@@ -107,3 +107,43 @@ later, run migrations from CI or a one-off `docker compose run` instead.
 saved choice (`localStorage["cpoint-theme"]`) wins; otherwise the OS preference applies. Tailwind's
 `dark:` variant is bound to `[data-theme="dark"]`. This follows the Next.js 16
 "preventing flash before hydration" guide, so no theme library is needed.
+
+### D-016 · 2026-10-02 · Accepted — Auth: Auth.js credentials, JWT sessions, database-checked guard
+
+**Decision:** Auth.js v5 (`next-auth@5.0.0-beta.32`, which supports Next 16) with a credentials
+provider. The session is a JWT (12 hours, one shift) carrying only `{ userId, role }`. The real
+authorization lives in the Data Access Layer (`src/server/policies/guard.ts`), which re-reads the
+user on every request, so deactivation and role changes apply on the next click. `proxy.ts` (Next
+16's middleware) only checks the cookie. Passwords use `bcryptjs` cost 12 (pure JS, no native
+build on Alpine). 5 wrong passwords lock the account for 15 minutes. Unknown emails get the same
+answer and timing as wrong passwords. 403 is a stable redirect to `/forbidden` rather than the
+still-experimental `forbidden()`.
+**Consequences:** No Auth.js adapter tables are needed. Each page costs one indexed user lookup per
+request (memoised with React `cache`).
+
+### D-017 · 2026-10-02 · Accepted — Seeding runs inside the app on startup
+
+**Decision:** `bootstrap.service.ts` runs from `instrumentation.ts` on every server start and from
+`npm run db:seed`:
+
+- Reference data uses create-if-missing upserts that never overwrite admin edits.
+- The first System Admin comes from `BOOTSTRAP_ADMIN_*` and is created only if no admin is active.
+- Demo users are opt-in via `SEED_DEMO_USERS`.
+- A database outage during bootstrap is logged, not fatal.
+
+**Why:** the Docker runner has no `tsx`. Seeding through the app's own code and Prisma client
+means there's no second toolchain in the image, and a fresh factory install is usable with
+`docker compose up` alone.
+
+### D-018 · 2026-10-02 · Accepted — Schema conventions
+
+**Decision:**
+
+- UUIDv7 primary keys (time-ordered). Tables are snake_case via `@@map`; columns keep Prisma's
+  camelCase.
+- Every foreign key is indexed. Money and quantities are `Decimal(12,2)`; confidences and
+  thresholds are `Float`.
+- No hard deletes of people or production data: `isActive`, `CANCELLED` or `onDelete: Restrict`.
+- Overrides cancel and recreate rework/salvage rows rather than editing them, so history survives.
+- The full schema for all phases is in the first migration, and later phases add migrations only
+  when requirements change.

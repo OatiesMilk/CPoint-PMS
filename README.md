@@ -24,26 +24,54 @@ The reasons behind each choice are in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 Runs PostgreSQL in Docker and Next.js on your machine, with hot reload.
 
 ```bash
-cp .env.example .env        # defaults work as-is for local dev
+cp .env.example .env        # then fill in the three blanks (see "Environment" below)
 npm install                 # also generates the Prisma client
 npm run db:up               # starts PostgreSQL in Docker (port 5432, localhost only)
 npm run db:deploy           # applies database migrations
-npm run dev                 # http://localhost:3000
+npm run dev                 # http://localhost:3000. Seeds reference data + demo users on start
 ```
 
 Stop the database with `npm run db:down`. Data persists in the `pgdata` Docker volume.
+
+## Environment
+
+`.env.example` lists every variable. Three must be filled in before the first start:
+
+| Variable                   | What to put                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------- |
+| `AUTH_SECRET`              | A random secret that signs sessions: `openssl rand -base64 32`. One per machine.   |
+| `BOOTSTRAP_ADMIN_PASSWORD` | 12+ characters. Creates the first System Admin if none exists.                     |
+| `DEMO_USER_PASSWORD`       | 8+ characters. Password for the demo accounts below (when `SEED_DEMO_USERS=true`). |
+
+**Demo accounts** (created on startup when `SEED_DEMO_USERS=true`; turn it off for real use):
+
+| Role              | Email                      | Lands on             |
+| ----------------- | -------------------------- | -------------------- |
+| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     |
+| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` |
+| System Admin      | `admin@cpoint.local`       | `/admin`             |
+| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       |
+
+On every start the app also makes sure the reference data exists (shoe types, defect types, CV
+thresholds 90% / 60%, a sample supplier). It never overwrites values an admin has changed.
+`npm run db:seed` runs the same steps by hand.
+
+**Sign-in rules:** 5 wrong passwords lock an account for 15 minutes; sessions last 12 hours (one
+shift); a deactivated user is signed out on their next click. Every sign-in, failure and sign-out
+is written to the audit log.
 
 ## Quick start: demo / factory machine
 
 Runs the whole system in Docker with one command. No Node.js needed on the machine.
 
 ```bash
-cp .env.example .env        # change POSTGRES_PASSWORD for any real deployment
+cp .env.example .env        # fill in the blanks; change POSTGRES_PASSWORD for real use
 docker compose up --build -d
 ```
 
-Open <http://localhost:3000>. On startup the app container applies pending migrations, then starts
-the server. Check status with `docker compose ps` (both services should say `healthy`) and logs with
+Open <http://localhost:3000> (or `http://<this-machine's-LAN-IP>:3000` from another PC). On startup
+the app container applies pending migrations, seeds reference data, then starts the server.
+`docker compose up` refuses to start without `AUTH_SECRET`. Check status with `docker compose ps` (both services should say `healthy`) and logs with
 `docker compose logs -f app`. To stop: `docker compose down` (add `-v` to **delete all data**).
 
 | Container | What it is                                 | Data volume             |
@@ -65,7 +93,7 @@ the server. Check status with `docker compose ps` (both services should say `hea
 | `npm run db:up` / `db:down` | Start/stop PostgreSQL in Docker                                            |
 | `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`            |
 | `npm run db:deploy`         | Apply pending migrations                                                   |
-| `npm run db:seed`           | Seed demo data (from Phase 1)                                              |
+| `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)       |
 | `npm run db:studio`         | Browse the database in Prisma Studio                                       |
 
 First time running e2e: `npx playwright install chromium`. If Chromium is already installed

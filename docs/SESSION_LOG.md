@@ -16,6 +16,33 @@ Template:
 
 ---
 
+## 2026-10-02 — Phase 1: Data & auth
+
+**Who:** Team + Claude Code
+**Summary:** Migrated the full schema, added startup bootstrap/seeding, Auth.js sign-in with
+lockout and audit, the permission matrix + guards, the role-based app shell, and role home pages.
+Verified with 94 unit and 13 e2e tests, locally and against the Docker stack.
+**Changed:**
+
+- DB: `prisma/schema.prisma` + `migrations/…_init` (17 tables, 46 indexes).
+- Server: `models/{db,user,audit-log,reference-data}`, `services/{audit,auth,bootstrap}`,
+  `policies/{permissions,navigation,guard}`, `lib/{auth,auth.config,password,env}`,
+  `controllers/auth.controller`, `instrumentation.ts`, `proxy.ts`.
+- UI: login page (RHF + Zod), sidebar shell, role homes, `/forbidden`, `not-found`, primitives
+  (Input, Label, Card, Alert, DropdownMenu), `src/lib/domain.ts` (enums + labels).
+- Tooling: ESLint Prisma rule switched to a regex (allows the runtime-free enums file); route.ts
+  files anywhere may import controllers. CI/compose pass the auth env; CI checks the bootstrap.
+- Docs: README (Environment, demo accounts, sign-in rules), API.md (auth), CLAUDE.md rules,
+  DESIGN.md components, D-016 to D-018.
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · test ✅ (94) · build ✅ · e2e ✅ (13, `next start`
+and Docker) · docker ✅ (fresh volume: migration applied, bootstrap seeded, health 200).
+**Decisions:** D-016, D-017, D-018
+**Follow-ups:**
+
+- Confirm the shift length (session) and lockout policy with CPoint.
+- Phase 2: batches & stages.
+
 ## 2026-10-02 — Phase 0: Foundation
 
 **Who:** Team + Claude Code

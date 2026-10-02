@@ -65,13 +65,19 @@ Re-measure whenever a color token changes.
 
 ## Components
 
-| Component              | Purpose                        | Variants                                                     | Required states                                                                |
-| ---------------------- | ------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `Button`               | Actions                        | primary, secondary, ghost, destructive, link · sm/md/lg/icon | pressed (`scale .97`), focus ring, disabled + reason, pending (spinner + verb) |
-| `VerdictBadge`         | Show a scan/decision outcome   | PASS, REWORK, REJECT, NEEDS_REVIEW                           | Always icon + label                                                            |
-| `ThemeToggle`          | Light/dark switch              | —                                                            | Accessible name; icons swap via CSS (no hydration mismatch)                    |
-| Tables (Phase 2+)      | Lists of batches, scans, items | —                                                            | skeleton rows, empty (first-use vs filtered), error + retry, stale label       |
-| Latest scans (Phase 3) | Live CV feed                   | —                                                            | "Updated Ns ago", paused/offline label                                         |
+| Component              | Purpose                        | Variants                                                        | Required states                                                                    |
+| ---------------------- | ------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `Button`               | Actions                        | primary, secondary, ghost, destructive, link · sm/md/lg/icon    | pressed (`scale .97`), focus ring, disabled + reason, pending (spinner + verb)     |
+| `VerdictBadge`         | Show a scan/decision outcome   | PASS, REWORK, REJECT, NEEDS_REVIEW                              | Always icon + label                                                                |
+| `ThemeToggle`          | Light/dark switch              | —                                                               | Accessible name; icons swap via CSS (no hydration mismatch)                        |
+| `Input` / `Label`      | Form fields                    | —                                                               | focus ring, `aria-invalid` red outline, error text below with how to fix, disabled |
+| `Alert`                | Inline message                 | info, danger (role=alert), success                              | icon + text; danger announced to screen readers                                    |
+| `Card`                 | Grouped content                | —                                                               | header (title + description) + content                                             |
+| `DropdownMenu`         | User menu, row actions         | —                                                               | keyboard navigable, scales from trigger                                            |
+| Sidebar                | Main navigation                | link, active (yellow wash + ink indicator), planned ("Phase N") | planned items aren't links; screen readers hear "available in Phase N"             |
+| `ComingSoonCard`       | Placeholder dashboard panel    | —                                                               | names the phase that delivers it                                                   |
+| Tables (Phase 2+)      | Lists of batches, scans, items | —                                                               | skeleton rows, empty (first-use vs filtered), error + retry, stale label           |
+| Latest scans (Phase 3) | Live CV feed                   | —                                                               | "Updated Ns ago", paused/offline label                                             |
 
 ## Patterns
 

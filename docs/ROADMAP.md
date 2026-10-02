@@ -18,13 +18,13 @@ Tick the boxes as they're done.
 
 ## Phase 1 — Data & auth
 
-- [ ] Full Prisma schema + first migration + indexes
-- [ ] Seed: 4 role accounts, shoe types, defect types, CV settings, sample supplier
-- [ ] Auth.js credentials login, hashed passwords, inactive users blocked
-- [ ] Policies (`can(user, permission)`) + middleware; 401/403/404 pages
-- [ ] App shell: sidebar with role-based nav, theme toggle (no flash), logged-in user menu
-- [ ] AuditLog helper used by every mutation
-- [ ] e2e: each role logs in and sees only its nav
+- [x] Full Prisma schema + first migration + indexes
+- [x] Seed: 4 role accounts, shoe types, defect types, CV settings, sample supplier
+- [x] Auth.js credentials login, hashed passwords, inactive users blocked
+- [x] Policies (`can(user, permission)`) + middleware; 401/403/404 pages
+- [x] App shell: sidebar with role-based nav, theme toggle (no flash), logged-in user menu
+- [x] AuditLog helper used by every mutation
+- [x] e2e: each role logs in and sees only its nav
 
 ## Phase 2 — Batches & stages
 

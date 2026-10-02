@@ -23,6 +23,14 @@ Operational endpoints such as health are unversioned.
 | 422    | `VALIDATION_FAILED` | Body failed validation; `details` lists the fields          |
 | 500    | `INTERNAL`          | Unexpected server error. Details are logged, never returned |
 
+## Authentication
+
+- **People** sign in on `/login`. The session is an HTTP-only cookie (Auth.js JWT, 12 hours).
+  `/api/auth/*` is handled by Auth.js; don't call it directly.
+- **API routes** check the session and the caller's role on every request. No session → `401`;
+  wrong role → `403`. Deactivated accounts get `401` immediately, even with a valid cookie.
+- **Camera devices** (Phase 3) will use `Authorization: Bearer <device token>` instead of a session.
+
 ## `GET /api/health`
 
 Liveness and readiness check. Used by the Docker `HEALTHCHECK`, CI and the home page.

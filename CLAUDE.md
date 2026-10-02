@@ -35,6 +35,10 @@ configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 - No per-person workforce rankings or scores anywhere (client sensitivity, see the survey).
 - Defect types, CV thresholds and class keys are **data**, never hardcoded.
 - Docker: one compose file, two services (`app`, `db`). Don't add containers.
+- Every page calls `requireRole`/`requirePermission` (`src/server/policies/guard.ts`); every API
+  route calls `requireApiPermission`. The proxy is only an optimistic cookie check.
+- Every mutation runs in `runInTransaction` and writes `recordAudit` with the same `tx`.
+- When a module ships, remove its `phase` in `src/server/policies/navigation.ts` so the nav links it.
 - Never claim a check passed without running it. If you couldn't run it, say so.
 
 ## End of every session
