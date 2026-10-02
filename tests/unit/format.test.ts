@@ -21,3 +21,15 @@ describe("Manila dates", () => {
     expect(manilaYear(lateUtc)).toBe(2027);
   });
 });
+
+describe("startOfManilaDay", async () => {
+  const { startOfManilaDay } = await import("@/server/services/scan-query.service");
+  it("is 16:00 UTC of the previous day", () => {
+    expect(startOfManilaDay(new Date("2026-10-02T03:00:00.000Z")).toISOString()).toBe(
+      "2026-10-01T16:00:00.000Z",
+    );
+    expect(startOfManilaDay(new Date("2026-10-02T17:00:00.000Z")).toISOString()).toBe(
+      "2026-10-02T16:00:00.000Z",
+    );
+  });
+});

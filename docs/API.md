@@ -5,7 +5,7 @@ Operational endpoints such as health are unversioned.
 
 ## Conventions
 
-- JSON in and out, except uploads, which are `multipart/form-data` (Phase 3).
+- JSON in and out, except scan uploads, which are `multipart/form-data`.
 - Timestamps are ISO 8601 in UTC (`2026-10-02T13:11:21.193Z`). The UI shows them in `Asia/Manila`.
 - Every error uses one shape:
 
@@ -21,6 +21,7 @@ Operational endpoints such as health are unversioned.
 | 404    | `NOT_FOUND`         | The resource doesn't exist                                  |
 | 409    | `CONFLICT`          | Conflicts with the current state (e.g. skipping a stage)    |
 | 409    | `STALE`             | Someone else changed the record first; reload and retry     |
+| 413    | `PAYLOAD_TOO_LARGE` | Upload over the size limit (10 MB per image)                |
 | 422    | `VALIDATION_FAILED` | Body failed validation; `details` lists the fields          |
 | 500    | `INTERNAL`          | Unexpected server error. Details are logged, never returned |
 
@@ -30,7 +31,7 @@ Operational endpoints such as health are unversioned.
   `/api/auth/*` is handled by Auth.js; don't call it directly.
 - **API routes** check the session and the caller's role on every request. No session → `401`;
   wrong role → `403`. Deactivated accounts get `401` immediately, even with a valid cookie.
-- **Camera devices** (Phase 3) will use `Authorization: Bearer <device token>` instead of a session.
+- **Camera devices** use `Authorization: Bearer <device token>` instead of a session (see below).
 
 ## `GET /api/health`
 
@@ -80,12 +81,71 @@ System Admin). Writes need `batch:manage` (Floor Manager). All writes are audite
 `durations` in the detail response is milliseconds spent per stage, counting repeat visits and
 the open stage up to now.
 
+## Camera ingestion (device token)
+
+A camera machine (the YOLO service, a phone/webcam client, or `npm run cv:simulate`) sends each
+capture to the system. It authenticates with a **device token** created by a System Admin under
+**API tokens**: `Authorization: Bearer cpt_…`. The token is shown once and stored only as a hash.
+A revoked, expired or unknown token gets `401`.
+
+### `POST /api/v1/scans`
+
+`multipart/form-data`, one leather section per request:
+
+| Field          | Required | Notes                                                                                                                                                                                                                                                              |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `image`        | yes      | JPEG, PNG or WebP (checked by content, not file name), ≤ 10 MB                                                                                                                                                                                                     |
+| `detections`   | no       | JSON array, ≤ 50: `[{ "classKey": "cut", "confidence": 0.93, "box": { "x": 0.12, "y": 0.40, "width": 0.08, "height": 0.05 } }]`. `box` is in fractions (0–1) of the image width and height, from the top-left corner. Omit it or send `[]` when nothing was found. |
+| `source`       | no       | `SIMULATOR`, `PHONE`, `WEBCAM` (default), `DEDICATED_CAMERA`                                                                                                                                                                                                       |
+| `modelVersion` | no       | e.g. `yolov8n-cpoint-2026-10`, shown on the scan                                                                                                                                                                                                                   |
+| `capturedAt`   | no       | ISO 8601 with offset; defaults to the time received                                                                                                                                                                                                                |
+| `batchId`      | no       | Only for multi-camera setups. Normally omitted (see "Which batch")                                                                                                                                                                                                 |
+
+**Decision (D-011):** the highest confidence among _active_ defect types decides, using the
+thresholds set by the admin (default ≥ 0.90 → `REJECT`, ≥ 0.60 → `REWORK`, otherwise `PASS`).
+Any `classKey` the system doesn't know → `NEEDS_REVIEW` (the scan waits in the review queue, and the
+class is stored and flagged). Class keys are matched exactly (`cut`, `hole`, `abrasion`, `dirt`).
+Add new ones under Admin → Settings when the model is retrained.
+
+**Outcome rows:** `REWORK` opens a repair ticket; `REJECT` creates a salvage item (D-007).
+
+**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "status" } }`.
+`409` when no batch is at Preparation (`message` says what to do). `413` over 10 MB. `422` for invalid fields.
+
+### Which batch: `GET /api/v1/batches/current`
+
+The single Preparation camera feeds **the batch picked on the Camera page**. If none is picked, or
+it has left Preparation, it feeds **the batch that has been at Preparation the longest** (D-020).
+Call this before capturing to show the operator where scans will go. It accepts a device token or
+a signed-in session.
+
+`200 { "data": { "batchId", "batchCode", "rollCode", "shoeType", "selection": "selected" | "oldest", "stageStartedAt" } }`,
+or `404 NO_BATCH_AT_PREPARATION`.
+
+## Scans (session)
+
+| Method & path                      | Permission    | Notes                                                                                                                               |
+| ---------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/scans`                | `scan:read`   | filters `verdict`, `status`, `source`, `batch` (code), `override=1`, `page`; or `limit=1…50` for the latest scans (the live widget) |
+| `GET /api/v1/scans/{id}`           | `scan:read`   | scan, detections (with boxes), rework/salvage history, who decided                                                                  |
+| `GET /api/v1/scans/{id}/image`     | `scan:read`   | the captured image (`Cache-Control: private`)                                                                                       |
+| `POST /api/v1/scans/{id}/decision` | `scan:decide` | `{ verdict: PASS\|REWORK\|REJECT, reason?, expectedFinalVerdict }`                                                                  |
+
+**Decisions:**
+
+- Resolving a `NEEDS_REVIEW` scan needs no reason. Changing an existing decision (an override)
+  needs a `reason` (3–300 characters).
+- `expectedFinalVerdict` is the verdict the person saw (`null` for pending). If it changed, the
+  answer is `409 STALE`.
+- The repair ticket or salvage item is swapped to match the new verdict.
+- `409` once the batch is closed, or once the material has moved on (repair started, salvage
+  reused or discarded).
+
 ## Coming next
 
-| Phase | Endpoints                                                                                                              |
-| ----- | ---------------------------------------------------------------------------------------------------------------------- |
-| 3     | `POST /api/v1/scans` (CV device token), `GET /api/v1/batches/current?stage=PREPARATION`, `/api/v1/scans/{id}/decision` |
-| 4–6   | rework, salvage, inventory, users, defect types, CV settings, reports                                                  |
+| Phase | Endpoints                                                             |
+| ----- | --------------------------------------------------------------------- |
+| 4–6   | rework, salvage, inventory, users, defect types, CV settings, reports |
 
 The Phase 3 CV ingestion contract is specified in `docs/prompts/system-rebuild.md` →
 `<cv_integration_contract>`. Keep it stable once published, because the YOLO service depends on it.

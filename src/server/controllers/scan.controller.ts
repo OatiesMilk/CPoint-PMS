@@ -3,13 +3,76 @@ import { handle, json } from "@/server/lib/http";
 import { sniffImageType } from "@/server/lib/image-type";
 import { requireApiPermission, requireDevice } from "@/server/policies/guard";
 import { NO_BATCH_MESSAGE, resolveCameraBatch } from "@/server/services/camera.service";
+import { getStorage } from "@/server/lib/storage";
+import { decideScan } from "@/server/services/scan-decision.service";
 import { ingestScan } from "@/server/services/scan-ingest.service";
-import { ingestFieldsSchema, MAX_IMAGE_BYTES } from "@/server/validators/scan.validator";
+import { getScanDetail, latestScans, listScans } from "@/server/services/scan-query.service";
+import { readJsonBody } from "@/server/lib/http";
+import {
+  decisionSchema,
+  ingestFieldsSchema,
+  isScanId,
+  MAX_IMAGE_BYTES,
+  scanListQuerySchema,
+} from "@/server/validators/scan.validator";
+
+type IdContext = { params: Promise<{ id: string }> };
+
+async function scanIdFrom(ctx: IdContext): Promise<string> {
+  const { id } = await ctx.params;
+  if (!isScanId(id)) throw Errors.notFound("This scan");
+  return id;
+}
 
 const text = (value: FormDataEntryValue | null) =>
   typeof value === "string" && value.trim() !== "" ? value : undefined;
 
 export const scanController = {
+  /** GET /api/v1/scans?verdict=&status=&source=&batch=&override=1&page=  or  ?limit=8 (latest, for the live widget). */
+  index: handle(async (request: Request) => {
+    await requireApiPermission("scan:read");
+    const query = scanListQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
+    if (query.limit) return json({ data: await latestScans(query.limit) });
+    const { rows, total, page, pageCount } = await listScans(query);
+    return json({ data: rows, meta: { total, page, pageCount } });
+  }),
+
+  /** GET /api/v1/scans/{id}: scan, detections, outcomes, decision history. */
+  show: handle(async (_request: Request, ctx: IdContext) => {
+    await requireApiPermission("scan:read");
+    const scan = await getScanDetail(await scanIdFrom(ctx));
+    if (!scan) throw Errors.notFound("This scan");
+    return json({ data: scan });
+  }),
+
+  /** GET /api/v1/scans/{id}/image: the captured image (private, cacheable: keys are never reused). */
+  image: handle(async (_request: Request, ctx: IdContext) => {
+    await requireApiPermission("scan:read");
+    const scan = await getScanDetail(await scanIdFrom(ctx));
+    if (!scan?.imagePath) throw Errors.notFound("This scan's image");
+    let bytes: Buffer;
+    try {
+      bytes = await getStorage().read(scan.imagePath);
+    } catch {
+      throw Errors.notFound("This scan's image file");
+    }
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        "Content-Type": scan.imageMime ?? "application/octet-stream",
+        "Cache-Control": "private, max-age=86400, immutable",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }),
+
+  /** POST /api/v1/scans/{id}/decision  { verdict, reason?, expectedFinalVerdict } */
+  decide: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("scan:decide");
+    const id = await scanIdFrom(ctx);
+    const input = decisionSchema.parse(await readJsonBody(request));
+    return json({ data: await decideScan(id, input, user) });
+  }),
+
   /** POST /api/v1/scans: camera ingestion (multipart/form-data, device token). */
   ingest: handle(async (request: Request) => {
     const device = await requireDevice(request, "scans:create");
