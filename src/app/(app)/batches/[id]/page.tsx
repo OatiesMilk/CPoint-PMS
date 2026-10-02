@@ -27,7 +27,7 @@ import { formatCalendarDate, formatDuration, formatManilaDateTime } from "@/lib/
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { getBatchDetail } from "@/server/services/batch.service";
-import { batchScanCounts } from "@/server/services/scan-query.service";
+import { batchYield } from "@/server/services/scan-query.service";
 import { isBatchId } from "@/server/validators/batch.validator";
 import { BatchActionsBar } from "./batch-actions";
 
@@ -41,7 +41,14 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
   const detail = await getBatchDetail(id);
   if (!detail) notFound();
   const { batch, actions, durations, now } = detail;
-  const counts = await batchScanCounts(batch.id);
+  const yieldCounts = await batchYield(batch.id);
+  const counts = {
+    total: yieldCounts.scanned,
+    pass: yieldCounts.passed,
+    rework: yieldCounts.reworkOpen + yieldCounts.reworkInProgress + yieldCounts.reworkDone,
+    reject: yieldCounts.rejected,
+    pending: yieldCounts.pendingReview,
+  };
   const canManage = can(user.role, "batch:manage");
 
   return (

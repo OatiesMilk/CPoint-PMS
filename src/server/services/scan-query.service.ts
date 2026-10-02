@@ -1,4 +1,6 @@
 import type { Verdict } from "@/lib/domain";
+import { computeBatchYield, type BatchYield } from "@/lib/outcome-rules";
+import { countReworkByStatus, countSalvageAssignedTo } from "@/server/models/outcome.model";
 import { manilaToday } from "@/lib/format";
 import {
   countScans,
@@ -111,24 +113,25 @@ export async function inspectorSummary(now: Date = new Date()) {
   return { pending, todayAuto, todayOverrides };
 }
 
-export type BatchScanCounts = {
-  total: number;
-  pass: number;
-  rework: number;
-  reject: number;
-  pending: number;
-};
-
-export async function batchScanCounts(batchId: string): Promise<BatchScanCounts> {
-  const groups = await countScansByVerdict(batchId);
-  const get = (v: Verdict | null) => groups.find((g) => g.finalVerdict === v)?._count._all ?? 0;
-  const counts = {
-    pass: get("PASS"),
-    rework: get("REWORK"),
-    reject: get("REJECT"),
-    pending: get(null),
-  };
-  return { total: counts.pass + counts.rework + counts.reject + counts.pending, ...counts };
+/** Usable = passed + repaired (D-007, D-021). Cancelled repairs never count. */
+export async function batchYield(batchId: string): Promise<BatchYield> {
+  const [groups, rework, salvageReceived] = await Promise.all([
+    countScansByVerdict(batchId),
+    countReworkByStatus({ scan: { batchId } }),
+    countSalvageAssignedTo(batchId),
+  ]);
+  const scans = (v: Verdict | null) => groups.find((g) => g.finalVerdict === v)?._count._all ?? 0;
+  const tickets = (s: string) => rework.find((g) => g.status === s)?._count._all ?? 0;
+  return computeBatchYield({
+    scans: {
+      pass: scans("PASS"),
+      rework: scans("REWORK"),
+      reject: scans("REJECT"),
+      pending: scans(null),
+    },
+    rework: { open: tickets("OPEN"), inProgress: tickets("IN_PROGRESS"), done: tickets("DONE") },
+    salvageReceived,
+  });
 }
 
 export type ScanDetail = ScanDetailRow;

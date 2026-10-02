@@ -160,3 +160,20 @@ describe("stageDurations", () => {
     });
   });
 });
+
+describe("completion with open repairs (D-021)", () => {
+  it("disables Complete with the reason while repairs are open", () => {
+    const a = availableActions(
+      { status: "IN_PROGRESS", currentStage: "FINISHING" },
+      { openRepairs: 1 },
+    );
+    expect(a.complete).toEqual({
+      allowed: false,
+      reason:
+        "1 section is still at the repair station. Mark it repaired on the Rework board first.",
+    });
+    expect(
+      availableActions({ status: "IN_PROGRESS", currentStage: "FINISHING" }).complete.allowed,
+    ).toBe(true);
+  });
+});

@@ -2,6 +2,7 @@ import { STAGE_ORDER, type Stage } from "@/lib/domain";
 import { manilaYear } from "@/lib/format";
 import {
   availableActions,
+  openRepairsReason,
   planCancel,
   planTransition,
   stageDurations,
@@ -30,6 +31,7 @@ import {
   listActiveShoeTypes,
   listActiveSuppliers,
 } from "@/server/models/reference-data.model";
+import { cancelLiveReworkForBatch, countLiveReworkForBatch } from "@/server/models/outcome.model";
 import { closeOpenStageLog, openStageLog } from "@/server/models/stage-log.model";
 import type { BatchFormValues } from "@/server/validators/batch.validator";
 import { recordAudit } from "./audit.service";
@@ -83,9 +85,10 @@ export async function getBatchDetail(
 ): Promise<BatchDetail | null> {
   const batch = await findBatchDetail(id);
   if (!batch) return null;
+  const openRepairs = batch.status === "IN_PROGRESS" ? await countLiveReworkForBatch(id) : 0;
   return {
     batch,
-    actions: availableActions(batch),
+    actions: availableActions(batch, { openRepairs }),
     durations: stageDurations(batch.stageLogs, now),
     now: now.getTime(),
   };
@@ -202,6 +205,7 @@ async function applyPlan(
   actor: Actor,
   now: Date,
   extra: { cancelledReason?: string } = {},
+  inTx?: (tx: Parameters<Parameters<typeof runInTransaction>[0]>[0]) => Promise<void>,
 ) {
   const batch = await findBatchById(id);
   if (!batch) throw Errors.notFound("This batch");
@@ -215,6 +219,7 @@ async function applyPlan(
     const moved = await transitionBatch(id, batch, { ...next, ...extra }, tx);
     if (!moved) throw Errors.stale(STALE_MESSAGE);
     if (closesOpenLog) await closeOpenStageLog(id, actor.id, now, tx);
+    if (inTx) await inTx(tx);
     if (opensStage) {
       await openStageLog(
         {
@@ -249,6 +254,10 @@ export async function transitionBatchStage(
   if (input.action === "move_back" && !input.reason) {
     throw Errors.validation([{ path: ["reason"], message: "Say why the batch is moving back." }]);
   }
+  if (input.action === "complete") {
+    const openRepairs = await countLiveReworkForBatch(id);
+    if (openRepairs > 0) throw Errors.conflict(openRepairsReason(openRepairs));
+  }
   return applyPlan(
     id,
     input.expectedStage,
@@ -272,8 +281,19 @@ export async function cancelBatch(
     { action: "batch.cancel", reason: input.reason },
     actor,
     now,
-    {
-      cancelledReason: input.reason,
+    { cancelledReason: input.reason },
+    async (tx) => {
+      // The roll is gone, so its unfinished repairs are moot (D-021). Salvage stays: the leather exists.
+      const { count } = await cancelLiveReworkForBatch(id, now, tx);
+      if (count > 0) {
+        await recordAudit(tx, {
+          actor: { type: "USER", userId: actor.id },
+          action: "rework.cancel",
+          entity: "Batch",
+          entityId: id,
+          after: { cancelledRepairs: count, reason: "Batch cancelled" },
+        });
+      }
     },
   );
 }

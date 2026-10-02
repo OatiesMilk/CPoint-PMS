@@ -18,10 +18,15 @@ const refs = {
   listActiveSuppliers: vi.fn(),
 };
 const recordAudit = vi.fn();
+const outcomes = {
+  countLiveReworkForBatch: vi.fn(async () => 0),
+  cancelLiveReworkForBatch: vi.fn(async () => ({ count: 0 })),
+};
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/batch.model", () => batches);
 vi.mock("@/server/models/stage-log.model", () => logs);
+vi.mock("@/server/models/outcome.model", () => outcomes);
 vi.mock("@/server/models/reference-data.model", () => refs);
 vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn("tx"),
@@ -276,5 +281,49 @@ describe("describeTransition", () => {
   it("names the destination", () => {
     expect(svc.describeTransition("advance", "PREPARATION")).toBe("Move to Upper Making");
     expect(svc.describeTransition("move_back", "SOLEING")).toBe("Move back to Upper Making");
+  });
+});
+
+describe("repairs and batch closing (D-021)", () => {
+  it("blocks completing while sections are still at the repair station", async () => {
+    batches.findBatchById.mockResolvedValue(batch({ currentStage: "FINISHING" }));
+    outcomes.countLiveReworkForBatch.mockResolvedValueOnce(2);
+    await expect(
+      svc.transitionBatchStage(
+        "b1",
+        { action: "complete", expectedStage: "FINISHING" },
+        actor,
+        now,
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining("2 sections are still at the repair station"),
+    });
+    expect(batches.transitionBatch).not.toHaveBeenCalled();
+  });
+
+  it("completes once repairs are done", async () => {
+    batches.findBatchById.mockResolvedValue(batch({ currentStage: "FINISHING" }));
+    await svc.transitionBatchStage(
+      "b1",
+      { action: "complete", expectedStage: "FINISHING" },
+      actor,
+      now,
+    );
+    expect(batches.transitionBatch).toHaveBeenCalled();
+  });
+
+  it("cancelling a batch cancels its unfinished repairs in the same transaction and audits it", async () => {
+    batches.findBatchById.mockResolvedValue(batch());
+    outcomes.cancelLiveReworkForBatch.mockResolvedValueOnce({ count: 3 });
+    await svc.cancelBatch("b1", { reason: "Roll returned" }, actor, now);
+    expect(outcomes.cancelLiveReworkForBatch).toHaveBeenCalledWith("b1", now, "tx");
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "rework.cancel",
+        after: expect.objectContaining({ cancelledRepairs: 3 }),
+      }),
+    );
   });
 });
