@@ -193,3 +193,33 @@ YOLO service must plug in later without code changes.
 
 **Consequences:** Phase 4 only builds the lifecycle and boards for rows that already exist. Phase 6
 adds the Settings page for defect types and thresholds.
+
+### D-021 · 2026-10-02 · Accepted — Rework and salvage lifecycle, repair guard and batch yield
+
+**Context:** Phase 3 creates a rework ticket for every REWORK scan and a salvage item for every
+REJECT scan (D-007, D-020). The client said repaired sections "should still be counted in the
+batch", and that rejected leather is kept for later production (survey Q15).
+**Decision:**
+
+- **Rework ticket:** `OPEN → IN_PROGRESS → DONE` ("Start repair", "Mark repaired"). Each step can
+  be undone one step back (6 s undo toast; "Reopen" on DONE) while the batch is open. `CANCELLED`
+  comes only from an override or a batch cancel, and is final. The QI and the FM can both work the
+  board (`rework:manage`). There's no drag and drop: buttons are clearer and keyboard-accessible.
+- **Salvage item:** `AVAILABLE → ASSIGNED` to another batch that is Planned or In progress (never
+  its origin), `ASSIGNED → AVAILABLE` ("Unassign") while that batch is open, and
+  `AVAILABLE → DISCARDED` with a required reason (final, confirmed). Only the FM decides
+  (`salvage:manage`). The QI sees the list read-only.
+- **Yield:** usable = passed + repaired (DONE). Sections still at the repair station, rejected,
+  pending review, and cancelled tickets are not usable. Salvage reused in a batch is counted
+  separately ("Salvage reused here"), not added to usable, because it wasn't scanned as part of that roll.
+- **Repair guard:** a batch can't be completed while any of its sections are OPEN/IN_PROGRESS at
+  the repair station (409 naming the count). Otherwise a closed batch's usable count would be wrong.
+- **Cancel cascade:** cancelling a batch cancels its OPEN/IN_PROGRESS tickets in the same
+  transaction (audited `rework.cancel`). Its AVAILABLE salvage stays available, because the
+  leather still exists.
+- **Concurrency:** every move sends `expectedStatus`. The update is conditional, so a mismatch is
+  409 STALE (same pattern as D-019).
+
+**Consequences:** Phase 7 reports can read repair turnaround (`openedAt → startedAt →
+completedAt`) and salvage reuse from these rows. There are no per-person metrics; `completedById`
+and `handledById` are only for the audit trail (D-008).

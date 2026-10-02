@@ -48,10 +48,10 @@ Tick the boxes as they're done.
 
 ## Phase 4 — Rework & salvage
 
-- [ ] Rework tickets created automatically from REWORK (**done in Phase 3**); board OPEN → IN_PROGRESS → DONE
-- [ ] Salvage items created automatically from REJECT (**done in Phase 3**); assign to a later batch or discard
-- [ ] Batch counts service (usable = passed + rework done) shown on batch detail
-- [ ] Unit tests for counts
+- [x] Rework tickets created automatically from REWORK (**done in Phase 3**); board OPEN → IN_PROGRESS → DONE
+- [x] Salvage items created automatically from REJECT (**done in Phase 3**); assign to a later batch or discard
+- [x] Batch counts service (usable = passed + rework done) shown on batch detail
+- [x] Unit tests for counts
 
 ## Phase 5 — Inventory
 

@@ -88,6 +88,10 @@ Re-measure whenever a color token changes.
 | `LatestScansWidget`    | Live camera feed               | —                                                                             | skeleton, empty (link to Camera), "Updated Ns ago", error keeps stale data dimmed; no animation on refresh |
 | Tables (Phase 2+)      | Lists of batches, scans, items | —                                                                             | skeleton rows, empty (first-use vs filtered), error + retry, stale label                                   |
 | Latest scans (Phase 3) | Live CV feed                   | —                                                                             | "Updated Ns ago", paused/offline label                                                                     |
+| `ScanThumb`            | Small scan image on cards      | —                                                                             | fixed size; falls back to an icon + "No image" when the file is missing                                    |
+| Rework board           | Repair station work            | columns Waiting / Being repaired / Repaired (7 days)                          | one primary button per card, undo toast (6s), empty text per column, batch filter in the URL, STALE alert  |
+| Salvage list           | Rejected leather               | tabs Available / Reused / Discarded (`?status=`) with counts                  | FM actions in dialogs (discard needs a reason); QI read-only with an explanation line                      |
+| Yield card             | Batch outcome                  | —                                                                             | usable as the hero number with "passed + repaired"; each count links to the board/list; empty before scans |
 
 ## Patterns
 

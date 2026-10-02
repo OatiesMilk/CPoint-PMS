@@ -16,6 +16,49 @@ Template:
 
 ---
 
+## 2026-10-02 — Phase 4: Rework & salvage
+
+**Who:** Team + Claude Code
+**Summary:** Closed the loop on camera outcomes:
+
+- a rework board where sections move Waiting → Being repaired → Repaired, with undo;
+- a salvage list where the Floor Manager reuses rejected leather in another batch or discards it;
+- a batch Yield card (usable = passed + repaired).
+
+Completing a batch is blocked while repairs are open, and cancelling a batch cancels its open repairs.
+**Changed:**
+
+- Domain: `src/lib/outcome-rules.ts` (ticket/salvage moves, `computeBatchYield`), the open-repairs
+  reason in `stage-machine.ts`.
+- Server:
+  - models: the outcome model's list/transition/count helpers, `listOpenBatches`;
+  - services: `rework.service`, `salvage.service`, `batchYield` in `scan-query.service`, the
+    completion guard and cancel cascade in `batch.service`;
+  - validators: `outcome.validator`; controller: `outcome.controller`.
+- API: `GET /api/v1/rework`, `POST /api/v1/rework/{id}/status`, `GET /api/v1/salvage`,
+  `POST /api/v1/salvage/{id}/assign|unassign|discard` (`docs/API.md`).
+- UI:
+  - pages: `/rework`, `/salvage` (tabs);
+  - the Yield card and a detail skeleton on batch detail;
+  - the Open reworks card on the FM home;
+  - `ScanThumb` and an image fallback on `ScanImage`;
+  - scan detail links to the board/list;
+  - nav: Rework and Salvage are live.
+- **Fix (auth):** the proxy now redirects signed-in users away from `/login` on GET only. A late
+  prefetch response could restore the session cookie right after `/logout` cleared it. The sign-in
+  POST was then redirected and the form showed "This page couldn't load". Phase 4's two extra nav
+  links made the deactivation e2e test fail consistently. This is very likely the "unreproduced"
+  Phase 3 failure; it hasn't recurred since the fix (stress-run 6×, full suite 6×).
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · test ✅ (218) · build ✅ · e2e ✅ (33 against
+`next start`, twice; 33 against Docker, twice, starting cold) · docker ✅ (fresh image, health 200)
+· audit rows checked in psql ✅ (`rework.start/done/unstart/cancel`, `salvage.assign/unassign/discard`)
+**Decisions:** D-021
+**Follow-ups:**
+
+- `rework.reopen` is covered by unit tests only (no e2e).
+- Phase 5: inventory.
+
 ## 2026-10-02 — Phase 3: CV skeleton
 
 **Who:** Team + Claude Code
