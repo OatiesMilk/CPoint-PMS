@@ -3,11 +3,12 @@
  * Who:   the Floor Manager, at the office desk, checking the line several times a shift.
  * What:  see what needs attention on the line today (exceptions first).
  * Worst: missing a backlog (open reworks, low leather stock) until it stops production.
- * Batches by stage is live (Phase 2); the other panels describe what later phases add.
+ * Batches by stage (Phase 2) and Latest scans (Phase 3) are live; the rest describe later phases.
  */
 import type { Metadata } from "next";
 import { BatchesByStageCard } from "@/components/features/batches/batches-by-stage-card";
 import { ComingSoonCard } from "@/components/features/coming-soon-card";
+import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
 import { PageHeader } from "@/components/features/page-header";
 import { connection } from "next/server";
 import { requireRole } from "@/server/policies/guard";
@@ -27,11 +28,7 @@ export default async function FloorManagerHome() {
       />
       <div className="grid grid-cols-3 gap-4">
         <BatchesByStageCard planned={summary.planned} stages={summary.stages} />
-        <ComingSoonCard
-          phase={3}
-          title="Latest scans"
-          description="Live feed from the Preparation camera with each Pass, Rework or Reject."
-        />
+        <LatestScansWidget />
         <ComingSoonCard
           phase={7}
           title="Today's inspection split"

@@ -1,11 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { ZodError } from "zod";
 import type { Stage } from "@/lib/domain";
 import type { TransitionAction } from "@/lib/stage-machine";
-import { AppError } from "@/server/lib/errors";
-import { logger } from "@/server/lib/logger";
+import { toActionError, type ActionResult } from "@/server/lib/action-result";
 import { requirePermission } from "@/server/policies/guard";
 import {
   cancelBatch,
@@ -20,39 +18,9 @@ import {
   transitionSchema,
 } from "@/server/validators/batch.validator";
 
-export type ActionResult<T = object> =
-  | ({ ok: true } & T)
-  | { ok: false; error: string; code?: string; fieldErrors?: Record<string, string> };
+export type { ActionResult };
 
-type Issue = { path: PropertyKey[]; message: string };
-
-function fieldErrorsFrom(issues: Issue[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const issue of issues) {
-    const key = String(issue.path[0] ?? "");
-    if (key && !out[key]) out[key] = issue.message;
-  }
-  return out;
-}
-
-/** Turns service errors into something the form or button can show; never leaks internals. */
-function toResult(error: unknown): ActionResult<never> {
-  if (error instanceof ZodError) {
-    return {
-      ok: false,
-      error: "Some fields need fixing.",
-      fieldErrors: fieldErrorsFrom(error.issues),
-    };
-  }
-  if (error instanceof AppError) {
-    const fieldErrors = Array.isArray(error.details)
-      ? fieldErrorsFrom(error.details as Issue[])
-      : undefined;
-    return { ok: false, error: error.message, code: error.code, fieldErrors };
-  }
-  logger.error({ err: error }, "Batch action failed");
-  return { ok: false, error: "Something failed on our side. Nothing was changed. Try again." };
-}
+const toResult = (error: unknown) => toActionError(error, "Batch action");
 
 function refresh(id?: string) {
   revalidatePath("/batches");

@@ -42,3 +42,14 @@ export function manilaToday(now: Date = new Date()): string {
 export function manilaYear(now: Date = new Date()): number {
   return Number(manilaToday(now).slice(0, 4));
 }
+
+/** "9:41 PM" in Manila time, for live feeds. */
+export function formatManilaTime(value: Date | string): string {
+  return new Intl.DateTimeFormat("en-PH", { timeZone: APP_TIME_ZONE, timeStyle: "short" }).format(
+    new Date(value),
+  );
+}
+
+export function formatPercent(fraction: number | null | undefined): string {
+  return fraction === null || fraction === undefined ? "—" : `${Math.round(fraction * 100)}%`;
+}

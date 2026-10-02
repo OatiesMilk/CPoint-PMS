@@ -2,50 +2,99 @@
  * Intent brief (ui-craft §1)
  * Who:   the Quality Inspector, at a desk next to the line, through the whole shift.
  * What:  verify the camera's decisions and settle the ones it can't make.
- * Worst: a wrong automatic Reject or Pass goes unchecked.
- * Phase 1 placeholder: panels describe what each later phase adds.
+ * Worst: a wrong automatic Reject or Pass goes unchecked. Pending reviews are the primary action.
  */
 import type { Metadata } from "next";
+import Link from "next/link";
+import { connection } from "next/server";
+import { ArrowRight, CircleHelp, ListChecks, UserCheck } from "lucide-react";
 import { ComingSoonCard } from "@/components/features/coming-soon-card";
 import { PageHeader } from "@/components/features/page-header";
+import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/server/policies/guard";
+import { inspectorSummary } from "@/server/services/scan-query.service";
 
 export const metadata: Metadata = { title: "Overview" };
 
 export default async function QualityInspectorHome() {
   const user = await requireRole("QUALITY_INSPECTOR");
+  await connection();
+  const summary = await inspectorSummary();
+
+  const tiles = [
+    {
+      label: "Waiting for your decision",
+      value: summary.pending,
+      hint: "Unknown defect classes the camera couldn’t decide.",
+      href: "/review",
+      Icon: CircleHelp,
+    },
+    {
+      label: "Rework and Reject today",
+      value: summary.todayAuto,
+      hint: "Automatic calls you can spot-check.",
+      href: "/review",
+      Icon: ListChecks,
+    },
+    {
+      label: "Overridden today",
+      value: summary.todayOverrides,
+      hint: "Decisions a person changed.",
+      href: "/scans?override=1",
+      Icon: UserCheck,
+    },
+  ];
+
   return (
     <>
       <PageHeader
         title={`Good day, ${user.name.split(" ")[0]}`}
-        description="Today's inspection work."
+        description="Today’s inspection work."
+        actions={
+          summary.pending > 0 && (
+            <Button asChild>
+              <Link href="/review">
+                Review {summary.pending} scan{summary.pending === 1 ? "" : "s"}
+                <ArrowRight aria-hidden />
+              </Link>
+            </Button>
+          )
+        }
       />
       <div className="grid grid-cols-3 gap-4">
-        <ComingSoonCard
-          phase={3}
-          title="Decisions to verify"
-          description="Today's automatic Rework and Reject calls, with one-click override."
-        />
-        <ComingSoonCard
-          phase={3}
-          title="Flagged scans"
-          description="Scans with a defect class the system doesn't know yet."
-        />
-        <ComingSoonCard
-          phase={3}
-          title="Latest scans"
-          description="Live feed from the Preparation camera."
-        />
-        <ComingSoonCard
-          phase={7}
-          title="Defects by type"
-          description="Today's cut, hole, abrasion and dirt counts."
-        />
-        <ComingSoonCard
-          phase={7}
-          title="AI agreement rate"
-          description="How often people agree with the camera's decision."
-        />
+        {tiles.map((t) => (
+          <Card key={t.label}>
+            <CardHeader>
+              <CardDescription className="flex items-center gap-1.5">
+                <t.Icon aria-hidden className="size-4" />
+                {t.label}
+              </CardDescription>
+              <CardTitle className="text-3xl tabular-nums">
+                <Link href={t.href} className="underline-offset-4 hover:underline">
+                  {t.value}
+                </Link>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">{t.hint}</p>
+            </CardContent>
+          </Card>
+        ))}
+        <LatestScansWidget className="col-span-2" />
+        <div className="flex flex-col gap-4">
+          <ComingSoonCard
+            phase={7}
+            title="Defects by type"
+            description="Today's cut, hole, abrasion and dirt counts."
+          />
+          <ComingSoonCard
+            phase={7}
+            title="AI agreement rate"
+            description="How often people agree with the camera's decision."
+          />
+        </div>
       </div>
     </>
   );

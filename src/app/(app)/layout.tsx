@@ -1,5 +1,6 @@
 import { ROLE_LABELS } from "@/lib/domain";
 import { Sidebar } from "@/components/features/app-shell/sidebar";
+import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { requireUser } from "@/server/policies/guard";
 import { navigationFor } from "@/server/policies/navigation";
@@ -17,7 +18,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         signOutAction={signOutAction}
       />
       <main className="min-w-0 flex-1 px-10 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-8">{children}</div>
+        <QueryProvider>
+          <div className="mx-auto flex max-w-6xl flex-col gap-8">{children}</div>
+        </QueryProvider>
       </main>
       <Toaster />
     </div>

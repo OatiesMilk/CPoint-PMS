@@ -12,7 +12,6 @@ import { connection } from "next/server";
 import { ArrowLeft, CornerUpLeft } from "lucide-react";
 import { BatchStatusBadge } from "@/components/features/batches/batch-status-badge";
 import { StageProgress } from "@/components/features/batches/stage-progress";
-import { ComingSoonCard } from "@/components/features/coming-soon-card";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -28,6 +27,7 @@ import { formatCalendarDate, formatDuration, formatManilaDateTime } from "@/lib/
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { getBatchDetail } from "@/server/services/batch.service";
+import { batchScanCounts } from "@/server/services/scan-query.service";
 import { isBatchId } from "@/server/validators/batch.validator";
 import { BatchActionsBar } from "./batch-actions";
 
@@ -41,6 +41,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
   const detail = await getBatchDetail(id);
   if (!detail) notFound();
   const { batch, actions, durations, now } = detail;
+  const counts = await batchScanCounts(batch.id);
   const canManage = can(user.role, "batch:manage");
 
   return (
@@ -190,11 +191,45 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
             </dl>
           </CardContent>
         </Card>
-        <ComingSoonCard
-          phase={3}
-          title="Scans & counts"
-          description="Camera results for this roll at Preparation: passed, in rework, rejected and usable sections."
-        />
+        <Card>
+          <CardHeader>
+            <CardTitle>Scans at Preparation</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {counts.total === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No sections of this roll have been scanned yet.
+              </p>
+            ) : (
+              <dl className="grid grid-cols-2 gap-3">
+                {[
+                  ["Passed", counts.pass, "PASS"],
+                  ["Rework", counts.rework, "REWORK"],
+                  ["Rejected", counts.reject, "REJECT"],
+                  ["Needs review", counts.pending, "NEEDS_REVIEW"],
+                ].map(([label, value, verdict]) => (
+                  <div key={label as string}>
+                    <dt className="text-sm text-muted-foreground">{label}</dt>
+                    <dd className="text-xl font-semibold tabular-nums">
+                      <Link
+                        href={`/scans?batch=${batch.code}&verdict=${verdict}`}
+                        className="underline-offset-4 hover:underline"
+                      >
+                        {value}
+                      </Link>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            <Link
+              href={`/scans?batch=${batch.code}`}
+              className="text-sm underline underline-offset-4"
+            >
+              All {counts.total} scan{counts.total === 1 ? "" : "s"} of this batch
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </>
   );

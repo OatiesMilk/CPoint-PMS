@@ -45,14 +45,13 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
   {
     title: "Quality",
     items: [
-      { label: "Camera", href: "/camera", icon: "camera", permission: "camera:view", phase: 3 },
-      { label: "Scans", href: "/scans", icon: "scans", permission: "scan:read", phase: 3 },
+      { label: "Camera", href: "/camera", icon: "camera", permission: "camera:view" },
+      { label: "Scans", href: "/scans", icon: "scans", permission: "scan:read" },
       {
         label: "Review queue",
         href: "/review",
         icon: "review",
         permission: "scan:decide",
-        phase: 3,
       },
       { label: "Rework", href: "/rework", icon: "rework", permission: "rework:manage", phase: 4 },
       { label: "Salvage", href: "/salvage", icon: "salvage", permission: "salvage:read", phase: 4 },
@@ -86,7 +85,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         href: "/admin/tokens",
         icon: "tokens",
         permission: "token:manage",
-        phase: 3,
       },
       {
         label: "Audit log",
