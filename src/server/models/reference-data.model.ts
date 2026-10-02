@@ -27,3 +27,27 @@ export function ensureCvSettings(
 ) {
   return db.cvSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: {} });
 }
+
+export function listActiveShoeTypes(db: Db = defaultDb()) {
+  return db.shoeType.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { sortOrder: "asc" },
+  });
+}
+
+export function listActiveSuppliers(db: Db = defaultDb()) {
+  return db.supplier.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+export function findShoeType(id: string, db: Db = defaultDb()) {
+  return db.shoeType.findUnique({ where: { id } });
+}
+
+export function findSupplier(id: string, db: Db = defaultDb()) {
+  return db.supplier.findUnique({ where: { id } });
+}
