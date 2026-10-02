@@ -1,5 +1,6 @@
 import { ROLE_LABELS } from "@/lib/domain";
 import { Sidebar } from "@/components/features/app-shell/sidebar";
+import { Toaster } from "@/components/ui/toaster";
 import { requireUser } from "@/server/policies/guard";
 import { navigationFor } from "@/server/policies/navigation";
 import { signOutAction } from "./actions";
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       <main className="min-w-0 flex-1 px-10 py-8">
         <div className="mx-auto flex max-w-6xl flex-col gap-8">{children}</div>
       </main>
+      <Toaster />
     </div>
   );
 }

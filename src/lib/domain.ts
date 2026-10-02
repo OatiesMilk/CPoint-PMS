@@ -15,7 +15,7 @@ export {
   Stage,
   Verdict,
 } from "@/generated/prisma/enums";
-import type { Role, Stage } from "@/generated/prisma/enums";
+import type { BatchStatus, Role, Stage } from "@/generated/prisma/enums";
 
 export const ROLE_LABELS: Record<Role, string> = {
   FLOOR_MANAGER: "Floor Manager",
@@ -44,4 +44,11 @@ export const STAGE_LABELS: Record<Stage, string> = {
   UPPER_MAKING: "Upper Making",
   SOLEING: "Sole-ing",
   FINISHING: "Finishing",
+};
+
+export const BATCH_STATUS_LABELS: Record<BatchStatus, string> = {
+  PLANNED: "Planned",
+  IN_PROGRESS: "In progress",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
 };

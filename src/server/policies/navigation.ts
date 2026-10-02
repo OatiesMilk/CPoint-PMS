@@ -32,7 +32,7 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
   {
     title: "Production",
     items: [
-      { label: "Batches", href: "/batches", icon: "batches", permission: "batch:read", phase: 2 },
+      { label: "Batches", href: "/batches", icon: "batches", permission: "batch:read" },
       {
         label: "Inventory",
         href: "/inventory",

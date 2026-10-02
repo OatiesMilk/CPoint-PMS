@@ -47,21 +47,34 @@ const STALE_MESSAGE =
 
 // ───────────── reads ─────────────
 
+export type BatchListItem = BatchListRow & { timeInStageMs: number | null };
+
 export async function listBatches(
   filters: BatchListFilters,
   page = 1,
-): Promise<{ rows: BatchListRow[]; total: number; page: number; pageCount: number }> {
+  now: Date = new Date(),
+): Promise<{ rows: BatchListItem[]; total: number; page: number; pageCount: number }> {
   const { rows, total } = await listBatchRows(filters, {
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
-  return { rows, total, page, pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)) };
+  return {
+    rows: rows.map((row) => {
+      const open = row.status === "IN_PROGRESS" ? row.stageLogs[0] : undefined;
+      return { ...row, timeInStageMs: open ? now.getTime() - open.startedAt.getTime() : null };
+    }),
+    total,
+    page,
+    pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+  };
 }
 
 export type BatchDetail = {
   batch: BatchDetailRow;
   actions: BatchActions;
   durations: Record<Stage, number>;
+  /** The "now" the durations were computed at, so the page can show matching open-log times. */
+  now: number;
 };
 
 export async function getBatchDetail(
@@ -74,6 +87,7 @@ export async function getBatchDetail(
     batch,
     actions: availableActions(batch),
     durations: stageDurations(batch.stageLogs, now),
+    now: now.getTime(),
   };
 }
 
@@ -84,18 +98,21 @@ export async function getBatchFormOptions() {
 
 export type StageSummary = {
   planned: number;
-  stages: { stage: Stage; count: number; oldestStartedAt: Date | null }[];
+  stages: { stage: Stage; count: number; oldestWaitMs: number | null }[];
 };
 
 /** In-progress batches per stage with the longest wait, for spotting the bottleneck. */
-export async function batchesByStageSummary(): Promise<StageSummary> {
+export async function batchesByStageSummary(now: Date = new Date()): Promise<StageSummary> {
   const { counts, openLogs, planned } = await inProgressByStage();
   return {
     planned,
     stages: STAGE_ORDER.map((stage) => ({
       stage,
       count: counts.find((c) => c.currentStage === stage)?._count._all ?? 0,
-      oldestStartedAt: openLogs.find((l) => l.stage === stage)?._min.startedAt ?? null,
+      oldestWaitMs: (() => {
+        const oldest = openLogs.find((l) => l.stage === stage)?._min.startedAt;
+        return oldest ? now.getTime() - oldest.getTime() : null;
+      })(),
     })),
   };
 }
