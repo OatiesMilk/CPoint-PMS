@@ -8,6 +8,7 @@ export const PERMISSIONS = {
   "batch:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "batch:manage": ["FLOOR_MANAGER"],
   "camera:view": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
+  "camera:manage": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // choose the batch the camera feeds
   "scan:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "scan:decide": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // review queue + overrides
   "rework:manage": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],

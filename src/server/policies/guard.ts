@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import type { Role } from "@/lib/domain";
 import { auth } from "@/server/lib/auth";
 import { Errors } from "@/server/lib/errors";
+import type { DeviceScope } from "@/server/lib/device-token";
+import { authenticateDevice, type DeviceIdentity } from "@/server/services/api-token.service";
 import { getActiveSessionUser, type SessionUser } from "@/server/services/auth.service";
 import { can, type Permission } from "./permissions";
 
@@ -47,4 +49,9 @@ export async function requireApiPermission(permission: Permission): Promise<Sess
   if (!user) throw Errors.unauthenticated();
   if (!can(user.role, permission)) throw Errors.forbidden();
   return user;
+}
+
+/** Device (camera) requests: a Bearer device token with the given scope. Throws 401/403. */
+export function requireDevice(request: Request, scope: DeviceScope): Promise<DeviceIdentity> {
+  return authenticateDevice(request.headers.get("authorization"), scope);
 }

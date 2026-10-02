@@ -13,6 +13,7 @@ const EXPECTED: Record<Permission, Role[]> = {
   "batch:read": [FM, QI, AD],
   "batch:manage": [FM],
   "camera:view": [FM, QI, AD],
+  "camera:manage": [FM, QI],
   "scan:read": [FM, QI, AD],
   "scan:decide": [FM, QI],
   "rework:manage": [FM, QI],
