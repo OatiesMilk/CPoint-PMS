@@ -197,9 +197,23 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {y.scanned === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No sections of this roll have been scanned yet.
-              </p>
+              <div className="flex flex-col gap-2 text-sm">
+                <p className="text-muted-foreground">
+                  No sections of this roll have been scanned yet.
+                </p>
+                {y.salvageReceived > 0 && (
+                  <p>
+                    Salvage reused here:{" "}
+                    <Link
+                      href={`/salvage?status=ASSIGNED&batch=${batch.code}`}
+                      data-testid="yield-salvage-in"
+                      className="font-semibold tabular-nums underline-offset-4 hover:underline"
+                    >
+                      {y.salvageReceived}
+                    </Link>
+                  </p>
+                )}
+              </div>
             ) : (
               <>
                 <div>
