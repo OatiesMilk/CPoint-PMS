@@ -6,7 +6,8 @@ import prettier from "eslint-config-prettier/flat";
 // MVC layer rules (see CLAUDE.md and docs/prompts/system-rebuild.md → <architecture>).
 // Type-only imports of generated Prisma types are allowed everywhere.
 const prismaOnlyInModels = {
-  group: ["@/generated/prisma", "@/generated/prisma/*", "@/server/lib/prisma"],
+  // The runtime-free enums file is allowed; it is re-exported through src/lib/domain.ts.
+  regex: "^@/(generated/prisma(?!/enums$)|server/lib/prisma$)",
   allowTypeImports: true,
   message: "Only src/server/models/** may use Prisma. Go through a service.",
 };
