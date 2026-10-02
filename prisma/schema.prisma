@@ -1,0 +1,12 @@
+// CPoint Product Monitoring System — database schema.
+// Models are added in Phase 1 (see docs/ROADMAP.md and docs/prompts/system-rebuild.md).
+// Only src/server/models/** may import the generated client.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

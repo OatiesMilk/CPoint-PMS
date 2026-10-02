@@ -1,0 +1,117 @@
+/*
+ * CPoint design tokens — the single source of truth for color, type, space, finish and motion.
+ * Rationale for every value lives in DESIGN.md. Components use these tokens only (via Tailwind
+ * utilities mapped in globals.css); no raw hex, oklch or pixel values in components.
+ *
+ * Naming follows shadcn/ui (background, foreground, primary, muted, accent, border, ring, ...)
+ * so generated components work unchanged, plus CPoint-specific brand and verdict tokens.
+ */
+
+:root {
+  /* ---------- type ---------- */
+  --font-body: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-code: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, monospace;
+
+  /* ---------- brand (from the CPoint logo) ---------- */
+  --brand-yellow: oklch(0.93 0.19 104); /* logo field; marks + highlights, never body text */
+  --brand-red: oklch(0.58 0.23 27); /* logo "C" only; never UI chrome (collides with Reject) */
+  --brand-ink: oklch(0.21 0.012 85); /* logo lettering; warm near-black */
+
+  /* ---------- neutrals: warm ramp tinted toward the brand yellow (hue ~90) ---------- */
+  --background: oklch(0.982 0.005 95);
+  --foreground: oklch(0.21 0.012 85);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --muted: oklch(0.955 0.007 95);
+  --muted-foreground: oklch(0.47 0.014 85);
+  --border: oklch(0.9 0.009 95);
+  --input: oklch(0.66 0.012 90); /* field outlines: ≥3:1 against card (WCAG 1.4.11) */
+
+  /* ---------- actions ---------- */
+  --primary: var(--brand-ink); /* one solid primary per view */
+  --primary-foreground: oklch(0.982 0.005 95);
+  --secondary: oklch(0.945 0.008 95);
+  --secondary-foreground: var(--foreground);
+  --accent: oklch(0.96 0.045 104); /* hover / selected rows / active nav: a yellow wash */
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.53 0.2 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.21 0.012 85);
+
+  /* ---------- verdicts (fixed meaning across the whole product) ---------- */
+  --pass: oklch(0.5 0.13 150);
+  --pass-soft: oklch(0.95 0.045 150);
+  --rework: oklch(0.53 0.15 50); /* orange, kept clearly apart from brand yellow */
+  --rework-soft: oklch(0.95 0.045 60);
+  --reject: oklch(0.53 0.2 27);
+  --reject-soft: oklch(0.95 0.035 27);
+  --review: oklch(0.5 0.14 255);
+  --review-soft: oklch(0.95 0.03 255);
+
+  /* ---------- sidebar ---------- */
+  --sidebar: oklch(0.965 0.006 95);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-active: var(--accent);
+  --sidebar-indicator: var(--brand-ink);
+
+  /* ---------- finish ---------- */
+  --radius: 0.375rem; /* 6px: soft-industrial, applied everywhere */
+  --shadow-1: 0 1px 2px oklch(0.2 0.01 85 / 0.06), 0 1px 1px oklch(0.2 0.01 85 / 0.04);
+  --shadow-2: 0 4px 12px oklch(0.2 0.01 85 / 0.1), 0 1px 3px oklch(0.2 0.01 85 / 0.08);
+
+  /* ---------- motion ---------- */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-press: 120ms;
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+
+  color-scheme: light;
+}
+
+/* Dark values are chosen, not inverted. Primary flips to brand yellow on ink. */
+:root[data-theme="dark"] {
+  --background: oklch(0.17 0.008 85);
+  --foreground: oklch(0.955 0.006 95);
+  --card: oklch(0.205 0.009 85);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.225 0.01 85);
+  --popover-foreground: var(--foreground);
+  --muted: oklch(0.245 0.01 85);
+  --muted-foreground: oklch(0.73 0.012 90);
+  --border: oklch(0.3 0.01 85);
+  --input: oklch(0.55 0.012 85);
+
+  --primary: oklch(0.9 0.18 104);
+  --primary-foreground: var(--brand-ink);
+  --secondary: oklch(0.27 0.01 85);
+  --secondary-foreground: var(--foreground);
+  --accent: oklch(0.3 0.04 100);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.68 0.18 25);
+  --destructive-foreground: var(--brand-ink);
+  --ring: oklch(0.9 0.18 104);
+
+  --pass: oklch(0.76 0.15 150);
+  --pass-soft: oklch(0.29 0.05 150);
+  --rework: oklch(0.79 0.14 60);
+  --rework-soft: oklch(0.3 0.05 55);
+  --reject: oklch(0.72 0.17 25);
+  --reject-soft: oklch(0.3 0.06 27);
+  --review: oklch(0.76 0.12 255);
+  --review-soft: oklch(0.29 0.05 255);
+
+  --sidebar: oklch(0.15 0.008 85);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-active: oklch(0.26 0.03 100);
+  --sidebar-indicator: oklch(0.9 0.18 104);
+
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-2: 0 6px 16px oklch(0 0 0 / 0.45), 0 1px 3px oklch(0 0 0 / 0.3);
+
+  color-scheme: dark;
+}
