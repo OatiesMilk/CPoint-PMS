@@ -161,3 +161,12 @@ export function stageDurations(logs: StageLogLike[], now: Date): Record<Stage, n
   }
   return totals;
 }
+
+/** Button and toast wording: "Start production", "Move to Upper Making", "Move back to Preparation", … */
+export function transitionLabel(action: TransitionAction, stage: Stage): string {
+  if (action === "start") return "Start production";
+  if (action === "complete") return "Complete batch";
+  const to = action === "advance" ? nextStage(stage) : previousStage(stage);
+  if (!to) return action === "advance" ? "Complete batch" : "Move back";
+  return `${action === "advance" ? "Move to" : "Move back to"} ${STAGE_LABELS[to]}`;
+}

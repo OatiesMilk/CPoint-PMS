@@ -1,4 +1,4 @@
-import { STAGE_LABELS, STAGE_ORDER, type Stage } from "@/lib/domain";
+import { STAGE_ORDER, type Stage } from "@/lib/domain";
 import { manilaYear } from "@/lib/format";
 import {
   availableActions,
@@ -261,11 +261,4 @@ export async function cancelBatch(
   );
 }
 
-/** "Move to Upper Making", "Complete batch", … for buttons and toasts. */
-export function describeTransition(action: TransitionAction, stage: Stage): string {
-  const order = STAGE_ORDER.indexOf(stage);
-  if (action === "start") return "Start production";
-  if (action === "complete") return "Complete batch";
-  if (action === "advance") return `Move to ${STAGE_LABELS[STAGE_ORDER[order + 1]]}`;
-  return `Move back to ${STAGE_LABELS[STAGE_ORDER[order - 1]]}`;
-}
+export { transitionLabel as describeTransition } from "@/lib/stage-machine";
