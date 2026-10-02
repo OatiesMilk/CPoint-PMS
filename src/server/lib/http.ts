@@ -1,8 +1,17 @@
 import { ZodError } from "zod";
-import { AppError } from "./errors";
+import { AppError, Errors } from "./errors";
 import { logger } from "./logger";
 
 export type ApiErrorBody = { error: { code: string; message: string; details?: unknown } };
+
+/** Parses a JSON body, turning malformed JSON into a 400 instead of a 500. */
+export async function readJsonBody(request: Request): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    throw Errors.badRequest("The request body must be valid JSON.");
+  }
+}
 
 export function json<T>(data: T, status = 200): Response {
   return Response.json(data, { status });

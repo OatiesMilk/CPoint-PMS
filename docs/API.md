@@ -20,6 +20,7 @@ Operational endpoints such as health are unversioned.
 | 403    | `FORBIDDEN`         | Signed in, but the role isn't allowed                       |
 | 404    | `NOT_FOUND`         | The resource doesn't exist                                  |
 | 409    | `CONFLICT`          | Conflicts with the current state (e.g. skipping a stage)    |
+| 409    | `STALE`             | Someone else changed the record first; reload and retry     |
 | 422    | `VALIDATION_FAILED` | Body failed validation; `details` lists the fields          |
 | 500    | `INTERNAL`          | Unexpected server error. Details are logged, never returned |
 
@@ -51,11 +52,38 @@ answer within 2 s):
 
 `status` is `"degraded"` and `checks.database` is `"down"` in the 503 case.
 
+## Batches (`/api/v1/batches`)
+
+A batch is one leather roll (D-005). Reads need `batch:read` (Floor Manager, Quality Inspector,
+System Admin). Writes need `batch:manage` (Floor Manager). All writes are audited.
+
+| Method & path                      | Body                                                | Returns                                                                          |
+| ---------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `GET /api/v1/batches`              | query: `status`, `stage`, `shoeTypeId`, `q`, `page` | `{ data: Batch[], meta: { total, page, pageCount } }`, 20 per page, newest first |
+| `POST /api/v1/batches`             | `BatchForm`                                         | `201 { data: Batch }`, status `PLANNED`                                          |
+| `GET /api/v1/batches/{id}`         | —                                                   | `{ data: { batch, actions, durations } }`                                        |
+| `PATCH /api/v1/batches/{id}`       | `BatchForm`                                         | `{ data: Batch }`                                                                |
+| `POST /api/v1/batches/{id}/stages` | `{ action, expectedStage, reason? }`                | `{ data: { code, status, currentStage } }`                                       |
+| `POST /api/v1/batches/{id}/cancel` | `{ reason, expectedStage? }`                        | `{ data: { code, status, currentStage } }`                                       |
+
+**`BatchForm`**: `rollCode` (1–50 chars), `shoeTypeId` (uuid), `supplierId?` (uuid),
+`receivedAt` (`YYYY-MM-DD`, not in the future in Manila time), `targetQuotaPairs?` (1–100,000),
+`notes?` (≤ 500). The shoe type can't change once production has started.
+
+**Stage actions:** `start` (PLANNED → Preparation), `advance` (next stage; no skipping),
+`complete` (only from Finishing), and `move_back` (previous stage; `reason` required, 3–300 chars).
+`expectedStage` is the stage the caller last saw:
+
+- If the batch has moved since, the answer is `409 { error: { code: "STALE" } }`. Reload and retry.
+- A move the rules don't allow returns `409 CONFLICT`, with the reason in `message`.
+
+`durations` in the detail response is milliseconds spent per stage, counting repeat visits and
+the open stage up to now.
+
 ## Coming next
 
 | Phase | Endpoints                                                                                                              |
 | ----- | ---------------------------------------------------------------------------------------------------------------------- |
-| 2     | `/api/v1/batches`, `/api/v1/batches/{id}`, `/api/v1/batches/{id}/stages`                                               |
 | 3     | `POST /api/v1/scans` (CV device token), `GET /api/v1/batches/current?stage=PREPARATION`, `/api/v1/scans/{id}/decision` |
 | 4–6   | rework, salvage, inventory, users, defect types, CV settings, reports                                                  |
 

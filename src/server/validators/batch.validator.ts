@@ -71,3 +71,10 @@ export const batchListQuerySchema = z.object({
 });
 
 export type BatchListQuery = z.infer<typeof batchListQuerySchema>;
+
+export const batchIdSchema = z.uuid();
+
+/** True for a well-formed batch id. Anything else is a 404, never a database error. */
+export function isBatchId(value: string): boolean {
+  return batchIdSchema.safeParse(value).success;
+}
