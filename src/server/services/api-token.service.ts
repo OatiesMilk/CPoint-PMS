@@ -14,6 +14,7 @@ import {
   touchApiToken,
 } from "@/server/models/api-token.model";
 import { runInTransaction } from "@/server/models/db";
+import { findFirstActiveUserWithRole } from "@/server/models/user.model";
 import { recordAudit } from "./audit.service";
 
 type Actor = { id: string };
@@ -89,4 +90,14 @@ export async function authenticateDevice(
     throw Errors.forbidden(`This device token can't ${scope.replace(":", " ")}.`);
   await touchApiToken(token.id, now);
   return { id: token.id, name: token.name };
+}
+
+/** For scripts (`npm run cv:token`): create a token on behalf of the first active System Admin. */
+export async function createDeviceTokenAsAdmin(name: string) {
+  const admin = await findFirstActiveUserWithRole("SYSTEM_ADMIN");
+  if (!admin)
+    throw new Error(
+      "No active System Admin exists yet. Start the app once so the bootstrap creates one.",
+    );
+  return createDeviceToken({ name }, admin);
 }

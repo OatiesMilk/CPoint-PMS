@@ -22,7 +22,9 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "cv:token": "tsx --conditions=react-server scripts/cv-token.ts",
+    "cv:simulate": "tsx scripts/cv-simulate.ts"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",

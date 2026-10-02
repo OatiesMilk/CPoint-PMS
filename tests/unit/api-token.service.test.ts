@@ -12,6 +12,7 @@ const tokens = {
 const recordAudit = vi.fn();
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/api-token.model", () => tokens);
+vi.mock("@/server/models/user.model", () => ({ findFirstActiveUserWithRole: vi.fn() }));
 vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn("tx"),
 }));

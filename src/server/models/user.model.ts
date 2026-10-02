@@ -42,3 +42,7 @@ export function recordSuccessfulLogin(id: string, at: Date, db: Db = defaultDb()
     data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: at },
   });
 }
+
+export function findFirstActiveUserWithRole(role: Role, db: Db = defaultDb()) {
+  return db.user.findFirst({ where: { role, isActive: true }, orderBy: { createdAt: "asc" } });
+}
