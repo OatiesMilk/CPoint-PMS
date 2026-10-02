@@ -1,0 +1,107 @@
+import { createHash, randomBytes } from "node:crypto";
+import { expect, type Browser, type APIRequestContext } from "@playwright/test";
+import pg from "pg";
+import sharp from "sharp";
+import { ACCOUNTS, signIn } from "./helpers";
+
+export async function withDb<T>(fn: (db: pg.Client) => Promise<T>): Promise<T> {
+  const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    return await fn(db);
+  } finally {
+    await db.end();
+  }
+}
+
+/** A device token straight in the DB (same format and hashing as the app), owned by an admin. */
+export async function createDeviceToken(
+  name = `E2E device ${Date.now()}`,
+): Promise<{ token: string; id: string }> {
+  const token = `cpt_${randomBytes(32).toString("base64url")}`;
+  const hash = createHash("sha256").update(token).digest("hex");
+  const id = await withDb(async (db) => {
+    const { rows } = await db.query(
+      `INSERT INTO api_tokens (id, name, "tokenPrefix", "tokenHash", scopes, "createdById")
+       SELECT gen_random_uuid(), $1, $2, $3, ARRAY['scans:create'], id FROM users
+       WHERE role = 'SYSTEM_ADMIN' AND "isActive" ORDER BY "createdAt" LIMIT 1 RETURNING id`,
+      [name, token.slice(0, 12), hash],
+    );
+    return rows[0].id as string;
+  });
+  return { token, id };
+}
+
+export async function shoeTypeId(): Promise<string> {
+  return withDb(
+    async (db) => (await db.query(`SELECT id FROM shoe_types WHERE code = 'SCH'`)).rows[0].id,
+  );
+}
+
+/** An API client signed in as the Floor Manager (for setting up batches quickly). */
+export async function managerApi(browser: Browser): Promise<APIRequestContext> {
+  const page = await browser.newPage();
+  await page.goto("/login");
+  await signIn(page, ACCOUNTS.manager.email);
+  await expect(page).toHaveURL(ACCOUNTS.manager.home);
+  return page.request;
+}
+
+export async function createBatch(
+  api: APIRequestContext,
+  start = true,
+): Promise<{ id: string; code: string }> {
+  const res = await api.post("/api/v1/batches", {
+    data: {
+      rollCode: `E2E-CV-${randomBytes(3).toString("hex").toUpperCase()}`,
+      shoeTypeId: await shoeTypeId(),
+      receivedAt: "2026-01-15",
+    },
+  });
+  expect(res.status()).toBe(201);
+  const { id, code } = (await res.json()).data;
+  if (start) {
+    const s = await api.post(`/api/v1/batches/${id}/stages`, {
+      data: { action: "start", expectedStage: "PREPARATION" },
+    });
+    expect(s.status()).toBe(200);
+  }
+  return { id, code };
+}
+
+let jpeg: Buffer | undefined;
+export async function sampleJpeg(): Promise<Buffer> {
+  jpeg ??= await sharp({ create: { width: 64, height: 48, channels: 3, background: "#7a4a26" } })
+    .jpeg()
+    .toBuffer();
+  return jpeg;
+}
+
+export type Det = {
+  classKey: string;
+  confidence: number;
+  box?: { x: number; y: number; width: number; height: number };
+};
+
+export async function postScan(
+  request: APIRequestContext,
+  token: string,
+  batchId: string,
+  detections: Det[],
+  image?: Buffer,
+) {
+  return request.post("/api/v1/scans", {
+    headers: { Authorization: `Bearer ${token}` },
+    multipart: {
+      image: { name: "capture.jpg", mimeType: "image/jpeg", buffer: image ?? (await sampleJpeg()) },
+      detections: JSON.stringify(
+        detections.map((d, i) => ({
+          ...d,
+          box: d.box ?? { x: 0.1 + i * 0.3, y: 0.2, width: 0.2, height: 0.2 },
+        })),
+      ),
+      batchId,
+      source: "SIMULATOR",
+    },
+  });
+}
