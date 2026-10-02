@@ -51,3 +51,10 @@ export function findShoeType(id: string, db: Db = defaultDb()) {
 export function findSupplier(id: string, db: Db = defaultDb()) {
   return db.supplier.findUnique({ where: { id } });
 }
+
+export function listDefectTypes(db: Db = defaultDb()) {
+  return db.defectType.findMany({
+    select: { id: true, key: true, label: true, isActive: true },
+    orderBy: { sortOrder: "asc" },
+  });
+}

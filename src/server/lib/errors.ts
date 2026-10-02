@@ -21,6 +21,7 @@ export const Errors = {
     new AppError(401, "UNAUTHENTICATED", message),
   forbidden: (message = "Your role can't do this.") => new AppError(403, "FORBIDDEN", message),
   notFound: (what: string) => new AppError(404, "NOT_FOUND", `${what} was not found.`),
+  tooLarge: (message: string) => new AppError(413, "PAYLOAD_TOO_LARGE", message),
   conflict: (message: string, details?: unknown) => new AppError(409, "CONFLICT", message, details),
   /** Optimistic-concurrency miss: someone else changed the record after the caller loaded it. */
   stale: (message: string) => new AppError(409, "STALE", message),

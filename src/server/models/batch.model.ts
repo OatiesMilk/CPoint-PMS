@@ -127,3 +127,37 @@ export async function inProgressByStage(db: Db = defaultDb()) {
   ]);
   return { counts, openLogs, planned };
 }
+
+const prepSelect = {
+  id: true,
+  code: true,
+  rollCode: true,
+  status: true,
+  currentStage: true,
+  shoeType: { select: { name: true } },
+  stageLogs: { where: { endedAt: null }, select: { startedAt: true }, take: 1 },
+} satisfies Prisma.BatchSelect;
+
+export type PreparationBatch = Prisma.BatchGetPayload<{ select: typeof prepSelect }>;
+
+/** Batches the camera can feed: in progress at Preparation, longest-waiting first. */
+export async function listBatchesAtPreparation(db: Db = defaultDb()): Promise<PreparationBatch[]> {
+  const rows = await db.batch.findMany({
+    where: { status: "IN_PROGRESS", currentStage: "PREPARATION" },
+    select: prepSelect,
+  });
+  const started = (b: PreparationBatch) => b.stageLogs[0]?.startedAt.getTime() ?? 0;
+  return rows.sort((a, b) => started(a) - started(b));
+}
+
+export function findPreparationBatchById(
+  id: string,
+  db: Db = defaultDb(),
+): Promise<PreparationBatch | null> {
+  return db.batch.findUnique({ where: { id }, select: prepSelect });
+}
+
+/** Row lock so concurrent scans for one batch get distinct sequence numbers. Call inside a transaction. */
+export async function lockBatchRow(id: string, db: Db): Promise<void> {
+  await db.$queryRaw`SELECT id FROM batches WHERE id = ${id}::uuid FOR UPDATE`;
+}

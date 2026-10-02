@@ -29,6 +29,15 @@ const eslintConfig = defineConfig([
   ...nextTs,
   prettier,
   {
+    rules: {
+      // A leading underscore marks an intentionally unused binding (e.g. mock parameters).
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
+    },
+  },
+  {
     files: ["src/app/**/*.{ts,tsx}"],
     ignores: ["src/app/api/**", "src/app/**/route.ts"],
     rules: {
