@@ -17,7 +17,7 @@ const noModels = {
 };
 const noControllers = {
   group: ["@/server/controllers/*"],
-  message: "Only src/app/api/**/route.ts may import controllers.",
+  message: "Only route.ts files may import controllers.",
 };
 const noServer = {
   group: ["@/server/*"],
@@ -30,7 +30,7 @@ const eslintConfig = defineConfig([
   prettier,
   {
     files: ["src/app/**/*.{ts,tsx}"],
-    ignores: ["src/app/api/**"],
+    ignores: ["src/app/api/**", "src/app/**/route.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -39,7 +39,7 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    files: ["src/app/api/**/*.ts"],
+    files: ["src/app/api/**/*.ts", "src/app/**/route.ts"],
     rules: {
       "no-restricted-imports": ["error", { patterns: [prismaOnlyInModels, noModels] }],
     },
