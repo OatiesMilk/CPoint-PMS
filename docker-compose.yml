@@ -33,6 +33,12 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-cpoint}:${POSTGRES_PASSWORD:-cpoint_dev_password}@db:5432/${POSTGRES_DB:-cpoint_pms}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env (openssl rand -base64 32)}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Manila}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:

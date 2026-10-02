@@ -43,6 +43,9 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       DATABASE_URL: postgresql://cpoint:cpoint_ci_password@localhost:5432/cpoint_pms?schema=public
+      AUTH_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
+      SEED_DEMO_USERS: "true"
+      DEMO_USER_PASSWORD: ci-demo-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -61,10 +64,20 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v4
+      - name: Write .env for the stack
+        run: |
+          cp .env.example .env
+          sed -i "s|^AUTH_SECRET=.*|AUTH_SECRET=$(openssl rand -base64 32)|" .env
+          sed -i "s|^BOOTSTRAP_ADMIN_PASSWORD=.*|BOOTSTRAP_ADMIN_PASSWORD=ci-admin-password-123|" .env
+          sed -i "s|^SEED_DEMO_USERS=.*|SEED_DEMO_USERS=false|" .env
       - name: Build and start the full stack
         run: docker compose up --build -d --wait
       - name: Health check
         run: curl --fail --silent http://localhost:3000/api/health
+      - name: Bootstrap created the admin and reference data
+        run: |
+          docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "select count(*) from users where role='SYSTEM_ADMIN'" | grep -qx 1
+          docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "select count(*) from defect_types" | grep -qx 4
       - if: failure()
         run: docker compose logs
       - if: always()

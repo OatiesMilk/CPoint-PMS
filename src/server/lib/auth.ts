@@ -4,6 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import { loginSchema } from "@/server/validators/auth.validator";
 import { verifyCredentials } from "@/server/services/auth.service";
 import { authConfig } from "./auth.config";
+import { logger } from "./logger";
 
 /** Error codes surfaced to the login form (never the reason for an unknown email). */
 export class InactiveAccountError extends CredentialsSignin {
@@ -28,6 +29,16 @@ export function requestMeta(request: Request) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  // Route Auth.js logs through pino. Wrong passwords are expected (and audited), not errors.
+  logger: {
+    error(error) {
+      if (error instanceof CredentialsSignin || error.name === "CredentialsSignin") return;
+      logger.error({ err: error }, "Auth.js error");
+    },
+    warn(code) {
+      logger.warn({ code }, "Auth.js warning");
+    },
+  },
   providers: [
     Credentials({
       credentials: { email: { type: "email" }, password: { type: "password" } },
