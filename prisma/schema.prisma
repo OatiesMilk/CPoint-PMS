@@ -222,11 +222,15 @@ model CvSettings {
   id              Int      @id @default(1)
   rejectAtOrAbove Float    @default(0.9)
   reworkAtOrAbove Float    @default(0.6)
+  /// The batch the single Preparation camera feeds (D-020). Null = oldest batch at Preparation.
+  activeBatchId   String?  @db.Uuid
   updatedById     String?  @db.Uuid
   updatedAt       DateTime @updatedAt
 
-  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  activeBatch Batch? @relation("CameraActiveBatch", fields: [activeBatchId], references: [id], onDelete: SetNull)
+  updatedBy   User?  @relation(fields: [updatedById], references: [id], onDelete: SetNull)
 
+  @@index([activeBatchId])
   @@index([updatedById])
   @@map("cv_settings")
 }
@@ -262,6 +266,7 @@ model Batch {
   scans           Scan[]
   salvageOrigin   SalvageItem[]       @relation("SalvageOrigin")
   salvageAssigned SalvageItem[]       @relation("SalvageAssigned")
+  cameraSettings  CvSettings[]        @relation("CameraActiveBatch")
   movements       InventoryMovement[]
 
   @@index([status, currentStage])
