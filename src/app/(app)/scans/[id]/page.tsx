@@ -62,12 +62,14 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
       kind: "Repair ticket",
       status: t.status,
       at: t.openedAt,
+      href: `/rework?batch=${scan.batch.code}`,
     })),
     ...scan.salvageItems.map((s) => ({
       id: s.id,
       kind: "Salvage item",
       status: s.status,
       at: s.createdAt,
+      href: `/salvage?status=${s.status}&batch=${scan.batch.code}`,
     })),
   ].sort((a, b) => a.at.getTime() - b.at.getTime());
 
@@ -179,7 +181,13 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                 <ul className="flex flex-col gap-2 text-sm">
                   {outcomes.map((o) => (
                     <li key={o.id} className="flex items-center justify-between gap-2">
-                      <span>{o.kind}</span>
+                      {o.status === "CANCELLED" ? (
+                        <span>{o.kind}</span>
+                      ) : (
+                        <Link href={o.href} className="underline-offset-4 hover:underline">
+                          {o.kind}
+                        </Link>
+                      )}
                       <Badge tone={o.status === "CANCELLED" ? "neutral" : "info"}>
                         {STATUS_LABEL[o.status] ?? o.status}
                       </Badge>

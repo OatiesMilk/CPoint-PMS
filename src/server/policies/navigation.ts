@@ -53,8 +53,8 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         icon: "review",
         permission: "scan:decide",
       },
-      { label: "Rework", href: "/rework", icon: "rework", permission: "rework:manage", phase: 4 },
-      { label: "Salvage", href: "/salvage", icon: "salvage", permission: "salvage:read", phase: 4 },
+      { label: "Rework", href: "/rework", icon: "rework", permission: "rework:manage" },
+      { label: "Salvage", href: "/salvage", icon: "salvage", permission: "salvage:read" },
     ],
   },
   {

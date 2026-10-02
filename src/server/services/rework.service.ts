@@ -65,6 +65,8 @@ export async function reworkBoard(batchCode?: string, now: Date = new Date()) {
     waiting: waiting.map(toCard),
     inProgress: inProgress.map(toCard),
     done: done.map(toCard),
+    /** The instant the board was read, so wait times on the page match the data. */
+    now: now.getTime(),
   };
 }
 

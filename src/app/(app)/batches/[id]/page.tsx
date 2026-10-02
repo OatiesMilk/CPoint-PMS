@@ -41,14 +41,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
   const detail = await getBatchDetail(id);
   if (!detail) notFound();
   const { batch, actions, durations, now } = detail;
-  const yieldCounts = await batchYield(batch.id);
-  const counts = {
-    total: yieldCounts.scanned,
-    pass: yieldCounts.passed,
-    rework: yieldCounts.reworkOpen + yieldCounts.reworkInProgress + yieldCounts.reworkDone,
-    reject: yieldCounts.rejected,
-    pending: yieldCounts.pendingReview,
-  };
+  const y = await batchYield(batch.id);
   const canManage = can(user.role, "batch:manage");
 
   return (
@@ -200,40 +193,72 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Scans at Preparation</CardTitle>
+            <CardTitle>Yield</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {counts.total === 0 ? (
+          <CardContent className="flex flex-col gap-4">
+            {y.scanned === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No sections of this roll have been scanned yet.
               </p>
             ) : (
-              <dl className="grid grid-cols-2 gap-3">
-                {[
-                  ["Passed", counts.pass, "PASS"],
-                  ["Rework", counts.rework, "REWORK"],
-                  ["Rejected", counts.reject, "REJECT"],
-                  ["Needs review", counts.pending, "NEEDS_REVIEW"],
-                ].map(([label, value, verdict]) => (
-                  <div key={label as string}>
-                    <dt className="text-sm text-muted-foreground">{label}</dt>
-                    <dd className="text-xl font-semibold tabular-nums">
-                      <Link
-                        href={`/scans?batch=${batch.code}&verdict=${verdict}`}
-                        className="underline-offset-4 hover:underline"
-                      >
-                        {value}
-                      </Link>
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+              <>
+                <div>
+                  <p className="text-sm text-muted-foreground">Usable sections</p>
+                  <p className="text-3xl font-semibold tabular-nums" data-testid="yield-usable">
+                    {y.usable}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {y.passed} passed + {y.reworkDone} repaired, of {y.scanned} scanned
+                  </p>
+                </div>
+                <dl className="grid grid-cols-2 gap-3 text-sm">
+                  {[
+                    [
+                      "At repair station",
+                      y.reworkOpen + y.reworkInProgress,
+                      `/rework?batch=${batch.code}`,
+                      "yield-repair",
+                    ],
+                    [
+                      "Rejected (salvage)",
+                      y.rejected,
+                      `/salvage?batch=${batch.code}`,
+                      "yield-rejected",
+                    ],
+                    [
+                      "Needs review",
+                      y.pendingReview,
+                      `/scans?batch=${batch.code}&status=PENDING_REVIEW`,
+                      "yield-review",
+                    ],
+                    [
+                      "Salvage reused here",
+                      y.salvageReceived,
+                      `/salvage?status=ASSIGNED&batch=${batch.code}`,
+                      "yield-salvage-in",
+                    ],
+                  ].map(([label, value, href, id]) => (
+                    <div key={label as string}>
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="text-lg font-semibold tabular-nums">
+                        <Link
+                          href={href as string}
+                          data-testid={id as string}
+                          className="underline-offset-4 hover:underline"
+                        >
+                          {value}
+                        </Link>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </>
             )}
             <Link
               href={`/scans?batch=${batch.code}`}
               className="text-sm underline underline-offset-4"
             >
-              All {counts.total} scan{counts.total === 1 ? "" : "s"} of this batch
+              All {y.scanned} scan{y.scanned === 1 ? "" : "s"} of this batch
             </Link>
           </CardContent>
         </Card>

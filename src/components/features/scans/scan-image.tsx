@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ImageOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type OverlayDetection = {
@@ -39,13 +40,30 @@ const TONES = {
 /** The captured section with each detection drawn where the model saw it (fractions of the image). */
 export function ScanImage({ src, alt, detections, thresholds, highlightId, className }: Props) {
   const [hover, setHover] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const active = highlightId ?? hover;
+
+  if (failed) {
+    return (
+      <figure
+        className={cn(
+          "flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted/40 text-center text-muted-foreground",
+          className,
+        )}
+      >
+        <ImageOff aria-hidden className="size-8" />
+        <figcaption>
+          The image file for this scan is missing. The detections below are still recorded.
+        </figcaption>
+      </figure>
+    );
+  }
 
   return (
     <figure className={cn("relative overflow-hidden rounded-lg border bg-muted", className)}>
       {/* Authenticated, per-scan image: next/image optimisation would need it to be public. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={alt} className="block h-auto w-full" />
+      <img src={src} alt={alt} onError={() => setFailed(true)} className="block h-auto w-full" />
       {detections.map((d) => (
         <div
           key={d.id}
