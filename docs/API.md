@@ -141,6 +141,29 @@ or `404 NO_BATCH_AT_PREPARATION`.
 - `409` once the batch is closed, or once the material has moved on (repair started, salvage
   reused or discarded).
 
+## Rework and salvage (session)
+
+Every REWORK verdict opens a **repair ticket**; every REJECT keeps the section as **salvage**
+(D-007). These endpoints move them along. Each takes `expectedStatus` (what the caller last saw)
+and answers `409 STALE` if it changed. All moves are audited.
+
+| Method & path                        | Permission       | Body / query                                                               |
+| ------------------------------------ | ---------------- | -------------------------------------------------------------------------- |
+| `GET /api/v1/rework`                 | `rework:manage`  | `?batch=` → `{ waiting, inProgress, done }` (done = last 7 days)           |
+| `POST /api/v1/rework/{id}/status`    | `rework:manage`  | `{ move: start\|done\|reopen\|unstart, expectedStatus, note? }`            |
+| `GET /api/v1/salvage`                | `salvage:read`   | `?status=AVAILABLE\|ASSIGNED\|DISCARDED&batch=` → `{ rows, counts }`       |
+| `POST /api/v1/salvage/{id}/assign`   | `salvage:manage` | `{ batchId, expectedStatus, note? }`, another planned or in-progress batch |
+| `POST /api/v1/salvage/{id}/unassign` | `salvage:manage` | `{ expectedStatus }`, only while the receiving batch is open               |
+| `POST /api/v1/salvage/{id}/discard`  | `salvage:manage` | `{ reason, expectedStatus }`; final                                        |
+
+**Repairs:**
+
+- **Flow:** `start` (OPEN → IN_PROGRESS) and `done` (IN_PROGRESS → DONE). Each can be undone one
+  step: `unstart` (IN_PROGRESS → OPEN) and `reopen` (DONE → IN_PROGRESS).
+- **Usable count:** a repaired section counts as usable in its batch (usable = passed + repaired).
+- **Closing a batch:** a batch can't be completed while repairs are open (`409`, with the count).
+  Cancelling a batch cancels its unfinished repairs.
+
 ## Coming next
 
 | Phase | Endpoints                                                             |
