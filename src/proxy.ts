@@ -14,7 +14,9 @@ export default auth((request) => {
   const { pathname, search } = request.nextUrl;
   const user = request.auth?.user;
 
-  if (pathname === "/login" && user?.role) {
+  // GET only: a late prefetch response can restore the session cookie right after /logout cleared
+  // it. Redirecting the sign-in POST (a server action) would then break the login form.
+  if (pathname === "/login" && user?.role && request.method === "GET") {
     return NextResponse.redirect(new URL(ROLE_HOME[user.role], request.nextUrl));
   }
 
