@@ -8,7 +8,7 @@ description: End-of-session routine for the CPoint rebuild. Runs the quality gat
 1. **Gates:** run `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` (and the
    Playwright smoke test / `docker compose up --build` if this session touched those areas).
    Record the real results. If something fails, fix it or record it as a blocker. Never mark it passed.
-2. **`docs/STATUS.md`:** overwrite it so it's accurate *now*. Cover the date, current phase,
+2. **`docs/STATUS.md`:** overwrite it so it's accurate _now_. Cover the date, current phase,
    phase checklist, "What works right now", **Next step (exact)** with a paste-ready prompt,
    blockers, and open questions/assumptions. Keep it ≤150 lines.
 3. **`docs/SESSION_LOG.md`:** prepend one entry using the template at the top of the file.

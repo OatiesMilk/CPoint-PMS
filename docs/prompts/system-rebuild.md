@@ -1,7 +1,7 @@
 # Master Prompt: CPoint Product Monitoring System Rebuild
 
 > **How to use this file.** Open Claude Code (Opus) at the repo root and say:
-> *"Read `docs/prompts/system-rebuild.md` and run the next phase listed in `docs/STATUS.md`."*
+> _"Read `docs/prompts/system-rebuild.md` and run the next phase listed in `docs/STATUS.md`."_
 > Claude does **one phase per session**, then stops for your review. See `docs/AGENTIC_WORKFLOW.md`.
 
 ---
@@ -20,10 +20,11 @@ project in a state the next session can't pick up from.
 **Current system:** Laravel 12 + MySQL + Blade (this repo before Phase 0). It has role dashboards, a
 YOLO ingestion API (`POST /api/inspections`, Sanctum token), auto pass/reject confidence thresholds,
 a human review queue, rework tracking, and a decision-support report. The panel asked for a rebuild
-that meets industry standards. Reuse the *ideas* that worked (listed in `docs/DECISIONS.md`), but
+that meets industry standards. Reuse the _ideas_ that worked (listed in `docs/DECISIONS.md`), but
 none of the PHP code.
 
 **Client research:** read `docs/client-survey.md` (Taglish interview answers). Key findings:
+
 - Everything is tracked today on paper and pen. The materials log book covers leather rolls, nails,
   equipment, sales and deliveries.
 - The **bottlenecks are Upper Making and Sole-ing**. Upper Making takes the longest.
@@ -37,20 +38,22 @@ none of the PHP code.
 - **Workforce metrics are sensitive.** Past awards caused jealousy. Do **not** build per-person
   rankings, leaderboards or individual scores.
 - The client wants **per-component tracking in Upper Making** (later), plus inventory management
-  and batch quotas.
+and batch quotas.
 </context>
 
 <read_first>
 At the start of **every** session, before doing anything else:
+
 1. `CLAUDE.md`: project rules (auto-loaded).
 2. `docs/STATUS.md`: current phase, what's done, what's next, blockers.
 3. `docs/DECISIONS.md`: settled decisions. Don't re-litigate them; add a new entry to change one.
 4. `docs/ROADMAP.md`: phase definitions and acceptance criteria.
 5. `.claude/skills/ui-craft/SKILL.md`: required for any UI work.
 6. `DESIGN.md` (exists after Phase 0): design tokens and rules. It overrides ui-craft defaults.
-</read_first>
+   </read_first>
 
 <ground_rules>
+
 - **Branch:** all rebuild work happens on `system-rebuild`. In Phase 0, if `system-rebuild` doesn't
   exist, create it from the current HEAD (the branch containing this file) and push it with
   `git push -u origin system-rebuild`. Never push to `main`.
@@ -65,29 +68,29 @@ At the start of **every** session, before doing anything else:
 - **When unsure,** don't guess on business rules. Make the smallest reasonable assumption, mark it
   `ASSUMPTION` in code comments and in `docs/STATUS.md → Open questions`, and keep going.
 - **Never** commit secrets. `.env` is gitignored, and `.env.example` documents every variable.
-</ground_rules>
+  </ground_rules>
 
 <tech_stack>
 Use the current stable versions at the time you scaffold, and record the exact versions in
 `docs/DECISIONS.md`.
 
-| Concern | Choice | Why |
-|---|---|---|
-| Framework | **Next.js (App Router) + TypeScript (strict)** | Full-stack in one deployable unit |
-| Runtime | Node.js current LTS | |
-| Database | **PostgreSQL** | Requested; relational fit for batches/scans/inventory |
-| ORM / migrations | **Prisma** | Typed models, versioned migrations, seed script |
-| Auth | **Auth.js (NextAuth v5)**, credentials provider, bcrypt/argon2 hashes, JWT sessions | Standard, no external IdP needed |
-| Validation | **Zod**, shared between API and forms | One schema = one truth |
-| UI | **Tailwind CSS + shadcn/ui (Radix)**, restyled via `DESIGN.md` tokens | Accessible primitives, no default look |
-| Forms | React Hook Form + Zod resolver | |
-| Client data / polling | TanStack Query | Polling for the "Latest scans" widget |
-| Charts | Recharts | Follow the `dataviz` guidance if available |
-| Tests | **Vitest** (unit/service), **Playwright** (e2e smoke) | |
-| Quality | ESLint, Prettier, `tsc --noEmit`, Husky + lint-staged | |
-| CI | GitHub Actions: lint → typecheck → test → build | Industry baseline |
-| Logging | pino (structured JSON) | |
-</tech_stack>
+| Concern               | Choice                                                                              | Why                                                   |
+| --------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Framework             | **Next.js (App Router) + TypeScript (strict)**                                      | Full-stack in one deployable unit                     |
+| Runtime               | Node.js current LTS                                                                 |                                                       |
+| Database              | **PostgreSQL**                                                                      | Requested; relational fit for batches/scans/inventory |
+| ORM / migrations      | **Prisma**                                                                          | Typed models, versioned migrations, seed script       |
+| Auth                  | **Auth.js (NextAuth v5)**, credentials provider, bcrypt/argon2 hashes, JWT sessions | Standard, no external IdP needed                      |
+| Validation            | **Zod**, shared between API and forms                                               | One schema = one truth                                |
+| UI                    | **Tailwind CSS + shadcn/ui (Radix)**, restyled via `DESIGN.md` tokens               | Accessible primitives, no default look                |
+| Forms                 | React Hook Form + Zod resolver                                                      |                                                       |
+| Client data / polling | TanStack Query                                                                      | Polling for the "Latest scans" widget                 |
+| Charts                | Recharts                                                                            | Follow the `dataviz` guidance if available            |
+| Tests                 | **Vitest** (unit/service), **Playwright** (e2e smoke)                               |                                                       |
+| Quality               | ESLint, Prettier, `tsc --noEmit`, Husky + lint-staged                               |                                                       |
+| CI                    | GitHub Actions: lint → typecheck → test → build                                     | Industry baseline                                     |
+| Logging               | pino (structured JSON)                                                              |                                                       |
+| </tech_stack>         |
 
 <docker>
 Keep Docker simple and organized:
@@ -148,6 +151,7 @@ tests/   unit/  e2e/
 ```
 
 Layer rules (enforce them in code review, and with ESLint `no-restricted-imports` where possible):
+
 - `route.ts` files are **one-liners** that delegate to a controller. They contain no logic.
 - Controllers never touch Prisma. Services never read `Request`. Only `models/` imports Prisma.
 - Server Components and Server Actions call **services**, never models or Prisma directly.
@@ -170,6 +174,7 @@ durations feed the bottleneck report. Stages can't be skipped. Going backwards n
 is audited.
 
 **Computer vision (Preparation only, before cutting):**
+
 - One **scan = one leather section** of the batch's roll, captured before the cutting guides are applied.
 - A scan has 0..n **detections** (defect type, confidence 0–1, bounding box as fractions 0–1).
 - **Defect types are configurable data, not code.** Seed `cut`, `hole`, `abrasion`, `dirt`. Each
@@ -185,9 +190,9 @@ is audited.
   3. max confidence < 0.60, or no detections → **PASS** (automatic; `ASSUMPTION` until confirmed)
   4. Any detection with an **unknown class key** → **NEEDS_REVIEW** instead, because the system
      can't trust a class it doesn't know.
-  Compare boundaries on the raw float (0.8999 = REWORK, 0.90 = REJECT). Validate that
-  `reworkAtOrAbove < rejectAtOrAbove` when an admin saves settings. Store the thresholds used on
-  each scan (`thresholdsSnapshot`) so old decisions stay explainable after the settings change.
+     Compare boundaries on the raw float (0.8999 = REWORK, 0.90 = REJECT). Validate that
+     `reworkAtOrAbove < rejectAtOrAbove` when an admin saves settings. Store the thresholds used on
+     each scan (`thresholdsSnapshot`) so old decisions stay explainable after the settings change.
 - **Human-in-the-loop:** the **Quality Inspector or the Floor Manager**, whoever is available, can
   **override** any automatic decision (PASS / REWORK / REJECT) from scan detail or the "Recent
   decisions" list, and resolves NEEDS_REVIEW scans in the review queue. Overrides require a reason
@@ -221,23 +226,23 @@ reorder level. Creating a batch can optionally consume one leather roll from inv
 <roles_and_modules>
 Seed one demo account per role (password from `.env`, documented in README).
 
-| Module | Floor Manager | Quality Inspector | System Admin | Shoe Constructor |
-|---|---|---|---|---|
-| Overview dashboard (role-specific) | ✅ | ✅ | ✅ (system health) | placeholder |
-| Batches: list / create / edit / advance stage | ✅ full | view | view | — |
-| Camera (CV placeholder page) | ✅ | ✅ | ✅ | — |
-| "Latest scans" widget (polls every 5s) | ✅ on overview | ✅ on overview | — | — |
-| Recent decisions + override; review queue (unknown classes) | ✅ | ✅ | — | — |
-| Scan history + detail (image + boxes) | ✅ | ✅ | view | — |
-| Rework board | ✅ | ✅ | — | — |
-| Salvage | ✅ | view | — | — |
-| Inventory + movements | ✅ | — | view | — |
-| Reports: daily summary, defects, stage durations, CSV export | ✅ | ✅ (quality only) | — | — |
-| Users (CRUD, deactivate, reset password) | — | — | ✅ | — |
-| Defect types, CV thresholds, shoe types, suppliers | — | — | ✅ | — |
-| CV device API tokens (create / revoke, shown once) | — | — | ✅ | — |
-| Audit log (filterable) | — | — | ✅ | — |
-| Constructor home: "Your tasks are coming soon" | — | — | — | ✅ |
+| Module                                                       | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor |
+| ------------------------------------------------------------ | -------------- | ----------------- | ------------------ | ---------------- |
+| Overview dashboard (role-specific)                           | ✅             | ✅                | ✅ (system health) | placeholder      |
+| Batches: list / create / edit / advance stage                | ✅ full        | view              | view               | —                |
+| Camera (CV placeholder page)                                 | ✅             | ✅                | ✅                 | —                |
+| "Latest scans" widget (polls every 5s)                       | ✅ on overview | ✅ on overview    | —                  | —                |
+| Recent decisions + override; review queue (unknown classes)  | ✅             | ✅                | —                  | —                |
+| Scan history + detail (image + boxes)                        | ✅             | ✅                | view               | —                |
+| Rework board                                                 | ✅             | ✅                | —                  | —                |
+| Salvage                                                      | ✅             | view              | —                  | —                |
+| Inventory + movements                                        | ✅             | —                 | view               | —                |
+| Reports: daily summary, defects, stage durations, CSV export | ✅             | ✅ (quality only) | —                  | —                |
+| Users (CRUD, deactivate, reset password)                     | —              | —                 | ✅                 | —                |
+| Defect types, CV thresholds, shoe types, suppliers           | —              | —                 | ✅                 | —                |
+| CV device API tokens (create / revoke, shown once)           | —              | —                 | ✅                 | —                |
+| Audit log (filterable)                                       | —              | —                 | ✅                 | —                |
+| Constructor home: "Your tasks are coming soon"               | —              | —                 | —                  | ✅               |
 
 **Floor Manager overview:** today's scans and pass/rework/reject split, open reworks, batches
 per stage (shows the bottleneck), low-stock alerts, and Latest scans.
@@ -253,6 +258,7 @@ connected here." It doesn't use `getUserMedia` yet.
 <cv_integration_contract>
 This contract is what the real YOLO service will call later, so keep it stable and document it in
 `docs/API.md`.
+
 - `POST /api/v1/scans`: `Authorization: Bearer <device token>` (hashed in DB, `scans:create` scope,
   revocable, `lastUsedAt` tracked). Request is `multipart/form-data`: `batchId` (optional; defaults
   to the open batch at Preparation), `image` (≤10 MB, jpeg/png/webp), and `detections` (JSON array of
@@ -265,7 +271,7 @@ This contract is what the real YOLO service will call later, so keep it stable a
   demoed with no camera.
 - Defect class keys, thresholds and source type are all data/config. Plugging in the real model
   must need **zero code changes** to the app.
-</cv_integration_contract>
+  </cv_integration_contract>
 
 <ui>
 - Follow `.claude/skills/ui-craft/SKILL.md` for every screen. Write the 3-line intent brief in the
@@ -323,6 +329,7 @@ The authoritative list with acceptance criteria is `docs/ROADMAP.md`. Summary:
 <quality_gates>
 A phase isn't done until **all** of these pass, and you've pasted the actual output summary into
 your final report:
+
 - `npm run lint` · `npm run typecheck` · `npm run test` (unit) · `npm run build`
 - Phase-relevant Playwright smoke test passes (from Phase 1 on).
 - `docker compose up --build` starts cleanly and `/api/health` returns 200 (check in Phase 0 and
@@ -332,11 +339,12 @@ your final report:
   defect type ignored, unknown class key, invalid thresholds, skipped stage.
 - The ui-craft "Definition of done" checklist is satisfied for every screen touched.
 - If a gate can't run (e.g. no Docker in the environment), say so explicitly. Never claim it passed.
-</quality_gates>
+  </quality_gates>
 
 <documentation_protocol>
 The docs are the project's memory between sessions and between teammates. Keep them true.
 At the **end of every session** (use the `/wrap-up` skill):
+
 1. **`docs/STATUS.md`**: update the current phase, the progress checklist, what's next (the exact
    next step), blockers, and open questions. Keep it under ~150 lines and keep it current; it's
    not a history.
@@ -347,14 +355,15 @@ At the **end of every session** (use the `/wrap-up` skill):
 4. **`docs/ROADMAP.md`**: tick the acceptance criteria that are done.
 5. `README.md`, `docs/API.md`, `DESIGN.md`: update them when setup, endpoints or design change.
 6. Commit the docs with the code (`docs(status): ...`) and push.
-</documentation_protocol>
+   </documentation_protocol>
 
 <final_report_format>
 End every session with:
+
 1. **Phase / outcome:** one line.
 2. **What changed:** bullets by module.
 3. **Quality gates:** each gate with pass/fail/not run (and why).
 4. **Assumptions made:** each also logged in STATUS → Open questions.
 5. **Questions for the team:** only the ones that block the next phase.
 6. **Next session:** the exact prompt to paste.
-</final_report_format>
+   </final_report_format>

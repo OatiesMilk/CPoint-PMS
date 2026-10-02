@@ -5,19 +5,28 @@ leather-shoe production line (Preparation → Upper Making → Sole-ing → Fini
 computer-vision checkpoint at Preparation, before cutting.
 
 **The project is mid-rebuild** from Laravel/MySQL to Next.js/PostgreSQL/Docker on the
-`system-rebuild` branch. If Laravel files (`artisan`, `composer.json`, `app/Http`) still exist,
-Phase 0 has not run yet.
+`system-rebuild` branch. Phase 0 (foundation) is done: the Laravel code is gone, and `main` still
+holds it for reference.
+
+Next.js 16 and Prisma 7 have breaking changes from older versions. Read the bundled docs before
+writing framework code:
+@AGENTS.md
+Prisma 7 specifics: the client is generated to `src/generated/prisma` (import from
+`@/generated/prisma/client`), it needs the `@prisma/adapter-pg` driver adapter, and the CLI is
+configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 
 ## Read at the start of every session
+
 - Current state (auto-loaded below): @docs/STATUS.md
 - Master spec: `docs/prompts/system-rebuild.md`. Read it before any feature work.
 - Settled decisions: `docs/DECISIONS.md`. Don't re-litigate them; add a new entry to change one.
 - Phases + acceptance criteria: `docs/ROADMAP.md`
 - Client research: `docs/client-survey.md`
-- Before any UI work, read `DESIGN.md` (once it exists) and `.claude/skills/ui-craft/SKILL.md`,
+- Before any UI work, read `DESIGN.md` and `.claude/skills/ui-craft/SKILL.md`,
   and follow them. Use tokens only, with no raw color or spacing values in components.
 
 ## Non-negotiables
+
 - Work on `system-rebuild`. Never push to `main`.
 - **One roadmap phase per session**, then stop and report (format in the master spec).
 - MVC layering: `app/api/v1/**/route.ts` (one-liner) → `server/controllers` → `server/services`
@@ -29,13 +38,18 @@ Phase 0 has not run yet.
 - Never claim a check passed without running it. If you couldn't run it, say so.
 
 ## End of every session
+
 Run `/wrap-up` (or follow the documentation protocol in the master spec): update
 `docs/STATUS.md`, prepend to `docs/SESSION_LOG.md`, log decisions in `docs/DECISIONS.md`, tick
 `docs/ROADMAP.md`, commit and push.
 
 ## Commands
-_Filled in during Phase 0. Keep this section accurate._
-- Dev: `docker compose up -d db` then `npm run dev`
-- Demo: `docker compose up --build`
-- Checks: `npm run lint && npm run typecheck && npm run test && npm run build`
-- Simulate CV scans: `npm run cv:simulate -- --count 20 --interval 3`
+
+- Dev: `npm run db:up && npm run db:deploy && npm run dev` (DB in Docker, app on host)
+- Demo: `docker compose up --build -d`, then http://localhost:3000
+- All checks: `npm run check` (lint + typecheck + unit tests + build)
+- E2E: `npm run build && npm run test:e2e`. Needs the DB up. Set `PLAYWRIGHT_CHROMIUM_PATH` if
+  browsers can't be downloaded.
+- After editing `prisma/schema.prisma`: `npm run db:migrate -- --name <change>`
+- Simulate CV scans (from Phase 3): `npm run cv:simulate -- --count 20 --interval 3`
+- A pre-commit hook (husky + lint-staged) runs ESLint and Prettier on staged files.
