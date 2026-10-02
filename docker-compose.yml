@@ -1,0 +1,45 @@
+# CPoint PMS — exactly two services (D-003).
+#   Dev:   npm run db:up            (database only; run `npm run dev` on the host)
+#   Demo:  docker compose up --build (whole system at http://localhost:3000)
+# Values come from .env when present, otherwise the defaults below.
+name: cpoint-pms
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cpoint}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cpoint_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-cpoint_pms}
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql
+    ports:
+      # Bound to localhost only: reachable from this machine for dev tools, not from the network.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    image: cpoint-pms:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cpoint}:${POSTGRES_PASSWORD:-cpoint_dev_password}@db:5432/${POSTGRES_DB:-cpoint_pms}?schema=public
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Manila}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - uploads:/app/storage/uploads
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  pgdata:
+  uploads:

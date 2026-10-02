@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, system-rebuild]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: check
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: cpoint
+          POSTGRES_PASSWORD: cpoint_ci_password
+          POSTGRES_DB: cpoint_pms
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cpoint -d cpoint_pms"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://cpoint:cpoint_ci_password@localhost:5432/cpoint_pms?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:deploy
+      - run: npm run build
+      - run: npm run test:e2e
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the full stack
+        run: docker compose up --build -d --wait
+      - name: Health check
+        run: curl --fail --silent http://localhost:3000/api/health
+      - if: failure()
+        run: docker compose logs
+      - if: always()
+        run: docker compose down -v
