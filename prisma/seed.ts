@@ -1,9 +1,13 @@
-// Seed script — filled in Phase 1 (role accounts, shoe types, defect types, CV settings).
-async function main() {
-  console.log("Nothing to seed yet (Phase 1).");
-}
+// `npm run db:seed`: same idempotent bootstrap the app runs on startup (reference data,
+// demo users when SEED_DEMO_USERS=true, first admin from BOOTSTRAP_ADMIN_*).
+import "dotenv/config";
+import { bootstrap } from "../src/server/services/bootstrap.service";
+import { getPrisma } from "../src/server/lib/prisma";
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+bootstrap()
+  .then(() => console.log("Seed complete."))
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => getPrisma().$disconnect());

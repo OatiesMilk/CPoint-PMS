@@ -7,7 +7,8 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
-    seed: "tsx prisma/seed.ts",
+    // react-server condition: lets the seed import server-only modules outside Next.js.
+    seed: "tsx --conditions=react-server prisma/seed.ts",
   },
   datasource: {
     // process.env (not env()) so `prisma generate` works without a database URL, e.g. in CI.
