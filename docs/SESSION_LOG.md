@@ -16,6 +16,36 @@ Template:
 
 ---
 
+## 2026-10-02 — Phase 2: Batches & stages
+
+**Who:** Team + Claude Code
+**Summary:** Built the batch module end to end:
+
+- the stage machine, models and service, with an atomic code counter and STALE concurrency;
+- the REST API;
+- list, create/edit and detail pages with dialogs and toasts;
+- the live "Batches by stage" card on the FM home.
+
+Verified with 140 unit and 21 e2e tests, locally and against Docker.
+**Changed:**
+
+- Domain: `src/lib/stage-machine.ts`, `src/lib/format.ts`, batch status labels in `src/lib/domain.ts`.
+- Server: `models/{batch,stage-log}`, reference-data list helpers, `services/batch.service`,
+  `validators/batch.validator`, `controllers/batch.controller`, `Errors.stale`, `readJsonBody`.
+- API: `/api/v1/batches`, `/[id]`, `/[id]/stages`, `/[id]/cancel` (`docs/API.md`).
+- UI: Table, Badge, Select, Textarea, Dialog, Toaster (sonner); BatchStatusBadge, StageProgress,
+  BatchesByStageCard; `/batches` (+ loading/error), `/batches/new`, `/batches/[id]`, `/batches/[id]/edit`.
+- Nav: Batches is live.
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · test ✅ (140) · build ✅ · e2e ✅ (21, `next start`
+and Docker) · docker ✅ (fresh volume, health 200) · audit rows checked in psql ✅
+**Decisions:** D-019
+**Follow-ups:**
+
+- Phase 3: decide how the camera picks "the current batch" when several are at Preparation.
+- The cloud sandbox's Docker daemon stopped once mid-session. The app degraded and recovered on its
+  own (health 503 → 200, no restart), which confirms the bootstrap/health design.
+
 ## 2026-10-02 — Phase 1: Data & auth
 
 **Who:** Team + Claude Code

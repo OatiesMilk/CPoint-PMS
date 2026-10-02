@@ -147,3 +147,22 @@ means there's no second toolchain in the image, and a fresh factory install is u
 - Overrides cancel and recreate rework/salvage rows rather than editing them, so history survives.
 - The full schema for all phases is in the first migration, and later phases add migrations only
   when requirements change.
+
+### D-019 · 2026-10-02 · Accepted — Batch lifecycle and concurrency rules
+
+**Decision:**
+
+- **Lifecycle:** `PLANNED` (registered) → _Start production_ opens Preparation → _advance_ one
+  stage at a time (no skipping) → _Complete_ only from Finishing (confirmed, final).
+- **Move back:** one stage, reason required, logged as `isRollback` with the reason; repeat visits
+  add to that stage's total time.
+- **Cancel:** from Planned or In progress, reason required, final.
+- **Edits:** allowed until completed/cancelled, but the shoe type locks at start.
+- **Codes:** `B-<Manila year>-<4-digit counter>` from an atomic `INSERT … ON CONFLICT` on `batch_sequences`.
+- **Concurrency:** each move sends `expectedStage`, and the update is conditional on the state that
+  was read. A mismatch is `409 STALE`, and the UI offers Refresh.
+- **One rule set:** `src/lib/stage-machine.ts` is a pure module used by both the services and the UI,
+  so buttons and rules can't drift.
+
+**Consequences:** stage durations come from `batch_stage_logs`, which is the data for the Phase 7
+bottleneck report. Phase 3 attaches scans to batches `IN_PROGRESS` at `PREPARATION`.

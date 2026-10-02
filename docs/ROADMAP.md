@@ -28,10 +28,10 @@ Tick the boxes as they're done.
 
 ## Phase 2 — Batches & stages
 
-- [ ] Batch list (filter by status/stage/shoe type), create, edit, cancel
-- [ ] Advance stage (no skipping; going backwards needs a reason) with `BatchStageLog`
-- [ ] Batch detail: stage timeline with durations
-- [ ] Unit tests for stage transitions
+- [x] Batch list (filter by status/stage/shoe type), create, edit, cancel
+- [x] Advance stage (no skipping; going backwards needs a reason) with `BatchStageLog`
+- [x] Batch detail: stage timeline with durations
+- [x] Unit tests for stage transitions
 
 ## Phase 3 — CV skeleton
 

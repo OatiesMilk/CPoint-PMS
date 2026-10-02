@@ -76,6 +76,13 @@ Re-measure whenever a color token changes.
 | `DropdownMenu`         | User menu, row actions         | —                                                               | keyboard navigable, scales from trigger                                            |
 | Sidebar                | Main navigation                | link, active (yellow wash + ink indicator), planned ("Phase N") | planned items aren't links; screen readers hear "available in Phase N"             |
 | `ComingSoonCard`       | Placeholder dashboard panel    | —                                                               | names the phase that delivers it                                                   |
+| `Table`                | Dense lists                    | `numeric` cells right-aligned                                   | one row height (44px); header row muted; hover wash                                |
+| `Badge`                | Status labels                  | neutral, info, success, warning, danger, brand                  | always icon + label                                                                |
+| `Select`               | Choices in forms and filters   | styled native `<select>`                                        | `aria-invalid`, disabled + hint explaining why                                     |
+| `Dialog`               | Confirm / reason prompts       | —                                                               | title names the item; confirm repeats the verb; Escape/close button                |
+| Toast (`sonner`)       | Routine success                | —                                                               | bottom-right, 4s; errors stay inline instead                                       |
+| `StageProgress`        | Where a batch is               | —                                                               | done ticked (ink), current yellow, upcoming muted; time under each step            |
+| Batch list states      | —                              | —                                                               | first-use empty + CTA, no-match + Clear, skeleton, error + Try again               |
 | Tables (Phase 2+)      | Lists of batches, scans, items | —                                                               | skeleton rows, empty (first-use vs filtered), error + retry, stale label           |
 | Latest scans (Phase 3) | Live CV feed                   | —                                                               | "Updated Ns ago", paused/offline label                                             |
 

@@ -5,14 +5,14 @@
 
 **Last updated:** 2026-10-02
 **Branch:** `system-rebuild`
-**Current phase:** Phase 2 — Batches & stages (not started)
-**Overall:** 2 / 9 phases complete
+**Current phase:** Phase 3 — CV skeleton (not started)
+**Overall:** 3 / 9 phases complete
 
 ## Phase progress
 
 - [x] 0. Foundation: branch, DESIGN.md, remove Laravel, scaffold, Docker, CI
 - [x] 1. Data & auth
-- [ ] 2. Batches & stages
+- [x] 2. Batches & stages
 - [ ] 3. CV skeleton (ingestion API, decision engine, simulator, override + review queue, camera placeholder)
 - [ ] 4. Rework & salvage
 - [ ] 5. Inventory
@@ -22,38 +22,41 @@
 
 ## What works right now
 
-- **Database:** the full schema for every phase is migrated (`prisma/migrations/…_init`): users,
-  API tokens, audit log, reference data, batches + stage logs, scans + detections, rework,
-  salvage, inventory. UUIDv7 ids and indexed FKs (D-018).
-- **Bootstrap on start** (D-017): reference data (2 shoe types, 4 defect types, CV thresholds
-  0.90/0.60, sample supplier), the first System Admin from env, and demo users when
-  `SEED_DEMO_USERS=true`. Idempotent; `npm run db:seed` runs the same thing.
-- **Sign-in** (D-016): Auth.js credentials with bcrypt and 12-hour JWT sessions.
-  - 5 wrong passwords lock the account for 15 minutes.
-  - Deactivated users are signed out on their next request.
-  - No account enumeration.
-  - Every sign-in, failure, lock and sign-out is audited.
-- **Access control:** `can(role, permission)` matrix; `requireRole`/`requirePermission` in pages,
-  `requireApiPermission` for APIs; `proxy.ts` does an optimistic cookie check. 403 and 404 pages.
-- **App shell:** the sidebar comes from the permission matrix; modules not built yet show as
-  "Phase N". It has a user menu (sign out) and the theme toggle. Role homes are placeholders,
-  except the admin home, which shows live system health.
-- **Audit pattern:** `runInTransaction` + `recordAudit(tx, …)`. Secrets are redacted.
-- **Tests:** 94 unit tests (incl. the full role × permission matrix and lockout rules) and 13 e2e
-  tests. The e2e tests pass against both `next start` and the Docker stack.
+- **Database:** the full schema for every phase is migrated (`prisma/migrations/…_init`).
+  UUIDv7 ids and indexed FKs (D-018).
+- **Bootstrap on start** (D-017): reference data, the first System Admin from env, and demo users
+  when `SEED_DEMO_USERS=true`. Idempotent; `npm run db:seed` runs the same thing.
+- **Sign-in & access** (D-016): Auth.js credentials, 12-hour sessions, lockout, and deactivation
+  enforced on the next request. A role × permission matrix with page/API guards; 403/404 pages.
+- **Batches** (D-019):
+  - **List:** filters (status, stage, shoe type, search) kept in the URL, time in stage,
+    pagination, and empty/loading/error states.
+  - **Create/edit:** batch codes `B-2026-0001`. The shoe type locks once production starts.
+  - **Detail:** one primary action per state (Start production → Move to … → Complete batch).
+    Moving back and cancelling need a reason; completing is confirmed. A stage stepper and a
+    timeline show durations and rollback reasons.
+  - **Concurrency:** two people moving the same batch get `409 STALE` with a Refresh button.
+  - **FM home:** "Batches by stage" is live, flagging the stage with the longest wait.
+  - **API:** `/api/v1/batches` (list, create, get, patch, stages, cancel), documented in `docs/API.md`.
+- **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)` with
+  before/after values. Verified in psql for every batch action.
+- **Tests:** 140 unit tests and 21 e2e tests. The e2e tests pass against `next start` and the Docker stack.
 
 ## Next step (exact)
 
-Start Phase 2. Paste into Claude Code:
+Start Phase 3. Paste into Claude Code:
 
-> /resume, then run Phase 2 (Batches & stages) from `docs/ROADMAP.md`. Start in plan mode.
+> /resume, then run Phase 3 (CV skeleton) from `docs/ROADMAP.md`. Start in plan mode.
 
-Phase 2 notes:
+Phase 3 notes:
 
-- The `Batch`, `BatchStageLog` and `BatchSequence` tables already exist. Use the
-  `runInTransaction` + `recordAudit` pattern.
-- Remove `phase: 2` from Batches in `src/server/policies/navigation.ts`.
-- Replace the "Batches by stage" placeholder card on the FM home.
+- "The batch at Preparation" = `status IN_PROGRESS` and `currentStage PREPARATION`. More than one
+  can be at Preparation, so `GET /api/v1/batches/current` needs a rule: the oldest-started, or an
+  explicitly selected batch on the Camera page. Decide this in the plan.
+- `Scan`, `Detection`, `ApiToken`, `CvSettings` and `DefectType` already exist. The decision
+  engine follows D-011.
+- Remove `phase: 3` from Camera, Scans, Review queue and API tokens in `navigation.ts`.
+- Replace the "Scans & counts" card on batch detail and "Latest scans" on the FM/QI homes.
 
 ## Blockers
 
