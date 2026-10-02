@@ -16,6 +16,42 @@ Template:
 
 ---
 
+## 2026-10-02 — Phase 3: CV skeleton
+
+**Who:** Team + Claude Code
+**Summary:** Built the camera pipeline end to end: device tokens, the ingestion API, the decision
+engine, image storage, automatic rework/salvage rows, and a simulator. Added overrides and the
+review queue, the scan pages with bounding-box overlays, the Camera page, token admin, and the
+live feed on the FM/QI homes.
+**Changed:**
+
+- DB: migration `camera_active_batch` (`cv_settings.activeBatchId`).
+- Domain: `src/lib/decision-engine.ts`.
+- Server:
+  - lib: `device-token`, `storage`, `image-type`, `action-result`;
+  - models: `api-token`, `scan`, `outcome`, `cv-settings`, plus preparation-batch helpers;
+  - services: `api-token`, `camera`, `scan-ingest`, `scan-decision`, `scan-query`;
+  - validators: `scan`, `token`; `controllers/scan.controller`; `requireDevice`; `camera:manage`.
+- API: `POST/GET /api/v1/scans`, `/{id}`, `/{id}/image`, `/{id}/decision`, `GET /api/v1/batches/current`.
+- Scripts: `npm run cv:token`, `npm run cv:simulate` (sharp-rendered leather images).
+- UI:
+  - pages: `/scans`, `/scans/[id]`, `/review`, `/camera`, `/admin/tokens`;
+  - components: ScanImage overlay, VerdictFlow, LatestScansWidget (TanStack Query);
+  - the QI home, batch scan counts, and nav (Camera, Scans, Review queue, API tokens are live).
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · test ✅ (193) · build ✅ · e2e ✅ (28 against
+`next start`, twice; 28 against Docker, 5 of 6 runs; see below) · docker ✅ (fresh volume, 2 migrations,
+simulator → images in the `uploads` volume, survive `restart app`) · audit rows checked in psql ✅
+**Decisions:** D-020
+**Follow-ups:**
+
+- **Unreproduced e2e failure:** on the first run against a freshly started Docker stack, the
+  deactivation test failed one `toBeVisible` assertion. It then passed 3× alone and in 5 more full
+  runs. Likely cause: cold-start latency (the first server action and bcrypt on a cold container)
+  exceeding Playwright's 5 s assertion timeout. Watch for it in CI; if it recurs, warm the app up in
+  the CI e2e job rather than raising timeouts.
+- Phase 4: rework and salvage boards and lifecycle; "usable" batch count.
+
 ## 2026-10-02 — Phase 2: Batches & stages
 
 **Who:** Team + Claude Code

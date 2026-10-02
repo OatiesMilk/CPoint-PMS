@@ -35,21 +35,21 @@ Tick the boxes as they're done.
 
 ## Phase 3 — CV skeleton
 
-- [ ] Device API tokens (hashed, scoped, revocable)
-- [ ] `POST /api/v1/scans` + `GET /api/v1/batches/current` documented in `docs/API.md`
-- [ ] Decision engine (pure, unit-tested): ≥0.90 REJECT, 0.60–0.89 REWORK, <0.60 PASS, unknown class → NEEDS_REVIEW; thresholds configurable
-- [ ] Unknown class keys stored and flagged
-- [ ] Image storage via `StorageService` on the `uploads` volume
-- [ ] `npm run cv:simulate` generates realistic scans
-- [ ] Override any decision (QI + FM) with a reason; review queue for NEEDS_REVIEW scans
-- [ ] Scan detail with bounding-box overlay
-- [ ] "Latest scans" widget on the FM and QI overviews (5s polling)
-- [ ] Camera placeholder page
+- [x] Device API tokens (hashed, scoped, revocable)
+- [x] `POST /api/v1/scans` + `GET /api/v1/batches/current` documented in `docs/API.md`
+- [x] Decision engine (pure, unit-tested): ≥0.90 REJECT, 0.60–0.89 REWORK, <0.60 PASS, unknown class → NEEDS_REVIEW; thresholds configurable
+- [x] Unknown class keys stored and flagged
+- [x] Image storage via `StorageService` on the `uploads` volume
+- [x] `npm run cv:simulate` generates realistic scans
+- [x] Override any decision (QI + FM) with a reason; review queue for NEEDS_REVIEW scans
+- [x] Scan detail with bounding-box overlay
+- [x] "Latest scans" widget on the FM and QI overviews (5s polling)
+- [x] Camera placeholder page
 
 ## Phase 4 — Rework & salvage
 
-- [ ] Rework tickets created automatically from REWORK; board OPEN → IN_PROGRESS → DONE
-- [ ] Salvage items created automatically from REJECT; assign to a later batch or discard
+- [ ] Rework tickets created automatically from REWORK (**done in Phase 3**); board OPEN → IN_PROGRESS → DONE
+- [ ] Salvage items created automatically from REJECT (**done in Phase 3**); assign to a later batch or discard
 - [ ] Batch counts service (usable = passed + rework done) shown on batch detail
 - [ ] Unit tests for counts
 

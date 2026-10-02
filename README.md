@@ -79,6 +79,21 @@ the app container applies pending migrations, seeds reference data, then starts 
 | `app`     | Next.js server (non-root), runs migrations | `uploads` (scan images) |
 | `db`      | PostgreSQL 18                              | `pgdata`                |
 
+## Camera and simulator
+
+The Preparation camera (later the YOLO service on a phone, webcam or dedicated camera) sends each
+capture to `POST /api/v1/scans` with a **device token** (contract in [`docs/API.md`](docs/API.md)).
+Without a camera, the simulator sends realistic scans through the same API:
+
+```bash
+npm run cv:token -- --name "Simulator"   # prints a token once; put it in .env as CV_DEVICE_TOKEN
+# start a batch (Batches → New batch → Start production), then:
+npm run cv:simulate -- --count 20 --interval 3
+```
+
+Scans go to the batch chosen on the **Camera** page, or to the batch that has been at Preparation
+the longest. Watch them arrive on the Floor Manager and Quality Inspector homes.
+
 ## Scripts
 
 | Command                     | What it does                                                               |
@@ -94,6 +109,8 @@ the app container applies pending migrations, seeds reference data, then starts 
 | `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`            |
 | `npm run db:deploy`         | Apply pending migrations                                                   |
 | `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)       |
+| `npm run cv:token`          | Create a camera device token (printed once)                                |
+| `npm run cv:simulate`       | Send simulated camera scans (`--count`, `--interval`, `--batch`)           |
 | `npm run db:studio`         | Browse the database in Prisma Studio                                       |
 
 First time running e2e: `npx playwright install chromium`. If Chromium is already installed

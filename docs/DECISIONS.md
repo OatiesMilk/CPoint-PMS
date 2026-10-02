@@ -166,3 +166,30 @@ means there's no second toolchain in the image, and a fresh factory install is u
 
 **Consequences:** stage durations come from `batch_stage_logs`, which is the data for the Phase 7
 bottleneck report. Phase 3 attaches scans to batches `IN_PROGRESS` at `PREPARATION`.
+
+### D-020 · 2026-10-02 · Accepted — Camera ingestion contract, batch targeting and device tokens
+
+**Context:** One camera at Preparation, but several batches can be at Preparation at once. The real
+YOLO service must plug in later without code changes.
+**Decision:**
+
+- **Which batch:** the camera feeds the batch picked on the Camera page
+  (`cv_settings.activeBatchId`, FM/QI via `camera:manage`). Otherwise, or once that batch leaves
+  Preparation, it feeds the batch at Preparation the longest. With none at Preparation, ingestion
+  returns 409 and stores nothing. An explicit `batchId` is accepted for future multi-camera setups.
+- **Contract:** `POST /api/v1/scans` (multipart: `image`, `detections` JSON with fractional boxes,
+  optional `source`/`modelVersion`/`capturedAt`/`batchId`) is the stable interface, documented in
+  `docs/API.md`.
+- **Unknown classes:** any unknown class key forces NEEDS_REVIEW, even beside a high-confidence
+  known defect. Known-but-deactivated types are ignored.
+- **Outcome rows** (D-007) are created in the ingestion transaction. Overrides cancel and recreate
+  them, and are refused once a repair has started or the salvage has been reused or discarded.
+- **Device tokens:** `cpt_` + 32 random bytes, stored as SHA-256 with a 12-character display prefix,
+  scope `scans:create`, revocable. `lastUsedAt` is updated at most once a minute.
+- **Images:** stored on disk under `UPLOADS_DIR` (the Docker `uploads` volume) via `StorageService`,
+  using server-generated keys that are never overwritten. The type is checked by magic bytes; ≤ 10 MB.
+- **Live widget:** TanStack Query polling every 5 s, paused in background tabs, rather than
+  websockets. The survey says daily summaries are enough; only the camera feed needs to be near-live.
+
+**Consequences:** Phase 4 only builds the lifecycle and boards for rows that already exist. Phase 6
+adds the Settings page for defect types and thresholds.

@@ -54,6 +54,7 @@ Run `/wrap-up` (or follow the documentation protocol in the master spec): update
 - All checks: `npm run check` (lint + typecheck + unit tests + build)
 - E2E: `npm run build && npm run test:e2e`. Needs the DB up. Set `PLAYWRIGHT_CHROMIUM_PATH` if
   browsers can't be downloaded.
-- After editing `prisma/schema.prisma`: `npm run db:migrate -- --name <change>`
-- Simulate CV scans (from Phase 3): `npm run cv:simulate -- --count 20 --interval 3`
+- After editing `prisma/schema.prisma`: `npm run db:migrate -- --name <change>`, then `npm run db:generate`
+- Camera simulator: `npm run cv:token` once (put the token in `.env` as `CV_DEVICE_TOKEN`), start a
+  batch, then `npm run cv:simulate -- --count 20 --interval 3`
 - A pre-commit hook (husky + lint-staged) runs ESLint and Prettier on staged files.

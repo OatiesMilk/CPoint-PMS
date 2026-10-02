@@ -5,15 +5,15 @@
 
 **Last updated:** 2026-10-02
 **Branch:** `system-rebuild`
-**Current phase:** Phase 3 — CV skeleton (not started)
-**Overall:** 3 / 9 phases complete
+**Current phase:** Phase 4 — Rework & salvage (not started)
+**Overall:** 4 / 9 phases complete
 
 ## Phase progress
 
 - [x] 0. Foundation: branch, DESIGN.md, remove Laravel, scaffold, Docker, CI
 - [x] 1. Data & auth
 - [x] 2. Batches & stages
-- [ ] 3. CV skeleton (ingestion API, decision engine, simulator, override + review queue, camera placeholder)
+- [x] 3. CV skeleton (ingestion API, decision engine, simulator, override + review queue, camera placeholder)
 - [ ] 4. Rework & salvage
 - [ ] 5. Inventory
 - [ ] 6. Admin
@@ -38,25 +38,44 @@
   - **Concurrency:** two people moving the same batch get `409 STALE` with a Refresh button.
   - **FM home:** "Batches by stage" is live, flagging the stage with the longest wait.
   - **API:** `/api/v1/batches` (list, create, get, patch, stages, cancel), documented in `docs/API.md`.
+- **Computer vision skeleton** (D-020):
+  - **Ingestion:** `POST /api/v1/scans` with a device token. It checks images by their content
+    (≤ 10 MB) and validates detections. The decision engine applies D-011, with the thresholds
+    snapshotted on each scan.
+  - **Unknown classes** are stored and flagged, and the scan goes to NEEDS_REVIEW.
+  - **Outcome rows:** a REWORK opens a repair ticket and a REJECT creates a salvage item, both automatically.
+  - **Images** live on the `uploads` volume behind `StorageService`.
+  - **Which batch:** the one picked on the Camera page, else the batch longest at Preparation.
+    `GET /api/v1/batches/current` reports it.
+  - **Device tokens** are hashed, scoped and revocable: Admin → API tokens, or `npm run cv:token`.
+  - **Simulator:** `npm run cv:simulate` posts realistic leather images through the real API.
+  - **Pages:**
+    - `/scans` (filters) and `/scans/[id]` (bounding-box overlay, override with a reason; the
+      ticket/salvage rows are swapped).
+    - `/review` (one-click decisions for unknown classes, plus today's automatic Rework/Reject calls).
+    - `/camera` (connection state, target batch, last capture) and `/admin/tokens`.
+  - **Live feed:** the Latest scans widget (5 s polling) is on the FM and QI homes; the QI home has
+    live counts; batch detail shows live scan counts.
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)` with
   before/after values. Verified in psql for every batch action.
-- **Tests:** 140 unit tests and 21 e2e tests. The e2e tests pass against `next start` and the Docker stack.
+- **Tests:** 193 unit tests and 28 e2e tests, run against `next start` and the Docker stack (see the Phase 3 log entry for one unreproduced cold-start failure).
 
 ## Next step (exact)
 
-Start Phase 3. Paste into Claude Code:
+Start Phase 4. Paste into Claude Code:
 
-> /resume, then run Phase 3 (CV skeleton) from `docs/ROADMAP.md`. Start in plan mode.
+> /resume, then run Phase 4 (Rework & salvage) from `docs/ROADMAP.md`. Start in plan mode.
 
-Phase 3 notes:
+Phase 4 notes:
 
-- "The batch at Preparation" = `status IN_PROGRESS` and `currentStage PREPARATION`. More than one
-  can be at Preparation, so `GET /api/v1/batches/current` needs a rule: the oldest-started, or an
-  explicitly selected batch on the Camera page. Decide this in the plan.
-- `Scan`, `Detection`, `ApiToken`, `CvSettings` and `DefectType` already exist. The decision
-  engine follows D-011.
-- Remove `phase: 3` from Camera, Scans, Review queue and API tokens in `navigation.ts`.
-- Replace the "Scans & counts" card on batch detail and "Latest scans" on the FM/QI homes.
+- Rework tickets and salvage items are **already created** at ingestion and on overrides (D-020).
+  Phase 4 builds:
+  - the boards: Rework `OPEN → IN_PROGRESS → DONE`; Salvage `AVAILABLE → ASSIGNED | DISCARDED`;
+  - the batch "usable = passed + rework done" count.
+- The override rules already refuse changes once a repair has started or salvage has moved on
+  (`scan-decision.service.ts`).
+- Remove `phase: 4` from Rework and Salvage in `navigation.ts`, and replace the "Open reworks"
+  placeholder on the FM home.
 
 ## Blockers
 
@@ -71,8 +90,8 @@ Phase 3 notes:
   shifts. Confirm the shift length with CPoint.
 - Unknown: number of components per shoe type (school shoe, topsider). Blocks component tracking only.
 - Unknown: what the Shoe Constructor role should see. It's a "coming soon" page for now.
-- Pending: the new YOLO training photos will change the defect classes. Classes are data, so no
-  code change should be needed.
+- Pending: the new YOLO training photos will change the defect classes. Classes are data; until
+  Phase 6 adds the Settings page, new classes arrive as "unknown" and go to the review queue.
 
 ## Environment notes
 
@@ -82,4 +101,6 @@ Phase 3 notes:
   by hand in its structure. On a normal machine `npx shadcn@latest add <component>` works.
 - Cloud sandbox only: Docker Hub is rate-limited and the Alpine CDN blocked. Verify Docker builds
   there with `--build-arg NODE_IMAGE=<local base image>`. The committed Dockerfile needs no workaround.
+- Simulator: `npm run cv:token`, put the token in `.env` as `CV_DEVICE_TOKEN`, start a batch, then `npm run cv:simulate`.
+- After `npm run db:migrate`, run `npm run db:generate` (Prisma 7 doesn't regenerate the client on migrate).
 - E2E without downloadable browsers: set `PLAYWRIGHT_CHROMIUM_PATH`. Against Docker: `E2E_BASE_URL=http://localhost:3000`.
