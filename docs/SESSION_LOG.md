@@ -15,6 +15,16 @@ Template:
 
 ---
 
+## 2026-10-02 — Planning: confidence rule update
+**Who:** Team + Claude Code
+**Summary:** Replaced per-defect-type actions with one rule for all types: ≥90% REJECT,
+60–89% REWORK, below 60% PASS (assumption).
+**Changed:** `docs/prompts/system-rebuild.md` (decision engine, overrides, data model, tests),
+`docs/DECISIONS.md` (D-011 supersedes D-006), `docs/STATUS.md`, `docs/ROADMAP.md`, `docs/AGENTIC_WORKFLOW.md`.
+**Gates:** n/a (docs only)
+**Decisions:** D-011
+**Follow-ups:** Confirm the 90% / 60% thresholds and the below-60% PASS assumption with CPoint.
+
 ## 2026-10-02 — Planning: rebuild prompt and project docs
 **Who:** Team + Claude Code
 **Summary:** Agreed the rebuild scope and defaults. Wrote the master prompt, living docs, and
@@ -24,4 +34,4 @@ agentic workflow setup. No application code changed.
 `.claude/skills/{ui-craft,resume,wrap-up}`.
 **Gates:** n/a (docs only)
 **Decisions:** D-001 – D-010
-**Follow-ups:** Run Phase 0. Confirm D-006 defect default actions with CPoint.
+**Follow-ups:** Run Phase 0. Confirm D-006 defect default actions with CPoint (superseded by D-011).

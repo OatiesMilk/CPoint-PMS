@@ -173,19 +173,26 @@ is audited.
 - One **scan = one leather section** of the batch's roll, captured before the cutting guides are applied.
 - A scan has 0..n **detections** (defect type, confidence 0–1, bounding box as fractions 0–1).
 - **Defect types are configurable data, not code.** Seed `cut`, `hole`, `abrasion`, `dirt`. Each
-  has `label`, `isActive`, `sortOrder`, and a `defaultAction` (`REJECT` | `REWORK`).
-  Seed values: cut→REJECT, hole→REJECT, abrasion→REWORK, dirt→REWORK. Mark these as `ASSUMPTION`
-  until the client confirms them. The YOLO class list will change after the new training photos,
-  so unknown class keys from the CV service must be stored and flagged, not rejected.
+  has `key`, `label`, `isActive`, `sortOrder`. The same confidence rule applies to **every** defect
+  type; there are no per-type actions. The YOLO class list will change after the new training
+  photos, so unknown class keys from the CV service must be stored and flagged, not rejected.
 - **Decision engine** (`server/services/decision-engine.ts`, pure function, fully unit-tested).
-  Thresholds are admin-editable settings, seeded at autoPassBelow = 0.50 and autoActAtOrAbove = 0.80.
-  1. No detections, or every confidence < autoPassBelow → **PASS** (automatic).
-  2. Any detection ≥ autoActAtOrAbove → apply that defect type's `defaultAction`. The most severe
-     wins: REJECT > REWORK. Decided **automatically**.
-  3. Otherwise → **NEEDS_REVIEW**, which goes to the shared review queue.
-- **Review queue:** the **Quality Inspector or the Floor Manager**, whoever is available, decides
-  PASS / REWORK / REJECT. Either role can also **override** an automatic decision. Overrides
-  require a reason and are tracked (`isOverride`, `aiVerdict` vs `finalVerdict`). This feeds an
+  It uses the **highest confidence among detections of active defect types**. The two thresholds
+  are admin-editable `CvSettings`, seeded at `rejectAtOrAbove = 0.90` and `reworkAtOrAbove = 0.60`
+  (team decision D-011):
+  1. max confidence ≥ 0.90 → **REJECT** (automatic)
+  2. 0.60 ≤ max confidence < 0.90 → **REWORK** (automatic)
+  3. max confidence < 0.60, or no detections → **PASS** (automatic; `ASSUMPTION` until confirmed)
+  4. Any detection with an **unknown class key** → **NEEDS_REVIEW** instead, because the system
+     can't trust a class it doesn't know.
+  Compare boundaries on the raw float (0.8999 = REWORK, 0.90 = REJECT). Validate that
+  `reworkAtOrAbove < rejectAtOrAbove` when an admin saves settings. Store the thresholds used on
+  each scan (`thresholdsSnapshot`) so old decisions stay explainable after the settings change.
+- **Human-in-the-loop:** the **Quality Inspector or the Floor Manager**, whoever is available, can
+  **override** any automatic decision (PASS / REWORK / REJECT) from scan detail or the "Recent
+  decisions" list, and resolves NEEDS_REVIEW scans in the review queue. Overrides require a reason
+  and are tracked (`isOverride`, `aiVerdict` vs `finalVerdict`). An override also updates the linked
+  ReworkTicket/SalvageItem: it cancels the old one and opens the new one. Overrides feed an
   "AI agreement rate" metric.
 - **Outcomes:**
   - **PASS** → the section continues to cutting.
@@ -220,7 +227,7 @@ Seed one demo account per role (password from `.env`, documented in README).
 | Batches: list / create / edit / advance stage | ✅ full | view | view | — |
 | Camera (CV placeholder page) | ✅ | ✅ | ✅ | — |
 | "Latest scans" widget (polls every 5s) | ✅ on overview | ✅ on overview | — | — |
-| Review queue: decide / override | ✅ | ✅ | — | — |
+| Recent decisions + override; review queue (unknown classes) | ✅ | ✅ | — | — |
 | Scan history + detail (image + boxes) | ✅ | ✅ | view | — |
 | Rework board | ✅ | ✅ | — | — |
 | Salvage | ✅ | view | — | — |
@@ -234,8 +241,8 @@ Seed one demo account per role (password from `.env`, documented in README).
 
 **Floor Manager overview:** today's scans and pass/rework/reject split, open reworks, batches
 per stage (shows the bottleneck), low-stock alerts, and Latest scans.
-**Quality Inspector overview:** review queue count (the primary action), today's defect breakdown
-by type, AI agreement rate, and Latest scans.
+**Quality Inspector overview:** today's REWORK/REJECT decisions to verify, with override (the primary
+action), the flagged-scan count, today's defect breakdown by type, AI agreement rate, and Latest scans.
 
 **Camera page (placeholder):** shows the connected source as "Not connected" with a
 "Simulator active" state when demo scans are arriving. It has a batch selector (the open batch at
@@ -284,9 +291,9 @@ This contract is what the real YOLO service will call later, so keep it stable a
 Prisma models (refine as needed and record changes in DECISIONS):
 `User(role enum, isActive)`, `ShoeType`, `Supplier`, `Batch`, `BatchStageLog`,
 `Scan(batchId, sequence, imagePath, source, modelVersion, aiVerdict, finalVerdict, status,
-maxConfidence, isOverride, overrideReason, decidedById, decidedAt)`,
+maxConfidence, thresholdsSnapshot Json, isOverride, overrideReason, decidedById, decidedAt)`,
 `Detection(scanId, defectTypeId?, rawClassKey, confidence, x, y, width, height)`,
-`DefectType(key unique, label, defaultAction, isActive, sortOrder)`, `CvSettings` (singleton),
+`DefectType(key unique, label, isActive, sortOrder)`, `CvSettings(rejectAtOrAbove, reworkAtOrAbove)` (singleton),
 `ReworkTicket(scanId unique, status, notes, completedById, completedAt)`,
 `SalvageItem(scanId unique, originBatchId, status, assignedBatchId?)`,
 `InventoryItem`, `InventoryMovement`, `ComponentType` (placeholder),
@@ -302,7 +309,7 @@ The authoritative list with acceptance criteria is `docs/ROADMAP.md`. Summary:
 1. **Data & auth:** Prisma schema, migrations, seed, Auth.js login, role policies, app shell with
    role nav and theme.
 2. **Batches & stages:** batch CRUD, stage advance with logs, batch detail timeline.
-3. **CV skeleton:** device tokens, ingestion API, decision engine, simulator, review queue,
+3. **CV skeleton:** device tokens, ingestion API, decision engine, simulator, override + review queue,
    Latest scans widget, Camera placeholder.
 4. **Rework & salvage:** tickets, salvage lifecycle, batch counts service.
 5. **Inventory:** items, movements, low-stock alerts, roll consumption on batch create.
@@ -321,7 +328,8 @@ your final report:
 - `docker compose up --build` starts cleanly and `/api/health` returns 200 (check in Phase 0 and
   Phase 8, and whenever Docker files change).
 - The decision engine, batch counts and stage transitions have unit tests covering edge cases:
-  no detections, an exact threshold value, mixed REJECT+REWORK, unknown class key, skipped stage.
+  no detections, exactly 0.60, 0.5999, exactly 0.90, 0.8999, several detections (highest wins), inactive
+  defect type ignored, unknown class key, invalid thresholds, skipped stage.
 - The ui-craft "Definition of done" checklist is satisfied for every screen touched.
 - If a gate can't run (e.g. no Docker in the environment), say so explicitly. Never claim it passed.
 </quality_gates>

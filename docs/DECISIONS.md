@@ -30,7 +30,7 @@ system for reference. Start with a fresh database (no MySQL data migration).
 **Decision:** CV runs only at Preparation, before cutting. Each scan is one section of the roll.
 Stages advance manually by the Floor Manager, with logged durations (to measure bottlenecks).
 
-### D-006 · 2026-10-02 · Accepted (values are ASSUMPTIONS) — Decision engine
+### D-006 · 2026-10-02 · Superseded by D-011 — Decision engine
 **Decision:** If every confidence is < 0.50 → PASS. If any is ≥ 0.80 → that defect type's
 `defaultAction` (REJECT > REWORK). Otherwise → NEEDS_REVIEW (QI or FM decides; either can override
 with a reason). Defect types, default actions and thresholds are admin-editable data.
@@ -55,3 +55,13 @@ rate); audit log; decision-support style defect analytics; light/dark theme with
 ### D-010 · 2026-10-02 · Accepted — Living project docs for agentic development
 **Decision:** `CLAUDE.md` (auto-loads `docs/STATUS.md`), `docs/ROADMAP.md`, `docs/DECISIONS.md`,
 `docs/SESSION_LOG.md`, plus `/resume` and `/wrap-up` skills. Every session ends by updating them.
+
+### D-011 · 2026-10-02 · Accepted — Uniform confidence rule for all defect types (supersedes D-006)
+**Context:** The team set one default for every defect type instead of per-type actions.
+**Decision:** The highest confidence among active defect types decides: **≥ 0.90 → REJECT**,
+**0.60 – < 0.90 → REWORK**, **< 0.60 or no detections → PASS** (ASSUMPTION). A detection with an
+unknown class key → NEEDS_REVIEW. Thresholds are admin-editable `CvSettings`
+(`rejectAtOrAbove`, `reworkAtOrAbove`) and are snapshotted on each scan. The QI or FM can override
+any decision with a reason. `DefectType.defaultAction` is dropped.
+**Consequences:** Every outcome is automatic; the review queue only holds flagged scans, while human
+judgement happens through overrides (tracked as the AI agreement rate). Confirm the values with CPoint.

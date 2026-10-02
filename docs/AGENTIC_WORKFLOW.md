@@ -48,8 +48,8 @@ STATUS.md is more reliable.
   role claims, then come back." It keeps the main context clean.
 - **Feed client feedback back in.** After a CPoint meeting, update `docs/client-survey.md`, then ask
   Claude to "reconcile the new survey answers with DECISIONS.md and STATUS open questions".
-- **Business-rule changes go through DECISIONS.** Example: "The client says dirt should be REJECT.
-  Add a decision superseding D-006 and update the seed."
+- **Business-rule changes go through DECISIONS.** Example: "The client wants rework to start at 65%.
+  Add a decision superseding D-011 and update the seed."
 - **Never let it guess silently.** The spec makes it log every `ASSUMPTION` in STATUS → Open
   questions. Go through that list with the client.
 
@@ -64,7 +64,7 @@ STATUS.md is more reliable.
 
 ## When the real camera module is ready
 Point the YOLO script at `POST /api/v1/scans` with a device token from Admin → API tokens, and add
-the new defect classes in Admin → Defect types. No app code should need to change (D-006). Then ask
+the new defect classes in Admin → Defect types. No app code should need to change (D-011). Then ask
 Claude to "replace the Camera placeholder with live phone/webcam capture" as a new roadmap phase.
 
 ## Troubleshooting Claude sessions

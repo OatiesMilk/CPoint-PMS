@@ -31,9 +31,9 @@ Start Phase 0. Paste into Claude Code:
 - None.
 
 ## Open questions / assumptions awaiting client confirmation
-- ASSUMPTION: defect default actions are cut→REJECT, hole→REJECT, abrasion→REWORK, dirt→REWORK.
 - ASSUMPTION: one scan = one leather section of the roll; reworked sections aren't re-scanned.
-- ASSUMPTION: CV thresholds are 0.50 / 0.80 (carried over from the legacy system).
+- Decided (D-011): for all defect types, ≥90% → REJECT and 60–89% → REWORK. Confirm with the client.
+- ASSUMPTION: below 60% → PASS; an unknown class key → NEEDS_REVIEW.
 - Unknown: number of components per shoe type (school shoe, topsider). Blocks component tracking only.
 - Unknown: what the Shoe Constructor role should see. It's a placeholder for now.
 - Pending: the new YOLO training photos will change the defect classes. The system treats classes
