@@ -53,7 +53,7 @@ Compose v2) and this folder. No Node.js needed.
    | Line                        | Put                                                                                       |
    | --------------------------- | ----------------------------------------------------------------------------------------- |
    | `AUTH_SECRET=`              | A long random string. `openssl rand -base64 32` makes one, or type 40+ random characters. |
-   | `BOOTSTRAP_ADMIN_PASSWORD=` | 12+ characters. The first System Admin's password.                                        |
+   | `BOOTSTRAP_ADMIN_PASSWORD=` | 12+ characters. Used only when no System Admin exists yet (demo off).                     |
    | `DEMO_USER_PASSWORD=`       | 8+ characters. The password for all four demo accounts.                                   |
    | `SEED_DEMO_WEEK=false`      | Change to `true` for a panel demo: a past week of production is created on first start.   |
 
@@ -84,7 +84,9 @@ Compose v2) and this folder. No Node.js needed.
 | `app`     | Next.js server (non-root), runs migrations | `uploads` (scan images) |
 | `db`      | PostgreSQL 18                              | `pgdata`                |
 
-**Demo accounts** (created on start when `SEED_DEMO_USERS=true`; all use `DEMO_USER_PASSWORD`):
+**Demo accounts** (created on start when `SEED_DEMO_USERS=true`). All four use
+`DEMO_USER_PASSWORD`, including `admin@cpoint.local`. `BOOTSTRAP_ADMIN_PASSWORD` is used only
+when there is no admin account yet, as on a real install with demo users off.
 
 | Role              | Email                      | Lands on             | Does                                                 |
 | ----------------- | -------------------------- | -------------------- | ---------------------------------------------------- |
@@ -286,12 +288,12 @@ Stop the database with `npm run db:down`. Data persists in the `pgdata` Docker v
 
 `.env.example` lists every variable with a comment. These need a value:
 
-| Variable                   | What to put                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------ |
-| `AUTH_SECRET`              | A random secret that signs sessions: `openssl rand -base64 32`. One per machine.     |
-| `BOOTSTRAP_ADMIN_PASSWORD` | 12+ characters. Creates the first System Admin if none exists.                       |
-| `DEMO_USER_PASSWORD`       | 8+ characters. Password for the demo accounts (when `SEED_DEMO_USERS=true`).         |
-| `SEED_DEMO_WEEK`           | `true` to create a past week of production on first start (panel demo). Default off. |
+| Variable                   | What to put                                                                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AUTH_SECRET`              | A random secret that signs sessions: `openssl rand -base64 32`. One per machine.                                                                                                           |
+| `BOOTSTRAP_ADMIN_PASSWORD` | 12+ characters. Creates the first System Admin (`BOOTSTRAP_ADMIN_EMAIL`) if no active admin exists. With demo users on, `admin@cpoint.local` already exists and uses `DEMO_USER_PASSWORD`. |
+| `DEMO_USER_PASSWORD`       | 8+ characters. Password for the demo accounts (when `SEED_DEMO_USERS=true`).                                                                                                               |
+| `SEED_DEMO_WEEK`           | `true` to create a past week of production on first start (panel demo). Default off.                                                                                                       |
 
 On every start the app makes sure the reference data exists: shoe types, defect types, CV
 thresholds 90% / 60%, and a sample supplier. It never overwrites values an admin has changed.
