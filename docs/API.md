@@ -69,7 +69,9 @@ System Admin). Writes need `batch:manage` (Floor Manager). All writes are audite
 
 **`BatchForm`**: `rollCode` (1–50 chars), `shoeTypeId` (uuid), `supplierId?` (uuid),
 `receivedAt` (`YYYY-MM-DD`, not in the future in Manila time), `targetQuotaPairs?` (1–100,000),
-`notes?` (≤ 500). The shoe type can't change once production has started.
+`notes?` (≤ 500), `rollItemId?` (create only: a leather-roll inventory item; one roll is recorded as
+used for the batch in the same transaction, or `422` on `rollItemId` if none is left). The shoe
+type can't change once production has started. Cancelling a **planned** batch returns its roll.
 
 **Stage actions:** `start` (PLANNED → Preparation), `advance` (next stage; no skipping),
 `complete` (only from Finishing), and `move_back` (previous stage; `reason` required, 3–300 chars).
@@ -165,11 +167,40 @@ and answers `409 STALE` if it changed. All moves are audited.
   workable, and `GET /api/v1/batches` rows carry `openRepairs` for the "In repair" tag. Only a
   cancelled batch freezes its repairs (`409`): cancelling cancels the unfinished ones.
 
+## Inventory (session)
+
+Stock is a ledger (D-023): `quantityOnHand` changes **only** through a movement, and movements are
+never edited or deleted. Quantities are numbers with at most 2 decimals.
+
+| Method & path                                | Permission         | Body / query                                                                         |
+| -------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------ |
+| `GET /api/v1/inventory`                      | `inventory:read`   | `?category=&stock=low\|out&q=&inactive=1&page=` → `{ rows, total, page, pageCount }` |
+| `POST /api/v1/inventory`                     | `inventory:manage` | `ItemForm` → `201`                                                                   |
+| `GET /api/v1/inventory/{id}`                 | `inventory:read`   | `?page=` → `{ item, movements, page, pageCount }` (newest first, `balanceAfter`)     |
+| `PATCH /api/v1/inventory/{id}`               | `inventory:manage` | `ItemForm` (quantity is never editable), or `{ isActive }`                           |
+| `GET /api/v1/inventory/{id}/movements`       | `inventory:read`   | `?page=`                                                                             |
+| `POST /api/v1/inventory/{id}/movements`      | `inventory:manage` | `Movement` → `201 { movementId, onHandAfter, message }`                              |
+| `POST /api/v1/inventory/movements/{id}/undo` | `inventory:manage` | records the opposite of a recent IN/OUT (within 10 minutes, once)                    |
+
+**`ItemForm`**: `sku` (2–20, letters/numbers/dashes, unique; stored upper-case), `name` (2–80),
+`category` (`LEATHER_ROLL|NAILS|ADHESIVE|THREAD|EQUIPMENT|OTHER`), `unit` (1–20, e.g. `roll`),
+`reorderLevel` (≥ 0), `openingStock?` (create only; recorded as an IN "Opening stock").
+
+**`Movement`**:
+
+- `{ "type": "IN", "quantity": 3, "reason"? }`: stock received (default note "Delivery received").
+- `{ "type": "OUT", "quantity": 1, "reason"?, "batchId"? }`: stock used. `409` if it would go below
+  zero ("Only 2 rolls in stock…").
+- `{ "type": "ADJUST", "counted": 4, "expectedQuantity": 5, "reason" }`: a stock count. The stored
+  change is `counted − current`; `409 STALE` if the stock isn't `expectedQuantity` any more.
+
+Low stock means an active item with `quantityOnHand ≤ reorderLevel` (out of stock at 0).
+
 ## Coming next
 
-| Phase | Endpoints                                                             |
-| ----- | --------------------------------------------------------------------- |
-| 4–6   | rework, salvage, inventory, users, defect types, CV settings, reports |
+| Phase | Endpoints                                            |
+| ----- | ---------------------------------------------------- |
+| 6–7   | users, defect types, CV settings, reports and export |
 
 The Phase 3 CV ingestion contract is specified in `docs/prompts/system-rebuild.md` →
 `<cv_integration_contract>`. Keep it stable once published, because the YOLO service depends on it.
