@@ -8,7 +8,7 @@ declare module "next-auth" {
     role: Role;
   }
   interface Session {
-    user: { id: string; role: Role; authAt?: number } & DefaultSession["user"];
+    user: { id: string; role: Role; authAt?: number; sid?: string } & DefaultSession["user"];
   }
 }
 
@@ -18,5 +18,7 @@ declare module "@auth/core/jwt" {
     role?: Role;
     /** When the user signed in (ms). Unlike `iat`, it isn't renewed when the token is refreshed (D-024). */
     authAt?: number;
+    /** This sign-in's id; sign-out revokes it server-side, so a stale cookie can't come back. */
+    sid?: string;
   }
 }

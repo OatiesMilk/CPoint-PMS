@@ -18,7 +18,7 @@ const getSession = cache(() => auth());
 
 const getSessionState = cache(async (): Promise<SessionState | null> => {
   const user = (await getSession())?.user;
-  return user?.id ? checkSession(user.id, user.authAt) : null;
+  return user?.id ? checkSession(user.id, user.authAt, user.sid) : null;
 });
 
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {

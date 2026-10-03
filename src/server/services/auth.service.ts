@@ -5,7 +5,9 @@ import { runInTransaction } from "@/server/models/db";
 import {
   findUserByEmail,
   findUserById,
+  isSessionRevoked,
   recordFailedLogin,
+  revokeSession,
   recordSuccessfulLogin,
   setPassword,
   type User,
@@ -130,16 +132,27 @@ export async function verifyCredentials(
 }
 
 export type SessionState =
-  { ok: true; user: SessionUser } | { ok: false; reason: "deactivated" | "password-reset" };
+  | { ok: true; user: SessionUser }
+  | { ok: false; reason: "deactivated" | "password-reset" | "signed-out" };
 
 /**
  * The signed-in user as of right now. A session ends when the account is removed or deactivated
- * (D-016), or when its password was reset or changed after this session signed in (D-024).
+ * (D-016), when its password was reset or changed after this session signed in (D-024), or when
+ * this session signed out (its `sid` is revoked, D-025).
  * `authAt` is the sign-in time from the token; tokens from before D-024 have none.
  */
-export async function checkSession(userId: string, authAt?: number): Promise<SessionState> {
-  const user = await findUserById(userId);
+export async function checkSession(
+  userId: string,
+  authAt?: number,
+  sid?: string,
+): Promise<SessionState> {
+  const [user, revoked] = await Promise.all([
+    findUserById(userId),
+    sid ? isSessionRevoked(sid) : false,
+  ]);
   if (!user || !user.isActive) return { ok: false, reason: "deactivated" };
+  // Signed out on this device: a late response may have restored the cookie; it's still over.
+  if (revoked) return { ok: false, reason: "signed-out" };
   if (user.sessionsValidFrom && (authAt ?? 0) < user.sessionsValidFrom.getTime()) {
     return { ok: false, reason: "password-reset" };
   }
@@ -155,16 +168,35 @@ export async function getActiveSessionUser(
   return state.ok ? state.user : null;
 }
 
-export async function recordSignOut(userId: string, meta: RequestMeta = {}): Promise<void> {
-  await runInTransaction((tx) =>
-    recordAudit(tx, {
+/** Session lifetime (auth.config SESSION_MAX_AGE_SECONDS): a revocation is useless after this. */
+const REVOCATION_TTL_MS = 12 * 3_600_000;
+
+/**
+ * Signs a session out server-side: its `sid` is revoked, so the JWT is refused even if a stale
+ * cookie comes back (a late prefetch response can restore it, D-025). Other devices stay signed in.
+ */
+export async function recordSignOut(
+  userId: string,
+  meta: RequestMeta = {},
+  sid?: string,
+  now: Date = new Date(),
+): Promise<void> {
+  await runInTransaction(async (tx) => {
+    if (sid) {
+      await revokeSession(
+        { sid, userId, expiresAt: new Date(now.getTime() + REVOCATION_TTL_MS) },
+        now,
+        tx,
+      );
+    }
+    await recordAudit(tx, {
       actor: { type: "USER", userId },
       action: "user.logout",
       entity: "User",
       entityId: userId,
       request: meta,
-    }),
-  );
+    });
+  });
 }
 
 /**

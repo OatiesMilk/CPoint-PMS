@@ -114,9 +114,25 @@ model User {
   apiTokensCreated  ApiToken[]
   cvSettingsUpdates CvSettings[]
   auditLogs         AuditLog[]
+  revokedSessions   SessionRevocation[]
 
   @@index([role, isActive])
   @@map("users")
+}
+
+/// A signed-out session (D-025 fix): its JWT `sid` is refused even if a stale cookie comes back.
+/// Rows are only needed until the token would have expired anyway; old ones are deleted on sign-out.
+model SessionRevocation {
+  sid       String   @id
+  userId    String   @db.Uuid
+  revokedAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("session_revocations")
 }
 
 model ApiToken {

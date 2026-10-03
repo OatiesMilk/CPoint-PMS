@@ -13,8 +13,8 @@ export const authController = {
   async logout(request: Request): Promise<Response> {
     const reasonParam = new URL(request.url).searchParams.get("reason") ?? "signed-out";
     const reason = LOGOUT_REASONS.has(reasonParam) ? reasonParam : "signed-out";
-    const userId = (await auth())?.user?.id;
-    if (userId) await recordSignOut(userId, requestMeta(request));
+    const user = (await auth())?.user;
+    if (user?.id) await recordSignOut(user.id, requestMeta(request), user.sid);
     await signOut({ redirectTo: `/login?reason=${reason}` });
     return new Response(null, { status: 204 }); // not reached: signOut redirects
   },

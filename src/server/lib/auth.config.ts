@@ -17,6 +17,7 @@ export const authConfig = {
         token.uid = user.id;
         token.role = user.role;
         token.authAt = Date.now();
+        token.sid = crypto.randomUUID();
       }
       return token;
     },
@@ -25,6 +26,7 @@ export const authConfig = {
         session.user.id = token.uid;
         session.user.role = token.role;
         session.user.authAt = token.authAt;
+        session.user.sid = token.sid;
       }
       return session;
     },

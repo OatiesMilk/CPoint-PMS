@@ -108,8 +108,11 @@ test("sign out returns to login and protects pages again", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL("/login?reason=signed-out");
   await expect(page.getByText("You signed out.")).toBeVisible();
+  // Signed out server-side (D-025): even if a late response restored the cookie, the session is
+  // refused, so a protected page always lands on the login page.
   await page.goto("/admin");
-  await expect(page).toHaveURL(/\/login\?callbackUrl=/);
+  await expect(page).toHaveURL(/\/login\?(callbackUrl=|reason=signed-out)/);
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 });
 
 test.describe("deactivation", () => {

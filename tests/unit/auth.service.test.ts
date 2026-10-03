@@ -6,6 +6,8 @@ const users = {
   recordFailedLogin: vi.fn(),
   recordSuccessfulLogin: vi.fn(),
   setPassword: vi.fn(),
+  isSessionRevoked: vi.fn(async () => false),
+  revokeSession: vi.fn(),
 };
 const recordAudit = vi.fn();
 const verifyPassword = vi.fn();
@@ -24,6 +26,7 @@ const {
   getActiveSessionUser,
   checkSession,
   changeOwnPassword,
+  recordSignOut,
   MAX_FAILED_ATTEMPTS,
   LOCK_MINUTES,
 } = await import("@/server/services/auth.service");
@@ -201,6 +204,32 @@ describe("changeOwnPassword (D-024)", () => {
     expect(recordAudit).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ action: "user.password_change" }),
+    );
+  });
+});
+
+describe("sign-out revocation (D-025)", () => {
+  it("ends a session whose sid was signed out, even with a valid token", async () => {
+    users.findUserById.mockResolvedValue(user());
+    users.isSessionRevoked.mockResolvedValueOnce(true);
+    expect(await checkSession("u1", now.getTime(), "sid-1")).toEqual({
+      ok: false,
+      reason: "signed-out",
+    });
+    expect(users.isSessionRevoked).toHaveBeenCalledWith("sid-1");
+    expect(await checkSession("u1", now.getTime(), "sid-2")).toMatchObject({ ok: true });
+  });
+
+  it("revokes the sid until the token would expire, and audits the sign-out", async () => {
+    await recordSignOut("u1", {}, "sid-1", now);
+    expect(users.revokeSession).toHaveBeenCalledWith(
+      { sid: "sid-1", userId: "u1", expiresAt: new Date(now.getTime() + 12 * 3_600_000) },
+      now,
+      expect.anything(),
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: "user.logout" }),
     );
   });
 });

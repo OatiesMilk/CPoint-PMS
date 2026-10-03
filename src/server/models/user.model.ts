@@ -137,3 +137,21 @@ export async function userCounts(now: Date, db: Db = defaultDb()) {
   ]);
   return { byRole: byRole.map((r) => ({ role: r.role, count: r._count._all })), locked };
 }
+
+// ───────────── session revocation (sign-out) ─────────────
+
+/** Records a signed-out session id and drops revocations whose tokens have expired anyway. */
+export async function revokeSession(
+  data: { sid: string; userId: string; expiresAt: Date },
+  now: Date,
+  db: Db = defaultDb(),
+) {
+  await db.sessionRevocation.upsert({ where: { sid: data.sid }, create: data, update: {} });
+  await db.sessionRevocation.deleteMany({ where: { expiresAt: { lt: now } } });
+}
+
+export async function isSessionRevoked(sid: string, db: Db = defaultDb()): Promise<boolean> {
+  return (
+    (await db.sessionRevocation.findUnique({ where: { sid }, select: { sid: true } })) !== null
+  );
+}
