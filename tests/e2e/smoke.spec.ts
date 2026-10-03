@@ -24,6 +24,8 @@ async function sidebarLinks(page: Page): Promise<string[]> {
 }
 
 async function expectAccessible(page: Page) {
+  // After a client-side navigation the title lands a moment after the URL changes.
+  await expect(page).toHaveTitle(/\S/);
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
@@ -93,7 +95,8 @@ test("Floor Manager journey: register a roll as a batch, start it, receive stock
   await expect(page.locator("header").getByText("In progress", { exact: true })).toBeVisible();
   await expectAccessible(page);
 
-  await page.goto("/inventory");
+  // Searched, not browsed: earlier e2e runs add items that push it past page 1.
+  await page.goto("/inventory?q=Contact%20cement");
   await page
     .getByRole("link", { name: /Contact cement/ })
     .first()

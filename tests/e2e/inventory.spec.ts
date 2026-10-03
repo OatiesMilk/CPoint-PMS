@@ -115,7 +115,7 @@ test("a low item shows on the Floor Manager home", async ({ browser, page }) => 
   await signInAs(page, ACCOUNTS.manager);
   const card = page.getByTestId("low-stock-card");
   await expect(card).toContainText("at or below the reorder level");
-  await page.goto("/inventory?stock=low");
+  await page.goto(`/inventory?stock=low&q=${item.sku}`);
   await expect(page.getByRole("row", { name: new RegExp(item.sku) })).toContainText("Low");
 });
 
