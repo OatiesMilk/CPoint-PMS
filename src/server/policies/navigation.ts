@@ -89,7 +89,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         href: "/admin/audit",
         icon: "audit",
         permission: "audit:read",
-        phase: 6,
       },
     ],
   },
