@@ -62,10 +62,10 @@ Tick the boxes as they're done.
 
 ## Phase 6 — Admin
 
-- [ ] Users CRUD, deactivate, reset password
-- [ ] Defect types, CV thresholds, shoe types, suppliers management
-- [ ] Audit log viewer with filters
-- [ ] Component types table + "Coming soon" page; Constructor placeholder home
+- [x] Users CRUD, deactivate, reset password (temporary password, forced change, sessions ended)
+- [x] Defect types, CV thresholds, shoe types, suppliers management (+ unknown classes panel)
+- [x] Audit log viewer with filters
+- [x] Component types table + "Coming soon" page; Constructor placeholder home
 
 ## Phase 7 — Dashboards & reports
 

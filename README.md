@@ -62,6 +62,11 @@ plus nails, adhesive and thread) the first time, without touching stock afterwar
 shift); a deactivated user is signed out on their next click. Every sign-in, failure and sign-out
 is written to the audit log.
 
+**Accounts:** the System Admin adds people under **Users**. Each new account (and each password
+reset) gets a temporary password that's shown once; the person chooses their own at first
+sign-in. A reset signs the person out everywhere. Anyone can change their password from the user
+menu (**Change password**).
+
 ## Quick start: demo / factory machine
 
 Runs the whole system in Docker with one command. No Node.js needed on the machine.

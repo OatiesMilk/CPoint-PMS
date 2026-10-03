@@ -13,17 +13,18 @@ Operational endpoints such as health are unversioned.
 { "error": { "code": "VALIDATION_FAILED", "message": "Some fields need fixing.", "details": [] } }
 ```
 
-| Status | `code`              | When                                                        |
-| ------ | ------------------- | ----------------------------------------------------------- |
-| 400    | `BAD_REQUEST`       | Malformed request                                           |
-| 401    | `UNAUTHENTICATED`   | No or invalid session / device token                        |
-| 403    | `FORBIDDEN`         | Signed in, but the role isn't allowed                       |
-| 404    | `NOT_FOUND`         | The resource doesn't exist                                  |
-| 409    | `CONFLICT`          | Conflicts with the current state (e.g. skipping a stage)    |
-| 409    | `STALE`             | Someone else changed the record first; reload and retry     |
-| 413    | `PAYLOAD_TOO_LARGE` | Upload over the size limit (10 MB per image)                |
-| 422    | `VALIDATION_FAILED` | Body failed validation; `details` lists the fields          |
-| 500    | `INTERNAL`          | Unexpected server error. Details are logged, never returned |
+| Status | `code`                     | When                                                             |
+| ------ | -------------------------- | ---------------------------------------------------------------- |
+| 400    | `BAD_REQUEST`              | Malformed request                                                |
+| 401    | `UNAUTHENTICATED`          | No or invalid session / device token                             |
+| 403    | `FORBIDDEN`                | Signed in, but the role isn't allowed                            |
+| 403    | `PASSWORD_CHANGE_REQUIRED` | Temporary password: choose your own at `/account/password` first |
+| 404    | `NOT_FOUND`                | The resource doesn't exist                                       |
+| 409    | `CONFLICT`                 | Conflicts with the current state (e.g. skipping a stage)         |
+| 409    | `STALE`                    | Someone else changed the record first; reload and retry          |
+| 413    | `PAYLOAD_TOO_LARGE`        | Upload over the size limit (10 MB per image)                     |
+| 422    | `VALIDATION_FAILED`        | Body failed validation; `details` lists the fields               |
+| 500    | `INTERNAL`                 | Unexpected server error. Details are logged, never returned      |
 
 ## Authentication
 
@@ -31,6 +32,9 @@ Operational endpoints such as health are unversioned.
   `/api/auth/*` is handled by Auth.js; don't call it directly.
 - **API routes** check the session and the caller's role on every request. No session → `401`;
   wrong role → `403`. Deactivated accounts get `401` immediately, even with a valid cookie.
+- A password reset or change ends every session that signed in before it (D-024): those requests
+  get `401`. An account on a temporary password gets `403 PASSWORD_CHANGE_REQUIRED` until it
+  chooses its own.
 - **Camera devices** use `Authorization: Bearer <device token>` instead of a session (see below).
 
 ## `GET /api/health`
@@ -196,11 +200,47 @@ never edited or deleted. Quantities are numbers with at most 2 decimals.
 
 Low stock means an active item with `quantityOnHand ≤ reorderLevel` (out of stock at 0).
 
+## Administration (session, System Admin)
+
+All of these need the System Admin role (`user:manage`, `settings:manage`, `audit:read`) and are
+audited (D-024).
+
+**Users**
+
+| Method & path                            | Body / query                                                                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------- |
+| `GET /api/v1/users`                      | `?role=&status=active\|deactivated\|locked&q=&page=`                             |
+| `POST /api/v1/users`                     | `{ name, email, role }` → `201 { id, name, temporaryPassword }` (**shown once**) |
+| `PATCH /api/v1/users/{id}`               | `{ name, email, role }`, or `{ isActive }`                                       |
+| `POST /api/v1/users/{id}/reset-password` | → `{ name, temporaryPassword }` (shown once); ends the account's sessions        |
+| `POST /api/v1/users/{id}/unlock`         | clears a sign-in lockout                                                         |
+
+`409` when the change would deactivate or demote yourself, or the last active System Admin. A
+duplicate email is `422` on `email`.
+
+**Settings**
+
+| Method & path                        | Body                                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `GET / PUT /api/v1/settings/cv`      | `{ rejectPercent, reworkPercent }`, e.g. `90`, `60`; rework must be below reject               |
+| `GET /api/v1/defect-types/unknown`   | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }` |
+| `GET / POST /api/v1/defect-types`    | `{ key, label, description?, sortOrder? }` (key fixed after creation)                          |
+| `GET / POST /api/v1/shoe-types`      | `{ code, name, sortOrder? }`                                                                   |
+| `GET / POST /api/v1/suppliers`       | `{ name, contactPerson?, phone?, notes? }`                                                     |
+| `GET / POST /api/v1/component-types` | `{ name, shoeTypeId?, sortOrder? }`                                                            |
+| `PATCH /api/v1/<list>/{id}`          | the same fields, or `{ isActive }`. There are no deletes.                                      |
+
+New thresholds apply to new scans only; each scan keeps its `thresholdsSnapshot`.
+
+**Audit log**: `GET /api/v1/audit-logs?actor=&action=&entity=&entityId=&from=&to=&page=`
+(`from`/`to` are Manila calendar days) → `{ entries, total, page, pageCount }`, newest first, 50
+per page. Each entry carries the changed fields as `diff: [{ key, before, after }]`.
+
 ## Coming next
 
-| Phase | Endpoints                                            |
-| ----- | ---------------------------------------------------- |
-| 6–7   | users, defect types, CV settings, reports and export |
+| Phase | Endpoints                              |
+| ----- | -------------------------------------- |
+| 7     | reports (daily summary) and CSV export |
 
 The Phase 3 CV ingestion contract is specified in `docs/prompts/system-rebuild.md` →
 `<cv_integration_contract>`. Keep it stable once published, because the YOLO service depends on it.

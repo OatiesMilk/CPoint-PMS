@@ -5,8 +5,8 @@
 
 **Last updated:** 2026-10-03
 **Branch:** `system-rebuild`
-**Current phase:** Phase 6 — Admin (not started)
-**Overall:** 6 / 9 phases complete
+**Current phase:** Phase 7 — Dashboards & reports (not started)
+**Overall:** 7 / 9 phases complete
 
 ## Phase progress
 
@@ -16,59 +16,63 @@
 - [x] 3. CV skeleton
 - [x] 4. Rework & salvage
 - [x] 5. Inventory
-- [ ] 6. Admin (users, defect types/thresholds/shoe types/suppliers, audit log viewer, component types)
-- [ ] 7. Dashboards & reports
+- [x] 6. Admin
+- [ ] 7. Dashboards & reports (FM/QI overviews, daily summary, defect analytics, AI agreement, bottleneck chart, CSV)
 - [ ] 8. Hardening & demo
 
 ## What works right now
 
-- **Database:** the full schema for every phase is migrated. UUIDv7 ids and indexed FKs (D-018).
-- **Bootstrap on start** (D-017): reference data, the first System Admin from env, and demo users
-  and demo inventory when `SEED_DEMO_USERS=true`.
-- **Sign-in & access** (D-016): Auth.js credentials, 12-hour sessions, lockout, deactivation on the
-  next request. A role × permission matrix with page/API guards.
-- **Batches** (D-019): list/create/edit/detail, a stage machine with reasons, STALE concurrency,
-  and `/api/v1/batches`.
-- **Camera** (D-020): device tokens, `POST /api/v1/scans`, the decision engine (D-011), image
-  storage, the simulator, overrides, the review queue, scan pages with box overlays, the Camera
-  page, and live feeds on the FM/QI homes.
-- **Rework & salvage** (D-021, D-022):
-  - the `/rework` board and `/salvage` tabs;
-  - the batch Yield card (usable = passed + repaired);
-  - a batch can be completed with repairs open and is tagged "In repair · N".
-- **Inventory** (D-023):
-  - **`/inventory`:** filters for category, stock level, search and deactivated items. Add and
-    edit items, with suggested codes and opening stock.
-  - **Item page:** Receive / Use / Stock count dialogs. Undo on receipts and usage. A history with
-    the balance after each entry.
-  - **Rules:** stock never goes negative; a count is refused if stock moved meanwhile.
-  - **FM home:** a live Low-stock alerts card.
-  - **Batch form:** optional "Take a roll from inventory". Cancelling a planned batch returns it.
-  - **Access:** the System Admin reads; the QI has no access.
-  - **API:** `/api/v1/inventory` (`docs/API.md`).
+- **Database:** the full schema, 3 migrations (`init`, `camera_active_batch`,
+  `users_sessions_valid_from`). UUIDv7 ids (D-018).
+- **Bootstrap on start** (D-017): reference data, the first System Admin, and demo users and
+  inventory when `SEED_DEMO_USERS=true`.
+- **Sign-in & access** (D-016, D-024): 12-hour sessions, lockout, a role × permission matrix.
+  - Deactivation, password resets and password changes end sessions on the next request.
+  - Temporary passwords force a change at `/account/password`.
+- **Batches** (D-019) with stages, STALE concurrency and the `/api/v1/batches` API.
+- **Camera** (D-020): ingestion API, the decision engine (D-011), the simulator, overrides, the
+  review queue, scan pages and live feeds.
+- **Rework & salvage** (D-021, D-022): the board, salvage tabs and the Yield card. A batch can be
+  completed with repairs open (tagged "In repair").
+- **Inventory** (D-023): a ledger of receive/use/count entries with undo, low-stock alerts, and an
+  optional roll taken on batch create.
+- **Admin** (D-024):
+  - **`/admin/users`:** add (temporary password shown once), edit, reset (ends their sessions),
+    unlock, and deactivate/reactivate. Self and last-admin protection.
+  - **`/admin/settings`:**
+    - thresholds (live bands; past scans keep theirs);
+    - defect types (fixed keys, an Unknown classes panel with "Add as defect type");
+    - shoe types, suppliers and components (no deletes).
+  - **`/admin/audit`:** filters and field-level before/after diffs.
+  - **`/components`:** a Coming soon page.
+  - **Admin home:** users by role, thresholds, unknown classes, and 24 h audit activity.
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`. Checked in psql.
-- **Tests:** 248 unit and 38 e2e tests. The e2e tests pass against `next start` and the Docker stack.
+- **Tests:** 276 unit and 44 e2e tests. The e2e tests pass against `next start` and the Docker stack.
 
 ## Next step (exact)
 
-Start Phase 6. Paste into Claude Code:
+Start Phase 7. Paste into Claude Code:
 
-> /resume, then run Phase 6 (Admin) from `docs/ROADMAP.md`. Start in plan mode.
+> /resume, then run Phase 7 (Dashboards & reports) from `docs/ROADMAP.md`. Start in plan mode.
 
-Phase 6 notes:
+Phase 7 notes:
 
-- Nav items with `phase: 6` in `navigation.ts`: Users, the settings entries and the Audit log.
-  Remove them as each ships.
-- The schema already has `User`, `DefectType`, `CvSettings`, `ShoeType`, `Supplier`,
-  `ComponentType` and `AuditLog`. Defect types, thresholds and class keys stay **data** (D-011).
-  Changing a threshold must not alter past scans: they keep their snapshot.
-- Users:
-  - deactivation is already enforced on the next request (D-016);
-  - a password reset should end the user's sessions (bump a `sessionVersion`, or rely on
-    `updatedAt` the way deactivation does; decide in the plan);
-  - never allow deactivating or demoting the last active System Admin.
-- The audit log viewer should filter by actor, action, entity and date, with before/after diffs.
-  It's read-only.
+- Placeholders to replace:
+  - **FM home:** "Today's inspection split" and "Daily summary";
+  - **QI home:** "Defects by type" and "AI agreement rate";
+  - **Nav:** Reports (`phase: 7`, `report:quality` FM+QI; `report:production` is FM only).
+- **Day buckets:** Manila calendar day (UTC+8, no DST). Bucket in SQL with
+  `AT TIME ZONE 'Asia/Manila'`.
+- **AI agreement** = scans where `finalVerdict = aiVerdict` / decided scans. NEEDS_REVIEW resolutions
+  count separately (the AI made no call).
+- **Bottleneck:** stage durations from `batch_stage_logs` (open logs up to now).
+- **Yield:** after D-022, a completed batch's usable count can still rise while it's tagged
+  In repair. Show yield "as of now".
+- **Charts:** read the `dataviz` skill and DESIGN.md first. Verdict colors are fixed (pass, rework,
+  reject, review tokens).
+- **CSV export:** server-generated, UTF-8 with BOM for Excel, Manila timestamps.
+- **No per-person metrics** anywhere (D-008). The audit log names people, but reports must
+  aggregate per stage, batch or day only.
 
 ## Blockers
 

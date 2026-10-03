@@ -16,6 +16,51 @@ Template:
 
 ---
 
+## 2026-10-03 — Phase 6: Admin
+
+**Who:** Team + Claude Code
+**Summary:** Gave the System Admin real tools:
+
+- accounts with temporary passwords, a forced change and resets that end every session;
+- Settings for thresholds, defect types (with an Unknown classes panel), shoe types, suppliers and
+  components;
+- a read-only audit log viewer with field diffs;
+- live admin home cards.
+
+**Changed:**
+
+- DB: migration `users_sessions_valid_from`.
+- Auth: the JWT `authAt` claim; `checkSession` ends sessions older than `sessionsValidFrom`; the
+  guard forces `/account/password` on `mustChangePassword`; API `403 PASSWORD_CHANGE_REQUIRED`;
+  `/logout?reason=password-reset`.
+- Domain: `src/lib/admin-rules.ts` (temp password, account guards, threshold validation and
+  description, audit diff).
+- Server:
+  - models: user admin queries; generic reference-data CRUD; unknown class keys; thresholds;
+    the audit viewer;
+  - services: `user-admin`, `settings`, `audit-query`, `changeOwnPassword`;
+  - validators: user, settings, audit;
+  - controllers: user, settings (a reference controller factory), audit.
+- API: `/api/v1/users` (+ reset-password, unlock), `/settings/cv`, `/defect-types` (+ `/unknown`),
+  `/shoe-types`, `/suppliers`, `/component-types`, `/audit-logs` (`docs/API.md`).
+- UI:
+  - pages: `/admin/users`, `/account/password`, `/admin/settings` (5 tabs), `/admin/audit`,
+    `/components`;
+  - the admin home cards; "Change password" in the user menu;
+  - Users, Settings and Audit log are live in the nav.
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · test ✅ (276) · build ✅ · e2e ✅ (44 against
+`next start`, twice; 44 against Docker, twice) · docker ✅ (rebuilt image, health 200; the
+migration had already been applied to the shared dev DB, and CI's docker job runs it on a fresh
+volume) · psql ✅ (thresholds restored to 90/60, audit rows per admin action, demo accounts
+untouched)
+**Decisions:** D-024
+**Follow-ups:**
+
+- Account edit, unlock and reactivate are unit-tested, not e2e-tested.
+- The last-admin rule is unit-tested (the e2e covers the self-protection path).
+- Phase 7: dashboards and reports.
+
 ## 2026-10-03 — Phase 5: Inventory
 
 **Who:** Team + Claude Code

@@ -284,3 +284,51 @@ production before (survey Q12–Q14). Phase 5 adds items, stock movements and lo
 **Consequences:** Phase 7 reports can read consumption per batch and per period from the
 movements. Supplier deliveries aren't linked to a supplier yet (the note holds it); add a
 `supplierId` on IN movements if CPoint wants delivery reports.
+
+### D-024 · 2026-10-03 · Accepted — Account administration, sessions and settings
+
+**Context:** Phase 6 gives the System Admin the tools that were bootstrap or SQL-only: accounts,
+thresholds, defect classes and the lists people pick from, plus a way to read the audit log.
+There is no email in the factory setup, so password handover is in person.
+**Decision:**
+
+- **Temporary passwords:**
+  - Creating an account or resetting its password generates a 12-character temporary password
+    (no look-alike characters), **shown once** to the admin. Only its bcrypt hash is stored, and
+    it never appears in the audit log.
+  - The account gets `mustChangePassword`. Until the person chooses their own (`/account/password`,
+    ≥ 10 characters, no other rules), every page redirects there and the API answers
+    `403 PASSWORD_CHANGE_REQUIRED`.
+- **Ending sessions:**
+  - A new column `users.sessionsValidFrom`, and the JWT carries `authAt` (the sign-in time).
+    `iat` can't be used: Auth.js renews it on every refreshed request.
+  - A session that signed in before `sessionsValidFrom` is ended on its next request
+    (`/logout?reason=password-reset`).
+  - An admin reset ends all of the person's sessions. Changing your own password ends your other
+    sessions and signs this one in again.
+- **Lock-out protection:**
+  - The admin can't deactivate or demote themselves, or reset their own password (they use
+    Change password).
+  - The **last active System Admin** can't be deactivated or demoted. This is checked in the UI,
+    in the service, and again inside the transaction, so two admins can't race past it.
+- **Thresholds** are edited as percentages (one decimal), with 0 < rework < reject ≤ 100. New
+  scans use them; past scans keep their `thresholdsSnapshot`.
+- **Defect types:**
+  - The key is fixed after creation, because the camera sends it and detections keep the raw key.
+  - Inactive types are ignored by the engine (D-011).
+  - An **Unknown classes** panel lists flagged class keys with counts and offers "Add as defect
+    type". This affects new scans only; past NEEDS_REVIEW scans stay in the queue.
+- **Reference lists** (shoe types, suppliers, component types): add, edit, and deactivate/reactivate
+  with an undo toast. **No deletes**, because records reference them. Inactive entries leave the
+  pickers.
+- **Component tracking** stays a placeholder: the table is managed in Settings, and `/components`
+  says it's coming. The number of components per shoe type is still open with CPoint.
+- **Audit log viewer:**
+  - read-only;
+  - filters for who, action, record type, Manila day range and record id;
+  - each entry expands to a field-level before/after diff;
+  - user audit rows carry the account's email so entries name the person.
+
+**Consequences:** the `sessionsValidFrom` mechanism can also end sessions on a role change or a
+"sign out everywhere" if CPoint wants it later. Phase 7 reports can rely on thresholds and defect
+types being data that admins change.
