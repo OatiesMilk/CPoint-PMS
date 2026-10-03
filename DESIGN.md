@@ -32,17 +32,18 @@ hex, oklch, or arbitrary pixel values. This file overrides the defaults in `.cla
 
 Names match the code (`--name` in CSS → `bg-name` / `text-name` in Tailwind).
 
-| Group   | Tokens                                                                                                     |
-| ------- | ---------------------------------------------------------------------------------------------------------- |
-| Surface | `background`, `card`, `popover`, `muted`, `sidebar`, `sidebar-active`, `sidebar-indicator`                 |
-| Text    | `foreground`, `muted-foreground` (≥ 6:1 on every surface), `*-foreground` pairs                            |
-| Action  | `primary`, `secondary`, `accent` (yellow wash for hover/selected), `destructive`, `ring`                   |
-| Lines   | `border` (dividers, 1.3:1), `input` (field outlines, ≥ 3:1 per WCAG 1.4.11)                                |
-| Brand   | `brand-yellow`, `brand-ink`, `brand-red` (logo only)                                                       |
-| Verdict | `pass`, `rework`, `reject`, `review`, each with `-soft` background. Text-on-soft ≥ 4.7:1 in both themes.   |
-| Type    | `text-xs` 12 · `text-sm` 13 · `text-base` 14 · `text-lg` 16 · `text-xl` 20 · `text-2xl` 24 · `text-3xl` 32 |
-| Finish  | `--radius` 6px → `rounded-sm/md/lg`; `shadow-1`, `shadow-2`                                                |
-| Motion  | `--ease-out`, `--ease-in-out`, `--dur-press` 120ms, `--dur-fast` 150ms, `--dur-base` 220ms                 |
+| Group   | Tokens                                                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Surface | `background`, `card`, `popover`, `muted`, `sidebar`, `sidebar-active`, `sidebar-indicator`                                     |
+| Text    | `foreground`, `muted-foreground` (≥ 6:1 on every surface), `*-foreground` pairs                                                |
+| Action  | `primary`, `secondary`, `accent` (yellow wash for hover/selected), `destructive`, `ring`                                       |
+| Lines   | `border` (dividers, 1.3:1), `input` (field outlines, ≥ 3:1 per WCAG 1.4.11)                                                    |
+| Brand   | `brand-yellow`, `brand-ink`, `brand-red` (logo only)                                                                           |
+| Verdict | `pass`, `rework`, `reject`, `review`, each with `-soft` background. Text-on-soft ≥ 4.7:1 in both themes.                       |
+| Chart   | `chart-pass/rework/reject/review` (CVD-validated steps for stacked marks, D-025), `chart-bar`, `chart-bar-muted`, `chart-grid` |
+| Type    | `text-xs` 12 · `text-sm` 13 · `text-base` 14 · `text-lg` 16 · `text-xl` 20 · `text-2xl` 24 · `text-3xl` 32                     |
+| Finish  | `--radius` 6px → `rounded-sm/md/lg`; `shadow-1`, `shadow-2`                                                                    |
+| Motion  | `--ease-out`, `--ease-in-out`, `--dur-press` 120ms, `--dur-fast` 150ms, `--dur-base` 220ms                                     |
 
 **Dark mode** values are chosen, not inverted: ink surfaces with a slight warm tint, primary
 flips to yellow with ink text, and verdict colors are lightened to keep ≥ 6.7:1 on cards. The
@@ -100,6 +101,10 @@ Re-measure whenever a color token changes.
 | Reference list manager | Settings lists (`ReferenceManager`) | table + Add/Edit dialog; Deactivate/Reactivate with undo toast                | locked fields read-only with the reason; inactive rows muted; empty text per list                          |
 | Thresholds form        | CV decision thresholds              | percent inputs                                                                | live Reject/Rework/Pass bands (icon + label); save disabled until changed                                  |
 | Audit list             | Read-only trail                     | `<details>` rows (no JS)                                                      | who · action · record; expands to a before/after field table, record link, "its full history"              |
+| `VerdictTrendChart`    | Scans per day by verdict            | Recharts stacked columns, fixed series order                                  | legend (swatch + icon + label), ≤24px bars, 2px gaps, tooltip, caption; the daily table is its table view  |
+| `BarList`              | Ranked/ordered magnitudes           | one hue; `muted`; `highlight` tag (e.g. Bottleneck)                           | value at the bar tip; label links; `title`/sr-only detail; never colour-only emphasis                      |
+| `SplitBar`             | Today's verdict split               | 100% bar                                                                      | 2px gaps; counts + % listed beside it                                                                      |
+| Report home cards      | FM/QI overviews                     | split, daily summary, defects today, AI agreement                             | empty text when nothing scanned; link to Reports                                                           |
 
 ## Patterns
 

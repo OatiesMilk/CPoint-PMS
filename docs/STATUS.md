@@ -5,74 +5,70 @@
 
 **Last updated:** 2026-10-03
 **Branch:** `system-rebuild`
-**Current phase:** Phase 7 — Dashboards & reports (not started)
-**Overall:** 7 / 9 phases complete
+**Current phase:** Phase 8 — Hardening & demo (not started)
+**Overall:** 8 / 9 phases complete
 
 ## Phase progress
 
-- [x] 0. Foundation: branch, DESIGN.md, remove Laravel, scaffold, Docker, CI
+- [x] 0. Foundation
 - [x] 1. Data & auth
 - [x] 2. Batches & stages
 - [x] 3. CV skeleton
 - [x] 4. Rework & salvage
 - [x] 5. Inventory
 - [x] 6. Admin
-- [ ] 7. Dashboards & reports (FM/QI overviews, daily summary, defect analytics, AI agreement, bottleneck chart, CSV)
-- [ ] 8. Hardening & demo
+- [x] 7. Dashboards & reports
+- [ ] 8. Hardening & demo (smoke test per role, ui-craft audit, a realistic demo week, clean
+      compose on a fresh machine, panel-ready README)
 
 ## What works right now
 
-- **Database:** the full schema, 3 migrations (`init`, `camera_active_batch`,
-  `users_sessions_valid_from`). UUIDv7 ids (D-018).
+- **Database:** 4 migrations (`init`, `camera_active_batch`, `users_sessions_valid_from`,
+  `session_revocations`). UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017): reference data, the first System Admin, and demo users and
   inventory when `SEED_DEMO_USERS=true`.
-- **Sign-in & access** (D-016, D-024): 12-hour sessions, lockout, a role × permission matrix.
-  - Deactivation, password resets and password changes end sessions on the next request.
-  - Temporary passwords force a change at `/account/password`.
-- **Batches** (D-019) with stages, STALE concurrency and the `/api/v1/batches` API.
-- **Camera** (D-020): ingestion API, the decision engine (D-011), the simulator, overrides, the
-  review queue, scan pages and live feeds.
-- **Rework & salvage** (D-021, D-022): the board, salvage tabs and the Yield card. A batch can be
-  completed with repairs open (tagged "In repair").
-- **Inventory** (D-023): a ledger of receive/use/count entries with undo, low-stock alerts, and an
-  optional roll taken on batch create.
-- **Admin** (D-024):
-  - **`/admin/users`:** add (temporary password shown once), edit, reset (ends their sessions),
-    unlock, and deactivate/reactivate. Self and last-admin protection.
-  - **`/admin/settings`:**
-    - thresholds (live bands; past scans keep theirs);
-    - defect types (fixed keys, an Unknown classes panel with "Add as defect type");
-    - shoe types, suppliers and components (no deletes).
-  - **`/admin/audit`:** filters and field-level before/after diffs.
-  - **`/components`:** a Coming soon page.
-  - **Admin home:** users by role, thresholds, unknown classes, and 24 h audit activity.
-- **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`. Checked in psql.
-- **Tests:** 276 unit and 44 e2e tests. The e2e tests pass against `next start` and the Docker stack.
+- **Sign-in & access** (D-016, D-024, D-025):
+  - 12-hour sessions, lockout, and a role × permission matrix;
+  - a session ends on deactivation, a password reset/change, or **sign-out (revoked
+    server-side)**;
+  - temporary passwords force a change.
+- **Batches** (D-019), **camera** (D-020, D-011), **rework & salvage** (D-021, D-022),
+  **inventory** (D-023), **admin** (D-024).
+- **Reports** (D-025):
+  - **`/reports`:** range presets and a custom range; totals; scans per day by final verdict;
+    defects by type (click-through to `/scans?defect=`); camera call vs final verdict with AI
+    agreement; time in each stage with the bottleneck (FM); the daily summary table; and Daily,
+    Defects and Stages CSVs (Excel-friendly).
+  - **FM home:** today's split + daily summary. **QI home:** defects today + AI agreement.
+  - No "Phase N" placeholders remain.
+- **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
+- **Tests:** 292 unit and 47 e2e tests.
 
 ## Next step (exact)
 
-Start Phase 7. Paste into Claude Code:
+Start Phase 8. Paste into Claude Code:
 
-> /resume, then run Phase 7 (Dashboards & reports) from `docs/ROADMAP.md`. Start in plan mode.
+> /resume, then run Phase 8 (Hardening & demo) from `docs/ROADMAP.md`. Start in plan mode.
 
-Phase 7 notes:
+Phase 8 notes:
 
-- Placeholders to replace:
-  - **FM home:** "Today's inspection split" and "Daily summary";
-  - **QI home:** "Defects by type" and "AI agreement rate";
-  - **Nav:** Reports (`phase: 7`, `report:quality` FM+QI; `report:production` is FM only).
-- **Day buckets:** Manila calendar day (UTC+8, no DST). Bucket in SQL with
-  `AT TIME ZONE 'Asia/Manila'`.
-- **AI agreement** = scans where `finalVerdict = aiVerdict` / decided scans. NEEDS_REVIEW resolutions
-  count separately (the AI made no call).
-- **Bottleneck:** stage durations from `batch_stage_logs` (open logs up to now).
-- **Yield:** after D-022, a completed batch's usable count can still rise while it's tagged
-  In repair. Show yield "as of now".
-- **Charts:** read the `dataviz` skill and DESIGN.md first. Verdict colors are fixed (pass, rework,
-  reject, review tokens).
-- **CSV export:** server-generated, UTF-8 with BOM for Excel, Manila timestamps.
-- **No per-person metrics** anywhere (D-008). The audit log names people, but reports must
-  aggregate per stage, batch or day only.
+- **Demo week:**
+  - Seed through the real services and the ingestion API (the simulator can post with
+    `capturedAt` in the past), so the audit, stage logs and ledger stay consistent;
+  - spread over 7 Manila days, with Upper Making and Sole-ing slowest (survey);
+  - make it opt-in (e.g. `npm run demo:seed`) and never part of a normal start.
+- **Fresh-machine check:**
+  - `docker compose up --build` exactly as the README says, on a clean volume;
+  - Docker Hub/Alpine are blocked in the cloud sandbox, so verify the committed Dockerfile in CI
+    or on a team laptop.
+- **ui-craft audit:** every screen in light and dark at 1280px+. Check states (empty, loading,
+  error, stale), focus order and copy.
+- **Smoke test per role:** one Playwright journey each for the FM, QI, System Admin and Shoe
+  Constructor.
+- **README for the panel:** an architecture diagram (MVC layers, Docker services), an ERD (from
+  Prisma), setup, and a demo script.
+- **Housekeeping:** remove `ComingSoonCard` if unused; review the `npm audit` findings in the
+  Prisma CLI's dependencies.
 
 ## Blockers
 

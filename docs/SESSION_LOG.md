@@ -16,6 +16,60 @@ Template:
 
 ---
 
+## 2026-10-03 — Phase 7: Dashboards & reports
+
+**Who:** Team + Claude Code
+**Summary:** Added Reports:
+
+- daily summary by final verdict, defects by type, camera call vs final verdict with AI agreement,
+  and time per stage with the bottleneck;
+- three CSV exports;
+- live cards replacing every "Phase 7" placeholder on the FM and QI homes.
+
+Also fixed a real sign-out bug: sessions are now revoked server-side.
+**Changed:**
+
+- Domain: `src/lib/report-rules.ts` (range presets, day filling, agreement, bottleneck, safe CSV),
+  `formatDayLabel`.
+- Server:
+  - `models/report.model.ts` (all report SQL, Manila-day buckets);
+  - `services/report.service.ts` (no person fields);
+  - `validators/report.validator.ts`, `controllers/report.controller.ts`;
+  - `/scans?defect=` filter.
+- API: `/api/v1/reports/quality`, `/production`, `/daily.csv`, `/defects.csv`, `/stages.csv`.
+- UI:
+  - **Recharts** (installed): `VerdictTrendChart`, `BarList`, `SplitBar`, `VerdictLegend`;
+  - **tokens:** chart-only `--chart-*` tokens validated with the dataviz palette validator (light
+    and dark);
+  - **pages and cards:** `/reports`; the FM home split + daily summary cards; the QI home
+    defects + agreement cards;
+  - **nav:** Reports is live.
+- **Fix (auth):** a late prefetch response could restore the session cookie after sign-out (the
+  e2e sign-out test failed once, then 3 of 4 under stress before the fix). JWTs now carry a `sid`;
+  sign-out writes it to `session_revocations` (migration), and the guard refuses it. 8/8 under
+  stress after the fix.
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · test ✅ (292) · build ✅ · e2e ✅ (47 against
+`next start`, twice; reports + auth specs 4× repeated, 56/56) · docker ⚠️ **not run locally**
+(see below; the CI docker job builds the image and runs the migrations on a fresh volume) ·
+psql ✅:
+
+- a day's report matches hand counts (454 / 145 / 371);
+- revocation rows exist and are pruned;
+- the migration is applied.
+
+**Decisions:** D-025
+**Follow-ups:**
+
+- **Sandbox:** the Docker daemon hit the sandbox's background time limit and was stopped (it was
+  already at the longest limit). Postgres kept running, and the rest of the session reached it on
+  its container IP. One full e2e run failed as the port forward died (a reports test's sign-in);
+  it passed in every run since.
+- **Audit:** `npm audit` reports 4 high issues in the Prisma CLI's dependencies (deepmerge-ts,
+  mysql2). They were there before this phase and aren't in the app's runtime. Revisit in Phase 8.
+- **Dead code:** `ComingSoonCard` is now unused; remove or keep for Phase 8 placeholders.
+- Phase 8: hardening and demo.
+
 ## 2026-10-03 — Phase 6: Admin
 
 **Who:** Team + Claude Code

@@ -69,11 +69,11 @@ Tick the boxes as they're done.
 
 ## Phase 7 — Dashboards & reports
 
-- [ ] FM overview and QI overview (as specified in the master spec)
-- [ ] Daily summary (Manila day), defect analytics, AI agreement rate
-- [ ] Stage-duration / bottleneck chart
-- [ ] CSV export
-- [ ] No per-person metrics anywhere (check this)
+- [x] FM overview and QI overview (as specified in the master spec)
+- [x] Daily summary (Manila day), defect analytics, AI agreement rate
+- [x] Stage-duration / bottleneck chart
+- [x] CSV export
+- [x] No per-person metrics anywhere (checked: report payload unit test + UI review, D-025)
 
 ## Phase 8 — Hardening & demo
 

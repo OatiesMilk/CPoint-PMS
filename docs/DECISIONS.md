@@ -332,3 +332,51 @@ There is no email in the factory setup, so password handover is in person.
 **Consequences:** the `sessionsValidFrom` mechanism can also end sessions on a role change or a
 "sign out everywhere" if CPoint wants it later. Phase 7 reports can rely on thresholds and defect
 types being data that admins change.
+
+### D-025 · 2026-10-03 · Accepted — Report metrics, chart colours, and server-side sign-out
+
+**Context:** Phase 7 summarizes production and quality. The client wants a daily summary,
+cares about the bottleneck stages, and doesn't want anyone singled out (D-008). Separately, the
+e2e suite caught sign-out failing: a late prefetch response restored the session cookie, and the
+JWT was still valid.
+**Decision:**
+
+- **Aggregation:** every report aggregates **per Manila day, defect type, stage or batch**, never
+  per person.
+  - Days are bucketed in SQL: `(ts AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila'`.
+  - A unit test asserts that report payloads contain no person keys. Operational records (who
+    recorded a stock entry, the audit log) are not reports.
+- **Definitions:**
+  - Verdict counts use the **final** verdict.
+  - **AI agreement** = scans the AI decided (not NEEDS_REVIEW) whose final verdict equals the AI
+    verdict / those scans. Unknown-class scans decided by a person are reported separately.
+  - **Defects by type** use each scan's **strongest** detection (the one that drove the decision).
+  - **Stage time** = completed visits ending in the range (median + average), moves back
+    included, plus batches in each stage now and the longest wait.
+  - The **bottleneck** is the stage with the highest median.
+  - **Usable** yield is "as of now" (D-022).
+- **Range:** a preset (Today / 7 / 14 / 30 days, default 14) or custom from/to. At most 92 days,
+  never past today, in the URL.
+- **Access:** quality reports for the FM and QI (`report:quality`); production (stage times,
+  batches started/completed) for the FM only (`report:production`).
+- **CSV:** UTF-8 with a BOM and CRLF (Excel-friendly), RFC 4180 quoting, and text cells starting
+  with `= + - @` prefixed with `'` (formula injection).
+- **Charts** (dataviz procedure):
+  - Recharts only for the stacked daily verdict trend. Ranked lists use plain HTML bars with
+    direct labels.
+  - The verdict UI colours failed the colour-vision check when stacked (Rework vs Reject ΔE 0.8
+    for deuteranopia), so charts use **chart-only steps** (`--chart-*` in `tokens.css`), validated
+    with the dataviz validator in light and dark.
+  - Light Rework is below 3:1 on the card, so every chart ships a legend (icon + label) and a
+    table view.
+  - Badges keep the original verdict tokens.
+- **Sign-out is server-side:**
+  - Each sign-in carries a random `sid` in the JWT.
+  - Sign-out stores it in `session_revocations` (migration), kept until the token would have
+    expired, and the guard refuses it.
+  - Only that session ends; other devices stay signed in (password resets end all sessions,
+    D-024).
+
+**Consequences:** the guard does one extra primary-key lookup per request (run in parallel with
+the user lookup). Report SQL lives only in `report.model.ts`. Phase 8 can seed a realistic week
+using `capturedAt`.

@@ -35,6 +35,8 @@ Operational endpoints such as health are unversioned.
 - A password reset or change ends every session that signed in before it (D-024): those requests
   get `401`. An account on a temporary password gets `403 PASSWORD_CHANGE_REQUIRED` until it
   chooses its own.
+- Signing out revokes that session on the server (D-025): its token gets `401` even if the cookie
+  is replayed.
 - **Camera devices** use `Authorization: Bearer <device token>` instead of a session (see below).
 
 ## `GET /api/health`

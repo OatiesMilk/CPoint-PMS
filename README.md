@@ -11,7 +11,7 @@ Preparation, before cutting, that sorts leather sections into **Pass / Rework / 
 ## Tech stack
 
 Next.js 16 (App Router, TypeScript strict) · PostgreSQL 18 · Prisma 7 · Tailwind CSS 4 +
-shadcn/ui (Radix) · Zod · Vitest + Playwright · Docker (one compose file, two services) · GitHub Actions CI.
+shadcn/ui (Radix) · Zod · Recharts · Vitest + Playwright · Docker (one compose file, two services) · GitHub Actions CI.
 The reasons behind each choice are in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Prerequisites
@@ -65,7 +65,13 @@ is written to the audit log.
 **Accounts:** the System Admin adds people under **Users**. Each new account (and each password
 reset) gets a temporary password that's shown once; the person chooses their own at first
 sign-in. A reset signs the person out everywhere. Anyone can change their password from the user
-menu (**Change password**).
+menu (**Change password**). Signing out ends that session on the server, so a cached cookie can't
+bring it back.
+
+**Reports:** the Floor Manager and Quality Inspector open **Reports** for daily totals (Manila
+days), defects by type, how often people kept the camera's call, and (Floor Manager) time per
+stage with the bottleneck. Every table downloads as CSV for Excel. Nothing is broken down per
+person.
 
 ## Quick start: demo / factory machine
 
