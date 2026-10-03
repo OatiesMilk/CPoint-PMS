@@ -1,11 +1,13 @@
 import type { Role } from "@/lib/domain";
-import { DUMMY_HASH, verifyPassword } from "@/server/lib/password";
+import { Errors } from "@/server/lib/errors";
+import { DUMMY_HASH, hashPassword, verifyPassword } from "@/server/lib/password";
 import { runInTransaction } from "@/server/models/db";
 import {
   findUserByEmail,
   findUserById,
   recordFailedLogin,
   recordSuccessfulLogin,
+  setPassword,
   type User,
 } from "@/server/models/user.model";
 import { recordAudit } from "./audit.service";
@@ -13,7 +15,14 @@ import { recordAudit } from "./audit.service";
 export const MAX_FAILED_ATTEMPTS = 5;
 export const LOCK_MINUTES = 15;
 
-export type SessionUser = { id: string; name: string; email: string; role: Role };
+export type SessionUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  /** Set by an admin reset or for a new account: the user must choose a password first (D-024). */
+  mustChangePassword: boolean;
+};
 
 export type SignInResult =
   | { ok: true; user: SessionUser }
@@ -24,7 +33,13 @@ export type SignInResult =
 type RequestMeta = { ip?: string | null; userAgent?: string | null };
 
 function toSessionUser(user: User): SessionUser {
-  return { id: user.id, name: user.name, email: user.email, role: user.role };
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    mustChangePassword: user.mustChangePassword,
+  };
 }
 
 function minutesUntil(date: Date, now: Date): number {
@@ -114,10 +129,30 @@ export async function verifyCredentials(
   return { ok: true, user: toSessionUser(user) };
 }
 
-/** The signed-in user as of right now, or null if the account was removed or deactivated. */
-export async function getActiveSessionUser(userId: string): Promise<SessionUser | null> {
+export type SessionState =
+  { ok: true; user: SessionUser } | { ok: false; reason: "deactivated" | "password-reset" };
+
+/**
+ * The signed-in user as of right now. A session ends when the account is removed or deactivated
+ * (D-016), or when its password was reset or changed after this session signed in (D-024).
+ * `authAt` is the sign-in time from the token; tokens from before D-024 have none.
+ */
+export async function checkSession(userId: string, authAt?: number): Promise<SessionState> {
   const user = await findUserById(userId);
-  return user && user.isActive ? toSessionUser(user) : null;
+  if (!user || !user.isActive) return { ok: false, reason: "deactivated" };
+  if (user.sessionsValidFrom && (authAt ?? 0) < user.sessionsValidFrom.getTime()) {
+    return { ok: false, reason: "password-reset" };
+  }
+  return { ok: true, user: toSessionUser(user) };
+}
+
+/** The signed-in user as of right now, or null if their session has ended (see checkSession). */
+export async function getActiveSessionUser(
+  userId: string,
+  authAt?: number,
+): Promise<SessionUser | null> {
+  const state = await checkSession(userId, authAt);
+  return state.ok ? state.user : null;
 }
 
 export async function recordSignOut(userId: string, meta: RequestMeta = {}): Promise<void> {
@@ -130,4 +165,44 @@ export async function recordSignOut(userId: string, meta: RequestMeta = {}): Pro
       request: meta,
     }),
   );
+}
+
+/**
+ * The signed-in user chooses a new password (D-024). It clears `mustChangePassword` and ends their
+ * other sessions; the caller signs this one in again with the new password.
+ */
+export async function changeOwnPassword(
+  userId: string,
+  input: { currentPassword: string; newPassword: string },
+  meta: RequestMeta = {},
+  now: Date = new Date(),
+): Promise<{ email: string }> {
+  const user = await findUserById(userId);
+  if (!user || !user.isActive) throw Errors.unauthenticated();
+  if (!(await verifyPassword(input.currentPassword, user.passwordHash))) {
+    throw Errors.validation([
+      {
+        path: ["currentPassword"],
+        message: "That's not your current password. Check and try again.",
+      },
+    ]);
+  }
+  const passwordHash = await hashPassword(input.newPassword);
+  await runInTransaction(async (tx) => {
+    await setPassword(
+      userId,
+      { passwordHash, mustChangePassword: false, sessionsValidFrom: now },
+      tx,
+    );
+    await recordAudit(tx, {
+      actor: { type: "USER", userId },
+      action: "user.password_change",
+      entity: "User",
+      entityId: userId,
+      before: { mustChangePassword: user.mustChangePassword },
+      after: { mustChangePassword: false, otherSessionsEnded: true },
+      request: meta,
+    });
+  });
+  return { email: user.email };
 }

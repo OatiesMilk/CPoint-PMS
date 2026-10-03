@@ -1,7 +1,7 @@
 import { handlers, requestMeta, signOut, auth } from "@/server/lib/auth";
 import { recordSignOut } from "@/server/services/auth.service";
 
-const LOGOUT_REASONS = new Set(["deactivated", "signed-out"]);
+const LOGOUT_REASONS = new Set(["deactivated", "signed-out", "password-reset"]);
 
 export const authController = {
   handlers,

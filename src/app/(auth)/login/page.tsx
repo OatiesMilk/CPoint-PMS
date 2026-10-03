@@ -15,6 +15,10 @@ export const metadata: Metadata = { title: "Sign in" };
 
 const REASONS: Record<string, { tone: "info" | "success"; text: string }> = {
   "signed-out": { tone: "success", text: "You signed out." },
+  "password-reset": {
+    tone: "info",
+    text: "Your password was changed, so you were signed out. Sign in with the new or temporary password.",
+  },
   deactivated: {
     tone: "info",
     text: "Your account was deactivated, so you were signed out. Ask a System Admin if this is a mistake.",

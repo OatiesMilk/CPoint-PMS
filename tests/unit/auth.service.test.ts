@@ -5,6 +5,7 @@ const users = {
   findUserById: vi.fn(),
   recordFailedLogin: vi.fn(),
   recordSuccessfulLogin: vi.fn(),
+  setPassword: vi.fn(),
 };
 const recordAudit = vi.fn();
 const verifyPassword = vi.fn();
@@ -15,10 +16,17 @@ vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn({}),
 }));
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
-vi.mock("@/server/lib/password", () => ({ verifyPassword, DUMMY_HASH: "dummy" }));
+const hashPassword = vi.fn(async (p: string) => `hashed:${p}`);
+vi.mock("@/server/lib/password", () => ({ verifyPassword, hashPassword, DUMMY_HASH: "dummy" }));
 
-const { verifyCredentials, getActiveSessionUser, MAX_FAILED_ATTEMPTS, LOCK_MINUTES } =
-  await import("@/server/services/auth.service");
+const {
+  verifyCredentials,
+  getActiveSessionUser,
+  checkSession,
+  changeOwnPassword,
+  MAX_FAILED_ATTEMPTS,
+  LOCK_MINUTES,
+} = await import("@/server/services/auth.service");
 
 const now = new Date("2026-10-02T08:00:00.000Z");
 const minutes = (n: number) => new Date(now.getTime() + n * 60_000);
@@ -33,6 +41,8 @@ function user(overrides: Record<string, unknown> = {}) {
     isActive: true,
     failedLoginCount: 0,
     lockedUntil: null,
+    mustChangePassword: false,
+    sessionsValidFrom: null,
     ...overrides,
   };
 }
@@ -50,7 +60,13 @@ describe("verifyCredentials", () => {
     expect(users.findUserByEmail).toHaveBeenCalledWith("manager@cpoint.local");
     expect(result).toEqual({
       ok: true,
-      user: { id: "u1", name: "Ivy", email: "manager@cpoint.local", role: "FLOOR_MANAGER" },
+      user: {
+        id: "u1",
+        name: "Ivy",
+        email: "manager@cpoint.local",
+        role: "FLOOR_MANAGER",
+        mustChangePassword: false,
+      },
     });
     expect(users.recordSuccessfulLogin).toHaveBeenCalledWith("u1", now, expect.anything());
     expect(recordAudit).toHaveBeenCalledWith(
@@ -129,5 +145,62 @@ describe("getActiveSessionUser", () => {
     users.findUserById.mockResolvedValueOnce(user({ isActive: false })).mockResolvedValueOnce(null);
     expect(await getActiveSessionUser("u1")).toBeNull();
     expect(await getActiveSessionUser("u1")).toBeNull();
+  });
+});
+
+describe("checkSession (D-024)", () => {
+  it("ends sessions that signed in before a password reset or change", async () => {
+    users.findUserById.mockResolvedValue(user({ sessionsValidFrom: now }));
+    expect(await checkSession("u1", now.getTime() - 1)).toEqual({
+      ok: false,
+      reason: "password-reset",
+    });
+    expect(await checkSession("u1")).toMatchObject({ ok: false, reason: "password-reset" });
+    expect(await checkSession("u1", now.getTime())).toMatchObject({ ok: true });
+  });
+
+  it("says deactivated for a deactivated account, and carries mustChangePassword", async () => {
+    users.findUserById.mockResolvedValueOnce(user({ isActive: false }));
+    expect(await checkSession("u1", 1)).toEqual({ ok: false, reason: "deactivated" });
+    users.findUserById.mockResolvedValueOnce(user({ mustChangePassword: true }));
+    expect(await checkSession("u1", 1)).toMatchObject({
+      ok: true,
+      user: { mustChangePassword: true },
+    });
+  });
+});
+
+describe("changeOwnPassword (D-024)", () => {
+  it("checks the current password before changing anything", async () => {
+    users.findUserById.mockResolvedValue(user());
+    verifyPassword.mockResolvedValueOnce(false);
+    await expect(
+      changeOwnPassword("u1", { currentPassword: "wrong", newPassword: "a long new phrase" }),
+    ).rejects.toMatchObject({ status: 422, details: [{ path: ["currentPassword"] }] });
+    expect(users.setPassword).not.toHaveBeenCalled();
+  });
+
+  it("stores the new hash, clears mustChangePassword, ends other sessions and audits", async () => {
+    users.findUserById.mockResolvedValue(user({ mustChangePassword: true }));
+    verifyPassword.mockResolvedValueOnce(true);
+    await changeOwnPassword(
+      "u1",
+      { currentPassword: "temp", newPassword: "a long new phrase" },
+      {},
+      now,
+    );
+    expect(users.setPassword).toHaveBeenCalledWith(
+      "u1",
+      {
+        passwordHash: "hashed:a long new phrase",
+        mustChangePassword: false,
+        sessionsValidFrom: now,
+      },
+      expect.anything(),
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: "user.password_change" }),
+    );
   });
 });

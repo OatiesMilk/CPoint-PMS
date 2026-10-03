@@ -43,6 +43,18 @@ export function recordSuccessfulLogin(id: string, at: Date, db: Db = defaultDb()
   });
 }
 
+/** A new password hash. Ending older sessions (`sessionsValidFrom`) is the caller's choice. */
+export function setPassword(
+  id: string,
+  data: { passwordHash: string; mustChangePassword: boolean; sessionsValidFrom: Date },
+  db: Db = defaultDb(),
+) {
+  return db.user.update({
+    where: { id },
+    data: { ...data, failedLoginCount: 0, lockedUntil: null },
+  });
+}
+
 export function findFirstActiveUserWithRole(role: Role, db: Db = defaultDb()) {
   return db.user.findFirst({ where: { role, isActive: true }, orderBy: { createdAt: "asc" } });
 }

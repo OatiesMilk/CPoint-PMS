@@ -96,6 +96,8 @@ model User {
   role               Role
   isActive           Boolean   @default(true)
   mustChangePassword Boolean   @default(false) // set by admin reset (Phase 6)
+  /// Sessions signed in before this are ended (password reset or change, D-024).
+  sessionsValidFrom  DateTime?
   failedLoginCount   Int       @default(0)
   lockedUntil        DateTime?
   lastLoginAt        DateTime?

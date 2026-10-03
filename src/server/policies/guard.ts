@@ -3,10 +3,10 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { Role } from "@/lib/domain";
 import { auth } from "@/server/lib/auth";
-import { Errors } from "@/server/lib/errors";
+import { AppError, Errors } from "@/server/lib/errors";
 import type { DeviceScope } from "@/server/lib/device-token";
 import { authenticateDevice, type DeviceIdentity } from "@/server/services/api-token.service";
-import { getActiveSessionUser, type SessionUser } from "@/server/services/auth.service";
+import { checkSession, type SessionState, type SessionUser } from "@/server/services/auth.service";
 import { can, type Permission } from "./permissions";
 
 /**
@@ -16,19 +16,29 @@ import { can, type Permission } from "./permissions";
  */
 const getSession = cache(() => auth());
 
-export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
-  const id = (await getSession())?.user?.id;
-  return id ? getActiveSessionUser(id) : null;
+const getSessionState = cache(async (): Promise<SessionState | null> => {
+  const user = (await getSession())?.user;
+  return user?.id ? checkSession(user.id, user.authAt) : null;
 });
 
-/** Pages and server actions: the signed-in, active user, or a redirect. */
-export async function requireUser(): Promise<SessionUser> {
-  const session = await getSession();
-  if (!session?.user?.id) redirect("/login");
-  const user = await getCurrentUser();
-  // Valid token but the account is gone or deactivated: clear the cookie, then explain.
-  if (!user) redirect("/logout?reason=deactivated");
-  return user;
+export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
+  const state = await getSessionState();
+  return state?.ok ? state.user : null;
+});
+
+/**
+ * Pages and server actions: the signed-in, active user, or a redirect. A user who must choose a
+ * new password (D-024) is sent to /account/password first; only that page opts out.
+ */
+export async function requireUser(
+  options: { allowPasswordChange?: boolean } = {},
+): Promise<SessionUser> {
+  const state = await getSessionState();
+  if (!state) redirect("/login");
+  // Valid token but the session has ended: clear the cookie, then explain why.
+  if (!state.ok) redirect(`/logout?reason=${state.reason}`);
+  if (state.user.mustChangePassword && !options.allowPasswordChange) redirect("/account/password");
+  return state.user;
 }
 
 export async function requireRole(...roles: Role[]): Promise<SessionUser> {
@@ -47,6 +57,13 @@ export async function requirePermission(permission: Permission): Promise<Session
 export async function requireApiPermission(permission: Permission): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) throw Errors.unauthenticated();
+  if (user.mustChangePassword) {
+    throw new AppError(
+      403,
+      "PASSWORD_CHANGE_REQUIRED",
+      "Choose a new password at /account/password first.",
+    );
+  }
   if (!can(user.role, permission)) throw Errors.forbidden();
   return user;
 }

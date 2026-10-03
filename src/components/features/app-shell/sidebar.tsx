@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   KeyRound,
   LayoutDashboard,
+  LockKeyhole,
   LogOut,
   Package,
   Recycle,
@@ -161,6 +162,12 @@ export function Sidebar({ sections, user, signOutAction }: Props) {
               <span className="block text-sm text-muted-foreground">{user.email}</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/account/password">
+                <LockKeyhole aria-hidden />
+                Change password
+              </Link>
+            </DropdownMenuItem>
             <form action={signOutAction}>
               <DropdownMenuItem asChild>
                 <button type="submit" className="w-full">
