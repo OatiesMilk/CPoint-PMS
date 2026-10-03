@@ -69,7 +69,8 @@ jobs:
           cp .env.example .env
           sed -i "s|^AUTH_SECRET=.*|AUTH_SECRET=$(openssl rand -base64 32)|" .env
           sed -i "s|^BOOTSTRAP_ADMIN_PASSWORD=.*|BOOTSTRAP_ADMIN_PASSWORD=ci-admin-password-123|" .env
-          sed -i "s|^SEED_DEMO_USERS=.*|SEED_DEMO_USERS=false|" .env
+          sed -i "s|^DEMO_USER_PASSWORD=.*|DEMO_USER_PASSWORD=ci-demo-password|" .env
+          sed -i "s|^SEED_DEMO_WEEK=.*|SEED_DEMO_WEEK=true|" .env
       - name: Build and start the full stack
         run: docker compose up --build -d --wait
       - name: Health check
@@ -78,6 +79,28 @@ jobs:
         run: |
           docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "select count(*) from users where role='SYSTEM_ADMIN'" | grep -qx 1
           docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "select count(*) from defect_types" | grep -qx 4
+      - name: The demo week seeds in the background, consistently
+        run: |
+          q() { docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "$1"; }
+          for i in $(seq 1 60); do
+            docker compose logs app | grep -q "Demo week seeded" && break
+            sleep 3
+          done
+          docker compose logs app | grep "Demo week seeded"
+          # How much of the week has passed depends on the weekday CI runs on.
+          test "$(q "select count(*) from batches")" -ge 10
+          test "$(q "select count(*) from scans")" -ge 150
+          test "$(q "select count(*) from scans where status='PENDING_REVIEW'")" -ge 1
+          # Every item's on-hand quantity equals the sum of its ledger.
+          q "select count(*) from inventory_items i where i.\"quantityOnHand\" <> (select coalesce(sum(m.\"quantityDelta\"),0) from inventory_movements m where m.\"itemId\"=i.id)" | grep -qx 0
+      - name: A restart doesn't seed again
+        run: |
+          q() { docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "$1"; }
+          before="$(q "select count(*) from batches")"
+          docker compose restart app
+          docker compose up -d --wait
+          sleep 10
+          test "$(q "select count(*) from batches")" = "$before"
       - if: failure()
         run: docker compose logs
       - if: always()

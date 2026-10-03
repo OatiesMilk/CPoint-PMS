@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const calls: { fn: string; batchId?: string; now: Date }[] = [];
+const calls: { fn: string; batchId?: string; now: Date; classKeys?: string[] }[] = [];
 let nextBatch = 0;
 const svc = {
   createBatch: vi.fn(async (_v: unknown, _a: unknown, now: Date) => {
@@ -13,10 +13,21 @@ const svc = {
     calls.push({ fn: "transition", batchId, now });
   }),
   cancelBatch: vi.fn(),
-  ingestScan: vi.fn(async (input: { batchId: string }, _d: unknown, now: Date) => {
-    calls.push({ fn: "scan", batchId: input.batchId, now });
-    return { scanId: `s${calls.length}`, batchId: input.batchId, verdict: "PASS" };
-  }),
+  ingestScan: vi.fn(
+    async (
+      input: { batchId: string; detections: { classKey: string }[] },
+      _d: unknown,
+      now: Date,
+    ) => {
+      calls.push({
+        fn: "scan",
+        batchId: input.batchId,
+        now,
+        classKeys: input.detections.map((d) => d.classKey),
+      });
+      return { scanId: `s${calls.length}`, batchId: input.batchId, verdict: "PASS" };
+    },
+  ),
 };
 const mocks = {
   countBatches: vi.fn(async () => 0),
@@ -67,6 +78,7 @@ vi.mock("@/server/services/scan-ingest.service", () => ({ ingestScan: svc.ingest
 
 const { mulberry32, seedDemoWeek, stageDurationMs, STAGE_HOURS } =
   await import("@/server/services/demo-seed.service");
+const { UNKNOWN_CLASS } = await import("@/server/lib/leather-scan");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -130,5 +142,16 @@ describe("seedDemoWeek", () => {
         expect(times[i].getTime()).toBeGreaterThanOrEqual(times[i - 1].getTime());
       expect(times.at(-1)!.getTime()).toBeLessThanOrEqual(now.getTime());
     }
+  });
+
+  it.each([
+    ["Saturday afternoon", now],
+    ["Monday before the first shift", new Date("2026-10-04T23:30:00.000Z")],
+  ])("leaves the newest batch's last two sections for review (%s)", async (_label, at) => {
+    await seedDemoWeek({ now: at, seed: 1 });
+    const scans = calls.filter((c) => c.fn === "scan");
+    expect(scans.length).toBeGreaterThan(100);
+    expect(scans.slice(-2).map((c) => c.classKeys)).toEqual([[UNKNOWN_CLASS], [UNKNOWN_CLASS]]);
+    expect(new Set(scans.slice(-2).map((c) => c.batchId)).size).toBe(1);
   });
 });

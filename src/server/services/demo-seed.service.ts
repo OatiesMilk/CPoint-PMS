@@ -180,13 +180,17 @@ export async function seedDemoWeek(
   const salvage: { id: string; originBatchId: string; at: Date }[] = [];
   let index = 0;
 
-  const lastDay = workingDays[workingDays.length - 1];
+  const SLOTS = [8, 10.5];
+  // The last slot whose batch has surely started (a start lands up to 0.3 h after the slot).
+  const newestSlot = workingDays
+    .flatMap((day) => SLOTS.map((startHour) => ({ day, startHour })))
+    .findLast(({ day, startHour }) => past(at(day, startHour + 0.3)));
 
   for (const day of workingDays) {
-    for (const startHour of [8, 10.5]) {
+    for (const startHour of SLOTS) {
       index += 1;
       // The newest batch to reach the camera; its last two sections stay in the review queue.
-      const newest = day === lastDay && (startHour === 10.5 || !past(at(day, 10.5)));
+      const newest = day === newestSlot?.day && startHour === newestSlot.startHour;
       const school = index % 3 !== 0;
       const shoeType = school ? shoeTypes[0] : (shoeTypes[1] ?? shoeTypes[0]);
       const created = at(day, startHour - between(0.5, 1));
