@@ -38,7 +38,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         href: "/inventory",
         icon: "inventory",
         permission: "inventory:read",
-        phase: 5,
       },
     ],
   },

@@ -19,6 +19,7 @@ describe("quantities", () => {
   it("formats with the unit, pluralising count units only", () => {
     expect(formatQuantity(3, "roll")).toBe("3 rolls");
     expect(formatQuantity(1, "roll")).toBe("1 roll");
+    expect(formatQuantity(20, "box")).toBe("20 boxes");
     expect(formatQuantity(2.5, "kg")).toBe("2.5 kg");
     expect(formatQuantity(1200, "m")).toBe("1,200 m");
     expect(formatQuantity(2.1)).toBe("2.1");

@@ -41,7 +41,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
   if (!isBatchId(id)) notFound();
   const detail = await getBatchDetail(id);
   if (!detail) notFound();
-  const { batch, actions, openRepairs, durations, now } = detail;
+  const { batch, actions, openRepairs, rollFromInventory, durations, now } = detail;
   const y = await batchYield(batch.id);
   const canManage = can(user.role, "batch:manage");
 
@@ -173,6 +173,28 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
                   </span>,
                 ],
                 ["Supplier", batch.supplier?.name ?? "Not recorded"],
+                [
+                  "Roll from inventory",
+                  rollFromInventory ? (
+                    <span key="inv">
+                      {can(user.role, "inventory:read") ? (
+                        <Link
+                          href={`/inventory/${rollFromInventory.itemId}`}
+                          className="underline underline-offset-4"
+                        >
+                          {rollFromInventory.label}
+                        </Link>
+                      ) : (
+                        rollFromInventory.label
+                      )}
+                      {rollFromInventory.returned && (
+                        <span className="text-muted-foreground"> · returned to stock</span>
+                      )}
+                    </span>
+                  ) : (
+                    "Not recorded"
+                  ),
+                ],
                 ["Date received", formatCalendarDate(batch.receivedAt)],
                 [
                   "Target quota",

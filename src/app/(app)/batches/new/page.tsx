@@ -15,14 +15,19 @@ export const metadata: Metadata = { title: "New batch" };
 
 export default async function NewBatchPage() {
   await requirePermission("batch:manage");
-  const { shoeTypes, suppliers } = await getBatchFormOptions();
+  const { shoeTypes, suppliers, rollItems } = await getBatchFormOptions();
   return (
     <>
       <PageHeader
         title="New batch"
         description="One leather roll is one batch. It starts as Planned."
       />
-      <BatchForm shoeTypes={shoeTypes} suppliers={suppliers} today={manilaToday()} />
+      <BatchForm
+        shoeTypes={shoeTypes}
+        suppliers={suppliers}
+        rollItems={rollItems}
+        today={manilaToday()}
+      />
     </>
   );
 }

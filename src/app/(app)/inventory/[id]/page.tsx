@@ -1,0 +1,192 @@
+/*
+ * Intent brief (ui-craft §1)
+ * Who:   the Floor Manager, when a delivery arrives, stock is taken to the line, or at a count.
+ * What:  record what came in or went out in a few seconds, and read the item's history like the
+ *        log book: each entry with the balance after it.
+ * Worst: stock drifts from the shelf without anyone noticing. On hand is the hero number, every
+ *        change is an entry with who and why, and counts state the difference.
+ */
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { connection } from "next/server";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { StockBadge } from "@/components/features/inventory/stock-badge";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { formatManilaDateTime } from "@/lib/format";
+import {
+  CATEGORY_LABELS,
+  MOVEMENT_LABELS,
+  formatDelta,
+  formatQuantity,
+} from "@/lib/inventory-rules";
+import { requirePermission } from "@/server/policies/guard";
+import { can } from "@/server/policies/permissions";
+import { getItemDetail, usageBatchOptions } from "@/server/services/inventory.service";
+import { isInventoryId } from "@/server/validators/inventory.validator";
+import { StockActions } from "./stock-actions";
+
+export const metadata: Metadata = { title: "Inventory item" };
+
+const MOVEMENT_TONE = { IN: "success", OUT: "neutral", ADJUST: "info" } as const;
+
+export default async function InventoryItemPage({
+  params,
+  searchParams,
+}: PageProps<"/inventory/[id]">) {
+  const user = await requirePermission("inventory:read");
+  await connection();
+  const { id } = await params;
+  if (!isInventoryId(id)) notFound();
+  const pageParam = Number((await searchParams).page);
+  const page = Number.isInteger(pageParam) && pageParam > 1 ? pageParam : 1;
+  const detail = await getItemDetail(id, page);
+  if (!detail) notFound();
+  const { item, movements, pageCount } = detail;
+  const canManage = can(user.role, "inventory:manage");
+  const openBatches = canManage ? await usageBatchOptions() : [];
+
+  return (
+    <>
+      <div>
+        <Link
+          href="/inventory"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft aria-hidden className="size-4" />
+          All items
+        </Link>
+      </div>
+
+      <header className="flex flex-col gap-5 border-b pb-6">
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-semibold tracking-tight">{item.name}</h1>
+              <StockBadge level={item.level} inactive={!item.isActive} />
+            </div>
+            <p className="mt-1 text-lg text-muted-foreground">
+              <span className="font-mono">{item.sku}</span> · {CATEGORY_LABELS[item.category]}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">On hand</p>
+            <p className="text-3xl font-semibold tabular-nums" data-testid="on-hand">
+              {formatQuantity(item.quantityOnHand, item.unit)}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              reorder at {formatQuantity(item.reorderLevel, item.unit)}
+            </p>
+          </div>
+        </div>
+        {canManage && <StockActions item={item} openBatches={openBatches} />}
+      </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stock history</CardTitle>
+          <CardDescription>
+            Every change to the stock, newest first. Entries are never edited: a mistake is undone
+            with an opposite entry or corrected by a stock count.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {movements.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No stock recorded yet.{" "}
+              {canManage
+                ? "Use Receive stock when a delivery arrives."
+                : "Entries appear when the Floor Manager records stock."}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>When</TableHead>
+                    <TableHead>Entry</TableHead>
+                    <TableHead numeric>Change</TableHead>
+                    <TableHead numeric>Balance</TableHead>
+                    <TableHead>Note</TableHead>
+                    <TableHead>Batch</TableHead>
+                    <TableHead>Recorded by</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {movements.map((m) => (
+                    <TableRow key={m.id} data-testid="movement-row">
+                      <TableCell className="whitespace-nowrap">
+                        {formatManilaDateTime(m.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge tone={MOVEMENT_TONE[m.type]}>{MOVEMENT_LABELS[m.type]}</Badge>
+                      </TableCell>
+                      <TableCell numeric className="font-medium">
+                        {formatDelta(m.quantityDelta)}
+                      </TableCell>
+                      <TableCell numeric>{formatQuantity(m.balanceAfter)}</TableCell>
+                      <TableCell className="max-w-72 truncate" title={m.reason}>
+                        {m.reason}
+                      </TableCell>
+                      <TableCell>
+                        {m.batch ? (
+                          <Link
+                            href={`/batches/${m.batch.id}`}
+                            className="font-mono underline-offset-4 hover:underline"
+                          >
+                            {m.batch.code}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{m.createdBy.name}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {pageCount > 1 && (
+                <nav
+                  aria-label="History pages"
+                  className="flex items-center justify-between text-sm text-muted-foreground"
+                >
+                  <span>
+                    Page {page} of {pageCount}
+                  </span>
+                  <div className="flex gap-2">
+                    {page > 1 && (
+                      <Button asChild variant="secondary" size="sm">
+                        <Link href={`/inventory/${id}${page > 2 ? `?page=${page - 1}` : ""}`}>
+                          <ChevronLeft aria-hidden />
+                          Newer
+                        </Link>
+                      </Button>
+                    )}
+                    {page < pageCount && (
+                      <Button asChild variant="secondary" size="sm">
+                        <Link href={`/inventory/${id}?page=${page + 1}`}>
+                          Older
+                          <ChevronRight aria-hidden />
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                </nav>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+}

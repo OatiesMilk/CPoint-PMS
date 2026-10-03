@@ -66,7 +66,10 @@ const COUNT_UNITS = new Set([
 export function formatQuantity(quantity: number, unit?: string): string {
   const n = new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 }).format(quantity);
   if (!unit) return n;
-  const plural = quantity !== 1 && COUNT_UNITS.has(unit.toLowerCase()) ? `${unit}s` : unit;
+  const plural =
+    quantity !== 1 && COUNT_UNITS.has(unit.toLowerCase())
+      ? `${unit}${/(s|x|z|ch|sh)$/i.test(unit) ? "es" : "s"}`
+      : unit;
   return `${n} ${plural}`;
 }
 

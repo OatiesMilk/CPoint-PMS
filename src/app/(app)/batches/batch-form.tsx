@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatQuantity } from "@/lib/inventory-rules";
 import {
   batchFormSchema,
   type BatchFormInput,
@@ -25,6 +26,8 @@ type Option = { id: string; name: string };
 type Props = {
   shoeTypes: Option[];
   suppliers: Option[];
+  /** Create only: leather-roll inventory items with stock (D-023). */
+  rollItems?: { id: string; sku: string; name: string; unit: string; quantityOnHand: number }[];
   today: string;
   /** Edit mode: the batch id, its current values, and whether the shoe type can still change. */
   batch?: { id: string; code: string; values: BatchFormInput; shoeTypeLockedReason?: string };
@@ -37,6 +40,7 @@ const FIELDS = [
   "receivedAt",
   "targetQuotaPairs",
   "notes",
+  "rollItemId",
 ] as const;
 
 function FieldError({ id, message }: { id: string; message?: string }) {
@@ -48,7 +52,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-export function BatchForm({ shoeTypes, suppliers, today, batch }: Props) {
+export function BatchForm({ shoeTypes, suppliers, rollItems = [], today, batch }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
@@ -64,6 +68,7 @@ export function BatchForm({ shoeTypes, suppliers, today, batch }: Props) {
       receivedAt: today,
       targetQuotaPairs: "",
       notes: "",
+      rollItemId: "",
     },
   });
   const { errors } = form.formState;
@@ -127,6 +132,37 @@ export function BatchForm({ shoeTypes, suppliers, today, batch }: Props) {
             </p>
           )}
         </div>
+
+        {!batch && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rollItemId">
+              Take a roll from inventory{" "}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Select
+              id="rollItemId"
+              aria-invalid={!!errors.rollItemId}
+              aria-describedby={describedBy("rollItemId") ?? "rollItemId-hint"}
+              {...form.register("rollItemId")}
+            >
+              <option value="">Don’t record</option>
+              {rollItems.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.sku} · {r.name} ({formatQuantity(r.quantityOnHand, r.unit)} in stock)
+                </option>
+              ))}
+            </Select>
+            {errors.rollItemId ? (
+              <FieldError id="rollItemId-error" message={errors.rollItemId.message} />
+            ) : (
+              <p id="rollItemId-hint" className="text-sm text-muted-foreground">
+                {rollItems.length > 0
+                  ? "Records one roll as used for this batch, so inventory stays right."
+                  : "No leather rolls in stock in Inventory. You can still create the batch."}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">

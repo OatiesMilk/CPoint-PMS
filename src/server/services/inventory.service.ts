@@ -11,6 +11,7 @@ import {
   type StockLevel,
 } from "@/lib/inventory-rules";
 import { Errors } from "@/server/lib/errors";
+import { listOpenBatches } from "@/server/models/batch.model";
 import { runInTransaction } from "@/server/models/db";
 import {
   applyStockDelta,
@@ -124,6 +125,12 @@ export async function suggestItemCode(category: InventoryCategory): Promise<stri
 export async function lowStockSummary(take = 5) {
   const { rows, count } = await lowStockItems(take);
   return { count, items: rows.map(toItem) };
+}
+
+/** Batches stock can be used for: planned or in progress. */
+export async function usageBatchOptions() {
+  const rows = await listOpenBatches();
+  return rows.map((b) => ({ id: b.id, code: b.code }));
 }
 
 /** Leather-roll items the batch form can take a roll from. */
