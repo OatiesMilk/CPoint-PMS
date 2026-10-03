@@ -293,7 +293,7 @@ the terminal. Use the same Node.js LTS version across the team where possible.
 If you have not cloned the repository yet:
 
 ```cmd
-git clone https://github.com/OatiesMilk/AI-System-for-Quality-Inspection.git CPoint-PMS
+git clone https://github.com/OatiesMilk/CPoint-PMS.git
 cd CPoint-PMS
 ```
 
