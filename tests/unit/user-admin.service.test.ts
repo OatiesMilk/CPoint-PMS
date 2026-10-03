@@ -93,7 +93,10 @@ describe("account changes", () => {
     expect(users.updateUser).toHaveBeenCalledWith("u1", { isActive: false }, "tx");
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
-      expect.objectContaining({ action: "user.deactivate", after: { isActive: false } }),
+      expect.objectContaining({
+        action: "user.deactivate",
+        after: { email: "ivy@cpoint.local", isActive: false },
+      }),
     );
   });
 });

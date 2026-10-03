@@ -162,8 +162,8 @@ export async function setAccountActive(id: string, isActive: boolean, actor: Act
       action: isActive ? "user.reactivate" : "user.deactivate",
       entity: "User",
       entityId: id,
-      before: { isActive: before.isActive },
-      after: { isActive },
+      before: { email: before.email, isActive: before.isActive },
+      after: { email: before.email, isActive },
     });
   });
 }
@@ -185,8 +185,12 @@ export async function resetAccountPassword(id: string, actor: Actor, now: Date =
       action: "user.password_reset",
       entity: "User",
       entityId: id,
-      before: { mustChangePassword: user.mustChangePassword, locked: user.lockedUntil !== null },
-      after: { mustChangePassword: true, locked: false, sessionsEnded: true },
+      before: {
+        email: user.email,
+        mustChangePassword: user.mustChangePassword,
+        locked: user.lockedUntil !== null,
+      },
+      after: { email: user.email, mustChangePassword: true, locked: false, sessionsEnded: true },
     });
   });
   return { name: user.name, temporaryPassword };
@@ -201,8 +205,12 @@ export async function unlockAccount(id: string, actor: Actor) {
       action: "user.unlock",
       entity: "User",
       entityId: id,
-      before: { failedLoginCount: user.failedLoginCount, lockedUntil: user.lockedUntil },
-      after: { failedLoginCount: 0, lockedUntil: null },
+      before: {
+        email: user.email,
+        failedLoginCount: user.failedLoginCount,
+        lockedUntil: user.lockedUntil,
+      },
+      after: { email: user.email, failedLoginCount: 0, lockedUntil: null },
     });
   });
 }
