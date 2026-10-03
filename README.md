@@ -270,19 +270,122 @@ erDiagram
 
 ## Quick start: development
 
-Runs PostgreSQL in Docker and Next.js on your machine, with hot reload. Needs **Node.js 22.12+**
-(24 LTS recommended).
+Use this setup when working on the code: Next.js runs on your machine with hot reload, and
+PostgreSQL runs in Docker. Run commands one at a time and continue only when each succeeds.
 
-```bash
-cp .env.example .env        # then fill in the blanks (see "Environment" below)
-npm install                 # also generates the Prisma client
-npm run db:up               # starts PostgreSQL in Docker (port 5432, localhost only)
-npm run db:deploy           # applies database migrations
-npm run dev                 # http://localhost:3000. Seeds reference data + demo users on start
-npm run demo:seed           # optional: a past week of production (only on an empty database)
+### 1. Check the prerequisites
+
+Install Node.js **22.12 or newer** (24 LTS recommended) and Docker Desktop. Open Docker Desktop
+and wait until its engine is running. In a terminal, check:
+
+```cmd
+node --version
+npm --version
+docker --version
+docker compose version
 ```
 
-Stop the database with `npm run db:down`. Data persists in the `pgdata` Docker volume.
+If a command is not recognized, install the corresponding tool or check its PATH, then reopen
+the terminal. Use the same Node.js LTS version across the team where possible.
+
+### 2. Open the repository folder
+
+If you have not cloned the repository yet:
+
+```cmd
+git clone https://github.com/OatiesMilk/AI-System-for-Quality-Inspection.git CPoint-PMS
+cd CPoint-PMS
+```
+
+If you already have it, open a terminal in that folder. For example, in Windows Command Prompt
+(replace the path with your own):
+
+```cmd
+cd /d C:\Users\micro\OneDrive\Desktop\CPoint-PMS
+```
+
+### 3. Create and configure `.env`
+
+On a new checkout, copy the settings template. In **Windows Command Prompt**:
+
+```cmd
+copy .env.example .env
+notepad .env
+```
+
+In **PowerShell**, use `Copy-Item .env.example .env`; on **macOS/Linux**, use
+`cp .env.example .env`. If `.env` already exists, edit it instead of overwriting it.
+
+Generate a secret with Node.js (works in Command Prompt, PowerShell and macOS/Linux terminals):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Paste the generated value after `AUTH_SECRET=` in `.env`. Fill in these settings before starting
+Docker or the app:
+
+| Setting                    | Value for local development                                                    |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| `AUTH_SECRET`              | The generated random secret; at least 32 characters.                           |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Your chosen password, at least 12 characters.                                  |
+| `DEMO_USER_PASSWORD`       | Your chosen password, at least 8 characters; used by all four demo accounts.   |
+| `SEED_DEMO_USERS`          | `true` to create the demo accounts.                                            |
+| `SEED_DEMO_WEEK`           | `true` for sample production data, or `false` for an empty production dataset. |
+
+Use actual values, not placeholder text, and save the file. Keep the database values from
+`.env.example` for the default local setup. Each teammate should create their own `.env`; keep
+secrets out of Git and shared terminal output.
+
+### 4. Install dependencies and start the database
+
+Run these from the repository root:
+
+```bash
+npm ci
+npm run db:up
+npm run db:deploy
+```
+
+`npm ci` installs the versions in `package-lock.json` and generates the Prisma client.
+`db:up` starts PostgreSQL; `db:deploy` applies the committed database migrations. If the database
+is still starting when migration fails, check `docker compose ps`, wait for `db` to be healthy,
+and retry `npm run db:deploy`.
+
+### 5. Start the app and sign in
+
+```bash
+npm run dev
+```
+
+Leave this terminal running and open <http://localhost:3000>. The app seeds reference data and
+demo accounts during startup. Sign in with `manager@cpoint.local` and the `DEMO_USER_PASSWORD`
+you saved in `.env`. The other accounts are `inspector@cpoint.local`, `admin@cpoint.local`, and
+`constructor@cpoint.local`; all use that same demo password.
+
+With `SEED_DEMO_WEEK=true`, sample production data loads in the background on first startup.
+Refresh after about a minute. It only seeds when there are no batches. Alternatively, run
+`npm run demo:seed` in a second terminal after startup.
+
+### Troubleshooting and stopping
+
+- **`Invalid environment variables ... AUTH_SECRET`:** `.env` must contain a real secret of at
+  least 32 characters. Generate it with the Node.js command above, replace the `AUTH_SECRET=`
+  value, and save. Stop the app with **Ctrl+C**, then run `npm run dev` again. A `Ready` message
+  or a working login page does not mean startup seeding succeeded; check for bootstrap errors.
+- **Other invalid environment variables:** check the named setting against `.env.example` and
+  the minimum password lengths above, save, and restart the app.
+- **Docker connection error:** open Docker Desktop and wait for the engine, then retry
+  `npm run db:up`.
+- **Database connection error:** check `docker compose ps` and `docker compose logs db`, confirm
+  the database is healthy, and check that `DATABASE_URL` matches the PostgreSQL settings.
+- **Port 5432 is already occupied:** change `DB_PORT` in `.env` and the port in `DATABASE_URL`
+  to the same free port, then run `npm run db:up` again.
+
+Stop the app with **Ctrl+C**. Stop the database with `npm run db:down`; its data stays in the
+Docker volume. On later runs, use `npm run db:up` followed by `npm run dev`. After pulling new
+changes, run `npm ci` if dependencies changed and `npm run db:deploy` for new migrations before
+starting the app.
 
 ## Environment
 
