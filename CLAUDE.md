@@ -5,8 +5,7 @@ leather-shoe production line (Preparation → Upper Making → Sole-ing → Fini
 computer-vision checkpoint at Preparation, before cutting.
 
 **The project is mid-rebuild** from Laravel/MySQL to Next.js/PostgreSQL/Docker on the
-`system-rebuild` branch. Phase 0 (foundation) is done: the Laravel code is gone, and `main` still
-holds it for reference.
+`system-rebuild` branch. Phase 0 (foundation) is done: the Laravel code is gone.
 
 Next.js 16 and Prisma 7 have breaking changes from older versions. Read the bundled docs before
 writing framework code:
