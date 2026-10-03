@@ -11,6 +11,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft, CornerUpLeft } from "lucide-react";
 import { BatchStatusBadge } from "@/components/features/batches/batch-status-badge";
+import { InRepairBadge } from "@/components/features/batches/in-repair-badge";
 import { StageProgress } from "@/components/features/batches/stage-progress";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,7 +41,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
   if (!isBatchId(id)) notFound();
   const detail = await getBatchDetail(id);
   if (!detail) notFound();
-  const { batch, actions, durations, now } = detail;
+  const { batch, actions, openRepairs, durations, now } = detail;
   const y = await batchYield(batch.id);
   const canManage = can(user.role, "batch:manage");
 
@@ -62,6 +63,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
             <div className="flex items-center gap-3">
               <h1 className="font-mono text-3xl font-semibold tracking-tight">{batch.code}</h1>
               <BatchStatusBadge status={batch.status} />
+              <InRepairBadge count={openRepairs} />
             </div>
             <p className="mt-1 text-lg text-muted-foreground">
               {batch.shoeType.name} · roll <span className="font-mono">{batch.rollCode}</span>
@@ -74,6 +76,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
             code={batch.code}
             currentStage={batch.currentStage}
             actions={actions}
+            openRepairs={openRepairs}
           />
         )}
         {batch.status === "CANCELLED" && batch.cancelledReason && (

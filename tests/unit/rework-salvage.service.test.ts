@@ -88,7 +88,7 @@ describe("moveReworkTicket", () => {
     });
   });
 
-  it("409 on a closed batch", async () => {
+  it("409 on a cancelled batch", async () => {
     outcomes.findReworkTicket.mockResolvedValue(ticket("OPEN", "CANCELLED"));
     await expect(
       rework.moveReworkTicket("t1", { move: "start", expectedStatus: "OPEN" }, actor, now),

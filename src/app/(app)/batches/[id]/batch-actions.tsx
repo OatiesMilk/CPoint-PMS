@@ -20,17 +20,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { STAGE_LABELS, type Stage } from "@/lib/domain";
 import {
   nextStage,
+  openRepairsNote,
   transitionLabel,
   type BatchActions,
   type TransitionAction,
 } from "@/lib/stage-machine";
 import { cancelBatchAction, transitionBatchAction, type ActionResult } from "../actions";
 
-type Props = { id: string; code: string; currentStage: Stage; actions: BatchActions };
+type Props = {
+  id: string;
+  code: string;
+  currentStage: Stage;
+  actions: BatchActions;
+  /** Sections still at the repair station; completing is allowed and tags the batch (D-022). */
+  openRepairs: number;
+};
 
 type DialogKind = "complete" | "move_back" | "cancel" | null;
 
-export function BatchActionsBar({ id, code, currentStage, actions }: Props) {
+export function BatchActionsBar({ id, code, currentStage, actions, openRepairs }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [dialog, setDialog] = useState<DialogKind>(null);
@@ -180,6 +188,7 @@ export function BatchActionsBar({ id, code, currentStage, actions }: Props) {
             This closes Finishing and marks the batch as completed. It can’t be moved back
             afterwards.
           </DialogDescription>
+          {openRepairs > 0 && <Alert tone="info">{openRepairsNote(openRepairs)}</Alert>}
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="ghost">Not yet</Button>

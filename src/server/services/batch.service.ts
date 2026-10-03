@@ -2,7 +2,6 @@ import { STAGE_ORDER, type Stage } from "@/lib/domain";
 import { manilaYear } from "@/lib/format";
 import {
   availableActions,
-  openRepairsReason,
   planCancel,
   planTransition,
   stageDurations,
@@ -31,7 +30,11 @@ import {
   listActiveShoeTypes,
   listActiveSuppliers,
 } from "@/server/models/reference-data.model";
-import { cancelLiveReworkForBatch, countLiveReworkForBatch } from "@/server/models/outcome.model";
+import {
+  cancelLiveReworkForBatch,
+  countLiveReworkByBatch,
+  countLiveReworkForBatch,
+} from "@/server/models/outcome.model";
 import { closeOpenStageLog, openStageLog } from "@/server/models/stage-log.model";
 import type { BatchFormValues } from "@/server/validators/batch.validator";
 import { recordAudit } from "./audit.service";
@@ -49,7 +52,11 @@ const STALE_MESSAGE =
 
 // ───────────── reads ─────────────
 
-export type BatchListItem = BatchListRow & { timeInStageMs: number | null };
+export type BatchListItem = BatchListRow & {
+  timeInStageMs: number | null;
+  /** Sections still at the repair station (D-022 "In repair" tag). */
+  openRepairs: number;
+};
 
 export async function listBatches(
   filters: BatchListFilters,
@@ -60,10 +67,15 @@ export async function listBatches(
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
+  const repairs = await countLiveReworkByBatch(rows.map((r) => r.id));
   return {
     rows: rows.map((row) => {
       const open = row.status === "IN_PROGRESS" ? row.stageLogs[0] : undefined;
-      return { ...row, timeInStageMs: open ? now.getTime() - open.startedAt.getTime() : null };
+      return {
+        ...row,
+        timeInStageMs: open ? now.getTime() - open.startedAt.getTime() : null,
+        openRepairs: repairs.get(row.id) ?? 0,
+      };
     }),
     total,
     page,
@@ -74,6 +86,8 @@ export async function listBatches(
 export type BatchDetail = {
   batch: BatchDetailRow;
   actions: BatchActions;
+  /** Sections still at the repair station; a completed batch with any is tagged "In repair". */
+  openRepairs: number;
   durations: Record<Stage, number>;
   /** The "now" the durations were computed at, so the page can show matching open-log times. */
   now: number;
@@ -85,10 +99,11 @@ export async function getBatchDetail(
 ): Promise<BatchDetail | null> {
   const batch = await findBatchDetail(id);
   if (!batch) return null;
-  const openRepairs = batch.status === "IN_PROGRESS" ? await countLiveReworkForBatch(id) : 0;
+  const openRepairs = batch.status === "CANCELLED" ? 0 : await countLiveReworkForBatch(id);
   return {
     batch,
-    actions: availableActions(batch, { openRepairs }),
+    actions: availableActions(batch),
+    openRepairs,
     durations: stageDurations(batch.stageLogs, now),
     now: now.getTime(),
   };
@@ -253,10 +268,6 @@ export async function transitionBatchStage(
 ) {
   if (input.action === "move_back" && !input.reason) {
     throw Errors.validation([{ path: ["reason"], message: "Say why the batch is moving back." }]);
-  }
-  if (input.action === "complete") {
-    const openRepairs = await countLiveReworkForBatch(id);
-    if (openRepairs > 0) throw Errors.conflict(openRepairsReason(openRepairs));
   }
   return applyPlan(
     id,

@@ -128,6 +128,21 @@ export function countLiveReworkForBatch(batchId: string, db: Db = defaultDb()) {
   });
 }
 
+/** Unfinished repairs per batch, for the "In repair" tag on a page of batches. */
+export async function countLiveReworkByBatch(
+  batchIds: string[],
+  db: Db = defaultDb(),
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (batchIds.length === 0) return counts;
+  const rows = await db.reworkTicket.findMany({
+    where: { scan: { batchId: { in: batchIds } }, status: { in: ["OPEN", "IN_PROGRESS"] } },
+    select: { scan: { select: { batchId: true } } },
+  });
+  for (const { scan } of rows) counts.set(scan.batchId, (counts.get(scan.batchId) ?? 0) + 1);
+  return counts;
+}
+
 /** A cancelled batch's unfinished repairs are moot: the roll is gone. */
 export function cancelLiveReworkForBatch(batchId: string, at: Date, db: Db = defaultDb()) {
   return db.reworkTicket.updateMany({

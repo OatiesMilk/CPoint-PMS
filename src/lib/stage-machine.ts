@@ -134,24 +134,20 @@ export type BatchActions = {
 const asAvailability = (r: PlanResult): Availability =>
   r.ok ? { allowed: true } : { allowed: false, reason: r.reason };
 
-/** Message shown when a batch can't be completed because sections are still being repaired (D-021). */
-export function openRepairsReason(openRepairs: number): string {
-  return `${openRepairs} section${openRepairs === 1 ? " is" : "s are"} still at the repair station. Mark ${openRepairs === 1 ? "it" : "them"} repaired on the Rework board first.`;
+/**
+ * Shown when completing a batch whose sections are still being repaired (D-022). Completing is
+ * allowed: the batch is tagged "In repair" and the repairs count as usable once done.
+ */
+export function openRepairsNote(openRepairs: number): string {
+  return `${openRepairs} section${openRepairs === 1 ? " is" : "s are"} still at the repair station. The batch will be tagged In repair, and ${openRepairs === 1 ? "it counts" : "they count"} as usable once repaired on the Rework board.`;
 }
 
-export function availableActions(
-  batch: BatchState,
-  context: { openRepairs?: number } = {},
-): BatchActions {
+export function availableActions(batch: BatchState): BatchActions {
   const closed = CLOSED[batch.status];
-  const complete = asAvailability(planTransition(batch, "complete"));
   return {
     start: asAvailability(planTransition(batch, "start")),
     advance: asAvailability(planTransition(batch, "advance")),
-    complete:
-      complete.allowed && context.openRepairs
-        ? { allowed: false, reason: openRepairsReason(context.openRepairs) }
-        : complete,
+    complete: asAvailability(planTransition(batch, "complete")),
     moveBack: asAvailability(planTransition(batch, "move_back")),
     cancel: asAvailability(planCancel(batch)),
     edit: closed ? { allowed: false, reason: closed } : { allowed: true },

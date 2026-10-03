@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BatchStatus, Stage } from "@/lib/domain";
 import {
   availableActions,
+  openRepairsNote,
   nextStage,
   planCancel,
   planTransition,
@@ -161,19 +162,14 @@ describe("stageDurations", () => {
   });
 });
 
-describe("completion with open repairs (D-021)", () => {
-  it("disables Complete with the reason while repairs are open", () => {
-    const a = availableActions(
-      { status: "IN_PROGRESS", currentStage: "FINISHING" },
-      { openRepairs: 1 },
-    );
-    expect(a.complete).toEqual({
-      allowed: false,
-      reason:
-        "1 section is still at the repair station. Mark it repaired on the Rework board first.",
-    });
+describe("completion with open repairs (D-022)", () => {
+  it("never blocks Complete; the confirm dialog explains the In repair tag", () => {
     expect(
       availableActions({ status: "IN_PROGRESS", currentStage: "FINISHING" }).complete.allowed,
     ).toBe(true);
+    expect(openRepairsNote(2)).toBe(
+      "2 sections are still at the repair station. The batch will be tagged In repair, and they count as usable once repaired on the Rework board.",
+    );
+    expect(openRepairsNote(1)).toContain("1 section is still");
   });
 });

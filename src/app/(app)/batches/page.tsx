@@ -9,6 +9,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { BatchStatusBadge } from "@/components/features/batches/batch-status-badge";
+import { InRepairBadge } from "@/components/features/batches/in-repair-badge";
 import { PageHeader } from "@/components/features/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -138,7 +139,10 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                       )}
                     </TableCell>
                     <TableCell>
-                      <BatchStatusBadge status={b.status} />
+                      <div className="flex items-center gap-1.5">
+                        <BatchStatusBadge status={b.status} />
+                        <InRepairBadge count={b.openRepairs} />
+                      </div>
                     </TableCell>
                     <TableCell>{formatCalendarDate(b.receivedAt)}</TableCell>
                     <TableCell numeric>

@@ -4,7 +4,8 @@ import type { BatchStatus, ReworkStatus, SalvageStatus } from "./domain";
  * Rework and salvage lifecycle rules (D-021), pure and client-safe. Services enforce them; the UI
  * uses them to decide which buttons to show.
  *
- *   Rework:  OPEN ─start─► IN_PROGRESS ─done─► DONE      (each step can be undone one step back)
+ *   Rework:  OPEN ─start─► IN_PROGRESS ─done─► DONE      (each step can be undone one step back,
+ *            also after the batch is completed; D-022)
  *   Salvage: AVAILABLE ─assign─► ASSIGNED ─unassign─► AVAILABLE;  AVAILABLE ─discard─► DISCARDED (final)
  *   CANCELLED (both) is set only by an override or a batch cancel, never by a person here.
  */
@@ -35,8 +36,9 @@ export function planReworkMove(
 ): Result<{ to: ReworkStatus }> {
   if (ticket.status === "CANCELLED")
     return { ok: false, reason: "This repair was cancelled because the decision changed." };
-  if (!isOpen(batchStatus))
-    return { ok: false, reason: "The batch is closed, so its repairs can't change." };
+  // A completed batch keeps its repairs on the board (D-022); only a cancelled roll freezes them.
+  if (batchStatus === "CANCELLED")
+    return { ok: false, reason: "The batch was cancelled, so its repairs can't change." };
   const { from, to } = REWORK_MOVES[move];
   if (ticket.status !== from)
     return { ok: false, reason: "This repair has already moved on. Refresh the board." };

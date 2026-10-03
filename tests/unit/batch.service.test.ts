@@ -20,6 +20,7 @@ const refs = {
 const recordAudit = vi.fn();
 const outcomes = {
   countLiveReworkForBatch: vi.fn(async () => 0),
+  countLiveReworkByBatch: vi.fn(async () => new Map<string, number>()),
   cancelLiveReworkForBatch: vi.fn(async () => ({ count: 0 })),
 };
 
@@ -284,25 +285,35 @@ describe("describeTransition", () => {
   });
 });
 
-describe("repairs and batch closing (D-021)", () => {
-  it("blocks completing while sections are still at the repair station", async () => {
+describe("repairs and batch closing (D-021, D-022)", () => {
+  it("completes even while sections are still at the repair station", async () => {
     batches.findBatchById.mockResolvedValue(batch({ currentStage: "FINISHING" }));
-    outcomes.countLiveReworkForBatch.mockResolvedValueOnce(2);
-    await expect(
-      svc.transitionBatchStage(
-        "b1",
-        { action: "complete", expectedStage: "FINISHING" },
-        actor,
-        now,
-      ),
-    ).rejects.toMatchObject({
-      status: 409,
-      message: expect.stringContaining("2 sections are still at the repair station"),
-    });
-    expect(batches.transitionBatch).not.toHaveBeenCalled();
+    outcomes.countLiveReworkForBatch.mockResolvedValue(2);
+    await svc.transitionBatchStage(
+      "b1",
+      { action: "complete", expectedStage: "FINISHING" },
+      actor,
+      now,
+    );
+    expect(batches.transitionBatch).toHaveBeenCalled();
+    outcomes.countLiveReworkForBatch.mockResolvedValue(0);
   });
 
-  it("completes once repairs are done", async () => {
+  it("tags list rows with their open repairs, completed batches included", async () => {
+    batches.listBatches.mockResolvedValueOnce({
+      rows: [
+        { id: "b1", status: "COMPLETED", stageLogs: [] },
+        { id: "b2", status: "IN_PROGRESS", stageLogs: [{ startedAt: now }] },
+      ],
+      total: 2,
+    });
+    outcomes.countLiveReworkByBatch.mockResolvedValueOnce(new Map([["b1", 3]]));
+    const { rows } = await svc.listBatches({}, 1, now);
+    expect(outcomes.countLiveReworkByBatch).toHaveBeenCalledWith(["b1", "b2"]);
+    expect(rows.map((r) => r.openRepairs)).toEqual([3, 0]);
+  });
+
+  it("completes with no repairs open", async () => {
     batches.findBatchById.mockResolvedValue(batch({ currentStage: "FINISHING" }));
     await svc.transitionBatchStage(
       "b1",

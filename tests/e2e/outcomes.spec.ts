@@ -19,7 +19,7 @@ async function advanceTo(api: APIRequestContext, batchId: string, stages: string
   }
 }
 
-test("a repaired section counts as usable, and the batch can't close until repairs are done", async ({
+test("a batch completes with a repair open, is tagged In repair, and counts the section once repaired", async ({
   browser,
   page,
   request,
@@ -35,14 +35,21 @@ test("a repaired section counts as usable, and the batch can't close until repai
   await page.goto(`/batches/${batch.id}`);
   await expect(page.getByTestId("yield-usable")).toHaveText("1");
   await expect(page.getByTestId("yield-repair")).toHaveText("1");
-  await expect(page.getByRole("button", { name: "Complete batch" })).toHaveCount(0); // disabled → hidden as primary
+  await expect(page.getByText("In repair · 1")).toBeVisible();
 
-  const viaApi = await api.post(`/api/v1/batches/${batch.id}/stages`, {
-    data: { action: "complete", expectedStage: "FINISHING" },
-  });
-  expect(viaApi.status()).toBe(409);
-  expect((await viaApi.json()).error.message).toContain("1 section is still at the repair station");
+  await page.getByRole("button", { name: "Complete batch" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("1 section is still at the repair station");
+  await dialog.getByRole("button", { name: "Complete batch" }).click();
+  await expect(page.getByText("Completed", { exact: true })).toBeVisible();
+  await expect(page.getByText("In repair · 1")).toBeVisible();
 
+  await page.goto(`/batches?q=${batch.code}`);
+  await expect(page.getByRole("row", { name: new RegExp(batch.code) })).toContainText(
+    "In repair · 1",
+  );
+
+  // The repair stays workable on the board after the batch is completed.
   await page.goto(`/rework?batch=${batch.code}`);
   const card = page.getByRole("listitem", { name: `${batch.code} · #1` });
   await card.getByRole("button", { name: "Start repair" }).click();
@@ -64,9 +71,7 @@ test("a repaired section counts as usable, and the batch can't close until repai
   await page.goto(`/batches/${batch.id}`);
   await expect(page.getByTestId("yield-usable")).toHaveText("2");
   await expect(page.getByTestId("yield-repair")).toHaveText("0");
-  await page.getByRole("button", { name: "Complete batch" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Complete batch" }).click();
-  await expect(page.getByText("Completed", { exact: true })).toBeVisible();
+  await expect(page.getByText(/In repair ·/)).toHaveCount(0);
 });
 
 test("Undo in the toast puts a repair back where it was", async ({ browser, page, request }) => {

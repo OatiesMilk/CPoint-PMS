@@ -22,13 +22,27 @@ describe("planReworkMove", () => {
     expect(planReworkMove({ status: "DONE" }, "IN_PROGRESS", "start")).toMatchObject({ ok: false });
   });
 
-  it("refuses everything on a cancelled ticket or a closed batch", () => {
+  it("refuses everything on a cancelled ticket or a cancelled batch", () => {
     expect(planReworkMove({ status: "CANCELLED" }, "IN_PROGRESS", "start")).toMatchObject({
       ok: false,
     });
-    for (const batch of ["COMPLETED", "CANCELLED"] as BatchStatus[]) {
-      expect(planReworkMove({ status: "OPEN" }, batch, "start")).toMatchObject({ ok: false });
-    }
+    expect(planReworkMove({ status: "OPEN" }, "CANCELLED", "start")).toMatchObject({ ok: false });
+  });
+
+  it("keeps repairs workable after the batch is completed (D-022)", () => {
+    const done = "COMPLETED" as BatchStatus;
+    expect(planReworkMove({ status: "OPEN" }, done, "start")).toEqual({
+      ok: true,
+      to: "IN_PROGRESS",
+    });
+    expect(planReworkMove({ status: "IN_PROGRESS" }, done, "done")).toEqual({
+      ok: true,
+      to: "DONE",
+    });
+    expect(planReworkMove({ status: "DONE" }, done, "reopen")).toEqual({
+      ok: true,
+      to: "IN_PROGRESS",
+    });
   });
 });
 
