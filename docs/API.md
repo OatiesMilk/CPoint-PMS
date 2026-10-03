@@ -236,11 +236,31 @@ New thresholds apply to new scans only; each scan keeps its `thresholdsSnapshot`
 (`from`/`to` are Manila calendar days) → `{ entries, total, page, pageCount }`, newest first, 50
 per page. Each entry carries the changed fields as `diff: [{ key, before, after }]`.
 
+## Reports (session)
+
+Aggregates per Manila day, defect type or stage, never per person (D-025, D-008). Range params:
+`?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
+default is the last 14 days, at most 92, and never past today.
+
+| Method & path                     | Permission          | Returns                                                                       |
+| --------------------------------- | ------------------- | ----------------------------------------------------------------------------- |
+| `GET /api/v1/reports/quality`     | `report:quality`    | `{ range, totals, days[], defects[], matrix[] }`                              |
+| `GET /api/v1/reports/production`  | `report:production` | `{ range, stages[], bottleneck, days[], totals }` (stage times in ms)         |
+| `GET /api/v1/reports/daily.csv`   | `report:quality`    | one row per day: scanned, verdicts, pending, overridden, agreement %, repairs |
+| `GET /api/v1/reports/defects.csv` | `report:quality`    | one row per defect type (by each scan's top detection), by final verdict      |
+| `GET /api/v1/reports/stages.csv`  | `report:production` | per stage: visits, median/average hours, in stage now, bottleneck             |
+
+- **Verdicts** count the **final** verdict.
+- **AI agreement** = scans the AI decided whose final verdict is the same / scans the AI decided
+  (NEEDS_REVIEW excluded).
+- **CSV:** UTF-8 with a BOM and CRLF, so it opens correctly in Excel. Text cells starting with
+  `= + - @` are prefixed with `'`.
+
 ## Coming next
 
-| Phase | Endpoints                              |
-| ----- | -------------------------------------- |
-| 7     | reports (daily summary) and CSV export |
+| Phase | Endpoints                                      |
+| ----- | ---------------------------------------------- |
+| 8     | none planned; hardening of the endpoints above |
 
 The Phase 3 CV ingestion contract is specified in `docs/prompts/system-rebuild.md` →
 `<cv_integration_contract>`. Keep it stable once published, because the YOLO service depends on it.
