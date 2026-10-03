@@ -77,7 +77,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         href: "/admin/settings",
         icon: "settings",
         permission: "settings:manage",
-        phase: 6,
       },
       {
         label: "API tokens",
