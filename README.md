@@ -301,7 +301,7 @@ If you already have it, open a terminal in that folder. For example, in Windows 
 (replace the path with your own):
 
 ```cmd
-cd /d C:\Users\micro\OneDrive\Desktop\CPoint-PMS
+cd /d C:\path\to\CPoint-PMS
 ```
 
 ### 3. Create and configure `.env`
