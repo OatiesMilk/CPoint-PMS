@@ -9,7 +9,7 @@ import {
   type PlanResult,
   type TransitionAction,
 } from "@/lib/stage-machine";
-import { Errors } from "@/server/lib/errors";
+import { AppError, Errors } from "@/server/lib/errors";
 import {
   findBatchById,
   findBatchDetail,
@@ -36,8 +36,10 @@ import {
   countLiveReworkForBatch,
 } from "@/server/models/outcome.model";
 import { closeOpenStageLog, openStageLog } from "@/server/models/stage-log.model";
+import { findInventoryItem, listRollMovementsForBatch } from "@/server/models/inventory.model";
 import type { BatchFormValues } from "@/server/validators/batch.validator";
 import { recordAudit } from "./audit.service";
+import { postMovement, rollItemOptions } from "./inventory.service";
 
 export const PAGE_SIZE = 20;
 
@@ -88,6 +90,8 @@ export type BatchDetail = {
   actions: BatchActions;
   /** Sections still at the repair station; a completed batch with any is tagged "In repair". */
   openRepairs: number;
+  /** The inventory roll recorded as used for this batch (D-023), if any. */
+  rollFromInventory: { itemId: string; label: string; returned: boolean } | null;
   durations: Record<Stage, number>;
   /** The "now" the durations were computed at, so the page can show matching open-log times. */
   now: number;
@@ -99,19 +103,34 @@ export async function getBatchDetail(
 ): Promise<BatchDetail | null> {
   const batch = await findBatchDetail(id);
   if (!batch) return null;
-  const openRepairs = batch.status === "CANCELLED" ? 0 : await countLiveReworkForBatch(id);
+  const [openRepairs, rollMovements] = await Promise.all([
+    batch.status === "CANCELLED" ? 0 : countLiveReworkForBatch(id),
+    listRollMovementsForBatch(id),
+  ]);
+  const taken = rollMovements.find((m) => m.type === "OUT");
   return {
     batch,
     actions: availableActions(batch),
     openRepairs,
+    rollFromInventory: taken
+      ? {
+          itemId: taken.item.id,
+          label: `${taken.item.sku} · ${taken.item.name}`,
+          returned: rollMovements.some((m) => m.type === "IN"),
+        }
+      : null,
     durations: stageDurations(batch.stageLogs, now),
     now: now.getTime(),
   };
 }
 
 export async function getBatchFormOptions() {
-  const [shoeTypes, suppliers] = await Promise.all([listActiveShoeTypes(), listActiveSuppliers()]);
-  return { shoeTypes, suppliers };
+  const [shoeTypes, suppliers, rollItems] = await Promise.all([
+    listActiveShoeTypes(),
+    listActiveSuppliers(),
+    rollItemOptions(),
+  ]);
+  return { shoeTypes, suppliers, rollItems };
 }
 
 export type StageSummary = {
@@ -165,8 +184,21 @@ function toColumns(values: BatchFormValues) {
   };
 }
 
+const ROLL_FIELD = "rollItemId";
+
+async function findRollItem(rollItemId: string) {
+  const row = await findInventoryItem(rollItemId);
+  if (!row || row.category !== "LEATHER_ROLL" || !row.isActive) {
+    throw Errors.validation([
+      { path: [ROLL_FIELD], message: "Choose a leather roll from the list." },
+    ]);
+  }
+  return { ...row, quantityOnHand: Number(row.quantityOnHand) };
+}
+
 export async function createBatch(values: BatchFormValues, actor: Actor, now: Date = new Date()) {
   await assertReferences(values);
+  const rollItem = values.rollItemId ? await findRollItem(values.rollItemId) : null;
   return runInTransaction(async (tx) => {
     const year = manilaYear(now);
     const code = formatBatchCode(year, await nextBatchNumber(year, tx));
@@ -178,6 +210,22 @@ export async function createBatch(values: BatchFormValues, actor: Actor, now: Da
       entityId: batch.id,
       after: batch,
     });
+    if (rollItem) {
+      // Same transaction (D-023): with no roll left, the batch and its code roll back too.
+      await postMovement(
+        tx,
+        rollItem,
+        { type: "OUT", delta: -1, reason: `Used for batch ${code}`, batchId: batch.id },
+        actor,
+        now,
+      ).catch((error: unknown) => {
+        // "Only 0 rolls in stock…" belongs next to the roll field, not in a page-level alert.
+        if (error instanceof AppError && error.status === 409) {
+          throw Errors.validation([{ path: [ROLL_FIELD], message: error.message }]);
+        }
+        throw error;
+      });
+    }
     return batch;
   });
 }
@@ -220,7 +268,10 @@ async function applyPlan(
   actor: Actor,
   now: Date,
   extra: { cancelledReason?: string } = {},
-  inTx?: (tx: Parameters<Parameters<typeof runInTransaction>[0]>[0]) => Promise<void>,
+  inTx?: (
+    tx: Parameters<Parameters<typeof runInTransaction>[0]>[0],
+    before: { status: BatchDetailRow["status"]; code: string },
+  ) => Promise<void>,
 ) {
   const batch = await findBatchById(id);
   if (!batch) throw Errors.notFound("This batch");
@@ -234,7 +285,7 @@ async function applyPlan(
     const moved = await transitionBatch(id, batch, { ...next, ...extra }, tx);
     if (!moved) throw Errors.stale(STALE_MESSAGE);
     if (closesOpenLog) await closeOpenStageLog(id, actor.id, now, tx);
-    if (inTx) await inTx(tx);
+    if (inTx) await inTx(tx, batch);
     if (opensStage) {
       await openStageLog(
         {
@@ -293,7 +344,8 @@ export async function cancelBatch(
     actor,
     now,
     { cancelledReason: input.reason },
-    async (tx) => {
+    async (tx, before) => {
+      if (before.status === "PLANNED") await returnRolls(tx, id, before.code, actor, now);
       // The roll is gone, so its unfinished repairs are moot (D-021). Salvage stays: the leather exists.
       const { count } = await cancelLiveReworkForBatch(id, now, tx);
       if (count > 0) {
@@ -310,3 +362,40 @@ export async function cancelBatch(
 }
 
 export { transitionLabel as describeTransition } from "@/lib/stage-machine";
+
+/**
+ * A planned batch never cut its roll, so cancelling it puts the roll back on the shelf (D-023).
+ * Once production starts the roll is cut, and nothing is returned.
+ */
+async function returnRolls(
+  tx: Parameters<Parameters<typeof runInTransaction>[0]>[0],
+  batchId: string,
+  code: string,
+  actor: Actor,
+  now: Date,
+) {
+  const movements = await listRollMovementsForBatch(batchId, tx);
+  const byItem = new Map<string, { item: (typeof movements)[number]["item"]; net: number }>();
+  for (const m of movements) {
+    const entry = byItem.get(m.item.id) ?? { item: m.item, net: 0 };
+    entry.net += Number(m.quantityDelta);
+    byItem.set(m.item.id, entry);
+  }
+  for (const { item, net } of byItem.values()) {
+    if (net >= 0) continue;
+    const fresh = await findInventoryItem(item.id, tx);
+    if (!fresh?.isActive) continue; // a deactivated item can't take stock; the history still shows the use
+    await postMovement(
+      tx,
+      { ...item, quantityOnHand: Number(fresh.quantityOnHand) },
+      {
+        type: "IN",
+        delta: -net,
+        reason: `Returned: batch ${code} cancelled before production`,
+        batchId,
+      },
+      actor,
+      now,
+    );
+  }
+}

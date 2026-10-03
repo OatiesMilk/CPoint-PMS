@@ -24,7 +24,16 @@ const outcomes = {
   cancelLiveReworkForBatch: vi.fn(async () => ({ count: 0 })),
 };
 
+const inventory = {
+  findInventoryItem: vi.fn(),
+  applyStockDelta: vi.fn(async () => true),
+  insertMovement: vi.fn(async () => ({ id: "m1" })),
+  listRollMovementsForBatch: vi.fn(async () => [] as unknown[]),
+  listRollItemsInStock: vi.fn(async () => []),
+};
+
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
+vi.mock("@/server/models/inventory.model", () => inventory);
 vi.mock("@/server/models/batch.model", () => batches);
 vi.mock("@/server/models/stage-log.model", () => logs);
 vi.mock("@/server/models/outcome.model", () => outcomes);
@@ -336,5 +345,88 @@ describe("repairs and batch closing (D-021, D-022)", () => {
         after: expect.objectContaining({ cancelledRepairs: 3 }),
       }),
     );
+  });
+});
+
+describe("leather roll from inventory (D-023)", () => {
+  const roll = (quantityOnHand: number) => ({
+    id: "0199a000-0000-7000-8000-0000000000aa",
+    sku: "LR-001",
+    name: "Black cowhide",
+    category: "LEATHER_ROLL",
+    unit: "roll",
+    quantityOnHand,
+    reorderLevel: 1,
+    isActive: true,
+  });
+
+  it("takes one roll in the batch-create transaction, linked to the batch", async () => {
+    inventory.findInventoryItem.mockResolvedValue(roll(3));
+    await svc.createBatch({ ...values, rollItemId: roll(3).id }, actor, now);
+    expect(inventory.applyStockDelta).toHaveBeenCalledWith(roll(3).id, -1, { min: 1 }, "tx");
+    expect(inventory.insertMovement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "OUT",
+        quantityDelta: -1,
+        batchId: "b1",
+        reason: "Used for batch B-2026-0007",
+      }),
+      "tx",
+    );
+  });
+
+  it("fails the whole create with a field error when no roll is left", async () => {
+    inventory.findInventoryItem.mockResolvedValue(roll(0));
+    inventory.applyStockDelta.mockResolvedValueOnce(false);
+    await expect(
+      svc.createBatch({ ...values, rollItemId: roll(0).id }, actor, now),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [{ path: ["rollItemId"], message: expect.stringContaining("Only 0 rolls") }],
+    });
+    expect(inventory.insertMovement).not.toHaveBeenCalled();
+  });
+
+  it("refuses an item that isn't an active leather roll", async () => {
+    inventory.findInventoryItem.mockResolvedValue({ ...roll(5), category: "NAILS" });
+    await expect(
+      svc.createBatch({ ...values, rollItemId: roll(5).id }, actor, now),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(batches.insertBatch).not.toHaveBeenCalled();
+  });
+
+  const taken = [
+    {
+      id: "m1",
+      type: "OUT",
+      quantityDelta: -1,
+      item: { id: "r1", sku: "LR-001", name: "Black", unit: "roll" },
+    },
+  ];
+
+  it("returns the roll when a planned batch is cancelled", async () => {
+    batches.findBatchById.mockResolvedValue(
+      batch({ status: "PLANNED", currentStage: "PREPARATION" }),
+    );
+    inventory.listRollMovementsForBatch.mockResolvedValueOnce(taken);
+    inventory.findInventoryItem.mockResolvedValue({ ...roll(2), id: "r1" });
+    await svc.cancelBatch("b1", { reason: "Order cancelled" }, actor, now);
+    expect(inventory.insertMovement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: "r1",
+        type: "IN",
+        quantityDelta: 1,
+        reason: "Returned: batch B-2026-0007 cancelled before production",
+      }),
+      "tx",
+    );
+  });
+
+  it("keeps the roll used once production has started", async () => {
+    batches.findBatchById.mockResolvedValue(batch());
+    inventory.listRollMovementsForBatch.mockResolvedValue(taken);
+    await svc.cancelBatch("b1", { reason: "Roll returned" }, actor, now);
+    expect(inventory.insertMovement).not.toHaveBeenCalled();
+    inventory.listRollMovementsForBatch.mockResolvedValue([]);
   });
 });

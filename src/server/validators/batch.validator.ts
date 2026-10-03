@@ -30,6 +30,11 @@ export const batchFormSchema = z.object({
     blankToUndefined,
     z.string().trim().max(500, "Keep notes under 500 characters.").optional(),
   ),
+  /** Create only (D-023): take one roll from this leather-roll inventory item. Ignored on edit. */
+  rollItemId: z.preprocess(
+    blankToUndefined,
+    z.uuid("Choose a leather roll from the list.").optional(),
+  ),
 });
 
 export type BatchFormInput = z.input<typeof batchFormSchema>;
