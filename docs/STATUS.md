@@ -5,8 +5,8 @@
 
 **Last updated:** 2026-10-03
 **Branch:** `system-rebuild`
-**Current phase:** Phase 5 — Inventory (not started)
-**Overall:** 5 / 9 phases complete
+**Current phase:** Phase 6 — Admin (not started)
+**Overall:** 6 / 9 phases complete
 
 ## Phase progress
 
@@ -15,8 +15,8 @@
 - [x] 2. Batches & stages
 - [x] 3. CV skeleton
 - [x] 4. Rework & salvage
-- [ ] 5. Inventory (items, movements, low-stock alerts, optional roll consumption)
-- [ ] 6. Admin
+- [x] 5. Inventory
+- [ ] 6. Admin (users, defect types/thresholds/shoe types/suppliers, audit log viewer, component types)
 - [ ] 7. Dashboards & reports
 - [ ] 8. Hardening & demo
 
@@ -24,44 +24,51 @@
 
 - **Database:** the full schema for every phase is migrated. UUIDv7 ids and indexed FKs (D-018).
 - **Bootstrap on start** (D-017): reference data, the first System Admin from env, and demo users
-  when `SEED_DEMO_USERS=true`.
+  and demo inventory when `SEED_DEMO_USERS=true`.
 - **Sign-in & access** (D-016): Auth.js credentials, 12-hour sessions, lockout, deactivation on the
   next request. A role × permission matrix with page/API guards.
 - **Batches** (D-019): list/create/edit/detail, a stage machine with reasons, STALE concurrency,
   and `/api/v1/batches`.
 - **Camera** (D-020): device tokens, `POST /api/v1/scans`, the decision engine (D-011), image
-  storage, the simulator (`npm run cv:simulate`), overrides, the review queue, scan pages with box
-  overlays, the Camera page, and live feeds on the FM/QI homes.
+  storage, the simulator, overrides, the review queue, scan pages with box overlays, the Camera
+  page, and live feeds on the FM/QI homes.
 - **Rework & salvage** (D-021, D-022):
-  - **`/rework` board** (FM + QI): Waiting → Being repaired → Repaired (7 days), with an undo toast
-    and Reopen.
-  - **`/salvage`** (FM acts, QI reads): Available / Reused / Discarded. Reuse rejected leather in
-    another open batch, unassign it, or discard it with a reason.
-  - **Batch detail Yield card:** usable = passed + repaired, plus at repair station, rejected,
-    needs review, and salvage reused here.
-  - **Batch rules** (D-022): a batch can be completed with repairs still open. It's tagged
-    "In repair · N" on the list and detail until they're done, and its usable count rises as they
-    finish. Cancelling a batch cancels its open repairs.
-  - **API:** `/api/v1/rework` and `/api/v1/salvage` (`docs/API.md`).
+  - the `/rework` board and `/salvage` tabs;
+  - the batch Yield card (usable = passed + repaired);
+  - a batch can be completed with repairs open and is tagged "In repair · N".
+- **Inventory** (D-023):
+  - **`/inventory`:** filters for category, stock level, search and deactivated items. Add and
+    edit items, with suggested codes and opening stock.
+  - **Item page:** Receive / Use / Stock count dialogs. Undo on receipts and usage. A history with
+    the balance after each entry.
+  - **Rules:** stock never goes negative; a count is refused if stock moved meanwhile.
+  - **FM home:** a live Low-stock alerts card.
+  - **Batch form:** optional "Take a roll from inventory". Cancelling a planned batch returns it.
+  - **Access:** the System Admin reads; the QI has no access.
+  - **API:** `/api/v1/inventory` (`docs/API.md`).
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`. Checked in psql.
-- **Tests:** 220 unit and 33 e2e tests. The e2e tests pass against `next start` and the Docker stack.
+- **Tests:** 248 unit and 38 e2e tests. The e2e tests pass against `next start` and the Docker stack.
 
 ## Next step (exact)
 
-Start Phase 5. Paste into Claude Code:
+Start Phase 6. Paste into Claude Code:
 
-> /resume, then run Phase 5 (Inventory) from `docs/ROADMAP.md`. Start in plan mode.
+> /resume, then run Phase 6 (Admin) from `docs/ROADMAP.md`. Start in plan mode.
 
-Phase 5 notes:
+Phase 6 notes:
 
-- `InventoryItem` and `InventoryMovement` already exist. `quantityOnHand` changes only via
-  movements (IN/OUT/ADJUST), in the same transaction, with a row lock or a conditional update.
-  Never allow negative stock silently.
-- Permissions exist: `inventory:read` (FM, System Admin) and `inventory:manage` (FM).
-- Replace the `phase={5}` low-stock placeholder on the FM home. Remove `phase: 5` from Inventory in
-  `navigation.ts`.
-- "Consume a leather roll when creating a batch" is optional. Decide it in the plan. A batch
-  already stores `rollCode`, and a movement can carry `batchId`.
+- Nav items with `phase: 6` in `navigation.ts`: Users, the settings entries and the Audit log.
+  Remove them as each ships.
+- The schema already has `User`, `DefectType`, `CvSettings`, `ShoeType`, `Supplier`,
+  `ComponentType` and `AuditLog`. Defect types, thresholds and class keys stay **data** (D-011).
+  Changing a threshold must not alter past scans: they keep their snapshot.
+- Users:
+  - deactivation is already enforced on the next request (D-016);
+  - a password reset should end the user's sessions (bump a `sessionVersion`, or rely on
+    `updatedAt` the way deactivation does; decide in the plan);
+  - never allow deactivating or demoting the last active System Admin.
+- The audit log viewer should filter by actor, action, entity and date, with before/after diffs.
+  It's read-only.
 
 ## Blockers
 

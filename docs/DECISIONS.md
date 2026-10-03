@@ -244,3 +244,43 @@ the repaired sections join it later.
 
 **Consequences:** a completed batch's usable count can still change until its repairs finish.
 Phase 7 reports should read yield "as of now", or only after the tag clears.
+
+### D-023 · 2026-10-03 · Accepted — Inventory is a ledger; optional roll consumption
+
+**Context:** CPoint tracks materials in a paper log book, and a late leather roll has stopped
+production before (survey Q12–Q14). Phase 5 adds items, stock movements and low-stock alerts.
+**Decision:**
+
+- **Ledger:** `quantityOnHand` changes only with an `inventory_movements` row, in the same
+  transaction, through one conditional `UPDATE`. Movements are never edited or deleted. A mistake
+  is undone with an opposite entry (the 6 s Undo toast; allowed once, within 10 minutes) or
+  corrected by a stock count.
+- **Types:**
+  - IN = received (> 0).
+  - OUT = used (> 0). It's refused if it would go below zero: no negative stock, ever.
+  - ADJUST = stock count. The user enters the counted quantity. It applies only if the stock is
+    still what the counter saw (else 409 STALE), and a reason is required.
+- **Quantities:** at most 2 decimals, ≤ 1,000,000, and computed in hundredths.
+- **Items:**
+  - The code is unique, suggested per category (`LR-001`, `NL-`, `AD-`, `TH-`, `EQ-`, `OT-`) and
+    editable.
+  - Opening stock is recorded as an IN "Opening stock".
+  - The quantity is never editable on the item.
+  - There's no delete: deactivating hides an item from pickers and refuses movements, but keeps
+    its history.
+- **Low stock:** active and `quantityOnHand ≤ reorderLevel`, via a Prisma field reference. Out of
+  stock at 0. Shown on the FM home card and as a list filter.
+- **Rolls and batches:**
+  - Creating a batch can optionally take one roll from a leather-roll item. It's an OUT linked to
+    the batch, in the batch-create transaction. With no stock left, it's a field error and nothing
+    is created.
+  - Cancelling a **planned** batch returns the roll. After production starts the roll is cut, so
+    nothing is returned.
+  - Inventory tracks counts per item, not individual roll codes. The batch keeps its own `rollCode`.
+- **Access** follows the master-spec matrix: the FM manages, the System Admin reads, the QI has
+  no access. Entries show who recorded them, as the log book does. There are no per-person
+  totals (D-008).
+
+**Consequences:** Phase 7 reports can read consumption per batch and per period from the
+movements. Supplier deliveries aren't linked to a supplier yet (the note holds it); add a
+`supplierId` on IN movements if CPoint wants delivery reports.

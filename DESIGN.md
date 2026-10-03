@@ -93,6 +93,9 @@ Re-measure whenever a color token changes.
 | Salvage list           | Rejected leather               | tabs Available / Reused / Discarded (`?status=`) with counts                  | FM actions in dialogs (discard needs a reason); QI read-only with an explanation line                      |
 | Yield card             | Batch outcome                  | —                                                                             | usable as the hero number with "passed + repaired"; each count links to the board/list; empty before scans |
 | `InRepairBadge`        | Batch with unfinished repairs  | warning tone, wrench icon, "In repair · N"                                    | hidden at 0; shown on the batch list and detail, completed batches included                                |
+| `StockBadge`           | Stock level of an item         | In stock (success), Low (warning), Out of stock (danger), Deactivated         | icon + label; next to the on-hand quantity                                                                 |
+| `LowStockCard`         | FM home alert                  | —                                                                             | count + up to 5 items (on hand · reorder at), "N more" link, empty "Nothing to reorder"                    |
+| Stock entry dialogs    | Receive / Use / Stock count    | unit as an input suffix; count shows the live difference                      | errors stay in the dialog (e.g. not enough stock); success toast with Undo (6s) for IN/OUT                 |
 
 ## Patterns
 

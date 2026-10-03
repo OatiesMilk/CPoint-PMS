@@ -55,10 +55,10 @@ Tick the boxes as they're done.
 
 ## Phase 5 — Inventory
 
-- [ ] Items CRUD with category, unit, reorder level
-- [ ] Movements (IN/OUT/ADJUST) are the only way quantity changes
-- [ ] Low-stock alerts on the FM overview
-- [ ] Optionally consume a leather roll when creating a batch
+- [x] Items CRUD with category, unit, reorder level (no delete: deactivate keeps the history)
+- [x] Movements (IN/OUT/ADJUST) are the only way quantity changes
+- [x] Low-stock alerts on the FM overview
+- [x] Optionally consume a leather roll when creating a batch
 
 ## Phase 6 — Admin
 

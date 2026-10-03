@@ -16,6 +16,48 @@ Template:
 
 ---
 
+## 2026-10-03 — Phase 5: Inventory
+
+**Who:** Team + Claude Code
+**Summary:** Built inventory as a ledger:
+
+- items with codes, units and reorder levels;
+- stock entries (receive, use, stock count) with Undo and a log-book history showing the balance
+  after each entry;
+- low-stock alerts on the FM home;
+- an optional "Take a roll from inventory" when creating a batch, returned if a planned batch is
+  cancelled.
+
+**Changed:**
+
+- Domain: `src/lib/inventory-rules.ts` (movement planning, stock level, quantity format, item codes).
+- Server:
+  - `models/inventory.model.ts` (conditional `applyStockDelta`, field-reference low-stock query,
+    history with newer-sum balances);
+  - `services/inventory.service.ts` (`postMovement` is the single write path);
+  - `validators/inventory.validator.ts`, `controllers/inventory.controller.ts`;
+  - batch service: roll consumption in create, roll return on a planned cancel, roll info on
+    detail;
+  - bootstrap: demo inventory.
+- API: `/api/v1/inventory`, `/{id}`, `/{id}/movements`, `/movements/{id}/undo` (`docs/API.md`).
+- UI:
+  - pages: `/inventory` (filters), `/inventory/new`, `/inventory/[id]` (stock dialogs, history),
+    `/inventory/[id]/edit`;
+  - components: `StockBadge`, `LowStockCard`;
+  - the batch form's roll picker and "Roll from inventory" on batch detail;
+  - Inventory is live in the nav.
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · test ✅ (248) · build ✅ · e2e ✅ (38 against
+`next start`, twice; 38 against Docker, twice) · docker ✅ (rebuilt image, health 200, demo
+inventory seeded) · psql ✅ (ledger sum = on hand for all 40 items, no negative stock, audit rows
+per movement type, a failed roll-create left no batch)
+**Decisions:** D-023
+**Follow-ups:**
+
+- Item edit and deactivate are covered by unit tests and manual checks, not e2e.
+- Optional: link IN movements to a supplier for delivery reports (D-023 consequences).
+- Phase 6: Admin.
+
 ## 2026-10-03 — Phase 4 follow-up: complete batches with repairs open
 
 **Who:** Team + Claude Code

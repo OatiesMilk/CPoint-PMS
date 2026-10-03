@@ -54,6 +54,8 @@ Stop the database with `npm run db:down`. Data persists in the `pgdata` Docker v
 
 On every start the app also makes sure the reference data exists (shoe types, defect types, CV
 thresholds 90% / 60%, a sample supplier). It never overwrites values an admin has changed.
+With demo users on, it also adds five demo inventory items (two leather rolls, one of them low,
+plus nails, adhesive and thread) the first time, without touching stock afterwards.
 `npm run db:seed` runs the same steps by hand.
 
 **Sign-in rules:** 5 wrong passwords lock an account for 15 minutes; sessions last 12 hours (one
