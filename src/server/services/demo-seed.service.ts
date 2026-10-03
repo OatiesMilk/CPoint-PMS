@@ -3,7 +3,9 @@ import { manilaToday } from "@/lib/format";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
   renderLeatherImage,
+  randomBox,
   scenario,
+  UNKNOWN_CLASS,
   type Detection,
   type Random,
 } from "@/server/lib/leather-scan";
@@ -178,9 +180,13 @@ export async function seedDemoWeek(
   const salvage: { id: string; originBatchId: string; at: Date }[] = [];
   let index = 0;
 
+  const lastDay = workingDays[workingDays.length - 1];
+
   for (const day of workingDays) {
     for (const startHour of [8, 10.5]) {
       index += 1;
+      // The newest batch to reach the camera; its last two sections stay in the review queue.
+      const newest = day === lastDay && (startHour === 10.5 || !past(at(day, 10.5)));
       const school = index % 3 !== 0;
       const shoeType = school ? shoeTypes[0] : (shoeTypes[1] ?? shoeTypes[0]);
       const created = at(day, startHour - between(0.5, 1));
@@ -226,10 +232,16 @@ export async function seedDemoWeek(
       // Preparation: the camera checks each section before cutting.
       const prep = stageDurationMs("PREPARATION", random);
       const sections = Math.round(between(20, 30));
+      const sectionAt = (i: number) => plus(t, ((i + 0.5) * prep) / sections);
+      let captured = 0;
+      while (captured < sections && past(sectionAt(captured))) captured += 1;
       for (let i = 0; i < sections; i++) {
-        const ts = plus(t, ((i + 0.5) * prep) / sections);
+        const ts = sectionAt(i);
         if (!past(ts)) break;
-        const detections: Detection[] = scenario(random);
+        let detections: Detection[] = scenario(random);
+        const keepPending = newest && i >= captured - 2;
+        if (keepPending)
+          detections = [{ classKey: UNKNOWN_CLASS, confidence: 0.82, box: randomBox(random) }];
         const image = await renderLeatherImage(detections, {
           width: options.imageSize ?? 480,
           height: Math.round((options.imageSize ?? 480) * 0.75),
@@ -248,7 +260,7 @@ export async function seedDemoWeek(
           ts,
         );
         scans += 1;
-        await afterScan(result, ts);
+        await afterScan(result, ts, keepPending);
       }
       t = plus(t, prep);
 
@@ -398,7 +410,11 @@ export async function seedDemoWeek(
   return result;
 
   /** What people do after each scan: overrides, review decisions, repairs, salvage. */
-  async function afterScan(scan: { scanId: string; batchId: string; verdict: string }, ts: Date) {
+  async function afterScan(
+    scan: { scanId: string; batchId: string; verdict: string },
+    ts: Date,
+    keepPending = false,
+  ) {
     let final: string | null = scan.verdict === "NEEDS_REVIEW" ? null : scan.verdict;
     let decidedAt = ts; // repairs and salvage can only follow the decision
     const people: Actor[] = [qi!, fm!];
@@ -406,7 +422,7 @@ export async function seedDemoWeek(
     if (scan.verdict === "NEEDS_REVIEW") {
       const when = plus(ts, between(30, 120) * MINUTE);
       // Recent unknowns stay in the review queue, as on a real afternoon.
-      if (when.getTime() < now.getTime() - 2 * HOUR) {
+      if (!keepPending && when.getTime() < now.getTime() - 2 * HOUR) {
         const verdict = chance(0.7) ? "PASS" : "REWORK";
         await decideScan(scan.scanId, { verdict, expectedFinalVerdict: null }, qi!, when);
         final = verdict;

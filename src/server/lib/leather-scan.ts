@@ -14,7 +14,7 @@ export const UNKNOWN_CLASS = "scratch";
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
-function randomBox(random: Random): Box {
+export function randomBox(random: Random): Box {
   const rand = (min: number, max: number) => min + random() * (max - min);
   const width = rand(0.06, 0.2);
   const height = rand(0.05, 0.18);
