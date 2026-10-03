@@ -24,6 +24,8 @@ const envSchema = z.object({
   BOOTSTRAP_ADMIN_PASSWORD: optionalString.pipe(z.string().min(12).optional()),
   // Demo accounts (one per role) for development, CI and the capstone demo.
   SEED_DEMO_USERS: booleanString,
+  // A realistic past week of production for demos (D-026). Needs SEED_DEMO_USERS; runs once.
+  SEED_DEMO_WEEK: booleanString,
   DEMO_USER_PASSWORD: optionalString.pipe(z.string().min(8).optional()),
 });
 

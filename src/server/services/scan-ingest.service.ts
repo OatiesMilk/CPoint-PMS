@@ -104,9 +104,9 @@ export async function ingestScan(
         }),
         tx,
       );
-      if (decision.verdict === "REWORK") await insertReworkTicket(scan.id, tx);
+      if (decision.verdict === "REWORK") await insertReworkTicket(scan.id, tx, now);
       if (decision.verdict === "REJECT")
-        await insertSalvageItem({ scanId: scan.id, originBatchId: batch.id }, tx);
+        await insertSalvageItem({ scanId: scan.id, originBatchId: batch.id, createdAt: now }, tx);
       await recordAudit(tx, {
         actor: { type: "DEVICE", tokenId: device.id },
         action: "scan.create",

@@ -191,10 +191,10 @@ describe("ingestScan", () => {
 
   it("opens a rework ticket for REWORK and a salvage item for REJECT", async () => {
     await ingest([det("hole", 0.7)]);
-    expect(outcomes.insertReworkTicket).toHaveBeenCalledWith("scan1", "tx");
+    expect(outcomes.insertReworkTicket).toHaveBeenCalledWith("scan1", "tx", now);
     await ingest([det("cut", 0.95)]);
     expect(outcomes.insertSalvageItem).toHaveBeenCalledWith(
-      { scanId: "scan1", originBatchId: "0001" },
+      { scanId: "scan1", originBatchId: "0001", createdAt: now },
       "tx",
     );
   });

@@ -3,12 +3,13 @@ import { type Db, defaultDb } from "./db";
 
 // Rework tickets and salvage items are created from scan verdicts (D-007). Phase 4 manages their lifecycle.
 
-export function insertReworkTicket(scanId: string, db: Db = defaultDb()) {
-  return db.reworkTicket.create({ data: { scanId } });
+/** `at` is when the scan was decided (defaults to now), so replayed scans keep their timeline. */
+export function insertReworkTicket(scanId: string, db: Db = defaultDb(), at?: Date) {
+  return db.reworkTicket.create({ data: { scanId, ...(at ? { openedAt: at } : {}) } });
 }
 
 export function insertSalvageItem(
-  data: { scanId: string; originBatchId: string },
+  data: { scanId: string; originBatchId: string; createdAt?: Date },
   db: Db = defaultDb(),
 ) {
   return db.salvageItem.create({ data });

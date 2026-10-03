@@ -77,9 +77,9 @@ export async function decideScan(
     if (live.rework && input.verdict !== "REWORK")
       await cancelReworkTicket(live.rework.id, now, tx);
     if (live.salvage && input.verdict !== "REJECT") await cancelSalvageItem(live.salvage.id, tx);
-    if (input.verdict === "REWORK" && !live.rework) await insertReworkTicket(id, tx);
+    if (input.verdict === "REWORK" && !live.rework) await insertReworkTicket(id, tx, now);
     if (input.verdict === "REJECT" && !live.salvage) {
-      await insertSalvageItem({ scanId: id, originBatchId: scan.batchId }, tx);
+      await insertSalvageItem({ scanId: id, originBatchId: scan.batchId, createdAt: now }, tx);
     }
 
     await recordAudit(tx, {

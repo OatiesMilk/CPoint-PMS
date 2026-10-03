@@ -71,7 +71,7 @@ describe("overriding an automatic decision", () => {
       "tx",
     );
     expect(outcomes.cancelSalvageItem).toHaveBeenCalledWith("sv1", "tx");
-    expect(outcomes.insertReworkTicket).toHaveBeenCalledWith("s1", "tx");
+    expect(outcomes.insertReworkTicket).toHaveBeenCalledWith("s1", "tx", now);
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
       expect.objectContaining({ action: "scan.override" }),
@@ -93,7 +93,7 @@ describe("overriding an automatic decision", () => {
     expect(result.isOverride).toBe(false);
     expect(outcomes.cancelReworkTicket).toHaveBeenCalledWith("rw1", now, "tx");
     expect(outcomes.insertSalvageItem).toHaveBeenCalledWith(
-      { scanId: "s1", originBatchId: "b1" },
+      { scanId: "s1", originBatchId: "b1", createdAt: now },
       "tx",
     );
   });

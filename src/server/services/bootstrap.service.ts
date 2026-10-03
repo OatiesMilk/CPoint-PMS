@@ -12,6 +12,7 @@ import {
 import { countActiveUsersWithRole, createUser, findUserByEmail } from "@/server/models/user.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
 import { recordAudit } from "./audit.service";
+import { DEMO_INVENTORY, seedDemoWeek } from "./demo-seed.service";
 import { createItem } from "./inventory.service";
 
 const SYSTEM = { type: "SYSTEM" } as const;
@@ -126,50 +127,6 @@ export async function ensureDemoUsers(): Promise<number> {
   return created;
 }
 
-/** A few materials so a demo has stock to show, one of them low. Recorded by the demo Floor Manager. */
-export const DEMO_INVENTORY = [
-  {
-    sku: "LR-001",
-    name: "Black cowhide (school shoes)",
-    category: "LEATHER_ROLL",
-    unit: "roll",
-    reorderLevel: 3,
-    openingStock: 8,
-  },
-  {
-    sku: "LR-002",
-    name: "Brown suede (topsiders)",
-    category: "LEATHER_ROLL",
-    unit: "roll",
-    reorderLevel: 2,
-    openingStock: 2,
-  },
-  {
-    sku: "NL-001",
-    name: "Shoe tacks, 12 mm",
-    category: "NAILS",
-    unit: "box",
-    reorderLevel: 5,
-    openingStock: 20,
-  },
-  {
-    sku: "AD-001",
-    name: "Contact cement",
-    category: "ADHESIVE",
-    unit: "can",
-    reorderLevel: 4,
-    openingStock: 6,
-  },
-  {
-    sku: "TH-001",
-    name: "Waxed thread, black",
-    category: "THREAD",
-    unit: "spool",
-    reorderLevel: 6,
-    openingStock: 10,
-  },
-] as const;
-
 /** Opt-in with the demo users. Adds only the codes that don't exist yet; never touches stock. */
 export async function ensureDemoInventory(): Promise<number> {
   if (!getEnv().SEED_DEMO_USERS) return 0;
@@ -185,10 +142,35 @@ export async function ensureDemoInventory(): Promise<number> {
   return created;
 }
 
-/** Everything the system needs to be usable. Safe to run on every start. */
-export async function bootstrap(): Promise<void> {
+/**
+ * A past week of production for demos (D-026). Opt-in with SEED_DEMO_WEEK; runs only on a
+ * database with no batches, so restarts never add another week.
+ */
+export async function ensureDemoWeek(): Promise<void> {
+  const { SEED_DEMO_WEEK, SEED_DEMO_USERS } = getEnv();
+  if (!SEED_DEMO_WEEK) return;
+  if (!SEED_DEMO_USERS) {
+    logger.warn("SEED_DEMO_WEEK needs SEED_DEMO_USERS=true; skipping the demo week.");
+    return;
+  }
+  const result = await seedDemoWeek();
+  if (!result.seeded) logger.info({ reason: result.reason }, "Demo week not seeded");
+}
+
+/**
+ * Everything the system needs to be usable. Safe to run on every start.
+ *
+ * The demo week (~30 s) runs in the background when the server starts, so the app and its
+ * healthcheck come up straight away; the week fills in within a minute. `npm run db:seed` waits.
+ */
+export async function bootstrap(options: { demoWeekInBackground?: boolean } = {}): Promise<void> {
   await ensureReferenceData();
   await ensureDemoUsers();
-  await ensureDemoInventory();
+  const demoWeek = ensureDemoWeek().then(ensureDemoInventory);
+  if (options.demoWeekInBackground) {
+    demoWeek.catch((error) => logger.error({ err: error }, "Demo week failed"));
+  } else {
+    await demoWeek;
+  }
   await ensureAdmin();
 }

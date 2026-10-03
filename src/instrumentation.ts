@@ -5,7 +5,7 @@ export async function register() {
   const { bootstrap } = await import("@/server/services/bootstrap.service");
   const { logger } = await import("@/server/lib/logger");
   try {
-    await bootstrap();
+    await bootstrap({ demoWeekInBackground: true });
     logger.info("Bootstrap complete");
   } catch (error) {
     // Don't crash the server: /api/health reports the database problem, and the next start retries.

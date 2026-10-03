@@ -171,3 +171,7 @@ export function listOpenBatches(db: Db = defaultDb()) {
     take: 200,
   });
 }
+
+export function countBatches(db: Db = defaultDb()) {
+  return db.batch.count();
+}

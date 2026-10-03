@@ -202,7 +202,10 @@ export async function createBatch(values: BatchFormValues, actor: Actor, now: Da
   return runInTransaction(async (tx) => {
     const year = manilaYear(now);
     const code = formatBatchCode(year, await nextBatchNumber(year, tx));
-    const batch = await insertBatch({ ...toColumns(values), code, createdById: actor.id }, tx);
+    const batch = await insertBatch(
+      { ...toColumns(values), code, createdById: actor.id, createdAt: now },
+      tx,
+    );
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "batch.create",
