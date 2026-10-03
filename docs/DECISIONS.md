@@ -380,3 +380,58 @@ JWT was still valid.
 **Consequences:** the guard does one extra primary-key lookup per request (run in parallel with
 the user lookup). Report SQL lives only in `report.model.ts`. Phase 8 can seed a realistic week
 using `capturedAt`.
+
+### D-026 · 2026-10-03 · Accepted — Demo week seed through the real services
+
+**Context:** Phase 8 needs a believable week of production for the panel demo, not test
+leftovers. Hand-written SQL inserts would bypass the rules that keep stage logs, the stock ledger,
+rework, salvage and the audit log consistent with each other.
+**Decision:**
+
+- **Replay, don't insert:** `seedDemoWeek` (`services/demo-seed.service.ts`) replays the last six
+  Manila working days (Mon–Sat) by calling the real services with a past `now`:
+  - `createBatch`, `transitionBatchStage`, `ingestScan`, `decideScan`, `moveReworkTicket`,
+    `assignSalvage`/`discardSalvage`, `recordMovement`.
+  - Services that create rows now pass their `now` through to `createdAt`/`openedAt`, so seeded
+    rows carry the past time.
+  - Audit `createdAt` stays the real seeding time. Accepted: the audit log records when a row
+    was written.
+- **Deterministic:** a mulberry32 PRNG with a fixed seed. Stage times are drawn from the survey's
+  ranges: Preparation 2–3 h, **Upper Making 6–9 h** (bottleneck), Sole-ing 4–6 h, Finishing
+  1–2 h. Scans use the simulator's mix (`lib/leather-scan.ts`, shared with `cv:simulate`), with
+  real sharp-rendered JPEGs.
+- **What the week contains:**
+  - two batches per day, one moved back, one cancelled, one planned for tomorrow;
+  - about 6% overrides with reasons, and repairs timed after each decision;
+  - salvage reused in in-progress batches (at most 4 each) or discarded with a reason;
+  - deliveries and daily use of supplies.
+
+  The newest batch's last two sections are always unknown-class scans left in the review queue.
+
+- **When it runs:** opt-in only. `SEED_DEMO_WEEK=true` (requires `SEED_DEMO_USERS`) runs it in
+  the background on start, so the healthcheck isn't delayed. `npm run demo:seed` runs it by hand.
+  Either way it runs **only when no batches exist**, so restarts never add a second week.
+- `sharp` becomes a direct, exact-pinned dependency (the version Next already ships).
+
+**Consequences:**
+
+- The demo data passes the same invariants as real data: CI checks that the stock equals the
+  ledger and that nothing re-seeds on restart.
+- The seed's device token shows "Last used: Never", because the seed bypasses HTTP
+  (`docs/UI_AUDIT.md` L4).
+- Seeding takes about 30 s, in the background.
+
+### D-027 · 2026-10-03 · Accepted — npm audit highs in the Prisma CLI are not reachable
+
+**Context:** `npm audit` reports 4 highs: `deepmerge-ts` < 8 (stack exhaustion on recursive
+objects) and `mysql2` ≤ 3.23.0 (auth downgrade, decompression bomb). Both come in via the
+`prisma` CLI. The runtime image includes the CLI (`/app/migrate`) to run `migrate deploy` on
+start. The only "fix" npm offers is a downgrade to Prisma 6, which breaks the project (D-001).
+**Decision:** keep Prisma 7 and accept the exposure.
+
+- `mysql2` is never loaded: the CLI talks to PostgreSQL only.
+- `deepmerge-ts` merges our own static `prisma.config.ts`, with no outside input.
+- The CLI runs once per container start and then exits. It never handles requests.
+
+**Consequences:** re-check `npm audit` when upgrading Prisma, and drop this entry once Prisma
+ships fixed dependencies. Don't add `overrides` that swap the CLI's dependencies untested.

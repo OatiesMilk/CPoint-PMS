@@ -77,8 +77,9 @@ Tick the boxes as they're done.
 
 ## Phase 8 — Hardening & demo
 
-- [ ] Playwright smoke test per role covering the main flows
-- [ ] ui-craft audit across all screens, findings fixed
-- [ ] Demo seed: realistic week of data
-- [ ] Clean `docker compose up --build` on a fresh machine, following the README word for word
-- [ ] Panel-ready README: architecture diagram, ERD, setup, demo script
+- [x] Playwright smoke test per role covering the main flows (+ axe on every page)
+- [x] ui-craft audit across all screens, findings fixed (`docs/UI_AUDIT.md`)
+- [x] Demo seed: realistic week of data (D-026)
+- [x] Clean `docker compose up --build` on a fresh machine, following the README word for word
+      (sandbox: one documented base-image build arg; the CI docker job is the clean-runner check)
+- [x] Panel-ready README: architecture diagram, ERD, setup, demo script

@@ -16,6 +16,59 @@ Template:
 
 ---
 
+## 2026-10-03 — Phase 8: Hardening & demo
+
+**Who:** Team + Claude Code
+**Summary:** The system is panel-ready:
+
+- a realistic demo week seeded through the real services;
+- a smoke test per role with axe on every page;
+- a ui-craft audit with every finding fixed or listed;
+- a fresh-machine Docker run from the README;
+- a rewritten README with an architecture diagram, ERD and a 10-minute demo script.
+
+**Changed:**
+
+- **Demo seed (D-026):**
+  - `services/demo-seed.service.ts`, `lib/leather-scan.ts` (shared with the simulator),
+    `npm run demo:seed`, and `SEED_DEMO_WEEK` (passed through compose, documented in
+    `.env.example`).
+  - It runs in the background on start, and only on an empty database.
+  - Services pass `now` through to `createdAt`/`openedAt`. `sharp` is a direct dependency.
+- **Tests:**
+  - `tests/e2e/smoke.spec.ts`: every sidebar page per role renders and passes axe (WCAG 2.1
+    A/AA, light, and dark for the FM). Short journeys for FM, QI, Admin and Constructor.
+  - Unit tests for the seed (determinism, stage times, guards, time order, two scans left for
+    review).
+  - Two older e2e tests now search instead of browsing page 1.
+- **UI fixes (`docs/UI_AUDIT.md`):**
+  - The superseded verdict is struck through, not faded. The admin health list is a valid `dl`.
+    Skeletons have `role=status`.
+  - The review queue has a `?batch=` filter and a truncation note. The rework "Repaired" column
+    is capped at 12.
+  - The batches table fits at 1280 px. The admin nav shows a single active link. Latest scans
+    wraps. The "All 0 scans" link is hidden. Salvage Discard has more space.
+- **CI:** the docker job starts with the demo week and checks the counts, a pending review, that
+  stock equals the ledger, and that a restart doesn't re-seed.
+- **Docs:**
+  - README rewrite: Mermaid architecture and ERD (both render), demo quick start, demo script,
+    screenshots in `docs/screenshots/`.
+  - DESIGN.md rules from the audit.
+  - `ComingSoonCard` removed.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (299) · build ✅ · format ✅ · e2e ✅ 57/57 twice on
+`next start` and twice on a fresh Docker stack loaded with the demo week · docker ✅ fresh clone,
+fresh volumes, README steps. Sandbox deviations: a base-image build arg, and a separate compose
+project name so the dev volumes weren't reused.
+**Decisions:** D-026 (demo week seed), D-027 (Prisma CLI npm audit highs accepted)
+**Follow-ups:**
+
+- CPoint confirmations (thresholds, shift length, salvage/yield rules, Constructor scope).
+- Real YOLO model and new defect classes (added as data in Settings).
+- Component tracking once CPoint gives the component counts per shoe type.
+
+---
+
 ## 2026-10-03 — Phase 7: Dashboards & reports
 
 **Who:** Team + Claude Code

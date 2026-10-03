@@ -57,4 +57,5 @@ Run `/wrap-up` (or follow the documentation protocol in the master spec): update
 - After editing `prisma/schema.prisma`: `npm run db:migrate -- --name <change>`, then `npm run db:generate`
 - Camera simulator: `npm run cv:token` once (put the token in `.env` as `CV_DEVICE_TOKEN`), start a
   batch, then `npm run cv:simulate -- --count 20 --interval 3`
+- Demo week (empty DB only): `npm run demo:seed`, or `SEED_DEMO_WEEK=true` in `.env` for Docker
 - A pre-commit hook (husky + lint-staged) runs ESLint and Prettier on staged files.

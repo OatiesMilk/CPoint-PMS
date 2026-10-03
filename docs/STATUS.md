@@ -5,8 +5,8 @@
 
 **Last updated:** 2026-10-03
 **Branch:** `system-rebuild`
-**Current phase:** Phase 8 — Hardening & demo (not started)
-**Overall:** 8 / 9 phases complete
+**Current phase:** Roadmap complete. Waiting on CPoint confirmations and the real YOLO model.
+**Overall:** 9 / 9 phases complete
 
 ## Phase progress
 
@@ -18,61 +18,54 @@
 - [x] 5. Inventory
 - [x] 6. Admin
 - [x] 7. Dashboards & reports
-- [ ] 8. Hardening & demo (smoke test per role, ui-craft audit, a realistic demo week, clean
-      compose on a fresh machine, panel-ready README)
+- [x] 8. Hardening & demo
 
 ## What works right now
 
-- **Database:** 4 migrations (`init`, `camera_active_batch`, `users_sessions_valid_from`,
-  `session_revocations`). UUIDv7 ids (D-018).
+- **Database:** 4 migrations. UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017): reference data, the first System Admin, and demo users and
   inventory when `SEED_DEMO_USERS=true`.
+- **Demo week** (D-026): `SEED_DEMO_WEEK=true` (in the background on start) or
+  `npm run demo:seed`.
+  - It replays six working days through the real services: 14 batches, about 290 scans with
+    images, overrides, repairs, salvage and stock movements, and two scans left for review.
+  - It runs only on a database with no batches.
 - **Sign-in & access** (D-016, D-024, D-025):
   - 12-hour sessions, lockout, and a role × permission matrix;
-  - a session ends on deactivation, a password reset/change, or **sign-out (revoked
-    server-side)**;
-  - temporary passwords force a change.
-- **Batches** (D-019), **camera** (D-020, D-011), **rework & salvage** (D-021, D-022),
-  **inventory** (D-023), **admin** (D-024).
-- **Reports** (D-025):
-  - **`/reports`:** range presets and a custom range; totals; scans per day by final verdict;
-    defects by type (click-through to `/scans?defect=`); camera call vs final verdict with AI
-    agreement; time in each stage with the bottleneck (FM); the daily summary table; and Daily,
-    Defects and Stages CSVs (Excel-friendly).
-  - **FM home:** today's split + daily summary. **QI home:** defects today + AI agreement.
-  - No "Phase N" placeholders remain.
+  - sessions end on deactivation, a password change or reset, or a server-side sign-out.
+- **Modules:**
+  - batches (D-019) and the camera with the decision engine (D-020, D-011);
+  - rework & salvage (D-021, D-022), inventory ledger (D-023);
+  - admin (D-024), reports with CSV (D-025).
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
-- **Tests:** 292 unit and 47 e2e tests.
+- **Quality:**
+  - 299 unit and 57 e2e tests, including a smoke test per role with axe (WCAG 2.1 A/AA) on
+    every page.
+  - The ui-craft audit is in `docs/UI_AUDIT.md`, with no open Critical, High or Medium findings.
+  - CI checks the Docker stack with the demo week: stock equals the ledger, and a restart doesn't
+    re-seed.
+- **README:** purpose, a demo quick start (checked on a fresh clone with fresh volumes), a
+  10-minute demo script per role, a Mermaid architecture diagram and ERD, and screenshots.
 
 ## Next step (exact)
 
-Start Phase 8. Paste into Claude Code:
+The roadmap is done. Before the panel, rehearse on a team laptop. Paste into Claude Code:
 
-> /resume, then run Phase 8 (Hardening & demo) from `docs/ROADMAP.md`. Start in plan mode.
+> /resume, then help us rehearse the panel demo: walk the README "Demo script" against a fresh
+> `docker compose up --build -d` with `SEED_DEMO_WEEK=true`, list anything that doesn't match,
+> and fix it. Start in plan mode.
 
-Phase 8 notes:
+After the panel, the follow-ups are:
 
-- **Demo week:**
-  - Seed through the real services and the ingestion API (the simulator can post with
-    `capturedAt` in the past), so the audit, stage logs and ledger stay consistent;
-  - spread over 7 Manila days, with Upper Making and Sole-ing slowest (survey);
-  - make it opt-in (e.g. `npm run demo:seed`) and never part of a normal start.
-- **Fresh-machine check:**
-  - `docker compose up --build` exactly as the README says, on a clean volume;
-  - Docker Hub/Alpine are blocked in the cloud sandbox, so verify the committed Dockerfile in CI
-    or on a team laptop.
-- **ui-craft audit:** every screen in light and dark at 1280px+. Check states (empty, loading,
-  error, stale), focus order and copy.
-- **Smoke test per role:** one Playwright journey each for the FM, QI, System Admin and Shoe
-  Constructor.
-- **README for the panel:** an architecture diagram (MVC layers, Docker services), an ERD (from
-  Prisma), setup, and a demo script.
-- **Housekeeping:** remove `ComingSoonCard` if unused; review the `npm audit` findings in the
-  Prisma CLI's dependencies.
+- apply CPoint's answers to the open questions below (each is a data or setting change, or a
+  new decision entry);
+- plug in the real YOLO service: it posts to `POST /api/v1/scans` with a device token
+  (`docs/API.md`), and its new classes are added under Settings → Defect types;
+- component tracking, once CPoint gives the component counts per shoe type.
 
 ## Blockers
 
-- None.
+- None for the demo. Component tracking and the Constructor's features wait on CPoint.
 
 ## Open questions / assumptions awaiting client confirmation
 
@@ -81,22 +74,33 @@ Phase 8 notes:
 - ASSUMPTION: one scan = one leather section of the roll; reworked sections aren't re-scanned.
 - ASSUMPTION: the sign-in lockout (5 tries / 15 minutes) and the 12-hour session suit factory
   shifts. Confirm the shift length with CPoint.
-- Decided (D-021/D-022, team-confirmed 2026-10-03): salvage reused in a batch is shown separately,
-  not added to its usable count; a batch can be completed with repairs open and is tagged
-  "In repair". Still to confirm with CPoint.
-- Unknown: number of components per shoe type (school shoe, topsider). Blocks component tracking only.
+- Decided (D-021/D-022, team-confirmed): salvage reused in a batch is shown separately, not added
+  to its usable count. A batch can be completed with repairs open and is tagged "In repair".
+  Still to confirm with CPoint.
+- ASSUMPTION (D-026): the demo week's stage times (Upper Making 6–9 h as the bottleneck) match
+  the survey. Real figures will replace them as soon as the line uses the system.
+- Unknown: the number of components per shoe type (school shoe, topsider). Blocks component
+  tracking only.
 - Unknown: what the Shoe Constructor role should see. It's a "coming soon" page for now.
-- Pending: the new YOLO training photos will change the defect classes. Classes are data; until
-  Phase 6 adds the Settings page, new classes arrive as "unknown" and go to the review queue.
+- Pending: the new YOLO training photos will change the defect classes. Classes are data: new
+  ones arrive as "unknown", go to the review queue, and are added under Settings → Defect types.
 
 ## Environment notes
 
 - Timezone: `Asia/Manila` for display; UTC for storage.
-- Local `.env` needs `AUTH_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD` and `DEMO_USER_PASSWORD` (README → Environment).
+- Local `.env` needs `AUTH_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD` and `DEMO_USER_PASSWORD` (README →
+  Environment). With demo users on, `admin@cpoint.local` uses `DEMO_USER_PASSWORD`.
+- `npm audit` reports 4 highs in the Prisma CLI's dependencies. They aren't reachable, and the
+  exposure is accepted (D-027). Re-check when upgrading Prisma.
 - `ui.shadcn.com` is unreachable from the Claude cloud sandbox, so shadcn components are written
-  by hand in its structure. On a normal machine `npx shadcn@latest add <component>` works.
-- Cloud sandbox only: Docker Hub is rate-limited and the Alpine CDN blocked. Verify Docker builds
-  there with `--build-arg NODE_IMAGE=<local base image>`. The committed Dockerfile needs no workaround.
-- Simulator: `npm run cv:token`, put the token in `.env` as `CV_DEVICE_TOKEN`, start a batch, then `npm run cv:simulate`.
-- After `npm run db:migrate`, run `npm run db:generate` (Prisma 7 doesn't regenerate the client on migrate).
-- E2E without downloadable browsers: set `PLAYWRIGHT_CHROMIUM_PATH`. Against Docker: `E2E_BASE_URL=http://localhost:3000`.
+  by hand in its structure.
+- Cloud sandbox only:
+  - Docker Hub is rate-limited and the Alpine CDN blocked. Build with
+    `docker compose build --build-arg NODE_IMAGE=<local base image>`, then `up -d`.
+  - Use `-p <name>` for a throwaway stack so the dev volumes aren't reused.
+- After `npm run db:migrate`, run `npm run db:generate` (Prisma 7 doesn't regenerate the client
+  on migrate).
+- E2E:
+  - Without downloadable browsers, set `PLAYWRIGHT_CHROMIUM_PATH`.
+  - Against Docker, set `E2E_BASE_URL=http://localhost:3000`, plus that stack's
+    `DEMO_USER_PASSWORD` if it differs.
