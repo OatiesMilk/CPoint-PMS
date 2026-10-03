@@ -71,7 +71,7 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
   {
     title: "Administration",
     items: [
-      { label: "Users", href: "/admin/users", icon: "users", permission: "user:manage", phase: 6 },
+      { label: "Users", href: "/admin/users", icon: "users", permission: "user:manage" },
       {
         label: "Settings",
         href: "/admin/settings",
