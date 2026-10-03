@@ -161,8 +161,9 @@ and answers `409 STALE` if it changed. All moves are audited.
 - **Flow:** `start` (OPEN → IN_PROGRESS) and `done` (IN_PROGRESS → DONE). Each can be undone one
   step: `unstart` (IN_PROGRESS → OPEN) and `reopen` (DONE → IN_PROGRESS).
 - **Usable count:** a repaired section counts as usable in its batch (usable = passed + repaired).
-- **Closing a batch:** a batch can't be completed while repairs are open (`409`, with the count).
-  Cancelling a batch cancels its unfinished repairs.
+- **Closing a batch:** a batch can be completed while repairs are open (D-022). Its repairs stay
+  workable, and `GET /api/v1/batches` rows carry `openRepairs` for the "In repair" tag. Only a
+  cancelled batch freezes its repairs (`409`): cancelling cancels the unfinished ones.
 
 ## Coming next
 

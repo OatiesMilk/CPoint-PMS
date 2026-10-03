@@ -223,3 +223,24 @@ batch", and that rejected leather is kept for later production (survey Q15).
 **Consequences:** Phase 7 reports can read repair turnaround (`openedAt → startedAt →
 completedAt`) and salvage reuse from these rows. There are no per-person metrics; `completedById`
 and `handledById` are only for the audit trail (D-008).
+
+### D-022 · 2026-10-03 · Accepted — Completing a batch with repairs still open (supersedes part of D-021)
+
+**Context:** D-021 blocked completing a batch while any section was still at the repair station.
+The team pointed out that the line doesn't wait for the repair station: the batch moves on, and
+the repaired sections join it later.
+**Decision:**
+
+- A batch **can be completed** with OPEN/IN_PROGRESS repairs. The confirm dialog says how many are
+  still at the repair station.
+- Any batch with unfinished repairs, completed or not, shows an **"In repair · N"** tag on the
+  batch list and the batch detail. The tag disappears when the last repair is done.
+- Repairs on a **completed** batch stay workable on the Rework board (start, repaired, undo,
+  reopen), and the batch's usable count rises as they're repaired. Only a **cancelled** batch
+  freezes its repairs (they're cancelled with it, D-021).
+- Unchanged from D-021: usable = passed + repaired; salvage reused in a batch is shown separately
+  and not added to usable (confirmed by the team, 2026-10-03); salvage can only go to a Planned
+  or In-progress batch.
+
+**Consequences:** a completed batch's usable count can still change until its repairs finish.
+Phase 7 reports should read yield "as of now", or only after the tag clears.

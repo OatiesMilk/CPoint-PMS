@@ -3,7 +3,7 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-03
 **Branch:** `system-rebuild`
 **Current phase:** Phase 5 — Inventory (not started)
 **Overall:** 5 / 9 phases complete
@@ -32,17 +32,19 @@
 - **Camera** (D-020): device tokens, `POST /api/v1/scans`, the decision engine (D-011), image
   storage, the simulator (`npm run cv:simulate`), overrides, the review queue, scan pages with box
   overlays, the Camera page, and live feeds on the FM/QI homes.
-- **Rework & salvage** (D-021):
+- **Rework & salvage** (D-021, D-022):
   - **`/rework` board** (FM + QI): Waiting → Being repaired → Repaired (7 days), with an undo toast
     and Reopen.
   - **`/salvage`** (FM acts, QI reads): Available / Reused / Discarded. Reuse rejected leather in
     another open batch, unassign it, or discard it with a reason.
   - **Batch detail Yield card:** usable = passed + repaired, plus at repair station, rejected,
     needs review, and salvage reused here.
-  - **Batch rules:** completing is blocked while repairs are open; cancelling cancels open repairs.
+  - **Batch rules** (D-022): a batch can be completed with repairs still open. It's tagged
+    "In repair · N" on the list and detail until they're done, and its usable count rises as they
+    finish. Cancelling a batch cancels its open repairs.
   - **API:** `/api/v1/rework` and `/api/v1/salvage` (`docs/API.md`).
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`. Checked in psql.
-- **Tests:** 218 unit and 33 e2e tests. The e2e tests pass against `next start` and the Docker stack.
+- **Tests:** 220 unit and 33 e2e tests. The e2e tests pass against `next start` and the Docker stack.
 
 ## Next step (exact)
 
@@ -72,8 +74,9 @@ Phase 5 notes:
 - ASSUMPTION: one scan = one leather section of the roll; reworked sections aren't re-scanned.
 - ASSUMPTION: the sign-in lockout (5 tries / 15 minutes) and the 12-hour session suit factory
   shifts. Confirm the shift length with CPoint.
-- ASSUMPTION (D-021): salvage reused in a batch is shown separately, not added to its "usable"
-  count, and a batch can't be completed while repairs are open. Confirm both with CPoint.
+- Decided (D-021/D-022, team-confirmed 2026-10-03): salvage reused in a batch is shown separately,
+  not added to its usable count; a batch can be completed with repairs open and is tagged
+  "In repair". Still to confirm with CPoint.
 - Unknown: number of components per shoe type (school shoe, topsider). Blocks component tracking only.
 - Unknown: what the Shoe Constructor role should see. It's a "coming soon" page for now.
 - Pending: the new YOLO training photos will change the defect classes. Classes are data; until

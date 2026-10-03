@@ -92,6 +92,7 @@ Re-measure whenever a color token changes.
 | Rework board           | Repair station work            | columns Waiting / Being repaired / Repaired (7 days)                          | one primary button per card, undo toast (6s), empty text per column, batch filter in the URL, STALE alert  |
 | Salvage list           | Rejected leather               | tabs Available / Reused / Discarded (`?status=`) with counts                  | FM actions in dialogs (discard needs a reason); QI read-only with an explanation line                      |
 | Yield card             | Batch outcome                  | —                                                                             | usable as the hero number with "passed + repaired"; each count links to the board/list; empty before scans |
+| `InRepairBadge`        | Batch with unfinished repairs  | warning tone, wrench icon, "In repair · N"                                    | hidden at 0; shown on the batch list and detail, completed batches included                                |
 
 ## Patterns
 

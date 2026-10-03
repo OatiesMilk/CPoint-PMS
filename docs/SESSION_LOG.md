@@ -16,6 +16,28 @@ Template:
 
 ---
 
+## 2026-10-03 — Phase 4 follow-up: complete batches with repairs open
+
+**Who:** Team + Claude Code
+**Summary:** The team confirmed that salvage reused in a batch stays out of its usable count. They
+changed the closing rule: a batch can be completed while sections are still at the repair
+station. Such a batch is tagged "In repair · N" until its repairs are done.
+**Changed:**
+
+- Rules: `planReworkMove` refuses only cancelled batches; `availableActions` no longer blocks
+  Complete; `openRepairsNote` replaces `openRepairsReason`.
+- Server: the completion guard is removed from `batch.service`; list rows and batch detail carry
+  `openRepairs` (`countLiveReworkByBatch`).
+- UI: `InRepairBadge` on the batch list and detail, and a note in the Complete dialog.
+- Tests: updated unit tests (220) and the outcomes e2e (complete with an open repair, then repair it
+  on the board).
+- Docs: D-022, API.md, STATUS, DESIGN.md.
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · test ✅ (220) · build ✅ · e2e ✅ (33 against
+`next start`, twice) · docker: not re-run locally (no Docker-specific change; CI runs the docker job)
+**Decisions:** D-022
+**Follow-ups:** Phase 5 (Inventory).
+
 ## 2026-10-02 — Phase 4: Rework & salvage
 
 **Who:** Team + Claude Code
