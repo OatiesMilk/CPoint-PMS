@@ -1,102 +1,331 @@
 # CPoint Product Monitoring System
 
 Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe production line
-(school shoes and topsiders). It tracks batches (one leather roll each) through four stages:
-**Preparation → Upper Making → Sole-ing → Finishing**. It has one computer-vision checkpoint at
-Preparation, before cutting, that sorts leather sections into **Pass / Rework / Reject**.
+(school shoes and topsiders). It replaces paper tally sheets with one shared view of the line:
 
-> BS-IT capstone project. The rebuild is in progress on the `system-rebuild` branch. Progress is
-> in [`docs/STATUS.md`](docs/STATUS.md), and the plan is in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+- **Batches:** each one is a leather roll. A batch moves through **Preparation → Upper Making →
+  Sole-ing → Finishing**, and the system records who moved it and when.
+- **Camera checkpoint:** a computer-vision camera at Preparation checks each leather section
+  before it is cut and calls it **Pass / Rework / Reject**. Unknown defects go to a person to
+  decide. A person can override any call.
+- **Rework and salvage:** reworked sections go to the repair station board. Rejected leather is
+  kept as salvage for another batch rather than thrown away.
+- **Inventory:** leather rolls and supplies are tracked through an audited ledger, with low-stock
+  alerts.
+- **Reports:** daily totals, defects by type, how often people kept the camera's call, and time
+  per stage (the bottleneck), with CSV for Excel. Nothing is ranked per person.
+
+![Floor Manager home with a demo week loaded](docs/screenshots/floor-manager-home.png)
+
+> BS-IT capstone project. Progress is in [`docs/STATUS.md`](docs/STATUS.md), the plan in
+> [`docs/ROADMAP.md`](docs/ROADMAP.md), and every design decision with its reason in
+> [`docs/DECISIONS.md`](docs/DECISIONS.md).
+
+## Contents
+
+- [Quick start: demo / factory machine](#quick-start-demo--factory-machine) (Docker only)
+- [Demo script](#demo-script) (10 minutes, per role)
+- [Architecture](#architecture) and [data model](#data-model)
+- [Quick start: development](#quick-start-development)
+- [Environment](#environment), [Camera and simulator](#camera-and-simulator), [Scripts](#scripts)
 
 ## Tech stack
 
 Next.js 16 (App Router, TypeScript strict) · PostgreSQL 18 · Prisma 7 · Tailwind CSS 4 +
-shadcn/ui (Radix) · Zod · Recharts · Vitest + Playwright · Docker (one compose file, two services) · GitHub Actions CI.
-The reasons behind each choice are in [`docs/DECISIONS.md`](docs/DECISIONS.md).
-
-## Prerequisites
-
-- **Node.js 22.12+** (24 LTS recommended) and npm
-- **Docker Desktop** (or Docker Engine + Compose v2)
-
-## Quick start: development
-
-Runs PostgreSQL in Docker and Next.js on your machine, with hot reload.
-
-```bash
-cp .env.example .env        # then fill in the three blanks (see "Environment" below)
-npm install                 # also generates the Prisma client
-npm run db:up               # starts PostgreSQL in Docker (port 5432, localhost only)
-npm run db:deploy           # applies database migrations
-npm run dev                 # http://localhost:3000. Seeds reference data + demo users on start
-```
-
-Stop the database with `npm run db:down`. Data persists in the `pgdata` Docker volume.
-
-## Environment
-
-`.env.example` lists every variable. Three must be filled in before the first start:
-
-| Variable                   | What to put                                                                        |
-| -------------------------- | ---------------------------------------------------------------------------------- |
-| `AUTH_SECRET`              | A random secret that signs sessions: `openssl rand -base64 32`. One per machine.   |
-| `BOOTSTRAP_ADMIN_PASSWORD` | 12+ characters. Creates the first System Admin if none exists.                     |
-| `DEMO_USER_PASSWORD`       | 8+ characters. Password for the demo accounts below (when `SEED_DEMO_USERS=true`). |
-
-**Demo accounts** (created on startup when `SEED_DEMO_USERS=true`; turn it off for real use):
-
-| Role              | Email                      | Lands on             |
-| ----------------- | -------------------------- | -------------------- |
-| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     |
-| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` |
-| System Admin      | `admin@cpoint.local`       | `/admin`             |
-| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       |
-
-On every start the app also makes sure the reference data exists (shoe types, defect types, CV
-thresholds 90% / 60%, a sample supplier). It never overwrites values an admin has changed.
-With demo users on, it also adds five demo inventory items (two leather rolls, one of them low,
-plus nails, adhesive and thread) the first time, without touching stock afterwards.
-`npm run db:seed` runs the same steps by hand.
-
-**Sign-in rules:** 5 wrong passwords lock an account for 15 minutes; sessions last 12 hours (one
-shift); a deactivated user is signed out on their next click. Every sign-in, failure and sign-out
-is written to the audit log.
-
-**Accounts:** the System Admin adds people under **Users**. Each new account (and each password
-reset) gets a temporary password that's shown once; the person chooses their own at first
-sign-in. A reset signs the person out everywhere. Anyone can change their password from the user
-menu (**Change password**). Signing out ends that session on the server, so a cached cookie can't
-bring it back.
-
-**Reports:** the Floor Manager and Quality Inspector open **Reports** for daily totals (Manila
-days), defects by type, how often people kept the camera's call, and (Floor Manager) time per
-stage with the bottleneck. Every table downloads as CSV for Excel. Nothing is broken down per
-person.
+shadcn/ui (Radix) · Zod · Recharts · Vitest + Playwright (+ axe) · Docker (one compose file, two
+services) · GitHub Actions CI.
 
 ## Quick start: demo / factory machine
 
-Runs the whole system in Docker with one command. No Node.js needed on the machine.
+Runs the whole system in Docker. The machine needs only **Docker Desktop** (or Docker Engine +
+Compose v2) and this folder. No Node.js needed.
 
-```bash
-cp .env.example .env        # fill in the blanks; change POSTGRES_PASSWORD for real use
-docker compose up --build -d
-```
+1. Create the settings file:
 
-Open <http://localhost:3000> (or `http://<this-machine's-LAN-IP>:3000` from another PC). On startup
-the app container applies pending migrations, seeds reference data, then starts the server.
-`docker compose up` refuses to start without `AUTH_SECRET`. Check status with `docker compose ps` (both services should say `healthy`) and logs with
-`docker compose logs -f app`. To stop: `docker compose down` (add `-v` to **delete all data**).
+   ```bash
+   cp .env.example .env
+   ```
+
+   (Windows PowerShell: `Copy-Item .env.example .env`.)
+
+2. Open `.env` in a text editor and fill in:
+
+   | Line                        | Put                                                                                       |
+   | --------------------------- | ----------------------------------------------------------------------------------------- |
+   | `AUTH_SECRET=`              | A long random string. `openssl rand -base64 32` makes one, or type 40+ random characters. |
+   | `BOOTSTRAP_ADMIN_PASSWORD=` | 12+ characters. The first System Admin's password.                                        |
+   | `DEMO_USER_PASSWORD=`       | 8+ characters. The password for all four demo accounts.                                   |
+   | `SEED_DEMO_WEEK=false`      | Change to `true` for a panel demo: a past week of production is created on first start.   |
+
+   For real use, also change `POSTGRES_PASSWORD` and set `SEED_DEMO_USERS=false`.
+
+3. Build and start:
+
+   ```bash
+   docker compose up --build -d
+   ```
+
+   The first build takes a few minutes. On start, the app container applies database migrations,
+   seeds the reference data and accounts, then starts the server.
+
+4. Open <http://localhost:3000> (or `http://<this-machine's-LAN-IP>:3000` from another PC on the
+   network) and sign in with one of the demo accounts below.
+
+   With `SEED_DEMO_WEEK=true`, the demo week is written in the background during the first
+   minute. Refresh the home page after about 30 seconds. It runs only while the database has no
+   batches, so restarts never add a second week.
+
+`docker compose ps` shows both services as `healthy` once ready, and
+`docker compose logs -f app` shows the logs. Stop with `docker compose down`. Add `-v` only to
+**delete all data** (both volumes).
 
 | Container | What it is                                 | Data volume             |
 | --------- | ------------------------------------------ | ----------------------- |
 | `app`     | Next.js server (non-root), runs migrations | `uploads` (scan images) |
 | `db`      | PostgreSQL 18                              | `pgdata`                |
 
+**Demo accounts** (created on start when `SEED_DEMO_USERS=true`; all use `DEMO_USER_PASSWORD`):
+
+| Role              | Email                      | Lands on             | Does                                                 |
+| ----------------- | -------------------------- | -------------------- | ---------------------------------------------------- |
+| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Batches, stages, rework, salvage, inventory, reports |
+| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Review queue, overrides, rework, quality reports     |
+| System Admin      | `admin@cpoint.local`       | `/admin`             | Users, thresholds, defect types, tokens, audit       |
+| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | A "coming soon" page until CPoint confirms its scope |
+
+## Demo script
+
+About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows
+(or one normal and one private) to show two roles side by side.
+
+### 1. Floor Manager (4 min)
+
+1. **Home** (`manager@cpoint.local`): batches by stage, with **Upper Making** marked as the
+   longest wait. Also today's inspection split, open repairs, low stock (Contact cement) and the
+   daily summary.
+2. **Batches → B-2026-0011:** the stage stepper and timeline (who moved it, when, and how long
+   each stage took). The **Yield** card shows usable sections = passed + repaired, and how many
+   went to the repair station and to salvage.
+
+   ![Batch detail](docs/screenshots/batch-detail.png)
+
+3. **New batch:** register a roll (it can be taken from inventory), then **Start production**.
+   The batch is now at Preparation, so the camera's scans go to it.
+4. **Camera:** shows which batch is receiving scans. To show live scans, run the simulator from a
+   development checkout (see [Camera and simulator](#camera-and-simulator)). They appear on the
+   home page within seconds.
+5. **Rework board:** Waiting → Being repaired → Repaired. Each step is one click, with undo.
+6. **Salvage:** rejected sections are kept. **Use in batch** assigns one to another open batch;
+   **Discard** needs a reason.
+7. **Inventory → Contact cement:** the ledger. Stock changes only through recorded movements
+   (deliveries, use, counts), and undo is a reversal entry, never an edit.
+8. **Reports:** the scans-per-day chart, defects by type, camera call vs final verdict, and time
+   in each stage, where Upper Making is the **bottleneck**. Download **Daily CSV** and open it in
+   Excel.
+
+### 2. Quality Inspector (3 min)
+
+1. **Review queue** (`inspector@cpoint.local`): two scans with an unknown defect class
+   ("scratch") wait for a person. Decide one: **Pass / Rework / Reject**.
+
+   ![Review queue](docs/screenshots/review-queue.png)
+
+2. Open one of **today's automatic Rework and Reject** calls. The image shows the camera's box
+   and confidence. **Override decision…** asks for a reason, and the scan then shows both calls
+   (the camera's is struck through).
+
+   ![Scan detail](docs/screenshots/scan-detail.png)
+
+3. **Reports → Camera call vs final verdict:** the off-diagonal numbers are overrides. A high
+   agreement (about 95% in the demo week) means the thresholds suit the line.
+
+### 3. System Admin (2 min)
+
+1. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Rework from 60%,
+   with a preview of what the camera will decide. Changes apply to new scans only. Old scans keep
+   the thresholds they were decided with.
+
+   ![Settings](docs/screenshots/admin-settings.png)
+
+2. **Settings → Defect types:** "scratch" is listed as an **unknown class** the camera has sent.
+   Adding it as a defect type is a data change, not a code change.
+3. **Users:** add a person, who gets a one-time temporary password. **API tokens:** each camera
+   machine has its own token, which can only send scans.
+4. **Audit log:** every change above, plus every sign-in, with before/after values.
+
+### Talking points
+
+- **The decision rule (D-011):** the highest confidence among known defects decides. ≥ 90% →
+  Reject, 60–89% → Rework, below 60% → Pass. An unknown class always goes to a person. The
+  thresholds are data the admin can change.
+- **People stay in charge:** any call can be overridden with a reason, and the reports show how
+  often that happens.
+- **No per-person rankings or scores** anywhere (from the client survey). Reports aggregate by
+  day, stage and defect only.
+- **Nothing is deleted:** stock moves through a ledger, rejected leather becomes salvage, and
+  every change is in the audit log.
+
+![Reports](docs/screenshots/reports.png)
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Clients
+    B["Browser<br/>(FM, QI, Admin, Constructor)"]
+    C["Camera device<br/>(YOLO / simulator)"]
+  end
+
+  subgraph app["Docker service: app (Next.js 16)"]
+    P["proxy.ts<br/>optimistic session check"]
+    V["Pages + server actions<br/>(View)"]
+    R["api/v1/**/route.ts<br/>(one-line routes)"]
+    CT["controllers<br/>parse · validate · shape"]
+    S["services<br/>business rules, guards,<br/>transactions + audit"]
+    M["models<br/>(only layer that imports Prisma)"]
+  end
+
+  DB[("Docker service: db<br/>PostgreSQL 18<br/>volume: pgdata")]
+  U[["volume: uploads<br/>scan images"]]
+
+  B -->|session cookie| P --> V
+  B --> R
+  C -->|"POST /api/v1/scans<br/>device token"| R
+  V --> S
+  R --> CT --> S --> M --> DB
+  S --> U
+```
+
+- **MVC layering, enforced by ESLint:** a page that imports a model, or a component that imports
+  server code, fails `npm run lint`.
+- **Access:**
+  - Every page calls `requireRole`/`requirePermission` and every API route calls
+    `requireApiPermission`. The proxy is only a fast first check.
+  - Permissions are a role × permission matrix in `src/server/policies`.
+- **Every mutation** runs in one database transaction and writes an audit row in that same
+  transaction.
+
+## Data model
+
+The core tables (`prisma/schema.prisma` has all of them, with indexes). Ids are UUIDv7.
+
+```mermaid
+erDiagram
+  User ||--o{ Batch : registers
+  User ||--o{ BatchStageLog : moves
+  User ||--o{ InventoryMovement : records
+  User ||--o{ ApiToken : creates
+  User ||--o{ AuditLog : "acts in"
+  ShoeType ||--o{ Batch : "is made as"
+  Supplier |o--o{ Batch : supplies
+  Batch ||--o{ BatchStageLog : "passes through"
+  Batch ||--o{ Scan : "is checked by"
+  ApiToken |o--o{ Scan : sends
+  Scan ||--o{ Detection : contains
+  DefectType |o--o{ Detection : classifies
+  Scan ||--o{ ReworkTicket : "opens (Rework)"
+  Scan ||--o{ SalvageItem : "keeps (Reject)"
+  Batch ||--o{ SalvageItem : "rejected from"
+  Batch |o--o{ SalvageItem : "reused in"
+  InventoryItem ||--o{ InventoryMovement : "ledger of"
+  Batch |o--o{ InventoryMovement : "uses stock"
+  Batch |o--o{ CvSettings : "camera points at"
+
+  Batch {
+    string code "B-2026-0001"
+    string rollCode
+    enum currentStage "PREPARATION..FINISHING"
+    enum status "PLANNED, IN_PROGRESS, COMPLETED, CANCELLED"
+  }
+  Scan {
+    int sequence "section number in the batch"
+    enum aiVerdict "PASS, REWORK, REJECT, NEEDS_REVIEW"
+    enum finalVerdict "null while pending review"
+    bool isOverride
+    json thresholdsSnapshot "thresholds used"
+  }
+  Detection {
+    string rawClassKey "what the model sent"
+    bool isUnknownClass
+    float confidence
+    float x_y_width_height "box, 0-1"
+  }
+  InventoryItem {
+    string sku
+    decimal quantityOnHand "changes only via movements"
+    decimal reorderLevel
+  }
+  InventoryMovement {
+    enum type "IN, OUT, ADJUST"
+    decimal quantityDelta
+    string reason
+  }
+  CvSettings {
+    float rejectAtOrAbove "0.9"
+    float reworkAtOrAbove "0.6"
+  }
+```
+
+## Quick start: development
+
+Runs PostgreSQL in Docker and Next.js on your machine, with hot reload. Needs **Node.js 22.12+**
+(24 LTS recommended).
+
+```bash
+cp .env.example .env        # then fill in the blanks (see "Environment" below)
+npm install                 # also generates the Prisma client
+npm run db:up               # starts PostgreSQL in Docker (port 5432, localhost only)
+npm run db:deploy           # applies database migrations
+npm run dev                 # http://localhost:3000. Seeds reference data + demo users on start
+npm run demo:seed           # optional: a past week of production (only on an empty database)
+```
+
+Stop the database with `npm run db:down`. Data persists in the `pgdata` Docker volume.
+
+## Environment
+
+`.env.example` lists every variable with a comment. These need a value:
+
+| Variable                   | What to put                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| `AUTH_SECRET`              | A random secret that signs sessions: `openssl rand -base64 32`. One per machine.     |
+| `BOOTSTRAP_ADMIN_PASSWORD` | 12+ characters. Creates the first System Admin if none exists.                       |
+| `DEMO_USER_PASSWORD`       | 8+ characters. Password for the demo accounts (when `SEED_DEMO_USERS=true`).         |
+| `SEED_DEMO_WEEK`           | `true` to create a past week of production on first start (panel demo). Default off. |
+
+On every start the app makes sure the reference data exists: shoe types, defect types, CV
+thresholds 90% / 60%, and a sample supplier. It never overwrites values an admin has changed.
+With demo users on, it also adds five demo inventory items the first time.
+`npm run db:seed` runs the same steps by hand.
+
+**The demo week** (`SEED_DEMO_WEEK=true` or `npm run demo:seed`) replays the last six working
+days through the real services:
+
+- 14 batches across all stages, with realistic stage times (Upper Making is the slowest);
+- about 290 scans with images;
+- overrides, repairs, salvage, deliveries and stock use, plus two scans left for review.
+
+It uses a fixed random seed, so it shows the same shape every time. It never runs on a database
+that already has batches.
+
+**Sign-in rules:**
+
+- 5 wrong passwords lock an account for 15 minutes.
+- Sessions last 12 hours (one shift).
+- A deactivated user is signed out on their next click.
+- Signing out ends the session on the server.
+- Every sign-in, failure and sign-out is in the audit log.
+
+**Accounts:** the System Admin adds people under **Users**. Each new account and each password
+reset gets a temporary password that is shown once, and the person chooses their own at first
+sign-in.
+
 ## Camera and simulator
 
 The Preparation camera (later the YOLO service on a phone, webcam or dedicated camera) sends each
 capture to `POST /api/v1/scans` with a **device token** (contract in [`docs/API.md`](docs/API.md)).
-Without a camera, the simulator sends realistic scans through the same API:
+Without a camera, the simulator sends realistic scans through the same API from a development
+checkout:
 
 ```bash
 npm run cv:token -- --name "Simulator"   # prints a token once; put it in .env as CV_DEVICE_TOKEN
@@ -104,55 +333,64 @@ npm run cv:token -- --name "Simulator"   # prints a token once; put it in .env a
 npm run cv:simulate -- --count 20 --interval 3
 ```
 
+The simulator can also point at the Docker stack (`CV_BASE_URL=http://localhost:3000`). Create the
+token there under **Admin → API tokens**.
+
 Scans go to the batch chosen on the **Camera** page, or to the batch that has been at Preparation
-the longest. Watch them arrive on the Floor Manager and Quality Inspector homes.
+the longest. They show up live on the Floor Manager and Quality Inspector homes.
 
 ## Scripts
 
-| Command                     | What it does                                                               |
-| --------------------------- | -------------------------------------------------------------------------- |
-| `npm run dev`               | Dev server with hot reload                                                 |
-| `npm run check`             | lint + typecheck + unit tests + build (run before pushing)                 |
-| `npm run lint`              | ESLint, including the MVC layer import rules                               |
-| `npm run typecheck`         | Generate route types, then `tsc --noEmit`                                  |
-| `npm run test`              | Unit tests (Vitest)                                                        |
-| `npm run test:e2e`          | Browser tests (Playwright). Needs `npm run build` and the database running |
-| `npm run format`            | Prettier                                                                   |
-| `npm run db:up` / `db:down` | Start/stop PostgreSQL in Docker                                            |
-| `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`            |
-| `npm run db:deploy`         | Apply pending migrations                                                   |
-| `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)       |
-| `npm run cv:token`          | Create a camera device token (printed once)                                |
-| `npm run cv:simulate`       | Send simulated camera scans (`--count`, `--interval`, `--batch`)           |
-| `npm run db:studio`         | Browse the database in Prisma Studio                                       |
+| Command                     | What it does                                                             |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `npm run dev`               | Dev server with hot reload                                               |
+| `npm run check`             | lint + typecheck + unit tests + build (run before pushing)               |
+| `npm run lint`              | ESLint, including the MVC layer import rules                             |
+| `npm run typecheck`         | Generate route types, then `tsc --noEmit`                                |
+| `npm run test`              | Unit tests (Vitest)                                                      |
+| `npm run test:e2e`          | Browser tests (Playwright + axe). Needs `npm run build` and the database |
+| `npm run format`            | Prettier                                                                 |
+| `npm run db:up` / `db:down` | Start/stop PostgreSQL in Docker                                          |
+| `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`          |
+| `npm run db:deploy`         | Apply pending migrations                                                 |
+| `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)     |
+| `npm run demo:seed`         | Seed a past week of production (only when there are no batches)          |
+| `npm run cv:token`          | Create a camera device token (printed once)                              |
+| `npm run cv:simulate`       | Send simulated camera scans (`--count`, `--interval`, `--batch`)         |
+| `npm run db:studio`         | Browse the database in Prisma Studio                                     |
 
 First time running e2e: `npx playwright install chromium`. If Chromium is already installed
-elsewhere, set `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome` instead.
+elsewhere, set `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome` instead. To test the Docker stack, set
+`E2E_BASE_URL=http://localhost:3000`.
 
 ## Project structure (MVC)
 
 ```
 src/
-  app/                 VIEW: pages and layouts (one folder per role from Phase 1)
-    api/**/route.ts    ROUTES: one-line files that hand off to a controller
+  app/                 VIEW: pages and layouts, one folder per area
+    api/v1/**/route.ts ROUTES: one-line files that hand off to a controller
   server/
     controllers/       CONTROLLER: parse/validate request → call service → shape response
-    services/          business rules (decision engine, batch counts, stage flow)
+    services/          business rules (decision engine, stage flow, ledger, reports, demo seed)
     models/            MODEL: data access; the only layer that imports Prisma
     validators/        Zod schemas shared by API and forms
-    policies/          who can do what (role permissions)
+    policies/          who can do what (role × permission), page and API guards
     lib/               env, Prisma client, logger, errors, HTTP helpers
   components/ui/       shadcn-style primitives, styled with design tokens
-  components/features/ feature components (VerdictBadge, ...)
+  components/features/ feature components (VerdictBadge, charts, app shell, ...)
   styles/tokens.css    design tokens (see DESIGN.md)
 prisma/                schema, migrations, seed
-tests/unit, tests/e2e  Vitest and Playwright tests
+tests/unit, tests/e2e  Vitest and Playwright tests (including a smoke test per role)
 docker/                container entrypoint
-docs/                  status, roadmap, decisions, API, client survey, master prompt
+docs/                  status, roadmap, decisions, API, UI audit, client survey, screenshots
 ```
 
-ESLint enforces the layers. For example, a page that imports a model, or a component that imports
-server code, fails `npm run lint`.
+## Quality checks
+
+- **CI** (GitHub Actions) runs lint, typecheck, unit tests, the build and the e2e suite. It also
+  builds the Docker stack, checks the demo week seeds once, and checks the stock ledger adds up.
+- **Accessibility:** the e2e smoke test runs axe (WCAG 2.1 A/AA) on every page of every role.
+- **UI audit:** the findings and their fixes are in [`docs/UI_AUDIT.md`](docs/UI_AUDIT.md).
 
 ## API
 
