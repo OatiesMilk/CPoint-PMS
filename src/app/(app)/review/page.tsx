@@ -5,6 +5,9 @@
  * Worst: a flagged section waits while the roll is cut. Oldest first, one click per decision.
  */
 import type { Metadata } from "next";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { connection } from "next/server";
 import { CircleCheck } from "lucide-react";
@@ -25,10 +28,13 @@ import { ReviewRowActions } from "./review-row-actions";
 
 export const metadata: Metadata = { title: "Review queue" };
 
-export default async function ReviewPage() {
+export default async function ReviewPage({ searchParams }: PageProps<"/review">) {
   await requirePermission("scan:decide");
   await connection();
-  const { pending, todayAuto } = await reviewQueue();
+  const raw = (await searchParams).batch;
+  const batch =
+    typeof raw === "string" && /^[A-Za-z0-9-]{1,30}$/.test(raw.trim()) ? raw.trim() : undefined;
+  const { pending, todayAuto } = await reviewQueue(new Date(), batch);
 
   return (
     <>
@@ -37,11 +43,37 @@ export default async function ReviewPage() {
         description="Scans the camera couldn’t decide, and today’s Rework and Reject calls."
       />
 
+      <form method="get" className="flex items-end gap-2" aria-label="Filter the review queue">
+        <div className="flex w-64 flex-col gap-1.5">
+          <Label htmlFor="review-batch">Batch</Label>
+          <Input
+            id="review-batch"
+            name="batch"
+            placeholder="e.g. B-2026-0012"
+            defaultValue={batch}
+          />
+        </div>
+        <Button type="submit" variant="secondary">
+          Filter
+        </Button>
+        {batch && (
+          <Button asChild variant="ghost">
+            <Link href="/review">Clear</Link>
+          </Button>
+        )}
+      </form>
+
       <section aria-labelledby="pending-heading" className="flex flex-col gap-3">
         <h2 id="pending-heading" className="text-xl font-semibold">
           Needs a decision{" "}
           <span className="text-muted-foreground tabular-nums">({pending.total})</span>
         </h2>
+        {pending.total > pending.rows.length && (
+          <p className="text-sm text-muted-foreground" role="note">
+            Showing the {pending.rows.length} oldest of {pending.total}. Decide these first, or
+            filter by batch to find a specific section.
+          </p>
+        )}
         {pending.total === 0 ? (
           <p className="flex items-center gap-2 rounded-lg border border-dashed px-5 py-8 text-muted-foreground">
             <CircleCheck aria-hidden className="size-5 text-pass" />

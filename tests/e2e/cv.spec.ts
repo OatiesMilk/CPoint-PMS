@@ -131,7 +131,7 @@ test.describe("people deciding", () => {
     await page.goto("/login");
     await signIn(page, ACCOUNTS.inspector.email);
     await expect(page).toHaveURL(ACCOUNTS.inspector.home);
-    await page.goto("/review");
+    await page.goto(`/review?batch=${batch.code}`);
     const group = page.getByRole("group", { name: `Decide ${batch.code} · #1` });
     await expect(group).toBeVisible();
     await group.getByRole("button", { name: "Pass" }).click();

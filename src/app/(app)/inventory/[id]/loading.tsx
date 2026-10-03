@@ -1,7 +1,7 @@
 // Skeleton that matches the item page (header with the on-hand number, then the history).
 export default function Loading() {
   return (
-    <div aria-busy="true" aria-label="Loading item" className="flex flex-col gap-6">
+    <div role="status" aria-busy="true" aria-label="Loading item" className="flex flex-col gap-6">
       <div className="h-5 w-24 animate-pulse rounded-md bg-muted" />
       <div className="flex items-start justify-between border-b pb-6">
         <div className="flex flex-col gap-2">

@@ -78,7 +78,12 @@ export function LatestScansWidget({ className }: { className?: string }) {
       </CardHeader>
       <CardContent className="flex-1">
         {isPending ? (
-          <ul aria-busy="true" aria-label="Loading scans" className="flex flex-col gap-2">
+          <ul
+            role="status"
+            aria-busy="true"
+            aria-label="Loading scans"
+            className="flex flex-col gap-2"
+          >
             {Array.from({ length: 5 }, (_, i) => (
               <li key={i} className="h-8 animate-pulse rounded-md bg-muted" />
             ))}
@@ -92,7 +97,7 @@ export function LatestScansWidget({ className }: { className?: string }) {
             .
           </p>
         ) : (
-          <ul className={cn("flex flex-col divide-y", isError && "opacity-60")}>
+          <ul className={cn("flex flex-col divide-y", isError && "grayscale")}>
             {data.map((s) => (
               <li key={s.id}>
                 <Link

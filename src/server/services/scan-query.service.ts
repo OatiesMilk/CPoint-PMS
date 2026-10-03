@@ -91,12 +91,19 @@ export function startOfManilaDay(now: Date = new Date()): Date {
   return new Date(Date.UTC(y, m - 1, d) - 8 * 3_600_000);
 }
 
-export async function reviewQueue(now: Date = new Date()) {
+export const REVIEW_QUEUE_LIMIT = 50;
+
+/** Oldest pending first (fair to the waiting sections); `batchCode` narrows both lists. */
+export async function reviewQueue(now: Date = new Date(), batchCode?: string) {
   const [pending, todayAuto] = await Promise.all([
-    listScanRows({ status: "PENDING_REVIEW" }, { skip: 0, take: 50 }, "oldest"),
     listScanRows(
-      { aiVerdictIn: ["REWORK", "REJECT"], since: startOfManilaDay(now) },
-      { skip: 0, take: 50 },
+      { status: "PENDING_REVIEW", batchCode },
+      { skip: 0, take: REVIEW_QUEUE_LIMIT },
+      "oldest",
+    ),
+    listScanRows(
+      { aiVerdictIn: ["REWORK", "REJECT"], since: startOfManilaDay(now), batchCode },
+      { skip: 0, take: REVIEW_QUEUE_LIMIT },
     ),
   ]);
   return {

@@ -69,16 +69,22 @@ export default async function AdminHome() {
               { label: "Application", ok: true, text: "Up" },
               { label: "Database", ok: dbUp, text: dbUp ? "Connected" : "Not reachable" },
             ].map((row) => (
-              <div key={row.label} className="flex items-center gap-2.5">
-                {row.ok ? (
-                  <CheckCircle2 aria-hidden className="size-5 text-pass" />
-                ) : (
-                  <CircleAlert aria-hidden className="size-5 text-reject" />
-                )}
-                <div>
-                  <dt className="text-sm text-muted-foreground">{row.label}</dt>
-                  <dd className={row.ok ? "font-medium" : "font-medium text-reject"}>{row.text}</dd>
-                </div>
+              <div key={row.label}>
+                <dt className="text-sm text-muted-foreground">{row.label}</dt>
+                <dd
+                  className={
+                    row.ok
+                      ? "flex items-center gap-2 font-medium"
+                      : "flex items-center gap-2 font-medium text-reject"
+                  }
+                >
+                  {row.ok ? (
+                    <CheckCircle2 aria-hidden className="size-5 text-pass" />
+                  ) : (
+                    <CircleAlert aria-hidden className="size-5 text-reject" />
+                  )}
+                  {row.text}
+                </dd>
               </div>
             ))}
           </dl>
