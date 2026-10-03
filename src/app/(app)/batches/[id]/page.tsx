@@ -293,12 +293,14 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
                 </dl>
               </>
             )}
-            <Link
-              href={`/scans?batch=${batch.code}`}
-              className="text-sm underline underline-offset-4"
-            >
-              All {y.scanned} scan{y.scanned === 1 ? "" : "s"} of this batch
-            </Link>
+            {y.scanned > 0 && (
+              <Link
+                href={`/scans?batch=${batch.code}`}
+                className="text-sm underline underline-offset-4"
+              >
+                All {y.scanned} scan{y.scanned === 1 ? "" : "s"} of this batch
+              </Link>
+            )}
           </CardContent>
         </Card>
       </div>

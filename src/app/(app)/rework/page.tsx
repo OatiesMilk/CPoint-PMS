@@ -72,6 +72,7 @@ function Column({
   empty,
   now,
   tone,
+  limit,
 }: {
   title: string;
   icon: typeof Wrench;
@@ -79,7 +80,10 @@ function Column({
   empty: string;
   now: number;
   tone?: string;
+  /** Show at most this many cards (the finished column grows all week). */
+  limit?: number;
 }) {
+  const shown = limit ? cards.slice(0, limit) : cards;
   return (
     <section aria-label={title} className="flex min-w-0 flex-col gap-3 rounded-lg bg-muted/50 p-3">
       <h2 className={cn("flex items-center gap-2 font-semibold", tone)}>
@@ -93,9 +97,14 @@ function Column({
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {cards.map((c) => (
+          {shown.map((c) => (
             <Card key={c.id} card={c} now={now} />
           ))}
+          {cards.length > shown.length && (
+            <li className="px-1 text-sm text-muted-foreground">
+              {cards.length - shown.length} more finished this week. Filter by batch to find one.
+            </li>
+          )}
         </ul>
       )}
     </section>
@@ -157,6 +166,7 @@ export default async function ReworkPage({ searchParams }: PageProps<"/rework">)
           title="Repaired, last 7 days"
           icon={CircleCheck}
           cards={board.done}
+          limit={12}
           now={now}
           tone="text-pass"
           empty="No repairs finished in the last 7 days."

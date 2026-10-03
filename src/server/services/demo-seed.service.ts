@@ -354,13 +354,15 @@ export async function seedDemoWeek(
   }
 
   // ── salvage: some rejected leather reused in open batches, some discarded ──
-  const open = await listOpenBatches();
+  // Reuse goes to batches on the line (not tomorrow's planned roll), at most 4 pieces each.
+  const open = (await listOpenBatches()).filter((b) => b.status === "IN_PROGRESS");
+  const reused = new Map<string, number>();
   for (const item of salvage) {
     const when = new Date(Math.min(item.at.getTime() + 6 * HOUR, now.getTime() - 10 * MINUTE));
-    const target = open.find((b) => b.id !== item.originBatchId);
-    const r = random();
-    if (r < 0.35 && target) {
-      await assignSalvage(
+    const target = open.find((b) => b.id !== item.originBatchId && (reused.get(b.id) ?? 0) < 4);
+    const roll = random();
+    if (target && roll < 0.35) {
+      const ok = await assignSalvage(
         item.id,
         {
           batchId: target.id,
@@ -369,8 +371,12 @@ export async function seedDemoWeek(
         },
         fm,
         when,
-      ).catch(() => undefined);
-    } else if (r < 0.6) {
+      ).then(
+        () => true,
+        () => false,
+      );
+      if (ok) reused.set(target.id, (reused.get(target.id) ?? 0) + 1);
+    } else if (roll < 0.6) {
       await discardSalvage(
         item.id,
         {

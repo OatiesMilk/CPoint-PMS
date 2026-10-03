@@ -74,8 +74,9 @@ type Props = {
   signOutAction: () => Promise<void>;
 };
 
-function isActive(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+/** Sections match their sub-pages; a role's home (e.g. /admin) only matches itself. */
+function isActive(pathname: string, href: string, exact = false) {
+  return pathname === href || (!exact && pathname.startsWith(`${href}/`));
 }
 
 export function Sidebar({ sections, user, signOutAction }: Props) {
@@ -118,7 +119,7 @@ export function Sidebar({ sections, user, signOutAction }: Props) {
                     </li>
                   );
                 }
-                const active = isActive(pathname, item.href);
+                const active = isActive(pathname, item.href, item.icon === "overview");
                 return (
                   <li key={item.href}>
                     <Link

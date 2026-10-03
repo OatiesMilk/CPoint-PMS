@@ -100,7 +100,6 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                 <TableHead>Batch</TableHead>
                 <TableHead>Roll code</TableHead>
                 <TableHead>Shoe type</TableHead>
-                <TableHead>Supplier</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Received</TableHead>
@@ -121,9 +120,6 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                     </TableCell>
                     <TableCell className="font-mono">{b.rollCode}</TableCell>
                     <TableCell>{b.shoeType.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {b.supplier?.name ?? "—"}
-                    </TableCell>
                     <TableCell>
                       {b.status === "IN_PROGRESS" ? (
                         <span>
@@ -139,7 +135,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <BatchStatusBadge status={b.status} />
                         <InRepairBadge count={b.openRepairs} />
                       </div>

@@ -112,7 +112,8 @@ export function SalvageActions({
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <div className="flex gap-2">
+      {/* Destructive set apart from the reuse action (DESIGN.md → Hierarchy). */}
+      <div className="flex gap-6">
         <Button size="sm" variant="secondary" disabled={pending} onClick={() => open("assign")}>
           Use in batch…
         </Button>

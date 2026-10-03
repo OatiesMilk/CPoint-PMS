@@ -102,7 +102,7 @@ export function LatestScansWidget({ className }: { className?: string }) {
               <li key={s.id}>
                 <Link
                   href={`/scans/${s.id}`}
-                  className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-3 py-2 hover:bg-accent/50"
+                  className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 py-2 hover:bg-accent/50"
                 >
                   <time
                     dateTime={s.createdAt}
@@ -110,13 +110,13 @@ export function LatestScansWidget({ className }: { className?: string }) {
                   >
                     {formatManilaTime(s.createdAt)}
                   </time>
-                  <span className="min-w-0 truncate">
-                    <span className="font-mono text-sm">{s.batchCode}</span>
-                    <span className="text-muted-foreground"> · #{s.sequence}</span>
+                  {/* The batch and section always show in full; the defect may truncate (audit). */}
+                  <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+                    <span className="font-mono text-sm whitespace-nowrap">{s.batchCode}</span>{" "}
+                    <span className="whitespace-nowrap text-muted-foreground">· #{s.sequence}</span>
                     {s.topDefect && (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {s.topDefect.label} {Math.round(s.topDefect.confidence * 100)}%
+                      <span className="min-w-0 truncate text-sm text-muted-foreground">
+                        {s.topDefect.label} {Math.round(s.topDefect.confidence * 100)}%
                       </span>
                     )}
                   </span>
