@@ -64,7 +64,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         href: "/reports",
         icon: "reports",
         permission: "report:quality",
-        phase: 7,
       },
     ],
   },

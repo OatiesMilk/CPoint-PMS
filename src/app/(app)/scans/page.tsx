@@ -39,7 +39,7 @@ export default async function ScansPage({ searchParams }: PageProps<"/scans">) {
   await connection();
   const query = scanListQuerySchema.parse(await searchParams);
   const filtered = Boolean(
-    query.verdict || query.status || query.source || query.batch || query.override,
+    query.verdict || query.status || query.source || query.batch || query.override || query.defect,
   );
   const { rows, total, page, pageCount } = await listScans(query);
 
@@ -59,6 +59,15 @@ export default async function ScansPage({ searchParams }: PageProps<"/scans">) {
         description="Every leather section the Preparation camera checked."
       />
       {(total > 0 || filtered) && <ScanFilters />}
+      {query.defect && (
+        <p className="text-sm text-muted-foreground">
+          Showing scans with a <span className="font-mono text-foreground">{query.defect}</span>{" "}
+          detection ·{" "}
+          <Link href="/scans" className="underline underline-offset-4">
+            clear
+          </Link>
+        </p>
+      )}
 
       {total === 0 && !filtered ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-16 text-center">

@@ -75,6 +75,7 @@ export type ScanFilters = {
   overridesOnly?: boolean;
   since?: Date;
   aiVerdictIn?: Verdict[];
+  defectKey?: string;
 };
 
 function scanWhere(f: ScanFilters): Prisma.ScanWhereInput {
@@ -90,6 +91,7 @@ function scanWhere(f: ScanFilters): Prisma.ScanWhereInput {
     ...(f.aiVerdictIn ? { aiVerdict: { in: f.aiVerdictIn } } : {}),
     ...(f.batchCode ? { batch: { code: { contains: f.batchCode, mode: "insensitive" } } } : {}),
     ...(f.overridesOnly ? { isOverride: true } : {}),
+    ...(f.defectKey ? { detections: { some: { rawClassKey: f.defectKey } } } : {}),
     ...(f.since ? { createdAt: { gte: f.since } } : {}),
   };
 }

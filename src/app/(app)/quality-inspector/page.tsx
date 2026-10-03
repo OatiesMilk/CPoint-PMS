@@ -8,12 +8,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { ArrowRight, CircleHelp, ListChecks, UserCheck } from "lucide-react";
-import { ComingSoonCard } from "@/components/features/coming-soon-card";
+import { AgreementCard, DefectsTodayCard } from "@/components/features/reports/home-cards";
 import { PageHeader } from "@/components/features/page-header";
 import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/server/policies/guard";
+import { agreementSummary, defectsToday } from "@/server/services/report.service";
 import { inspectorSummary } from "@/server/services/scan-query.service";
 
 export const metadata: Metadata = { title: "Overview" };
@@ -21,7 +22,11 @@ export const metadata: Metadata = { title: "Overview" };
 export default async function QualityInspectorHome() {
   const user = await requireRole("QUALITY_INSPECTOR");
   await connection();
-  const summary = await inspectorSummary();
+  const [summary, defects, agreement] = await Promise.all([
+    inspectorSummary(),
+    defectsToday(),
+    agreementSummary(),
+  ]);
 
   const tiles = [
     {
@@ -84,16 +89,8 @@ export default async function QualityInspectorHome() {
         ))}
         <LatestScansWidget className="col-span-2" />
         <div className="flex flex-col gap-4">
-          <ComingSoonCard
-            phase={7}
-            title="Defects by type"
-            description="Today's cut, hole, abrasion and dirt counts."
-          />
-          <ComingSoonCard
-            phase={7}
-            title="AI agreement rate"
-            description="How often people agree with the camera's decision."
-          />
+          <DefectsTodayCard defects={defects} />
+          <AgreementCard {...agreement} />
         </div>
       </div>
     </>

@@ -50,6 +50,19 @@
   --review: oklch(0.5 0.14 255);
   --review-soft: oklch(0.95 0.03 255);
 
+  /* ---------- charts (D-025) ----------
+     Chart-only steps of the verdict hues, re-stepped in lightness so stacked neighbours stay
+     apart under colour-vision deficiency (Rework vs Reject). Validated with the dataviz
+     validate_palette.js on the card surface: light passes (Rework contrast 2.8:1, so charts
+     always ship a legend + table view), dark passes all checks. Badges keep the tokens above. */
+  --chart-pass: oklch(0.5 0.13 150);
+  --chart-rework: oklch(0.7 0.15 62);
+  --chart-reject: oklch(0.5 0.2 27);
+  --chart-review: oklch(0.5 0.14 255);
+  --chart-bar: oklch(0.45 0.02 85); /* single-hue magnitude bars */
+  --chart-bar-muted: oklch(0.82 0.01 85);
+  --chart-grid: oklch(0.92 0.006 95);
+
   /* ---------- sidebar ---------- */
   --sidebar: oklch(0.965 0.006 95);
   --sidebar-foreground: var(--foreground);
@@ -103,6 +116,14 @@
   --reject-soft: oklch(0.3 0.06 27);
   --review: oklch(0.76 0.12 255);
   --review-soft: oklch(0.29 0.05 255);
+
+  --chart-pass: oklch(0.5 0.14 150);
+  --chart-rework: oklch(0.665 0.145 75);
+  --chart-reject: oklch(0.54 0.2 25);
+  --chart-review: oklch(0.63 0.13 255);
+  --chart-bar: oklch(0.78 0.012 90);
+  --chart-bar-muted: oklch(0.38 0.01 85);
+  --chart-grid: oklch(0.27 0.008 85);
 
   --sidebar: oklch(0.15 0.008 85);
   --sidebar-foreground: var(--foreground);

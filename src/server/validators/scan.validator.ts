@@ -68,6 +68,12 @@ export const scanListQuerySchema = z.object({
   source: z.enum(ScanSource).optional().catch(undefined),
   batch: z.string().trim().max(30).optional().catch(undefined), // batch code, e.g. B-2026-0001
   override: z.enum(["1"]).optional().catch(undefined),
+  /** A defect class key (from Reports → Defects by type): scans with a detection of it. */
+  defect: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/)
+    .optional()
+    .catch(undefined),
   page: z.coerce.number().int().min(1).max(10_000).optional().catch(undefined),
   limit: z.coerce.number().int().min(1).max(50).optional().catch(undefined),
 });

@@ -53,3 +53,12 @@ export function formatManilaTime(value: Date | string): string {
 export function formatPercent(fraction: number | null | undefined): string {
   return fraction === null || fraction === undefined ? "—" : `${Math.round(fraction * 100)}%`;
 }
+
+/** "Oct 3" for a YYYY-MM-DD calendar day (no time zone shift). */
+export function formatDayLabel(day: string): string {
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${day}T00:00:00Z`));
+}

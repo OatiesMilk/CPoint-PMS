@@ -62,6 +62,7 @@ function filtersFrom(q: ScanListQuery): ScanFilters {
     source: q.source,
     batchCode: q.batch,
     overridesOnly: q.override === "1",
+    defectKey: q.defect,
   };
 }
 
