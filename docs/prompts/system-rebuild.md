@@ -226,29 +226,29 @@ reorder level. Creating a batch can optionally consume one leather roll from inv
 <roles_and_modules>
 Seed one demo account per role (password from `.env`, documented in README).
 
-| Module                                                       | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor |
-| ------------------------------------------------------------ | -------------- | ----------------- | ------------------ | ---------------- |
-| Overview dashboard (role-specific)                           | ✅             | ✅                | ✅ (system health) | my requests      |
-| Batches: list / create / edit / advance stage                | ✅ full        | view              | view               | —                |
-| Camera (CV placeholder page)                                 | ✅             | ✅                | ✅                 | —                |
-| "Latest scans" widget (polls every 5s)                       | ✅ on overview | ✅ on overview    | —                  | —                |
-| Recent decisions + override                                  | ✅             | ✅                | —                  | —                |
-| Review queue: decide flagged scans (D-028)                   | view           | ✅                | —                  | —                |
-| Scan history + detail (image + boxes)                        | ✅             | ✅                | view               | —                |
-| Rework board                                                 | ✅             | ✅                | —                  | —                |
-| Salvage                                                      | ✅             | view              | —                  | —                |
-| Inventory + movements                                        | ✅             | —                 | view               | —                |
-| Reports: daily summary, defects, stage durations, CSV export | ✅             | ✅ (quality only) | —                  | —                |
-| Users (CRUD, deactivate, reset password)                     | —              | —                 | ✅                 | —                |
-| Defect types, CV thresholds, shoe types, suppliers           | —              | —                 | ✅                 | —                |
-| CV device API tokens (create / revoke, shown once)           | —              | —                 | ✅                 | —                |
-| Audit log (filterable)                                       | —              | —                 | ✅                 | —                |
-| Procurement: see requests (D-029)                            | ✅ all         | —                 | view all           | own              |
-| Procurement: send / cancel own pending request               | —              | —                 | —                  | designated only  |
-| Procurement: approve / reject / mark received                | ✅             | —                 | —                  | —                |
-| Procurement: remarks                                         | ✅             | —                 | —                  | own, designated  |
-| Procurement: choose who can request (D-030)                  | ✅             | —                 | ✅                 | —                |
-| Constructor home: my open requests (or how to get access)    | —              | —                 | —                  | ✅               |
+| Module                                                       | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor                 |
+| ------------------------------------------------------------ | -------------- | ----------------- | ------------------ | -------------------------------- |
+| Overview dashboard (role-specific)                           | ✅             | ✅                | ✅ (system health) | my requests                      |
+| Batches: list / create / edit / advance stage                | ✅ full        | view              | view               | —                                |
+| Camera (CV placeholder page)                                 | ✅             | ✅                | ✅                 | —                                |
+| "Latest scans" widget (polls every 5s)                       | ✅ on overview | ✅ on overview    | —                  | —                                |
+| Recent decisions + override                                  | ✅             | ✅                | —                  | —                                |
+| Review queue: decide flagged scans (D-028)                   | view           | ✅                | —                  | —                                |
+| Scan history + detail (image + boxes)                        | ✅             | ✅                | view               | —                                |
+| Rework board                                                 | ✅             | ✅                | —                  | —                                |
+| Salvage                                                      | ✅             | view              | —                  | —                                |
+| Inventory + movements                                        | ✅             | —                 | view               | —                                |
+| Reports: daily summary, defects, stage durations, CSV export | ✅             | ✅ (quality only) | —                  | —                                |
+| Users (CRUD, deactivate, reset password)                     | —              | —                 | ✅                 | —                                |
+| Defect types, CV thresholds, shoe types, suppliers           | —              | —                 | ✅                 | —                                |
+| CV device API tokens (create / revoke, shown once)           | —              | —                 | ✅                 | —                                |
+| Audit log (filterable)                                       | —              | —                 | ✅                 | —                                |
+| Procurement: see requests (D-029)                            | ✅ all         | —                 | view all           | own                              |
+| Procurement: send / cancel own pending request               | —              | —                 | —                  | ✅ (leather rolls: allowed ones) |
+| Procurement: approve / reject / mark received                | ✅             | —                 | —                  | —                                |
+| Procurement: remarks                                         | ✅             | —                 | —                  | own                              |
+| Procurement: choose who can request leather rolls (D-031)    | ✅             | —                 | ✅                 | —                                |
+| Constructor home: my open requests (or how to get access)    | —              | —                 | —                  | ✅                               |
 
 **Floor Manager overview:** today's scans and pass/rework/reject split, open reworks, batches
 per stage (shows the bottleneck), low-stock alerts, pending purchase requests, and Latest scans.

@@ -9,7 +9,7 @@ session picks up where the last one stopped, even when a different teammate runs
 | -------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------- |
 | `CLAUDE.md`                      | Project rules. **Auto-loaded every session**, and it auto-imports `docs/STATUS.md` | Rarely; when rules change       |
 | `docs/STATUS.md`                 | "Where are we right now?" Overwritten each session                                 | Claude, via `/wrap-up`          |
-| `docs/ROADMAP.md`                | Phases 0–8 with acceptance checkboxes                                              | Claude ticks; team edits scope  |
+| `docs/ROADMAP.md`                | Phases (0–9 so far) with acceptance checkboxes                                     | Claude ticks; team edits scope  |
 | `docs/DECISIONS.md`              | Why things are the way they are (append-only)                                      | Claude + team                   |
 | `docs/SESSION_LOG.md`            | History, newest on top                                                             | Claude, via `/wrap-up`          |
 | `docs/prompts/system-rebuild.md` | The master spec                                                                    | Team (log changes in DECISIONS) |
@@ -18,15 +18,15 @@ session picks up where the last one stopped, even when a different teammate runs
 
 Claude has **no memory between sessions** except these files. If it's not written down, it didn't happen.
 
-## First run (Phase 0)
+## Starting new work
 
-1. Merge this branch into `main`, or check it out, so that the docs are present.
-2. In the repo root, start Claude Code with Opus and paste:
-   ```
-   Read docs/prompts/system-rebuild.md and run Phase 0 from docs/ROADMAP.md.
-   Start in plan mode: show me the plan before changing files.
-   ```
-3. Review the plan, approve it, and let it work. It stops at the end of the phase with a report.
+Phases 0–9 are done (see `docs/ROADMAP.md`). For a new feature or a client change:
+
+1. `git checkout main && git pull`, then create a branch (e.g. `feature/<topic>`).
+2. Start Claude Code in the repo root and paste the prompt from `docs/STATUS.md` → Next step, or
+   write the request in `docs/prompts/<topic>.md` (see `procurement.md` for the shape) and ask
+   Claude to "read it and start with Step 1 in plan mode".
+3. Review the plan, approve it, and let it work. It stops with a report; then open the PR.
 
 ## The session loop (every phase after that)
 
@@ -34,7 +34,8 @@ Claude has **no memory between sessions** except these files. If it's not writte
 /resume                       → Claude reports status and proposes this session's plan
 (you) "go" or adjust the plan → Claude builds the phase in small commits
 (you) review in the browser   → `docker compose up -d db && npm run dev`, click through it
-/wrap-up                      → gates, docs updated, commit, push, paste-ready next prompt
+/wrap-up                      → gates, docs updated, commit, push the branch, next prompt
+(you) open the PR into main   → CI runs (check, e2e, Docker demo week); review and merge it
 ```
 
 Keep **one phase per session**. Long sessions get compacted and lose detail. A fresh session plus
@@ -60,17 +61,19 @@ STATUS.md is more reliable.
 ## Working as a team of four
 
 - **One driver per phase.** Two people running Claude on the same branch at once will create conflicts.
-- To work in parallel, split by phase _after Phase 1_ (the schema), each on a feature branch off
-  `system-rebuild` (e.g. `system-rebuild/inventory`). Merge back with a PR, and run `/wrap-up` on
-  `system-rebuild` after each merge so STATUS stays the single truth.
-- Good parallel pairs once Phase 3 is done: **Phase 5 (Inventory)** with **Phase 6 (Admin)**.
+- **Branches (D-032):** `main` is the base. Each session works on its own branch from the latest
+  `main` (e.g. `feature/procurement-csv`), pushes it, and the team opens and merges the PR. Nobody
+  pushes to `main` directly. `system-rebuild` holds Phases 0–8 and is no longer used.
+- To work in parallel, give each person a separate feature on a separate branch. Merge one PR
+  before starting a session that depends on it, and keep schema changes to one branch at a time.
 - Always `git pull` before starting a session. STATUS.md is only as fresh as your checkout.
 - Write your name in the "Who" line of the session log. Your panel may ask who built what.
 
 ## When the real camera module is ready
 
 Point the YOLO script at `POST /api/v1/scans` with a device token from Admin → API tokens, and add
-the new defect classes in Admin → Defect types. No app code should need to change (D-011). Then ask
+the new defect classes in Admin → Defect types. No app code should need to change (D-011). Scans
+with a class the system doesn't know yet wait in the Quality Inspector's review queue (D-028). Then ask
 Claude to "replace the Camera placeholder with live phone/webcam capture" as a new roadmap phase.
 
 ## Troubleshooting Claude sessions

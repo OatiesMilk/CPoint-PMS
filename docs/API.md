@@ -207,8 +207,9 @@ Low stock means an active item with `quantityOnHand ≤ reorderLevel` (out of st
 
 ## Procurement (session)
 
-Purchase requests (D-029, D-030). A **designated** Shoe Constructor asks for materials; the Floor
-Manager approves or rejects, then marks the request received. A request is never edited after it's
+Purchase requests (D-029, D-031). Any Shoe Constructor asks for materials; **leather rolls** only
+if the Floor Manager or System Admin has allowed them. The Floor Manager approves or rejects every
+request, then marks it received. A request is never edited after it's
 sent: cancel it and send a new one. Every change adds a timeline event and an audit row.
 
 ```
@@ -217,30 +218,32 @@ PENDING ─approve─▶ APPROVED ─receive─▶ RECEIVED
    └─cancel (requester)─▶ CANCELLED
 ```
 
-| Method & path                                    | Who                                    | Body / query                                                                              |
-| ------------------------------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `GET /api/v1/procurement/requests`               | `procurement:read` (constructors: own) | `?status=&category=&item=&from=&to=&page=` → `{ rows, total, counts, page, pageCount }`   |
-| `POST /api/v1/procurement/requests`              | designated requester                   | `RequestForm` → `201 { id, code, alreadyRequested[] }`                                    |
-| `GET /api/v1/procurement/requests/{id}`          | `procurement:read` (constructors: own) | lines (stock snapshot + current stock), `events`, `remarks`, `actions`, `canRemark`       |
-| `POST /api/v1/procurement/requests/{id}/approve` | `procurement:decide` (FM)              | `{ note? }` (send `{}` for none)                                                          |
-| `POST /api/v1/procurement/requests/{id}/reject`  | `procurement:decide` (FM)              | `{ reason }` (3–300)                                                                      |
-| `POST /api/v1/procurement/requests/{id}/receive` | `procurement:decide` (FM)              | no body. Posts an inventory **IN** ("Received for PR-…") for every line linked to an item |
-| `POST /api/v1/procurement/requests/{id}/cancel`  | the requester, while designated        | `{ note? }`                                                                               |
-| `POST /api/v1/procurement/requests/{id}/remarks` | FM; a designated requester on own      | `{ body }` (1–500) → `201`. Remarks are never edited or deleted                           |
-| `GET /api/v1/procurement/items`                  | designated requester                   | active items: `sku, name, category, unit, onHand, reorderLevel, low, openRequestCode`     |
-| `GET /api/v1/procurement/requesters`             | `procurement:designate` (FM, Admin)    | active Shoe Constructors with `canRequestMaterials`                                       |
-| `PUT /api/v1/procurement/requesters/{userId}`    | `procurement:designate` (FM, Admin)    | `{ canRequestMaterials }`. `409` unless the person is an active Shoe Constructor          |
+| Method & path                                    | Who                                                             | Body / query                                                                                                                                       |
+| ------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/procurement/requests`               | `procurement:read` (constructors: own)                          | `?status=&category=&item=&from=&to=&page=` → `{ rows, total, counts, page, pageCount }`                                                            |
+| `POST /api/v1/procurement/requests`              | `procurement:request` (constructors; leather rolls need the OK) | `RequestForm` → `201 { id, code, alreadyRequested[] }`                                                                                             |
+| `GET /api/v1/procurement/requests/{id}`          | `procurement:read` (constructors: own)                          | lines (stock snapshot + current stock), `events`, `remarks`, `actions`, `canRemark`                                                                |
+| `POST /api/v1/procurement/requests/{id}/approve` | `procurement:decide` (FM)                                       | `{ note? }` (send `{}` for none)                                                                                                                   |
+| `POST /api/v1/procurement/requests/{id}/reject`  | `procurement:decide` (FM)                                       | `{ reason }` (3–300)                                                                                                                               |
+| `POST /api/v1/procurement/requests/{id}/receive` | `procurement:decide` (FM)                                       | no body. Posts an inventory **IN** ("Received for PR-…") for every line linked to an item                                                          |
+| `POST /api/v1/procurement/requests/{id}/cancel`  | the requester                                                   | `{ note? }`                                                                                                                                        |
+| `POST /api/v1/procurement/requests/{id}/remarks` | FM; the requester on their own                                  | `{ body }` (1–500) → `201`. Remarks are never edited or deleted                                                                                    |
+| `GET /api/v1/procurement/items`                  | `procurement:request`                                           | active items: `sku, name, category, unit, onHand, reorderLevel, low, allowed, openRequestCode` (`allowed: false` for leather rolls without the OK) |
+| `GET /api/v1/procurement/requesters`             | `procurement:designate` (FM, Admin)                             | active Shoe Constructors with `canRequestLeatherRolls`                                                                                             |
+| `PUT /api/v1/procurement/requesters/{userId}`    | `procurement:designate` (FM, Admin)                             | `{ canRequestLeatherRolls }`. `409` unless the person is an active Shoe Constructor                                                                |
 
 **`RequestForm`**: `priority` (`NORMAL|URGENT`, default `NORMAL`), `neededBy?` (`YYYY-MM-DD`, today
 or later), `justification` (3–500), `lines` (1–10). Each line is `{ inventoryItemId, quantity,
-note? }`, or `{ itemName, unit, quantity, note? }` for something not in inventory yet. The same
+note? }`, or `{ itemName, category, unit, quantity, note? }` for something not in inventory yet
+(`category` is an inventory category, so a typed leather roll is recognised). The same
 item can't appear twice. `alreadyRequested` lists items another open request already asks for:
 a heads-up, never a block.
 
 **Errors:**
 
-- `403 NOT_A_REQUESTER`: the person isn't (or is no longer) a designated requester. It applies on
-  their next request after the flag is turned off; they stay signed in.
+- `403 LEATHER_ROLLS_NOT_ALLOWED`: a line is a leather roll (picked or typed) and the constructor
+  isn't allowed leather rolls. A change to the flag applies on their next request; they stay
+  signed in.
 - `409 CONFLICT`: the status doesn't allow it ("Only a pending request can be approved…").
 - `409 STALE`: someone else changed the request after it was loaded.
 - `404`: a constructor asking for someone else's request.

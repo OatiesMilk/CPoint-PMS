@@ -16,6 +16,63 @@ Template:
 
 ---
 
+## 2026-10-05 — Phase 9 follow-up: leather-roll requesters, branch workflow
+
+**Who:** Team + Claude Code
+**Summary:** Applied the team's answers.
+
+- **D-028 confirmed:** the FM doesn't decide flagged scans.
+- **Procurement rule (D-031, supersedes D-030):** every Shoe Constructor requests materials, and
+  only the ones the FM or Admin allows can request leather rolls.
+- **Branch workflow (D-032):** the docs and tooling now say `main` plus pull requests that the
+  team merges.
+
+**Changed:**
+
+- **Schema:** migration `leather_roll_requesters`.
+  - `canRequestMaterials` is renamed to `canRequestLeatherRolls` (who was designated is kept).
+  - Request lines record their `category`, backfilled from the item, so typed leather rolls are
+    caught too.
+- **Server:**
+  - `canRequestLeatherRollsFor`; submit, cancel and remarks need only the constructor role;
+  - a leather-roll line without the OK is refused with 403 `LEATHER_ROLLS_NOT_ALLOWED`;
+  - the picker marks leather rolls `allowed: false`, and the audit actions are
+    `procurement.leather_rolls.*`.
+- **UI:**
+  - the form greys out leather rolls with a note, and typed items choose a kind;
+  - the constructor home and Procurement are the same for every constructor;
+  - "Leather roll requesters" tab, plus the Admin menu wording.
+- **Tests:**
+  - unit: picked and typed leather rolls, the picker, permissions;
+  - e2e: supplies are always allowed; leather rolls work after the FM allows them and are
+    refused again once stopped, on the next request.
+- **Docs and tooling:**
+  - CLAUDE.md, the `/resume` and `/wrap-up` skills, AGENTIC_WORKFLOW, the ROADMAP header, and CI
+    triggers (`main` plus pull requests);
+  - API, README (overview, accounts, demo script, ERD), DESIGN, the master spec roles table,
+    STATUS.
+
+- **Security fix found by the Docker e2e run:** the sign-in form could submit natively before
+  hydration, as GET, putting the email and password in the URL. It's now `method="post"`, with
+  the button disabled until hydration. There's an e2e regression test (it fails before the fix).
+- **Test stability:**
+  - the e2e helpers left a browser page open per API login, and full runs crashed Chromium;
+    they're closed now;
+  - a procurement check filters to its own item, since data piles up across runs.
+
+**Gates:**
+
+- lint ✅ · typecheck ✅ · test ✅ (364) · build ✅ · format ✅
+- e2e ✅ 64/64 three times on `next start`, and twice on a fresh Docker stack. The stack applied
+  all 6 migrations and seeded one request per state, with stock equal to the ledger.
+- Before the page-leak fix, the same browser crash showed with both the old and new login forms
+  (an A/B check).
+- The sandbox ran out of disk once; I pruned the Docker build cache (26 GB).
+  **Decisions:** D-031, D-032 (D-028 confirmed)
+  **Follow-ups:** open the PR into `main`; tell CPoint about the Q5 change (D-028).
+
+---
+
 ## 2026-10-05 — Phase 9: Procurement & review access
 
 **Who:** Team + Claude Code

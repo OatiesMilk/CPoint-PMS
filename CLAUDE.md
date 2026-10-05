@@ -4,8 +4,8 @@ Capstone project (BS-IT) for CPoint Shoe Store Corporation: a Product Monitoring
 leather-shoe production line (Preparation → Upper Making → Sole-ing → Finishing) with one
 computer-vision checkpoint at Preparation, before cutting.
 
-**The project is mid-rebuild** from Laravel/MySQL to Next.js/PostgreSQL/Docker on the
-`system-rebuild` branch. Phase 0 (foundation) is done: the Laravel code is gone.
+The rebuild from Laravel/MySQL to Next.js/PostgreSQL/Docker is complete (roadmap Phases 0–9) and
+lives on `main`. New work is client follow-ups and new features, each added as a roadmap phase.
 
 Next.js 16 and Prisma 7 have breaking changes from older versions. Read the bundled docs before
 writing framework code:
@@ -26,8 +26,9 @@ configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 
 ## Non-negotiables
 
-- Work on `system-rebuild`. Never push to `main`.
-- **One roadmap phase per session**, then stop and report (format in the master spec).
+- Branch from the latest `main` (or use the branch the session gives you), push that branch, and
+  let the team open and merge the PR. Never push to `main` (D-032). `system-rebuild` is history.
+- **One roadmap phase or feature per session**, then stop and report (format in the master spec).
 - MVC layering: `app/api/v1/**/route.ts` (one-liner) → `server/controllers` → `server/services`
   → `server/models` (the only place that imports Prisma). Pages call services, never Prisma.
 - Desktop web only. No mobile/responsive work yet.
@@ -44,7 +45,7 @@ configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 
 Run `/wrap-up` (or follow the documentation protocol in the master spec): update
 `docs/STATUS.md`, prepend to `docs/SESSION_LOG.md`, log decisions in `docs/DECISIONS.md`, tick
-`docs/ROADMAP.md`, commit and push.
+`docs/ROADMAP.md`, commit and push the working branch. CI runs once the PR is open.
 
 ## Commands
 

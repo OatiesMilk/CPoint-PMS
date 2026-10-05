@@ -525,3 +525,57 @@ FM chooses who.
 
 **Consequences:** Phase 1's "Constructor is a placeholder role" no longer holds. Q14 is still
 open: who approves leather rolls (the FM or the leather-ordering staff member)?
+
+### D-031 · 2026-10-05 · Accepted — Every constructor requests materials; leather rolls need the OK (supersedes D-030)
+
+**Context:** the team clarified the client's rule (survey Q14).
+
+- Every Shoe Constructor can request any material except leather rolls.
+- Only the constructor(s) a System Admin or the Floor Manager designates may also request leather
+  rolls. In practice that's the person who orders leather.
+- The Floor Manager approves every request, leather rolls included.
+
+D-030 had made the whole procurement module depend on designation.
+**Decision:**
+
+- **Submitting:** `procurement:request` (Shoe Constructor) is enough to send a request, cancel
+  your own pending one, and add remarks to your own.
+- **Leather rolls:** they also need `users.canRequestLeatherRolls`, which is the old
+  `canRequestMaterials`, renamed. The rename keeps who was designated. The check is one helper,
+  `canRequestLeatherRollsFor(user)`.
+- **Recognising leather rolls:** each request line now records its **category**, copied from the
+  inventory item or chosen for a typed item. A typed "leather roll" is caught the same way as a
+  picked one.
+- **Errors and UI:**
+  - A leather-roll line without the OK is refused with 403 `LEATHER_ROLLS_NOT_ALLOWED`.
+  - The form greys leather rolls out and says to ask the Floor Manager.
+  - The FM's "Leather roll requesters" tab and the Admin's Users menu set the flag. Audit actions
+    are `procurement.leather_rolls.grant|revoke`.
+- **Unchanged from D-030:**
+  - the flag is read from the database on every request, so a change applies on the next click
+    without signing anyone out;
+  - only an active Shoe Constructor can hold it, and a role change clears it;
+  - the demo constructor gets it when bootstrap creates the account.
+
+**Consequences:**
+
+- Migration `leather_roll_requesters`: a column rename, plus a backfilled line `category`.
+- The constructor home and Procurement are the same for every constructor; only the leather
+  options differ.
+
+### D-032 · 2026-10-05 · Accepted — `main` is the base branch; changes arrive by pull request
+
+**Context:** all of `system-rebuild` is now in `main` (PR #1), and the team merges pull requests
+by hand. The "work on `system-rebuild`" rule in CLAUDE.md, the skills and the docs no longer
+matched how the repo is used.
+**Decision:**
+
+- `main` is the integration branch, and nobody pushes to it directly.
+- Each session works on a branch from the latest `main`: the branch the session gives you, or
+  `feature/<topic>`. It pushes that branch, and the team opens and merges the PR.
+- CI runs on pull requests and on pushes to `main`. `system-rebuild` is kept only as history and
+  receives no new work.
+- `/resume` checks the current branch against `main`, and `/wrap-up` pushes the current branch.
+
+**Consequences:** STATUS names the branch that holds unmerged work. A session that finds its
+branch already merged restarts it from `main`.

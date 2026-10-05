@@ -12,8 +12,9 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
   kept as salvage for another batch rather than thrown away.
 - **Inventory:** leather rolls and supplies are tracked through an audited ledger, with low-stock
   alerts.
-- **Procurement:** designated Shoe Constructors request materials when they run low. The Floor
-  Manager approves or rejects each request, then marks it received, which adds the stock to
+- **Procurement:** Shoe Constructors request materials when they run low. Leather rolls only by
+  the constructor the Floor Manager or Admin allows (usually the one who orders leather). The
+  Floor Manager approves or rejects each request, then marks it received, which adds the stock to
   inventory.
 - **Reports:** daily totals, defects by type, how often people kept the camera's call, and time
   per stage (the bottleneck), with CSV for Excel. Nothing is ranked per person.
@@ -96,7 +97,7 @@ when there is no admin account yet, as on a real install with demo users off.
 | Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Batches, stages, rework, salvage, inventory, purchase request decisions, reports |
 | Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Decides flagged scans (review queue), overrides, rework, quality reports         |
 | System Admin      | `admin@cpoint.local`       | `/admin`             | Users, thresholds, defect types, tokens, audit, who can request materials        |
-| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | Sends purchase requests (designated requester)                                   |
+| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | Sends purchase requests (the demo one may also request leather rolls)            |
 
 ## Demo script
 
@@ -152,7 +153,8 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 1. **Constructor home** (`constructor@cpoint.local`): their open requests. **New request**: pick
    **Contact cement** (the picker shows it's low, and that PR-… already asks for it), 2 cans,
    mark it **Urgent**, say why, and send it. Requests can't be edited afterwards: cancel and
-   resend.
+   resend. Every constructor can request supplies; **leather rolls** only once the Floor Manager
+   or Admin allows it (the demo constructor is allowed).
 2. **Floor Manager → Procurement:** the **Pending** tab, urgent first, with how long each has
    waited. Open the request: the stock **when asked** sits next to the stock **now**.
 
@@ -161,8 +163,10 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 3. **Approve** with a note, or **Reject…** with a reason the constructor will see. Open the
    approved request from earlier in the week and **Mark received…**: the dialog lists what goes
    into stock, and Inventory shows the delivery in the ledger ("Received for PR-…").
-4. The **timeline** and **remarks** on the request show who did what and when. The **Requesters**
-   tab chooses who may send requests. A change applies on that person's next click.
+4. The **timeline** and **remarks** on the request show who did what and when. The **Leather roll
+   requesters** tab chooses who may also request leather rolls. Stop it for the demo
+   constructor: on their next try, leather rolls are greyed out in the form, without signing
+   them out.
 
 ### 4. System Admin (2 min)
 
@@ -257,7 +261,7 @@ erDiagram
   InventoryItem ||--o{ InventoryMovement : "ledger of"
   Batch |o--o{ InventoryMovement : "uses stock"
   Batch |o--o{ CvSettings : "camera points at"
-  User ||--o{ PurchaseRequest : "requests (designated)"
+  User ||--o{ PurchaseRequest : "requests"
   PurchaseRequest ||--|{ PurchaseRequestLine : "asks for"
   InventoryItem |o--o{ PurchaseRequestLine : "is asked for"
   PurchaseRequestLine |o--o| InventoryMovement : "received as"
@@ -296,6 +300,7 @@ erDiagram
   }
   PurchaseRequestLine {
     string itemName
+    enum category "leather rolls need the OK"
     decimal quantity
     decimal onHandAtRequest "snapshot"
   }

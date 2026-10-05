@@ -1,8 +1,9 @@
 # Roadmap: System Rebuild
 
 Do one phase per Claude Code session. Each phase ends with the quality gates in
-`docs/prompts/system-rebuild.md` passing, the docs updated, and a commit and push to `system-rebuild`.
-Tick the boxes as they're done.
+`docs/prompts/system-rebuild.md` passing, the docs updated, and a commit and push of the working
+branch, which the team merges into `main` by pull request (D-032). Phases 0–8 were built on
+`system-rebuild`, now merged. Tick the boxes as they're done.
 
 ## Phase 0 — Foundation
 
@@ -98,3 +99,5 @@ Tick the boxes as they're done.
 - [x] Seeds: demo constructor designated; the demo week has one request in each state
 - [x] Tests: unit (rules, permissions, service, designation, seed), e2e journeys and access,
       axe smoke on the new pages
+- [x] Client follow-up (D-031): every Shoe Constructor requests materials; only those the FM or
+      Admin allows request leather rolls (also when typed); D-028 confirmed by the team
