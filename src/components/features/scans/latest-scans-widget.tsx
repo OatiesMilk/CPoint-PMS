@@ -78,16 +78,17 @@ export function LatestScansWidget({ className }: { className?: string }) {
       </CardHeader>
       <CardContent className="flex-1">
         {isPending ? (
-          <ul
+          // A div, not a list: role="status" would strip a <ul>'s list role and orphan its items.
+          <div
             role="status"
             aria-busy="true"
             aria-label="Loading scans"
             className="flex flex-col gap-2"
           >
             {Array.from({ length: 5 }, (_, i) => (
-              <li key={i} className="h-8 animate-pulse rounded-md bg-muted" />
+              <div key={i} className="h-8 animate-pulse rounded-md bg-muted" />
             ))}
-          </ul>
+          </div>
         ) : !data || data.length === 0 ? (
           <p className="rounded-md border border-dashed px-4 py-8 text-center text-muted-foreground">
             No scans yet. Start the simulator or connect a camera on the{" "}
