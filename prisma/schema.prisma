@@ -81,6 +81,19 @@ enum MovementType {
   ADJUST
 }
 
+enum PurchaseRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  RECEIVED
+}
+
+enum PurchasePriority {
+  NORMAL
+  URGENT
+}
+
 enum ActorType {
   USER
   DEVICE
@@ -89,32 +102,38 @@ enum ActorType {
 
 // ───────────── people & access ─────────────
 model User {
-  id                 String    @id @default(uuid(7)) @db.Uuid
-  name               String
-  email              String    @unique // stored lower-cased
-  passwordHash       String
-  role               Role
-  isActive           Boolean   @default(true)
-  mustChangePassword Boolean   @default(false) // set by admin reset (Phase 6)
+  id                  String    @id @default(uuid(7)) @db.Uuid
+  name                String
+  email               String    @unique // stored lower-cased
+  passwordHash        String
+  role                Role
+  isActive            Boolean   @default(true)
+  mustChangePassword  Boolean   @default(false) // set by admin reset (Phase 6)
   /// Sessions signed in before this are ended (password reset or change, D-024).
-  sessionsValidFrom  DateTime?
-  failedLoginCount   Int       @default(0)
-  lockedUntil        DateTime?
-  lastLoginAt        DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  sessionsValidFrom   DateTime?
+  failedLoginCount    Int       @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  /// A designated requester may submit purchase requests. Shoe Constructors only (D-030).
+  canRequestMaterials Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  batchesCreated    Batch[]             @relation("BatchCreatedBy")
-  stageLogsStarted  BatchStageLog[]     @relation("StageStartedBy")
-  stageLogsEnded    BatchStageLog[]     @relation("StageEndedBy")
-  scanDecisions     Scan[]              @relation("ScanDecidedBy")
-  reworkCompleted   ReworkTicket[]      @relation("ReworkCompletedBy")
-  salvageHandled    SalvageItem[]       @relation("SalvageHandledBy")
+  batchesCreated    Batch[]                 @relation("BatchCreatedBy")
+  stageLogsStarted  BatchStageLog[]         @relation("StageStartedBy")
+  stageLogsEnded    BatchStageLog[]         @relation("StageEndedBy")
+  scanDecisions     Scan[]                  @relation("ScanDecidedBy")
+  reworkCompleted   ReworkTicket[]          @relation("ReworkCompletedBy")
+  salvageHandled    SalvageItem[]           @relation("SalvageHandledBy")
   movements         InventoryMovement[]
   apiTokensCreated  ApiToken[]
   cvSettingsUpdates CvSettings[]
   auditLogs         AuditLog[]
   revokedSessions   SessionRevocation[]
+  purchaseRequests  PurchaseRequest[]       @relation("PurchaseRequestedBy")
+  purchaseDecisions PurchaseRequest[]       @relation("PurchaseDecidedBy")
+  purchaseEvents    PurchaseRequestEvent[]
+  purchaseRemarks   PurchaseRequestRemark[]
 
   @@index([role, isActive])
   @@map("users")
@@ -434,7 +453,8 @@ model InventoryItem {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  movements InventoryMovement[]
+  movements    InventoryMovement[]
+  requestLines PurchaseRequestLine[]
 
   @@index([category, isActive])
   @@map("inventory_items")
@@ -450,12 +470,109 @@ model InventoryMovement {
   createdById   String       @db.Uuid
   createdAt     DateTime     @default(now())
 
-  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  batch     Batch?        @relation(fields: [batchId], references: [id])
-  createdBy User          @relation(fields: [createdById], references: [id])
+  item         InventoryItem         @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  batch        Batch?                @relation(fields: [batchId], references: [id])
+  createdBy    User                  @relation(fields: [createdById], references: [id])
+  requestLines PurchaseRequestLine[]
 
   @@index([itemId, createdAt])
   @@index([batchId])
   @@index([createdById])
   @@map("inventory_movements")
+}
+
+// ───────────── procurement (D-029) ─────────────
+model PurchaseRequestSequence {
+  year      Int @id
+  lastValue Int @default(0)
+
+  @@map("purchase_request_sequences")
+}
+
+/// A designated Shoe Constructor asks for materials; the Floor Manager decides. Never edited after
+/// it's submitted: cancel and send a new one.
+model PurchaseRequest {
+  id              String                @id @default(uuid(7)) @db.Uuid
+  code            String                @unique // PR-2026-0001
+  requestedById   String                @db.Uuid
+  status          PurchaseRequestStatus @default(PENDING)
+  priority        PurchasePriority      @default(NORMAL)
+  neededBy        DateTime?             @db.Date
+  justification   String
+  decidedById     String?               @db.Uuid
+  decidedAt       DateTime?
+  rejectionReason String?
+  approvalNote    String?
+  receivedAt      DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  requestedBy User                    @relation("PurchaseRequestedBy", fields: [requestedById], references: [id])
+  decidedBy   User?                   @relation("PurchaseDecidedBy", fields: [decidedById], references: [id])
+  lines       PurchaseRequestLine[]
+  events      PurchaseRequestEvent[]
+  remarks     PurchaseRequestRemark[]
+
+  @@index([status, createdAt])
+  @@index([requestedById])
+  @@index([decidedById])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestLine {
+  id                    String   @id @default(uuid(7)) @db.Uuid
+  requestId             String   @db.Uuid
+  inventoryItemId       String?  @db.Uuid // null: an item not in inventory yet
+  itemName              String // copied from the item, or typed
+  unit                  String
+  quantity              Decimal  @db.Decimal(12, 2)
+  note                  String?
+  /// Stock when the request was made, so the Floor Manager sees why it was asked for.
+  onHandAtRequest       Decimal? @db.Decimal(12, 2)
+  reorderLevelAtRequest Decimal? @db.Decimal(12, 2)
+  movementId            String?  @db.Uuid // the IN movement posted on receipt
+  position              Int
+
+  request  PurchaseRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  item     InventoryItem?     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  movement InventoryMovement? @relation(fields: [movementId], references: [id], onDelete: Restrict)
+
+  @@index([requestId])
+  @@index([inventoryItemId])
+  @@index([movementId])
+  @@map("purchase_request_lines")
+}
+
+/// The request's timeline, shown to everyone who can see the request (the audit log is admin-only).
+model PurchaseRequestEvent {
+  id         String                 @id @default(uuid(7)) @db.Uuid
+  requestId  String                 @db.Uuid
+  fromStatus PurchaseRequestStatus? // null when submitted
+  toStatus   PurchaseRequestStatus
+  actorId    String                 @db.Uuid
+  note       String?
+  createdAt  DateTime               @default(now())
+
+  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor   User            @relation(fields: [actorId], references: [id])
+
+  @@index([requestId, createdAt])
+  @@index([actorId])
+  @@map("purchase_request_events")
+}
+
+/// Remarks are only ever added, never edited or deleted.
+model PurchaseRequestRemark {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  requestId String   @db.Uuid
+  authorId  String   @db.Uuid
+  body      String
+  createdAt DateTime @default(now())
+
+  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author  User            @relation(fields: [authorId], references: [id])
+
+  @@index([requestId, createdAt])
+  @@index([authorId])
+  @@map("purchase_request_remarks")
 }
