@@ -16,6 +16,63 @@ Template:
 
 ---
 
+## 2026-10-05 — Phase 9: Procurement & review access
+
+**Who:** Team + Claude Code
+**Summary:** Added the procurement module, and fixed an access bug in the review queue.
+
+- **Procurement:** designated Shoe Constructors request materials; the Floor Manager approves or
+  rejects them and marks them received, which posts the stock IN through the inventory ledger.
+- **Bug fix:** only the Quality Inspector now decides scans the camera flagged. This changes the
+  review part of D-011 and needs CPoint's confirmation.
+
+The Step 1 answers:
+
+- receipt is in this phase, for the whole request;
+- a flagged scan is QI-only for life;
+- the FM keeps the review queue, read-only;
+- requests can have up to 10 items.
+
+**Changed:**
+
+- **Scans (D-028):**
+  - `scan:review` (QI) and `requiredDecisionPermission`, enforced in `decideScan` (403);
+  - the FM sees "Waiting for a Quality Inspector" on the scan and in the queue.
+- **Schema:** `procurement` migration: requests, lines with a stock snapshot, events, remarks, a
+  sequence table, and `users.canRequestMaterials`.
+- **Server:**
+  - `lib/procurement-rules.ts`, `procurement.{model,service,validator,controller}`;
+  - permissions `procurement:{read,request,decide,remark,designate}`;
+  - the requester guards; the flag on `SessionUser`;
+  - a role change clears the flag.
+- **API:** `/api/v1/procurement/**` (requests, actions, remarks, items, requesters).
+- **UI:**
+  - the list, form and detail pages;
+  - the Requesters tab, FM home card, Inventory "Requested" badge, constructor home, and the
+    Admin Users toggle.
+- **Seeds:** bootstrap designates the demo constructor; the demo week adds five requests, one per
+  state.
+- **Fixes found by the gates:**
+  - the detail table overflowed at 1280 px;
+  - an invalid `<dl>` in the FM card (axe, seen only on the Docker demo);
+  - the Latest scans skeleton `<ul role=status>` (axe; a Phase 8 regression);
+  - three e2e tests that broke as test data grew.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (362) · build ✅ · format ✅ · e2e ✅ 63/63 twice on
+`next start` and twice on a fresh Docker stack with the demo week · docker ✅ demo week checked in
+psql (one request per state, stock equals the ledger, flagged scans decided only by the QI, no
+re-seed on restart). Sandbox deviations: a base-image build arg, and another project name and
+ports so the dev DB kept running.
+**Decisions:** D-028 (QI-only flagged scans, supersedes part of D-011), D-029 (purchase requests),
+D-030 (designated requesters)
+**Follow-ups:**
+
+- Confirm with CPoint: the Q5 change (D-028), and who approves leather rolls (Q14).
+- Open a PR into `main` when the team is ready.
+- Optional: CSV export and monthly counts for procurement.
+
+---
+
 ## 2026-10-03 — Phase 8: Hardening & demo
 
 **Who:** Team + Claude Code

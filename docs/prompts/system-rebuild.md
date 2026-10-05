@@ -228,11 +228,12 @@ Seed one demo account per role (password from `.env`, documented in README).
 
 | Module                                                       | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor |
 | ------------------------------------------------------------ | -------------- | ----------------- | ------------------ | ---------------- |
-| Overview dashboard (role-specific)                           | ✅             | ✅                | ✅ (system health) | placeholder      |
+| Overview dashboard (role-specific)                           | ✅             | ✅                | ✅ (system health) | my requests      |
 | Batches: list / create / edit / advance stage                | ✅ full        | view              | view               | —                |
 | Camera (CV placeholder page)                                 | ✅             | ✅                | ✅                 | —                |
 | "Latest scans" widget (polls every 5s)                       | ✅ on overview | ✅ on overview    | —                  | —                |
-| Recent decisions + override; review queue (unknown classes)  | ✅             | ✅                | —                  | —                |
+| Recent decisions + override                                  | ✅             | ✅                | —                  | —                |
+| Review queue: decide flagged scans (D-028)                   | view           | ✅                | —                  | —                |
 | Scan history + detail (image + boxes)                        | ✅             | ✅                | view               | —                |
 | Rework board                                                 | ✅             | ✅                | —                  | —                |
 | Salvage                                                      | ✅             | view              | —                  | —                |
@@ -242,10 +243,15 @@ Seed one demo account per role (password from `.env`, documented in README).
 | Defect types, CV thresholds, shoe types, suppliers           | —              | —                 | ✅                 | —                |
 | CV device API tokens (create / revoke, shown once)           | —              | —                 | ✅                 | —                |
 | Audit log (filterable)                                       | —              | —                 | ✅                 | —                |
-| Constructor home: "Your tasks are coming soon"               | —              | —                 | —                  | ✅               |
+| Procurement: see requests (D-029)                            | ✅ all         | —                 | view all           | own              |
+| Procurement: send / cancel own pending request               | —              | —                 | —                  | designated only  |
+| Procurement: approve / reject / mark received                | ✅             | —                 | —                  | —                |
+| Procurement: remarks                                         | ✅             | —                 | —                  | own, designated  |
+| Procurement: choose who can request (D-030)                  | ✅             | —                 | ✅                 | —                |
+| Constructor home: my open requests (or how to get access)    | —              | —                 | —                  | ✅               |
 
 **Floor Manager overview:** today's scans and pass/rework/reject split, open reworks, batches
-per stage (shows the bottleneck), low-stock alerts, and Latest scans.
+per stage (shows the bottleneck), low-stock alerts, pending purchase requests, and Latest scans.
 **Quality Inspector overview:** today's REWORK/REJECT decisions to verify, with override (the primary
 action), the flagged-scan count, today's defect breakdown by type, AI agreement rate, and Latest scans.
 

@@ -51,6 +51,24 @@ defect on a main screen. **Medium** is confusing but workable. **Low** is polish
 
 No Critical findings.
 
+## Phase 9 additions (2026-10-05)
+
+The new procurement screens were checked the same way, at 1280 px in light and dark:
+
+- the list, the form and the detail page;
+- the Requesters tab;
+- the FM home card, the constructor home, and the Inventory badge.
+
+The axe smoke covers every new page for the FM, the constructor and the Admin, and the manager
+smoke now creates an urgent pending request first.
+
+| #   | Severity | Where                           | Problem                                                                                                                       | Fix                                                                                                     | Commit    |
+| --- | -------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | --------- |
+| P1  | High     | Request detail, Items table     | At 1280 px the "Now" column was clipped ("In…", "Not in in…"): three badges shared one cell.                                  | Badges moved under the item name; the stock columns hold plain numbers, with the reorder level as text. | `aa68eb8` |
+| P2  | Medium   | FM home, Purchase requests card | axe (serious, definition-list): the "N marked urgent" line sat inside the `<dl>`. Seen only with an urgent request pending.   | Moved outside the list. The manager smoke test now creates that state, so it's checked every run.       | `5677a24` |
+| P3  | Medium   | Latest scans (FM/QI homes)      | axe (serious, listitem) during loading: `role="status"` on the skeleton `<ul>` removed its list role (from Phase 8's A4 fix). | The skeleton is a status `div` of plain bars.                                                           | `5026a6e` |
+| P4  | Low      | Procurement tabs                | On the Requesters tab the status counts showed "(–)".                                                                         | Counts load on every tab.                                                                               | `aa68eb8` |
+
 ## Checked and fine
 
 - **Hierarchy:** each page has one filled primary button (New batch, Receive stock, New token…).
