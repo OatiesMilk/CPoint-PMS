@@ -1,24 +1,9 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { inspectorApi, managerApi, withDb } from "./cv-helpers";
+import { inspectorApi, makeConstructor, managerApi, withDb } from "./cv-helpers";
 
-// Purchase requests (D-029, D-030). Tests run in parallel, so each one gets its own Shoe
-// Constructor account rather than toggling the shared demo constructor.
-
-async function makeConstructor(canRequestMaterials = true): Promise<{ id: string; email: string }> {
-  const id = randomUUID();
-  const email = `sc-${randomBytes(4).toString("hex")}@e2e.local`;
-  await withDb((db) =>
-    db.query(
-      `INSERT INTO users (id, name, email, "passwordHash", role, "canRequestMaterials", "updatedAt")
-       SELECT $1, $2, $3, "passwordHash", 'SHOE_CONSTRUCTOR', $4, now() FROM users
-       WHERE email = 'constructor@cpoint.local'`,
-      [id, `E2E Constructor ${email.slice(3, 11)}`, email, canRequestMaterials],
-    ),
-  );
-  return { id, email };
-}
+// Purchase requests (D-029, D-030). Each test gets its own Shoe Constructor (makeConstructor).
 
 async function signedIn(browser: Browser, email: string, home: string): Promise<Page> {
   const page = await browser.newPage();

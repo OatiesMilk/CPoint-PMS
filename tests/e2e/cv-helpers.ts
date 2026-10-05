@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { expect, type Browser, type APIRequestContext } from "@playwright/test";
 import pg from "pg";
 import sharp from "sharp";
@@ -116,4 +116,43 @@ export async function postScan(
       source: "SIMULATOR",
     },
   });
+}
+
+/**
+ * A fresh Shoe Constructor account (tests run in parallel, so none of them toggles the shared demo
+ * constructor). It reuses the demo constructor's password hash, so it signs in with the demo
+ * password.
+ */
+export async function makeConstructor(
+  canRequestMaterials = true,
+): Promise<{ id: string; email: string }> {
+  const id = randomUUID();
+  const email = `sc-${randomBytes(4).toString("hex")}@e2e.local`;
+  await withDb((db) =>
+    db.query(
+      `INSERT INTO users (id, name, email, "passwordHash", role, "canRequestMaterials", "updatedAt")
+       SELECT $1, $2, $3, "passwordHash", 'SHOE_CONSTRUCTOR', $4, now() FROM users
+       WHERE email = 'constructor@cpoint.local'`,
+      [id, `E2E Constructor ${email.slice(3, 11)}`, email, canRequestMaterials],
+    ),
+  );
+  return { id, email };
+}
+
+/** An urgent purchase request waiting on the Floor Manager, so the FM home shows that state. */
+export async function urgentPendingRequest(browser: Browser): Promise<void> {
+  const sc = await makeConstructor();
+  const page = await browser.newPage();
+  await page.goto("/login");
+  await signIn(page, sc.email);
+  await expect(page).toHaveURL("/constructor");
+  const res = await page.request.post("/api/v1/procurement/requests", {
+    data: {
+      priority: "URGENT",
+      justification: "E2E: the line stops without it",
+      lines: [{ itemName: "E2E urgent item", unit: "box", quantity: 1 }],
+    },
+  });
+  expect(res.status()).toBe(201);
+  await page.close();
 }

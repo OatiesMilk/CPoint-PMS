@@ -1,7 +1,13 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { createBatch, createDeviceToken, managerApi, postScan } from "./cv-helpers";
+import {
+  createBatch,
+  createDeviceToken,
+  managerApi,
+  postScan,
+  urgentPendingRequest,
+} from "./cv-helpers";
 
 /**
  * Smoke per role (Phase 8): every page in the role's sidebar renders (a heading, no error
@@ -59,7 +65,8 @@ test("the sign-in page passes axe in light and dark", async ({ browser }) => {
 
 test.describe("dark mode", () => {
   test.use({ colorScheme: "dark" });
-  test("every page in the manager's sidebar passes axe in dark mode", async ({ page }) => {
+  test("every page in the manager's sidebar passes axe in dark mode", async ({ browser, page }) => {
+    await urgentPendingRequest(browser); // the FM home's urgent state is checked too
     await signInAs(page, ACCOUNTS.manager);
     for (const href of await sidebarLinks(page)) {
       await page.goto(href);
@@ -70,7 +77,8 @@ test.describe("dark mode", () => {
 });
 
 for (const [role, account] of Object.entries(ACCOUNTS)) {
-  test(`every page in the ${role}'s sidebar renders and passes axe`, async ({ page }) => {
+  test(`every page in the ${role}'s sidebar renders and passes axe`, async ({ browser, page }) => {
+    if (role === "manager") await urgentPendingRequest(browser); // the FM home's urgent state
     await signInAs(page, account);
     const links = await sidebarLinks(page);
     expect(links.length).toBeGreaterThan(0);

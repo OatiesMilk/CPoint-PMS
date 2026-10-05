@@ -40,32 +40,35 @@ export function PendingRequestsCard({ count, urgent, oldest, now }: Props) {
             Constructors’ requests appear here when they send one.
           </p>
         ) : (
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
-            <div>
-              <dt className="text-sm text-muted-foreground">Waiting</dt>
-              <dd className="text-2xl font-semibold tabular-nums">{count}</dd>
-            </div>
-            <div>
-              <dt className="text-sm text-muted-foreground">Oldest</dt>
-              <dd className="flex flex-col">
-                <span className="text-2xl font-semibold tabular-nums">
-                  {formatDuration(now.getTime() - new Date(oldest.createdAt).getTime())}
-                </span>
-                <Link
-                  href={`/procurement/${oldest.id}`}
-                  className="font-mono text-sm underline-offset-4 hover:underline"
-                >
-                  {oldest.code}
-                </Link>
-              </dd>
-            </div>
+          <div className="flex flex-col gap-3">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+              <div>
+                <dt className="text-sm text-muted-foreground">Waiting</dt>
+                <dd className="text-2xl font-semibold tabular-nums">{count}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted-foreground">Oldest</dt>
+                <dd className="flex flex-col">
+                  <span className="text-2xl font-semibold tabular-nums">
+                    {formatDuration(now.getTime() - new Date(oldest.createdAt).getTime())}
+                  </span>
+                  <Link
+                    href={`/procurement/${oldest.id}`}
+                    className="font-mono text-sm underline-offset-4 hover:underline"
+                  >
+                    {oldest.code}
+                  </Link>
+                </dd>
+              </div>
+            </dl>
+            {/* Outside the <dl>: a definition list may only hold term/value pairs (axe). */}
             {urgent > 0 && (
-              <div className="col-span-2 mt-2 flex items-center gap-1.5 text-sm text-reject">
+              <p className="flex items-center gap-1.5 text-sm text-reject">
                 <Siren aria-hidden className="size-4" />
                 {urgent} marked urgent
-              </div>
+              </p>
             )}
-          </dl>
+          </div>
         )}
       </CardContent>
     </Card>
