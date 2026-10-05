@@ -259,3 +259,23 @@ export function listRollMovementsForBatch(batchId: string, db: Db = defaultDb())
     orderBy: newestFirst,
   });
 }
+
+/**
+ * Active items for the purchase request picker (D-030). Narrow on purpose: Shoe Constructors see
+ * this without `inventory:read`, so no movements, batches or people.
+ */
+export function listRequestableItems(db: Db = defaultDb()) {
+  return db.inventoryItem.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      sku: true,
+      name: true,
+      category: true,
+      unit: true,
+      quantityOnHand: true,
+      reorderLevel: true,
+    },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+  });
+}

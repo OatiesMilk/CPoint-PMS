@@ -4,6 +4,9 @@ import { navigationFor } from "@/server/policies/navigation";
 import {
   PERMISSIONS,
   can,
+  canSubmitPurchaseRequest,
+  mayActOnRequest,
+  mayRemarkOnRequest,
   requiredDecisionPermission,
   type Permission,
 } from "@/server/policies/permissions";
@@ -34,6 +37,11 @@ const EXPECTED: Record<Permission, Role[]> = {
   "token:manage": [AD],
   "audit:read": [AD],
   "system:health": [AD],
+  "procurement:read": [FM, AD, SC],
+  "procurement:request": [SC],
+  "procurement:decide": [FM],
+  "procurement:remark": [FM, SC],
+  "procurement:designate": [FM, AD],
 };
 
 describe("permissions matrix", () => {
@@ -49,8 +57,9 @@ describe("permissions matrix", () => {
     }
   }
 
-  it("gives the Shoe Constructor no module permissions (placeholder role)", () => {
-    expect(Object.keys(PERMISSIONS).some((p) => can(SC, p as Permission))).toBe(false);
+  it("gives the Shoe Constructor procurement permissions only (D-030)", () => {
+    const granted = Object.keys(PERMISSIONS).filter((p) => can(SC, p as Permission));
+    expect(granted.every((p) => p.startsWith("procurement:"))).toBe(true);
   });
 });
 
@@ -105,5 +114,45 @@ describe("deciding a scan (D-028)", () => {
       expect(requiredDecisionPermission({ aiVerdict: v })).toBe("scan:decide");
     expect(can(FM, requiredDecisionPermission({ aiVerdict: "NEEDS_REVIEW" }))).toBe(false);
     expect(can(QI, requiredDecisionPermission({ aiVerdict: "NEEDS_REVIEW" }))).toBe(true);
+  });
+});
+
+describe("procurement access (D-030)", () => {
+  const sc = { id: "sc1", role: SC, canRequestMaterials: true };
+  const scOff = { ...sc, canRequestMaterials: false };
+  const fm = { id: "fm1", role: FM, canRequestMaterials: false };
+  const own = { requestedById: "sc1" };
+  const other = { requestedById: "sc2" };
+
+  it("needs both the role and the flag to submit", () => {
+    expect(canSubmitPurchaseRequest(sc)).toBe(true);
+    expect(canSubmitPurchaseRequest(scOff)).toBe(false);
+    // The flag alone does nothing for another role.
+    expect(canSubmitPurchaseRequest({ role: FM, canRequestMaterials: true })).toBe(false);
+  });
+
+  it("lets only the designated requester cancel their own request", () => {
+    expect(mayActOnRequest(sc, own, "cancel")).toBe(true);
+    expect(mayActOnRequest(sc, other, "cancel")).toBe(false);
+    expect(mayActOnRequest(scOff, own, "cancel")).toBe(false);
+    expect(mayActOnRequest(fm, own, "cancel")).toBe(false);
+  });
+
+  it("lets only the Floor Manager approve, reject and receive", () => {
+    for (const action of ["approve", "reject", "receive"] as const) {
+      expect(mayActOnRequest(fm, own, action)).toBe(true);
+      expect(mayActOnRequest(sc, own, action)).toBe(false);
+      expect(mayActOnRequest({ id: "a", role: AD, canRequestMaterials: false }, own, action)).toBe(
+        false,
+      );
+    }
+  });
+
+  it("allows remarks from the Floor Manager, and from a designated requester on their own", () => {
+    expect(mayRemarkOnRequest(fm, other)).toBe(true);
+    expect(mayRemarkOnRequest(sc, own)).toBe(true);
+    expect(mayRemarkOnRequest(sc, other)).toBe(false);
+    expect(mayRemarkOnRequest(scOff, own)).toBe(false);
+    expect(mayRemarkOnRequest({ id: "q", role: QI, canRequestMaterials: false }, own)).toBe(false);
   });
 });

@@ -68,6 +68,7 @@ const adminSelect = {
   role: true,
   isActive: true,
   mustChangePassword: true,
+  canRequestMaterials: true,
   lockedUntil: true,
   lastLoginAt: true,
   createdAt: true,
@@ -119,7 +120,13 @@ export async function listUsers(
 
 export function updateUser(
   id: string,
-  data: { name?: string; email?: string; role?: Role; isActive?: boolean },
+  data: {
+    name?: string;
+    email?: string;
+    role?: Role;
+    isActive?: boolean;
+    canRequestMaterials?: boolean;
+  },
   db: Db = defaultDb(),
 ) {
   return db.user.update({ where: { id }, data, select: adminSelect });

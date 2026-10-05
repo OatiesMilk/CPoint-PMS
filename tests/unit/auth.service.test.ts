@@ -173,6 +173,26 @@ describe("checkSession (D-024)", () => {
   });
 });
 
+describe("checkSession and the requester flag (D-030)", () => {
+  it("reads the flag fresh on every request, so turning it off applies at once", async () => {
+    users.findUserById.mockResolvedValueOnce(
+      user({ role: "SHOE_CONSTRUCTOR", canRequestMaterials: true }),
+    );
+    expect(await checkSession("u1", 1)).toMatchObject({
+      ok: true,
+      user: { canRequestMaterials: true },
+    });
+    // The Floor Manager un-designates them: same token, next request, still signed in.
+    users.findUserById.mockResolvedValueOnce(
+      user({ role: "SHOE_CONSTRUCTOR", canRequestMaterials: false }),
+    );
+    expect(await checkSession("u1", 1)).toMatchObject({
+      ok: true,
+      user: { canRequestMaterials: false },
+    });
+  });
+});
+
 describe("changeOwnPassword (D-024)", () => {
   it("checks the current password before changing anything", async () => {
     users.findUserById.mockResolvedValue(user());

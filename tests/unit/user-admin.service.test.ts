@@ -63,6 +63,37 @@ describe("createAccount", () => {
 });
 
 describe("account changes", () => {
+  it("ends requester designation when a Shoe Constructor gets another role (D-030)", async () => {
+    users.findUserById.mockResolvedValue(
+      account({ role: "SHOE_CONSTRUCTOR", canRequestMaterials: true }),
+    );
+    await svc.updateAccount(
+      "u1",
+      { name: "Ivy", email: "ivy@cpoint.local", role: "QUALITY_INSPECTOR" },
+      admin,
+    );
+    expect(users.updateUser.mock.calls[0][1]).toMatchObject({
+      role: "QUALITY_INSPECTOR",
+      canRequestMaterials: false,
+    });
+    expect(recordAudit.mock.calls[0][1]).toMatchObject({
+      before: { canRequestMaterials: true },
+      after: { canRequestMaterials: false },
+    });
+  });
+
+  it("leaves the flag alone when a constructor's other details change", async () => {
+    users.findUserById.mockResolvedValue(
+      account({ role: "SHOE_CONSTRUCTOR", canRequestMaterials: true }),
+    );
+    await svc.updateAccount(
+      "u1",
+      { name: "Ivy B", email: "ivy@cpoint.local", role: "SHOE_CONSTRUCTOR" },
+      admin,
+    );
+    expect(users.updateUser.mock.calls[0][1]).not.toHaveProperty("canRequestMaterials");
+  });
+
   it("refuses deactivating the last active System Admin", async () => {
     users.findUserById.mockResolvedValue(account({ id: "a2", role: "SYSTEM_ADMIN" }));
     users.countActiveUsersWithRole.mockResolvedValueOnce(1);

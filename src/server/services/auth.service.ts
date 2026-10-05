@@ -24,6 +24,8 @@ export type SessionUser = {
   role: Role;
   /** Set by an admin reset or for a new account: the user must choose a password first (D-024). */
   mustChangePassword: boolean;
+  /** A designated requester (D-030). Read from the database on every request, like the role. */
+  canRequestMaterials: boolean;
 };
 
 export type SignInResult =
@@ -41,6 +43,7 @@ function toSessionUser(user: User): SessionUser {
     email: user.email,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
+    canRequestMaterials: user.canRequestMaterials,
   };
 }
 
