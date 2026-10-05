@@ -82,7 +82,8 @@ test("a constructor asks, the Floor Manager approves and receives, and stock goe
 
   // The Floor Manager: pending tab, urgent; approve with a note; receive.
   const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
-  await fm.goto("/procurement");
+  // Filtered to this item: other runs leave urgent requests pending, ahead of this one.
+  await fm.goto(`/procurement?status=PENDING&item=${item.id}`);
   await expect(fm.getByRole("row", { name: code })).toContainText("Urgent");
   await fm.goto(`/inventory?q=${item.sku}`);
   await expect(fm.getByRole("link", { name: `Requested in ${code}` })).toBeVisible();

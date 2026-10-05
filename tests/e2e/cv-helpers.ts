@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { expect, type Browser, type APIRequestContext } from "@playwright/test";
+import { expect, request, type Browser, type APIRequestContext } from "@playwright/test";
 import pg from "pg";
 import sharp from "sharp";
 import { ACCOUNTS, signIn } from "./helpers";
@@ -38,16 +38,27 @@ export async function shoeTypeId(): Promise<string> {
   );
 }
 
-/** An API client signed in as the Floor Manager (for setting up batches quickly). */
+/**
+ * An API client signed in as the given account. It signs in through the real form, then keeps only
+ * the session cookie in a standalone request context and closes the page: an open page per call
+ * kept a browser renderer alive until the worker ended, and those piled up over a full run until
+ * Chromium crashed.
+ */
 async function apiAs(
   browser: Browser,
   account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS],
 ): Promise<APIRequestContext> {
   const page = await browser.newPage();
-  await page.goto("/login");
-  await signIn(page, account.email);
-  await expect(page).toHaveURL(account.home);
-  return page.request;
+  try {
+    await page.goto("/login");
+    await signIn(page, account.email);
+    await expect(page).toHaveURL(account.home);
+    const { origin } = new URL(page.url());
+    const storageState = await page.context().storageState();
+    return await request.newContext({ baseURL: origin, storageState });
+  } finally {
+    await page.close();
+  }
 }
 
 export function managerApi(browser: Browser): Promise<APIRequestContext> {

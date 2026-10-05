@@ -9,8 +9,15 @@ async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCO
   await expect(page).toHaveURL(account.home);
 }
 
+// Pages opened beside the test's own page are closed after each test, so renderers don't pile up.
+const extraPages: Page[] = [];
+test.afterEach(async () => {
+  await Promise.all(extraPages.splice(0).map((p) => p.close()));
+});
+
 async function adminPage(browser: Browser) {
   const page = await browser.newPage();
+  extraPages.push(page);
   await signInAs(page, ACCOUNTS.admin);
   return page;
 }
