@@ -92,18 +92,20 @@ export async function requestableItems(): Promise<RequestableItem[]> {
       onHand,
       reorderLevel,
       low: onHand <= reorderLevel,
-      openRequestCode: open.get(r.id) ?? null,
+      openRequestCode: open.get(r.id)?.code ?? null,
     };
   });
 }
 
-/** itemId → the oldest open request asking for it. */
-export async function openRequestCodes(itemIds: string[]): Promise<Map<string, string>> {
+/** itemId → the oldest open (pending or approved) request asking for it. */
+export async function openRequestCodes(
+  itemIds: string[],
+): Promise<Map<string, { id: string; code: string }>> {
   const lines = await openRequestsForItems(itemIds);
-  const map = new Map<string, string>();
+  const map = new Map<string, { id: string; code: string }>();
   for (const line of lines)
     if (line.inventoryItemId && !map.has(line.inventoryItemId))
-      map.set(line.inventoryItemId, line.request.code);
+      map.set(line.inventoryItemId, { id: line.request.id, code: line.request.code });
   return map;
 }
 
@@ -205,7 +207,7 @@ export async function createRequest(
     /** Items another open request already asks for: shown as a heads-up, never a block. */
     alreadyRequested: lines.flatMap((l) =>
       l.inventoryItemId && open.has(l.inventoryItemId)
-        ? [{ itemName: l.itemName, code: open.get(l.inventoryItemId)! }]
+        ? [{ itemName: l.itemName, code: open.get(l.inventoryItemId)!.code }]
         : [],
     ),
   };

@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { ROLE_LABELS, type Role } from "@/lib/domain";
 import { userFormSchema } from "@/server/validators/user.validator";
+import { setRequesterAction } from "../../procurement/actions";
 import {
   createUserAction,
   resetPasswordAction,
@@ -219,6 +220,7 @@ type Row = {
   role: Role;
   isActive: boolean;
   status: "ACTIVE" | "DEACTIVATED" | "LOCKED";
+  canRequestMaterials: boolean;
 };
 
 /**
@@ -273,6 +275,21 @@ export function UserRowActions({
     });
   }
 
+  /** Designated requesters (D-030): the same action the Floor Manager uses under Procurement. */
+  function setRequester(value: boolean, quiet = false) {
+    startTransition(async () => {
+      const result = await setRequesterAction(user.id, value);
+      if (!result.ok) return void toast.error(result.error);
+      if (quiet) return;
+      toast.success(
+        value
+          ? `${user.name} can now send purchase requests.`
+          : `${user.name} can no longer send purchase requests.`,
+        { duration: 6000, action: { label: "Undo", onClick: () => setRequester(!value, true) } },
+      );
+    });
+  }
+
   function unlock() {
     startTransition(async () => {
       const result = await unlockUserAction(user.id);
@@ -305,6 +322,11 @@ export function UserRowActions({
             </DropdownMenuItem>
             {user.status === "LOCKED" && (
               <DropdownMenuItem onSelect={unlock}>Unlock</DropdownMenuItem>
+            )}
+            {user.role === "SHOE_CONSTRUCTOR" && user.isActive && (
+              <DropdownMenuItem onSelect={() => setRequester(!user.canRequestMaterials)}>
+                {user.canRequestMaterials ? "Stop purchase requests" : "Allow purchase requests"}
+              </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
             {user.isActive ? (

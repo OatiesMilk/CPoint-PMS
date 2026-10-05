@@ -3,14 +3,16 @@
  * Who:   the Floor Manager (manages) and the System Admin (reads), a few times a day.
  * What:  see what's on the shelf and what needs reordering, then record what came in or went out.
  * Worst: a leather roll runs out unnoticed and stops the line. Low and out-of-stock items carry a
- *        labelled badge, and the Stock filter narrows to them.
+ *        labelled badge, and the Stock filter narrows to them. Items with an open purchase request
+ *        say "Requested", so nobody orders twice.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, ShoppingCart } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { PageHeader } from "@/components/features/page-header";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -24,6 +26,7 @@ import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { listItems } from "@/server/services/inventory.service";
+import { openRequestCodes } from "@/server/services/procurement.service";
 import { inventoryListQuerySchema } from "@/server/validators/inventory.validator";
 import { InventoryFilters } from "./inventory-filters";
 
@@ -35,6 +38,8 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
   const query = inventoryListQuerySchema.parse(await searchParams);
   const filtered = Boolean(query.category || query.stock || query.q || query.inactive);
   const { rows, total, page, pageCount } = await listItems(query);
+  // Items a Shoe Constructor already asked for (D-029), so nobody orders twice.
+  const requested = await openRequestCodes(rows.map((r) => r.id));
   const canManage = can(user.role, "inventory:manage");
 
   const pageHref = (p: number) => {
@@ -125,7 +130,20 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                     {formatQuantity(item.reorderLevel)}
                   </TableCell>
                   <TableCell>
-                    <StockBadge level={item.level} inactive={!item.isActive} />
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <StockBadge level={item.level} inactive={!item.isActive} />
+                      {requested.has(item.id) && (
+                        <Link
+                          href={`/procurement/${requested.get(item.id)!.id}`}
+                          aria-label={`Requested in ${requested.get(item.id)!.code}`}
+                        >
+                          <Badge tone="info">
+                            <ShoppingCart aria-hidden />
+                            Requested
+                          </Badge>
+                        </Link>
+                      )}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}

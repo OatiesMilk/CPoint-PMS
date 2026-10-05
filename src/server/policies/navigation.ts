@@ -10,6 +10,7 @@ export type NavIcon =
   | "rework"
   | "salvage"
   | "inventory"
+  | "procurement"
   | "reports"
   | "users"
   | "settings"
@@ -38,6 +39,12 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         href: "/inventory",
         icon: "inventory",
         permission: "inventory:read",
+      },
+      {
+        label: "Procurement",
+        href: "/procurement",
+        icon: "procurement",
+        permission: "procurement:read",
       },
     ],
   },

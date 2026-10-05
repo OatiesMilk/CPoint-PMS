@@ -71,6 +71,7 @@ describe("navigationFor", () => {
       "Overview",
       "Batches",
       "Inventory",
+      "Procurement",
       "Camera",
       "Scans",
       "Review queue",
@@ -92,6 +93,7 @@ describe("navigationFor", () => {
       "Overview",
       "Batches",
       "Inventory",
+      "Procurement",
       "Camera",
       "Scans",
       "Users",
@@ -99,7 +101,7 @@ describe("navigationFor", () => {
       "API tokens",
       "Audit log",
     ]);
-    expect(labels(SC)).toEqual(["Home"]);
+    expect(labels(SC)).toEqual(["Home", "Procurement"]);
   });
 
   it("links each role's first item to its own home", () => {
