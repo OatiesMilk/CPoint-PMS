@@ -55,8 +55,10 @@
 
 ## Next step (exact)
 
-Push is done. Ask the team whether to open a PR from `claude/compassionate-darwin-uys0sv` into
-`main`. Then rehearse the panel demo. Paste into Claude Code:
+Pushed. CI (`.github/workflows/ci.yml`) runs only on `main`, `system-rebuild` and pull requests,
+so **this branch hasn't been through CI yet**. Opening a PR from
+`claude/compassionate-darwin-uys0sv` into `main` runs it: the check, e2e and Docker demo-week
+jobs. All the same gates passed locally and on a fresh Docker stack (SESSION_LOG). Then rehearse the panel demo. Paste into Claude Code:
 
 > /resume, then help us rehearse the panel demo: walk the README "Demo script" (all four roles,
 > including the procurement walkthrough) against a fresh `docker compose up --build -d` with
