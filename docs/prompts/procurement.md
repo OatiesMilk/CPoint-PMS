@@ -122,13 +122,13 @@ Push back where the codebase or a decision says otherwise.
 
 **4. Access matrix** (add the rows to the master spec table and to `permissions.ts`)
 
-| Action                               | Shoe Constructor (designated) | Shoe Constructor (not) | Floor Manager | Quality Inspector | System Admin |
-| ------------------------------------ | ----------------------------- | ---------------------- | ------------- | ----------------- | ------------ |
-| See Procurement                      | own requests                  | empty state            | all           | —                 | all, read    |
-| Submit / cancel own pending request  | ✅                            | —                      | —             | —                 | —            |
-| Add a remark                         | on own requests               | —                      | ✅            | —                 | —            |
-| Approve / reject / mark received     | —                             | —                      | ✅            | —                 | —            |
-| Designate requesters                 | —                             | —                      | ✅            | —                 | ✅           |
+| Action                              | Shoe Constructor (designated) | Shoe Constructor (not) | Floor Manager | Quality Inspector | System Admin |
+| ----------------------------------- | ----------------------------- | ---------------------- | ------------- | ----------------- | ------------ |
+| See Procurement                     | own requests                  | empty state            | all           | —                 | all, read    |
+| Submit / cancel own pending request | ✅                            | —                      | —             | —                 | —            |
+| Add a remark                        | on own requests               | —                      | ✅            | —                 | —            |
+| Approve / reject / mark received    | —                             | —                      | ✅            | —                 | —            |
+| Designate requesters                | —                             | —                      | ✅            | —                 | ✅           |
 
 Constructors don't have `inventory:read`. When they make a request they need a **narrow,
 read-only item picker**: active items with name, unit, on hand, reorder level and a low-stock

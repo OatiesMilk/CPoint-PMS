@@ -158,9 +158,12 @@ test("System Admin journey: thresholds, unknown classes and the audit trail", as
   ).toBeVisible();
 });
 
-test("Shoe Constructor: a coming-soon home and nothing else", async ({ page }) => {
+test("Shoe Constructor: their requests, and nothing else (D-030)", async ({ page }) => {
   await signInAs(page, ACCOUNTS.constructor);
-  await expect(page.getByRole("heading", { name: "Your tasks are coming soon" })).toBeVisible();
+  await expectRendered(page);
+  await expectAccessible(page);
+  await page.goto("/procurement");
+  await expectRendered(page);
   await expectAccessible(page);
   await page.goto("/batches");
   await expect(page).toHaveURL("/forbidden");

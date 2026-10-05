@@ -18,6 +18,7 @@ const EXPECTED_NAV = {
     "Overview",
     "Batches",
     "Inventory",
+    "Procurement",
     "Camera",
     "Scans",
     "Review queue",
@@ -39,6 +40,7 @@ const EXPECTED_NAV = {
     "Overview",
     "Batches",
     "Inventory",
+    "Procurement",
     "Camera",
     "Scans",
     "Users",
@@ -46,7 +48,7 @@ const EXPECTED_NAV = {
     "API tokens",
     "Audit log",
   ],
-  constructor: ["Home"],
+  constructor: ["Home", "Procurement"],
 } as const;
 
 for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
