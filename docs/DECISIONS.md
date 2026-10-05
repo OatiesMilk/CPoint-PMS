@@ -435,3 +435,147 @@ start. The only "fix" npm offers is a downgrade to Prisma 6, which breaks the pr
 
 **Consequences:** re-check `npm audit` when upgrading Prisma, and drop this entry once Prisma
 ships fixed dependencies. Don't add `overrides` that swap the CLI's dependencies untested.
+
+### D-028 · 2026-10-05 · Accepted — Only the Quality Inspector decides flagged scans (supersedes part of D-011)
+
+**Context:** D-011 and the master spec said the QI **or** the FM, "whoever is available" (survey
+Q5), resolves a scan the camera flagged (an unknown defect class, NEEDS_REVIEW). The client now
+asks that only the Quality Inspector does. This changes the review part of D-011. The confidence
+rule and overrides of automatic calls are unchanged.
+**Decision:**
+
+- New permission **`scan:review`** (QI only). `scan:decide` (FM + QI) now covers only overrides of
+  the camera's automatic Pass/Rework/Reject calls.
+- A scan whose camera verdict was **NEEDS_REVIEW** stays the QI's for its whole life: both while
+  it waits and after it's resolved, so the FM can't overturn the QI's call a click later. The rule
+  is one pure helper, `requiredDecisionPermission(scan)`.
+- It's enforced in `decideScan` (403 FORBIDDEN), so the Server Action and the API are both covered.
+  The UI follows the same helper.
+- The FM keeps the **Review queue**, read-only for flagged scans ("Waiting for a Quality
+  Inspector"). Today's automatic Rework/Reject calls stay there for overrides.
+- The demo seed resolves flagged scans as the QI only. A unit test asserts it.
+
+**Consequences:** if no QI is on shift, flagged scans wait. **This differs from the survey answer
+(Q5), so confirm it with CPoint** (listed under STATUS → Open questions). Reverting means mapping
+`scan:review` back to FM + QI in `permissions.ts`.
+
+### D-029 · 2026-10-05 · Accepted — Purchase requests: model and lifecycle
+
+**Context:** CPoint orders materials from a paper log book (Q12). A late leather roll has stopped
+the line (Q13), and nobody formally asks for stock (Q14). The client wants designated Shoe
+Constructors to request materials, and the FM to approve or reject each request with a status,
+an audit trail and remarks.
+**Decision:**
+
+- **Tables:**
+  - `purchase_requests`: a code `PR-YYYY-NNNN` from its own sequence table, the requester,
+    status, priority (`NORMAL | URGENT`), optional `neededBy`, a justification, and the decision
+    fields.
+  - `purchase_request_lines` (1–10): an inventory item, or a typed name and unit for something
+    not in inventory yet. The name and unit are always stored. Each line keeps a **stock snapshot**
+    (on hand and reorder level when asked), and the movement posted on receipt.
+  - `purchase_request_events`: the timeline users see, since the audit log is admin-only.
+  - `purchase_request_remarks`: append-only.
+- **Lifecycle** (`src/lib/procurement-rules.ts`, pure):
+  - `PENDING → APPROVED | REJECTED` by the FM (a rejection needs a reason of 3+ characters);
+  - `PENDING → CANCELLED` by the requester only;
+  - `APPROVED → RECEIVED` by the FM.
+  - A request is never edited after it's sent: cancel and send a new one.
+- **Receiving** posts an inventory **IN** ("Received for PR-…") for every line linked to an item,
+  through `postMovement` in the same transaction (D-023's single ledger write path). Typed items
+  are listed as "add to inventory first". The whole request is received at once; there's no
+  partial receipt (Step 1 answer).
+- **Concurrency:** every status change is a conditional update on the status that was loaded
+  (409 STALE). Every mutation writes an event and `recordAudit` in the same transaction.
+- **Views:**
+  - the list (Pending first for the FM, urgent then oldest), the form, and the detail page with
+    stock then and now;
+  - an FM home card, a "Requested" badge on Inventory, and "My requests" on the constructor home.
+- **Out of scope:** notifications, CSV and stats for requests. Nothing is counted per person
+  (D-008); the requester's name on a request is fine, as in the log book.
+
+**Consequences:** the ledger stays the only way stock changes. Lines keep their own name and
+unit, so renaming an item later doesn't rewrite history.
+
+### D-030 · 2026-10-05 · Accepted — Designated requesters
+
+**Context:** only some Shoe Constructors should request materials, and the System Admin **or** the
+FM chooses who.
+**Decision:**
+
+- **The flag:** a per-user flag, `users.canRequestMaterials`. Permissions stay role-based:
+  - `procurement:read` (FM, Admin, Constructor; constructors see only their own requests);
+  - `procurement:request` (Constructor);
+  - `procurement:decide` (FM);
+  - `procurement:remark` (FM; constructors on their own requests);
+  - `procurement:designate` (FM, Admin). The FM does **not** get `user:manage`.
+- **One check:** `canSubmitPurchaseRequest(user)` = the role permission **and** the flag. Pages,
+  Server Actions and the API all use it (403 `NOT_A_REQUESTER`).
+- **Fresh on every request:** the flag rides on `SessionUser`, which the guard reads from the
+  database on every request (D-016). Turning it off applies on the person's next click, and they
+  stay signed in.
+- **Who can hold it:** only an active Shoe Constructor. A role change clears it, in the same
+  transaction, with an audit entry.
+- **Where it's set:** the FM's Requesters tab and the Admin's Users menu use the same service
+  (`setRequester`), and both are audited.
+- **Constructors' item picker:** a narrow, read-only list of active items with stock. They don't
+  get `inventory:read`.
+- **Bootstrap:** the demo constructor is designated when it's created, and only then, so an FM
+  who stops it isn't overridden on the next start.
+
+**Consequences:** Phase 1's "Constructor is a placeholder role" no longer holds. Q14 is still
+open: who approves leather rolls (the FM or the leather-ordering staff member)?
+
+### D-031 · 2026-10-05 · Accepted — Every constructor requests materials; leather rolls need the OK (supersedes D-030)
+
+**Context:** the team clarified the client's rule (survey Q14).
+
+- Every Shoe Constructor can request any material except leather rolls.
+- Only the constructor(s) a System Admin or the Floor Manager designates may also request leather
+  rolls. In practice that's the person who orders leather.
+- The Floor Manager approves every request, leather rolls included.
+
+D-030 had made the whole procurement module depend on designation.
+**Decision:**
+
+- **Submitting:** `procurement:request` (Shoe Constructor) is enough to send a request, cancel
+  your own pending one, and add remarks to your own.
+- **Leather rolls:** they also need `users.canRequestLeatherRolls`, which is the old
+  `canRequestMaterials`, renamed. The rename keeps who was designated. The check is one helper,
+  `canRequestLeatherRollsFor(user)`.
+- **Recognising leather rolls:** each request line now records its **category**, copied from the
+  inventory item or chosen for a typed item. A typed "leather roll" is caught the same way as a
+  picked one.
+- **Errors and UI:**
+  - A leather-roll line without the OK is refused with 403 `LEATHER_ROLLS_NOT_ALLOWED`.
+  - The form greys leather rolls out and says to ask the Floor Manager.
+  - The FM's "Leather roll requesters" tab and the Admin's Users menu set the flag. Audit actions
+    are `procurement.leather_rolls.grant|revoke`.
+- **Unchanged from D-030:**
+  - the flag is read from the database on every request, so a change applies on the next click
+    without signing anyone out;
+  - only an active Shoe Constructor can hold it, and a role change clears it;
+  - the demo constructor gets it when bootstrap creates the account.
+
+**Consequences:**
+
+- Migration `leather_roll_requesters`: a column rename, plus a backfilled line `category`.
+- The constructor home and Procurement are the same for every constructor; only the leather
+  options differ.
+
+### D-032 · 2026-10-05 · Accepted — `main` is the base branch; changes arrive by pull request
+
+**Context:** all of `system-rebuild` is now in `main` (PR #1), and the team merges pull requests
+by hand. The "work on `system-rebuild`" rule in CLAUDE.md, the skills and the docs no longer
+matched how the repo is used.
+**Decision:**
+
+- `main` is the integration branch, and nobody pushes to it directly.
+- Each session works on a branch from the latest `main`: the branch the session gives you, or
+  `feature/<topic>`. It pushes that branch, and the team opens and merges the PR.
+- CI runs on pull requests and on pushes to `main`. `system-rebuild` is kept only as history and
+  receives no new work.
+- `/resume` checks the current branch against `main`, and `/wrap-up` pushes the current branch.
+
+**Consequences:** STATUS names the branch that holds unmerged work. A session that finds its
+branch already merged restarts it from `main`.

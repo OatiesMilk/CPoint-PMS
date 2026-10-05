@@ -8,8 +8,10 @@ description: Start-of-session briefing for the CPoint rebuild. Reads the living 
 1. Read `docs/STATUS.md`, `docs/ROADMAP.md` (current phase only), the top 3 entries of
    `docs/SESSION_LOG.md`, and skim `docs/DECISIONS.md` headings.
 2. Check reality against the docs:
-   - `git branch --show-current` (should be `system-rebuild`), `git status --short`,
-     `git log --oneline -10`.
+   - `git branch --show-current` (a working branch, never `main`; D-032), `git status --short`,
+     `git log --oneline -10`, and `git fetch origin main` then `git log --oneline HEAD..origin/main`.
+   - If the working branch is behind `main`, or already merged into it, say so and propose
+     updating or restarting it from `origin/main` before any new work.
    - If STATUS claims something is done that the code or git history doesn't show, say so.
 3. Reply in **under 15 lines**:
    - Current phase and % of its acceptance criteria ticked

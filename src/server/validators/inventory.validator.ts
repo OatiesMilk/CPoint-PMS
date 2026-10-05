@@ -5,7 +5,7 @@ import { MAX_QUANTITY, hasAtMostTwoDecimals } from "@/lib/inventory-rules";
 const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
 
 /** A quantity from a form or JSON: a number ≥ min, at most 2 decimals. */
-const quantity = (opts: { min: number; label: string; exclusiveMin?: boolean }) =>
+export const quantity = (opts: { min: number; label: string; exclusiveMin?: boolean }) =>
   z.coerce
     .number({ error: `Enter the ${opts.label} as a number.` })
     .refine((n) => Number.isFinite(n), `Enter the ${opts.label} as a number.`)

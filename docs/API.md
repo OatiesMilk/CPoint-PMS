@@ -132,15 +132,18 @@ or `404 NO_BATCH_AT_PREPARATION`.
 
 ## Scans (session)
 
-| Method & path                      | Permission    | Notes                                                                                                                               |
-| ---------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/scans`                | `scan:read`   | filters `verdict`, `status`, `source`, `batch` (code), `override=1`, `page`; or `limit=1…50` for the latest scans (the live widget) |
-| `GET /api/v1/scans/{id}`           | `scan:read`   | scan, detections (with boxes), rework/salvage history, who decided                                                                  |
-| `GET /api/v1/scans/{id}/image`     | `scan:read`   | the captured image (`Cache-Control: private`)                                                                                       |
-| `POST /api/v1/scans/{id}/decision` | `scan:decide` | `{ verdict: PASS\|REWORK\|REJECT, reason?, expectedFinalVerdict }`                                                                  |
+| Method & path                      | Permission                                      | Notes                                                                                                                               |
+| ---------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/scans`                | `scan:read`                                     | filters `verdict`, `status`, `source`, `batch` (code), `override=1`, `page`; or `limit=1…50` for the latest scans (the live widget) |
+| `GET /api/v1/scans/{id}`           | `scan:read`                                     | scan, detections (with boxes), rework/salvage history, who decided                                                                  |
+| `GET /api/v1/scans/{id}/image`     | `scan:read`                                     | the captured image (`Cache-Control: private`)                                                                                       |
+| `POST /api/v1/scans/{id}/decision` | `scan:decide`; `scan:review` for a flagged scan | `{ verdict: PASS\|REWORK\|REJECT, reason?, expectedFinalVerdict }`                                                                  |
 
 **Decisions:**
 
+- A scan the camera flagged (`aiVerdict: NEEDS_REVIEW`) is decided only by a Quality Inspector
+  (`scan:review`), both while it waits and after it's resolved. Anyone else gets `403 FORBIDDEN`
+  (D-028). Other scans can be overridden by the Floor Manager or the Quality Inspector.
 - Resolving a `NEEDS_REVIEW` scan needs no reason. Changing an existing decision (an override)
   needs a `reason` (3–300 characters).
 - `expectedFinalVerdict` is the verdict the person saw (`null` for pending). If it changed, the
@@ -202,6 +205,49 @@ never edited or deleted. Quantities are numbers with at most 2 decimals.
 
 Low stock means an active item with `quantityOnHand ≤ reorderLevel` (out of stock at 0).
 
+## Procurement (session)
+
+Purchase requests (D-029, D-031). Any Shoe Constructor asks for materials; **leather rolls** only
+if the Floor Manager or System Admin has allowed them. The Floor Manager approves or rejects every
+request, then marks it received. A request is never edited after it's
+sent: cancel it and send a new one. Every change adds a timeline event and an audit row.
+
+```
+PENDING ─approve─▶ APPROVED ─receive─▶ RECEIVED
+   ├─reject (reason)─▶ REJECTED
+   └─cancel (requester)─▶ CANCELLED
+```
+
+| Method & path                                    | Who                                                             | Body / query                                                                                                                                       |
+| ------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/procurement/requests`               | `procurement:read` (constructors: own)                          | `?status=&category=&item=&from=&to=&page=` → `{ rows, total, counts, page, pageCount }`                                                            |
+| `POST /api/v1/procurement/requests`              | `procurement:request` (constructors; leather rolls need the OK) | `RequestForm` → `201 { id, code, alreadyRequested[] }`                                                                                             |
+| `GET /api/v1/procurement/requests/{id}`          | `procurement:read` (constructors: own)                          | lines (stock snapshot + current stock), `events`, `remarks`, `actions`, `canRemark`                                                                |
+| `POST /api/v1/procurement/requests/{id}/approve` | `procurement:decide` (FM)                                       | `{ note? }` (send `{}` for none)                                                                                                                   |
+| `POST /api/v1/procurement/requests/{id}/reject`  | `procurement:decide` (FM)                                       | `{ reason }` (3–300)                                                                                                                               |
+| `POST /api/v1/procurement/requests/{id}/receive` | `procurement:decide` (FM)                                       | no body. Posts an inventory **IN** ("Received for PR-…") for every line linked to an item                                                          |
+| `POST /api/v1/procurement/requests/{id}/cancel`  | the requester                                                   | `{ note? }`                                                                                                                                        |
+| `POST /api/v1/procurement/requests/{id}/remarks` | FM; the requester on their own                                  | `{ body }` (1–500) → `201`. Remarks are never edited or deleted                                                                                    |
+| `GET /api/v1/procurement/items`                  | `procurement:request`                                           | active items: `sku, name, category, unit, onHand, reorderLevel, low, allowed, openRequestCode` (`allowed: false` for leather rolls without the OK) |
+| `GET /api/v1/procurement/requesters`             | `procurement:designate` (FM, Admin)                             | active Shoe Constructors with `canRequestLeatherRolls`                                                                                             |
+| `PUT /api/v1/procurement/requesters/{userId}`    | `procurement:designate` (FM, Admin)                             | `{ canRequestLeatherRolls }`. `409` unless the person is an active Shoe Constructor                                                                |
+
+**`RequestForm`**: `priority` (`NORMAL|URGENT`, default `NORMAL`), `neededBy?` (`YYYY-MM-DD`, today
+or later), `justification` (3–500), `lines` (1–10). Each line is `{ inventoryItemId, quantity,
+note? }`, or `{ itemName, category, unit, quantity, note? }` for something not in inventory yet
+(`category` is an inventory category, so a typed leather roll is recognised). The same
+item can't appear twice. `alreadyRequested` lists items another open request already asks for:
+a heads-up, never a block.
+
+**Errors:**
+
+- `403 LEATHER_ROLLS_NOT_ALLOWED`: a line is a leather roll (picked or typed) and the constructor
+  isn't allowed leather rolls. A change to the flag applies on their next request; they stay
+  signed in.
+- `409 CONFLICT`: the status doesn't allow it ("Only a pending request can be approved…").
+- `409 STALE`: someone else changed the request after it was loaded.
+- `404`: a constructor asking for someone else's request.
+
 ## Administration (session, System Admin)
 
 All of these need the System Admin role (`user:manage`, `settings:manage`, `audit:read`) and are
@@ -260,9 +306,7 @@ default is the last 14 days, at most 92, and never past today.
 
 ## Coming next
 
-| Phase | Endpoints                                      |
-| ----- | ---------------------------------------------- |
-| 8     | none planned; hardening of the endpoints above |
+No endpoints are planned beyond the roadmap. Component tracking waits on CPoint's answers.
 
 The Phase 3 CV ingestion contract is specified in `docs/prompts/system-rebuild.md` →
 `<cv_integration_contract>`. Keep it stable once published, because the YOLO service depends on it.

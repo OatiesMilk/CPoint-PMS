@@ -25,7 +25,13 @@ const svc = {
         now,
         classKeys: input.detections.map((d) => d.classKey),
       });
-      return { scanId: `s${calls.length}`, batchId: input.batchId, verdict: "PASS" };
+      // The unknown class is flagged, as the real decision engine does (D-011).
+      const flagged = input.detections.some((d) => d.classKey === "scratch");
+      return {
+        scanId: `s${calls.length}`,
+        batchId: input.batchId,
+        verdict: flagged ? "NEEDS_REVIEW" : "PASS",
+      };
     },
   ),
 };
@@ -39,7 +45,12 @@ const mocks = {
     { id: "st2", name: "Topsider" },
   ]),
   listActiveSuppliers: vi.fn(async () => [{ id: "sp1", name: "Supplier" }]),
-  findUserByEmail: vi.fn(async (email: string) => ({ id: email })),
+  findUserByEmail: vi.fn(async (email: string) => ({
+    id: email,
+    role: email.startsWith("inspector") ? "QUALITY_INSPECTOR" : "FLOOR_MANAGER",
+    isActive: true,
+    canRequestLeatherRolls: true,
+  })),
 };
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
@@ -73,7 +84,20 @@ vi.mock("@/server/services/salvage.service", () => ({
   assignSalvage: vi.fn(),
   discardSalvage: vi.fn(),
 }));
-vi.mock("@/server/services/scan-decision.service", () => ({ decideScan: vi.fn() }));
+const decideScan = vi.fn();
+vi.mock("@/server/services/scan-decision.service", () => ({ decideScan }));
+const procurement = {
+  createRequest: vi.fn(async (_values: unknown, _actor: unknown, now: Date) => {
+    calls.push({ fn: "request", batchId: "procurement", now });
+    return { id: `pr${calls.length}`, code: "PR", alreadyRequested: [] };
+  }),
+  actOnRequest: vi.fn(async (_id: string, _input: unknown, _actor: unknown, now: Date) => {
+    calls.push({ fn: "request", batchId: "procurement", now });
+  }),
+  addRemark: vi.fn(),
+  setRequester: vi.fn(),
+};
+vi.mock("@/server/services/procurement.service", () => procurement);
 vi.mock("@/server/services/scan-ingest.service", () => ({ ingestScan: svc.ingestScan }));
 
 const { mulberry32, seedDemoWeek, stageDurationMs, STAGE_HOURS } =
@@ -153,5 +177,32 @@ describe("seedDemoWeek", () => {
     expect(scans.length).toBeGreaterThan(100);
     expect(scans.slice(-2).map((c) => c.classKeys)).toEqual([[UNKNOWN_CLASS], [UNKNOWN_CLASS]]);
     expect(new Set(scans.slice(-2).map((c) => c.batchId)).size).toBe(1);
+  });
+
+  it("decides flagged scans as the Quality Inspector only, never by override (D-028)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    // ingestScan's mock names each scan s<n>, where n counts every recorded call so far.
+    const flaggedIds = new Set(
+      calls.flatMap((c, i) =>
+        c.fn === "scan" && c.classKeys?.includes("scratch") ? [`s${i + 1}`] : [],
+      ),
+    );
+    const onFlagged = decideScan.mock.calls.filter(([scanId]) => flaggedIds.has(scanId as string));
+    expect(onFlagged.length).toBeGreaterThan(0);
+    for (const [, input, actor] of onFlagged) {
+      expect((actor as { id: string }).id).toBe("inspector@cpoint.local");
+      expect(input).toMatchObject({ expectedFinalVerdict: null }); // a review, not an override
+    }
+  });
+
+  it("sends purchase requests through the services, forward in time and never past now", async () => {
+    const result = await seedDemoWeek({ now, seed: 1 });
+    expect(result).toMatchObject({ seeded: true, requests: 5 });
+    const times = calls.filter((c) => c.fn === "request").map((c) => c.now.getTime());
+    expect(times.length).toBeGreaterThan(5);
+    expect(Math.max(...times)).toBeLessThanOrEqual(now.getTime());
+    expect(
+      procurement.actOnRequest.mock.calls.map((c) => (c[1] as { action: string }).action),
+    ).toEqual(expect.arrayContaining(["approve", "receive", "reject", "cancel"]));
   });
 });

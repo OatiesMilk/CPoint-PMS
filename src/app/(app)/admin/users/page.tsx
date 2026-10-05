@@ -8,7 +8,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ChevronLeft, ChevronRight, CircleCheck, CircleSlash, LockKeyhole } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleSlash,
+  LockKeyhole,
+  ShoppingCart,
+} from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -97,7 +104,17 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
                       {isSelf && <span className="ml-2 text-sm text-muted-foreground">(you)</span>}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                    <TableCell>{ROLE_LABELS[u.role]}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        {ROLE_LABELS[u.role]}
+                        {u.canRequestLeatherRolls && (
+                          <Badge tone="neutral">
+                            <ShoppingCart aria-hidden />
+                            Leather rolls
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         <Badge tone={s.tone}>

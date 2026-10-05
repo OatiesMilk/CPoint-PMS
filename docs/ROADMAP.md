@@ -1,8 +1,9 @@
 # Roadmap: System Rebuild
 
 Do one phase per Claude Code session. Each phase ends with the quality gates in
-`docs/prompts/system-rebuild.md` passing, the docs updated, and a commit and push to `system-rebuild`.
-Tick the boxes as they're done.
+`docs/prompts/system-rebuild.md` passing, the docs updated, and a commit and push of the working
+branch, which the team merges into `main` by pull request (D-032). Phases 0–8 were built on
+`system-rebuild`, now merged. Tick the boxes as they're done.
 
 ## Phase 0 — Foundation
 
@@ -83,3 +84,20 @@ Tick the boxes as they're done.
 - [x] Clean `docker compose up --build` on a fresh machine, following the README word for word
       (sandbox: one documented base-image build arg; the CI docker job is the clean-runner check)
 - [x] Panel-ready README: architecture diagram, ERD, setup, demo script
+
+## Phase 9 — Procurement & review access
+
+- [x] Review access: only the Quality Inspector decides flagged scans, enforced in the service
+      (403), Floor Manager read-only on the scan and in the queue (D-028)
+- [x] Purchase requests: schema, lifecycle (approve / reject with reason / cancel / receive into
+      inventory), timeline, remarks, conditional updates and audit on every change (D-029)
+- [x] Designated requesters, chosen by the Floor Manager or the System Admin, effective on the
+      person's next request without signing out (D-030)
+- [x] Views: list with status tabs and filters, request form with a stock-aware picker, detail
+      with stock then and now, FM home card, Inventory "Requested" badge, constructor home
+- [x] API under `/api/v1/procurement/**`, documented in `docs/API.md`
+- [x] Seeds: demo constructor designated; the demo week has one request in each state
+- [x] Tests: unit (rules, permissions, service, designation, seed), e2e journeys and access,
+      axe smoke on the new pages
+- [x] Client follow-up (D-031): every Shoe Constructor requests materials; only those the FM or
+      Admin allows request leather rolls (also when typed); D-028 confirmed by the team

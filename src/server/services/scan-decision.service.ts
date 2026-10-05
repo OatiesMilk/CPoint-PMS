@@ -1,4 +1,4 @@
-import type { Verdict } from "@/lib/domain";
+import type { Role, Verdict } from "@/lib/domain";
 import { Errors } from "@/server/lib/errors";
 import { runInTransaction } from "@/server/models/db";
 import {
@@ -9,6 +9,7 @@ import {
   insertSalvageItem,
 } from "@/server/models/outcome.model";
 import { findScanById, updateScanDecision } from "@/server/models/scan.model";
+import { can, requiredDecisionPermission } from "@/server/policies/permissions";
 import type { DecisionInput } from "@/server/validators/scan.validator";
 import { recordAudit } from "./audit.service";
 
@@ -17,16 +18,20 @@ const STALE = "Someone else already decided this scan. Refresh to see the curren
 /**
  * A person's decision on a scan (D-011). Resolving a NEEDS_REVIEW scan needs no reason; changing an
  * existing decision (an override) does. The scan's rework ticket / salvage item is swapped to match,
- * keeping the cancelled one as history (D-018).
+ * keeping the cancelled one as history (D-018). A scan the camera flagged is decided only by a
+ * Quality Inspector, before and after it's resolved (D-028).
  */
 export async function decideScan(
   id: string,
   input: DecisionInput,
-  actor: { id: string },
+  actor: { id: string; role: Role },
   now: Date = new Date(),
 ) {
   const scan = await findScanById(id);
   if (!scan) throw Errors.notFound("This scan");
+  if (!can(actor.role, requiredDecisionPermission(scan))) {
+    throw Errors.forbidden("Only a Quality Inspector can decide a scan the camera flagged.");
+  }
   if (scan.batch.status === "COMPLETED" || scan.batch.status === "CANCELLED") {
     throw Errors.conflict(
       `Batch ${scan.batch.code} is closed, so its scans can no longer be changed.`,

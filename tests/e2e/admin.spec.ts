@@ -9,8 +9,15 @@ async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCO
   await expect(page).toHaveURL(account.home);
 }
 
+// Pages opened beside the test's own page are closed after each test, so renderers don't pile up.
+const extraPages: Page[] = [];
+test.afterEach(async () => {
+  await Promise.all(extraPages.splice(0).map((p) => p.close()));
+});
+
 async function adminPage(browser: Browser) {
   const page = await browser.newPage();
+  extraPages.push(page);
   await signInAs(page, ACCOUNTS.admin);
   return page;
 }
@@ -36,6 +43,8 @@ test("a new account signs in with its temporary password, must choose its own, a
   const temp = await create.getByLabel("Temporary password").inputValue();
   expect(temp).toMatch(/^[A-Za-z2-9]{12}$/);
   await create.getByRole("button", { name: "Done" }).click();
+  // Searched, not browsed: other tests add accounts that can push this one past page 1.
+  await admin.goto(`/admin/users?q=${encodeURIComponent(email)}`);
   await expect(admin.getByRole("row", { name: email })).toContainText("Temporary password");
 
   // First sign-in: forced to choose a password before anything else.

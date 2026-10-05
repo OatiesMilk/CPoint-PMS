@@ -16,6 +16,120 @@ Template:
 
 ---
 
+## 2026-10-05 — Phase 9 follow-up: leather-roll requesters, branch workflow
+
+**Who:** Team + Claude Code
+**Summary:** Applied the team's answers.
+
+- **D-028 confirmed:** the FM doesn't decide flagged scans.
+- **Procurement rule (D-031, supersedes D-030):** every Shoe Constructor requests materials, and
+  only the ones the FM or Admin allows can request leather rolls.
+- **Branch workflow (D-032):** the docs and tooling now say `main` plus pull requests that the
+  team merges.
+
+**Changed:**
+
+- **Schema:** migration `leather_roll_requesters`.
+  - `canRequestMaterials` is renamed to `canRequestLeatherRolls` (who was designated is kept).
+  - Request lines record their `category`, backfilled from the item, so typed leather rolls are
+    caught too.
+- **Server:**
+  - `canRequestLeatherRollsFor`; submit, cancel and remarks need only the constructor role;
+  - a leather-roll line without the OK is refused with 403 `LEATHER_ROLLS_NOT_ALLOWED`;
+  - the picker marks leather rolls `allowed: false`, and the audit actions are
+    `procurement.leather_rolls.*`.
+- **UI:**
+  - the form greys out leather rolls with a note, and typed items choose a kind;
+  - the constructor home and Procurement are the same for every constructor;
+  - "Leather roll requesters" tab, plus the Admin menu wording.
+- **Tests:**
+  - unit: picked and typed leather rolls, the picker, permissions;
+  - e2e: supplies are always allowed; leather rolls work after the FM allows them and are
+    refused again once stopped, on the next request.
+- **Docs and tooling:**
+  - CLAUDE.md, the `/resume` and `/wrap-up` skills, AGENTIC_WORKFLOW, the ROADMAP header, and CI
+    triggers (`main` plus pull requests);
+  - API, README (overview, accounts, demo script, ERD), DESIGN, the master spec roles table,
+    STATUS.
+
+- **Security fix found by the Docker e2e run:** the sign-in form could submit natively before
+  hydration, as GET, putting the email and password in the URL. It's now `method="post"`, with
+  the button disabled until hydration. There's an e2e regression test (it fails before the fix).
+- **Test stability:**
+  - the e2e helpers left a browser page open per API login, and full runs crashed Chromium;
+    they're closed now;
+  - a procurement check filters to its own item, since data piles up across runs.
+
+**Gates:**
+
+- lint ✅ · typecheck ✅ · test ✅ (364) · build ✅ · format ✅
+- e2e ✅ 64/64 three times on `next start`, and twice on a fresh Docker stack. The stack applied
+  all 6 migrations and seeded one request per state, with stock equal to the ledger.
+- Before the page-leak fix, the same browser crash showed with both the old and new login forms
+  (an A/B check).
+- The sandbox ran out of disk once; I pruned the Docker build cache (26 GB).
+  **Decisions:** D-031, D-032 (D-028 confirmed)
+  **Follow-ups:** open the PR into `main`; tell CPoint about the Q5 change (D-028).
+
+---
+
+## 2026-10-05 — Phase 9: Procurement & review access
+
+**Who:** Team + Claude Code
+**Summary:** Added the procurement module, and fixed an access bug in the review queue.
+
+- **Procurement:** designated Shoe Constructors request materials; the Floor Manager approves or
+  rejects them and marks them received, which posts the stock IN through the inventory ledger.
+- **Bug fix:** only the Quality Inspector now decides scans the camera flagged. This changes the
+  review part of D-011 and needs CPoint's confirmation.
+
+The Step 1 answers:
+
+- receipt is in this phase, for the whole request;
+- a flagged scan is QI-only for life;
+- the FM keeps the review queue, read-only;
+- requests can have up to 10 items.
+
+**Changed:**
+
+- **Scans (D-028):**
+  - `scan:review` (QI) and `requiredDecisionPermission`, enforced in `decideScan` (403);
+  - the FM sees "Waiting for a Quality Inspector" on the scan and in the queue.
+- **Schema:** `procurement` migration: requests, lines with a stock snapshot, events, remarks, a
+  sequence table, and `users.canRequestMaterials`.
+- **Server:**
+  - `lib/procurement-rules.ts`, `procurement.{model,service,validator,controller}`;
+  - permissions `procurement:{read,request,decide,remark,designate}`;
+  - the requester guards; the flag on `SessionUser`;
+  - a role change clears the flag.
+- **API:** `/api/v1/procurement/**` (requests, actions, remarks, items, requesters).
+- **UI:**
+  - the list, form and detail pages;
+  - the Requesters tab, FM home card, Inventory "Requested" badge, constructor home, and the
+    Admin Users toggle.
+- **Seeds:** bootstrap designates the demo constructor; the demo week adds five requests, one per
+  state.
+- **Fixes found by the gates:**
+  - the detail table overflowed at 1280 px;
+  - an invalid `<dl>` in the FM card (axe, seen only on the Docker demo);
+  - the Latest scans skeleton `<ul role=status>` (axe; a Phase 8 regression);
+  - three e2e tests that broke as test data grew.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (362) · build ✅ · format ✅ · e2e ✅ 63/63 twice on
+`next start` and twice on a fresh Docker stack with the demo week · docker ✅ demo week checked in
+psql (one request per state, stock equals the ledger, flagged scans decided only by the QI, no
+re-seed on restart). Sandbox deviations: a base-image build arg, and another project name and
+ports so the dev DB kept running.
+**Decisions:** D-028 (QI-only flagged scans, supersedes part of D-011), D-029 (purchase requests),
+D-030 (designated requesters)
+**Follow-ups:**
+
+- Confirm with CPoint: the Q5 change (D-028), and who approves leather rolls (Q14).
+- Open a PR into `main` when the team is ready.
+- Optional: CSV export and monthly counts for procurement.
+
+---
+
 ## 2026-10-03 — Phase 8: Hardening & demo
 
 **Who:** Team + Claude Code

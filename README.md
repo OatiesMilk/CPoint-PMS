@@ -6,12 +6,16 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
 - **Batches:** each one is a leather roll. A batch moves through **Preparation → Upper Making →
   Sole-ing → Finishing**, and the system records who moved it and when.
 - **Camera checkpoint:** a computer-vision camera at Preparation checks each leather section
-  before it is cut and calls it **Pass / Rework / Reject**. Unknown defects go to a person to
-  decide. A person can override any call.
+  before it is cut and calls it **Pass / Rework / Reject**. Unknown defects go to the Quality
+  Inspector to decide. A person can override the camera's automatic calls.
 - **Rework and salvage:** reworked sections go to the repair station board. Rejected leather is
   kept as salvage for another batch rather than thrown away.
 - **Inventory:** leather rolls and supplies are tracked through an audited ledger, with low-stock
   alerts.
+- **Procurement:** Shoe Constructors request materials when they run low. Leather rolls only by
+  the constructor the Floor Manager or Admin allows (usually the one who orders leather). The
+  Floor Manager approves or rejects each request, then marks it received, which adds the stock to
+  inventory.
 - **Reports:** daily totals, defects by type, how often people kept the camera's call, and time
   per stage (the bottleneck), with CSV for Excel. Nothing is ranked per person.
 
@@ -88,23 +92,23 @@ Compose v2) and this folder. No Node.js needed.
 `DEMO_USER_PASSWORD`, including `admin@cpoint.local`. `BOOTSTRAP_ADMIN_PASSWORD` is used only
 when there is no admin account yet, as on a real install with demo users off.
 
-| Role              | Email                      | Lands on             | Does                                                 |
-| ----------------- | -------------------------- | -------------------- | ---------------------------------------------------- |
-| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Batches, stages, rework, salvage, inventory, reports |
-| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Review queue, overrides, rework, quality reports     |
-| System Admin      | `admin@cpoint.local`       | `/admin`             | Users, thresholds, defect types, tokens, audit       |
-| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | A "coming soon" page until CPoint confirms its scope |
+| Role              | Email                      | Lands on             | Does                                                                             |
+| ----------------- | -------------------------- | -------------------- | -------------------------------------------------------------------------------- |
+| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Batches, stages, rework, salvage, inventory, purchase request decisions, reports |
+| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Decides flagged scans (review queue), overrides, rework, quality reports         |
+| System Admin      | `admin@cpoint.local`       | `/admin`             | Users, thresholds, defect types, tokens, audit, who can request materials        |
+| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | Sends purchase requests (the demo one may also request leather rolls)            |
 
 ## Demo script
 
-About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows
+About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows
 (or one normal and one private) to show two roles side by side.
 
 ### 1. Floor Manager (4 min)
 
 1. **Home** (`manager@cpoint.local`): batches by stage, with **Upper Making** marked as the
-   longest wait. Also today's inspection split, open repairs, low stock (Contact cement) and the
-   daily summary.
+   longest wait. Also today's inspection split, open repairs, low stock (Contact cement), the
+   daily summary, and **purchase requests** waiting for a decision (one urgent).
 2. **Batches → B-2026-0011:** the stage stepper and timeline (who moved it, when, and how long
    each stage took). The **Yield** card shows usable sections = passed + repaired, and how many
    went to the repair station and to salvage.
@@ -132,6 +136,9 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
 
    ![Review queue](docs/screenshots/review-queue.png)
 
+   Only the Quality Inspector decides these (D-028). The Floor Manager sees the same queue, but
+   read-only: "Waiting for a Quality Inspector".
+
 2. Open one of **today's automatic Rework and Reject** calls. The image shows the camera's box
    and confidence. **Override decision…** asks for a reason, and the scan then shows both calls
    (the camera's is struck through).
@@ -141,7 +148,27 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
 3. **Reports → Camera call vs final verdict:** the off-diagonal numbers are overrides. A high
    agreement (about 95% in the demo week) means the thresholds suit the line.
 
-### 3. System Admin (2 min)
+### 3. Shoe Constructor → Floor Manager: a purchase request (2 min)
+
+1. **Constructor home** (`constructor@cpoint.local`): their open requests. **New request**: pick
+   **Contact cement** (the picker shows it's low, and that PR-… already asks for it), 2 cans,
+   mark it **Urgent**, say why, and send it. Requests can't be edited afterwards: cancel and
+   resend. Every constructor can request supplies; **leather rolls** only once the Floor Manager
+   or Admin allows it (the demo constructor is allowed).
+2. **Floor Manager → Procurement:** the **Pending** tab, urgent first, with how long each has
+   waited. Open the request: the stock **when asked** sits next to the stock **now**.
+
+   ![A pending purchase request](docs/screenshots/purchase-request.png)
+
+3. **Approve** with a note, or **Reject…** with a reason the constructor will see. Open the
+   approved request from earlier in the week and **Mark received…**: the dialog lists what goes
+   into stock, and Inventory shows the delivery in the ledger ("Received for PR-…").
+4. The **timeline** and **remarks** on the request show who did what and when. The **Leather roll
+   requesters** tab chooses who may also request leather rolls. Stop it for the demo
+   constructor: on their next try, leather rolls are greyed out in the form, without signing
+   them out.
+
+### 4. System Admin (2 min)
 
 1. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Rework from 60%,
    with a preview of what the camera will decide. Changes apply to new scans only. Old scans keep
@@ -160,8 +187,10 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
 - **The decision rule (D-011):** the highest confidence among known defects decides. ≥ 90% →
   Reject, 60–89% → Rework, below 60% → Pass. An unknown class always goes to a person. The
   thresholds are data the admin can change.
-- **People stay in charge:** any call can be overridden with a reason, and the reports show how
-  often that happens.
+- **People stay in charge:** the camera's calls can be overridden with a reason, and the reports
+  show how often that happens. Flagged scans are the Quality Inspector's to decide (D-028).
+- **Requests close the loop with stock:** an approved request, once received, posts the delivery
+  into the inventory ledger. Nobody orders twice: Inventory marks items already requested.
 - **No per-person rankings or scores** anywhere (from the client survey). Reports aggregate by
   day, stage and defect only.
 - **Nothing is deleted:** stock moves through a ledger, rejected leather becomes salvage, and
@@ -232,6 +261,12 @@ erDiagram
   InventoryItem ||--o{ InventoryMovement : "ledger of"
   Batch |o--o{ InventoryMovement : "uses stock"
   Batch |o--o{ CvSettings : "camera points at"
+  User ||--o{ PurchaseRequest : "requests"
+  PurchaseRequest ||--|{ PurchaseRequestLine : "asks for"
+  InventoryItem |o--o{ PurchaseRequestLine : "is asked for"
+  PurchaseRequestLine |o--o| InventoryMovement : "received as"
+  PurchaseRequest ||--o{ PurchaseRequestEvent : "timeline"
+  PurchaseRequest ||--o{ PurchaseRequestRemark : "remarks"
 
   Batch {
     string code "B-2026-0001"
@@ -256,6 +291,18 @@ erDiagram
     string sku
     decimal quantityOnHand "changes only via movements"
     decimal reorderLevel
+  }
+  PurchaseRequest {
+    string code "PR-2026-0001"
+    enum status "PENDING, APPROVED, REJECTED, CANCELLED, RECEIVED"
+    enum priority "NORMAL, URGENT"
+    string rejectionReason
+  }
+  PurchaseRequestLine {
+    string itemName
+    enum category "leather rolls need the OK"
+    decimal quantity
+    decimal onHandAtRequest "snapshot"
   }
   InventoryMovement {
     enum type "IN, OUT, ADJUST"

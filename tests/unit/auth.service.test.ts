@@ -173,6 +173,26 @@ describe("checkSession (D-024)", () => {
   });
 });
 
+describe("checkSession and the leather-roll flag (D-031)", () => {
+  it("reads the flag fresh on every request, so turning it off applies at once", async () => {
+    users.findUserById.mockResolvedValueOnce(
+      user({ role: "SHOE_CONSTRUCTOR", canRequestLeatherRolls: true }),
+    );
+    expect(await checkSession("u1", 1)).toMatchObject({
+      ok: true,
+      user: { canRequestLeatherRolls: true },
+    });
+    // The Floor Manager stops their leather rolls: same token, next request, still signed in.
+    users.findUserById.mockResolvedValueOnce(
+      user({ role: "SHOE_CONSTRUCTOR", canRequestLeatherRolls: false }),
+    );
+    expect(await checkSession("u1", 1)).toMatchObject({
+      ok: true,
+      user: { canRequestLeatherRolls: false },
+    });
+  });
+});
+
 describe("changeOwnPassword (D-024)", () => {
   it("checks the current password before changing anything", async () => {
     users.findUserById.mockResolvedValue(user());

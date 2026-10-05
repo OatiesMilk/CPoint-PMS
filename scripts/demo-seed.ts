@@ -13,7 +13,7 @@ seedDemoWeek()
   .then(async (result) => {
     console.log(
       result.seeded
-        ? `Seeded ${result.batches} batches and ${result.scans} scans in ${Math.round(result.ms / 1000)}s.`
+        ? `Seeded ${result.batches} batches, ${result.scans} scans and ${result.requests} purchase requests in ${Math.round(result.ms / 1000)}s.`
         : `Nothing seeded: ${result.reason}.`,
     );
     await getPrisma().$disconnect();

@@ -24,6 +24,8 @@ export type SessionUser = {
   role: Role;
   /** Set by an admin reset or for a new account: the user must choose a password first (D-024). */
   mustChangePassword: boolean;
+  /** May request leather rolls (D-031). Read from the database on every request, like the role. */
+  canRequestLeatherRolls: boolean;
 };
 
 export type SignInResult =
@@ -41,6 +43,7 @@ function toSessionUser(user: User): SessionUser {
     email: user.email,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
+    canRequestLeatherRolls: user.canRequestLeatherRolls,
   };
 }
 

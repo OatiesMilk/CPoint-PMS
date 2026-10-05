@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { createBatch, createDeviceToken, managerApi, postScan, withDb } from "./cv-helpers";
+import {
+  createBatch,
+  createDeviceToken,
+  inspectorApi,
+  managerApi,
+  postScan,
+  withDb,
+} from "./cv-helpers";
 
 test.describe("camera ingestion API", () => {
   test("applies the confidence rule and flags unknown classes", async ({ browser, request }) => {
@@ -141,6 +148,44 @@ test.describe("people deciding", () => {
     await expect(page.locator("tbody tr")).toHaveCount(1);
     await expect(page.locator("tbody tr").first()).toContainText("Pass");
   });
+});
+
+test("only a Quality Inspector decides a flagged scan; the Floor Manager only sees it (D-028)", async ({
+  browser,
+  page,
+  request,
+}) => {
+  const api = await managerApi(browser);
+  const batch = await createBatch(api);
+  const { token } = await createDeviceToken();
+  const res = await postScan(request, token, batch.id, [{ classKey: "crease", confidence: 0.8 }]);
+  const { scanId } = (await res.json()).data;
+
+  // The Floor Manager: no controls on the scan or in the queue, and the API refuses.
+  await page.goto("/login");
+  await signIn(page, ACCOUNTS.manager.email);
+  await expect(page).toHaveURL(ACCOUNTS.manager.home);
+  await page.goto(`/scans/${scanId}`);
+  await expect(page.getByText(/Waiting for a Quality Inspector/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Override decision|Pass|Rework|Reject/ }),
+  ).toHaveCount(0);
+  await page.goto(`/review?batch=${batch.code}`);
+  await expect(page.getByRole("group", { name: `Decide ${batch.code} · #1` })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "Waiting for a Quality Inspector" })).toBeVisible();
+  const refused = await page.request.post(`/api/v1/scans/${scanId}/decision`, {
+    data: { verdict: "PASS", expectedFinalVerdict: null },
+  });
+  expect(refused.status()).toBe(403);
+  expect((await refused.json()).error.code).toBe("FORBIDDEN");
+
+  // The Quality Inspector decides it.
+  const decided = await (
+    await inspectorApi(browser)
+  ).post(`/api/v1/scans/${scanId}/decision`, {
+    data: { verdict: "PASS", expectedFinalVerdict: null },
+  });
+  expect(decided.status()).toBe(200);
 });
 
 test("the Floor Manager chooses which batch the camera feeds", async ({ browser, page }) => {

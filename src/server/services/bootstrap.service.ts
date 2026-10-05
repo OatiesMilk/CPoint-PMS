@@ -62,11 +62,18 @@ async function createUserWithAudit(input: {
   email: string;
   password: string;
   role: Role;
+  canRequestLeatherRolls?: boolean;
 }): Promise<void> {
   const passwordHash = await hashPassword(input.password);
   await runInTransaction(async (tx) => {
     const user = await createUser(
-      { name: input.name, email: input.email.toLowerCase(), passwordHash, role: input.role },
+      {
+        name: input.name,
+        email: input.email.toLowerCase(),
+        passwordHash,
+        role: input.role,
+        canRequestLeatherRolls: input.canRequestLeatherRolls ?? false,
+      },
       tx,
     );
     await recordAudit(tx, {
@@ -74,7 +81,12 @@ async function createUserWithAudit(input: {
       action: "user.create",
       entity: "User",
       entityId: user.id,
-      after: { email: user.email, role: user.role, source: "bootstrap" },
+      after: {
+        email: user.email,
+        role: user.role,
+        ...(input.canRequestLeatherRolls ? { canRequestLeatherRolls: true } : {}),
+        source: "bootstrap",
+      },
     });
   });
 }
@@ -120,6 +132,9 @@ export async function ensureDemoUsers(): Promise<number> {
       email: demo.email,
       password: DEMO_USER_PASSWORD,
       role: demo.role,
+      // The demo constructor can also request leather rolls (D-031). Set only when the account is
+      // created, so a Floor Manager who stops it isn't overridden on the next start.
+      canRequestLeatherRolls: demo.role === "SHOE_CONSTRUCTOR",
     });
     created += 1;
   }

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, system-rebuild]
+    branches: [main] # work arrives by pull request (D-032)
   pull_request:
 
 concurrency:

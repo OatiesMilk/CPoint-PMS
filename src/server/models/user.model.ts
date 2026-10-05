@@ -21,6 +21,7 @@ export type CreateUserData = {
   passwordHash: string;
   role: Role;
   mustChangePassword?: boolean;
+  canRequestLeatherRolls?: boolean;
 };
 
 export function createUser(data: CreateUserData, db: Db = defaultDb()) {
@@ -68,6 +69,7 @@ const adminSelect = {
   role: true,
   isActive: true,
   mustChangePassword: true,
+  canRequestLeatherRolls: true,
   lockedUntil: true,
   lastLoginAt: true,
   createdAt: true,
@@ -119,7 +121,13 @@ export async function listUsers(
 
 export function updateUser(
   id: string,
-  data: { name?: string; email?: string; role?: Role; isActive?: boolean },
+  data: {
+    name?: string;
+    email?: string;
+    role?: Role;
+    isActive?: boolean;
+    canRequestLeatherRolls?: boolean;
+  },
   db: Db = defaultDb(),
 ) {
   return db.user.update({ where: { id }, data, select: adminSelect });

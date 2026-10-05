@@ -1,7 +1,8 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   Quality Inspector or Floor Manager, whoever is free (client survey), many times a shift.
- * What:  settle the scans the camera couldn't decide, then spot-check today's automatic calls.
+ * Who:   Quality Inspector, many times a shift; the Floor Manager watches it (D-028).
+ * What:  settle the scans the camera couldn't decide (QI only), then spot-check today's
+ *        automatic calls (QI or FM, by override).
  * Worst: a flagged section waits while the roll is cut. Oldest first, one click per decision.
  */
 import type { Metadata } from "next";
@@ -23,13 +24,16 @@ import {
 } from "@/components/ui/table";
 import { formatManilaDateTime, formatPercent } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
+import { can } from "@/server/policies/permissions";
 import { reviewQueue } from "@/server/services/scan-query.service";
 import { ReviewRowActions } from "./review-row-actions";
 
 export const metadata: Metadata = { title: "Review queue" };
 
 export default async function ReviewPage({ searchParams }: PageProps<"/review">) {
-  await requirePermission("scan:decide");
+  const user = await requirePermission("scan:decide");
+  // Flagged scans are the Quality Inspector's to decide (D-028); the Floor Manager sees them only.
+  const canReview = can(user.role, "scan:review");
   await connection();
   const raw = (await searchParams).batch;
   const batch =
@@ -40,7 +44,11 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
     <>
       <PageHeader
         title="Review queue"
-        description="Scans the camera couldn’t decide, and today’s Rework and Reject calls."
+        description={
+          canReview
+            ? "Scans the camera couldn’t decide, and today’s Rework and Reject calls."
+            : "Scans the camera couldn’t decide wait here for a Quality Inspector. Today’s Rework and Reject calls are below."
+        }
       />
 
       <form method="get" className="flex items-end gap-2" aria-label="Filter the review queue">
@@ -88,7 +96,7 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
                 <TableHead>Batch · section</TableHead>
                 <TableHead>Camera saw</TableHead>
                 <TableHead numeric>Confidence</TableHead>
-                <TableHead className="text-right">Decide</TableHead>
+                <TableHead className="text-right">{canReview ? "Decide" : "Status"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -105,7 +113,13 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
                   </TableCell>
                   <TableCell numeric>{formatPercent(s.topDefect?.confidence)}</TableCell>
                   <TableCell className="text-right">
-                    <ReviewRowActions scanId={s.id} label={`${s.batchCode} · #${s.sequence}`} />
+                    {canReview ? (
+                      <ReviewRowActions scanId={s.id} label={`${s.batchCode} · #${s.sequence}`} />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Waiting for a Quality Inspector
+                      </span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

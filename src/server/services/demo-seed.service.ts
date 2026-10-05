@@ -1,4 +1,4 @@
-import type { Stage } from "@/lib/domain";
+import type { Role, Stage } from "@/lib/domain";
 import { manilaToday } from "@/lib/format";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
@@ -20,6 +20,7 @@ import { cancelBatch, createBatch, transitionBatchStage } from "./batch.service"
 import { createItem, recordMovement } from "./inventory.service";
 import { moveReworkTicket } from "./rework.service";
 import { assignSalvage, discardSalvage } from "./salvage.service";
+import { actOnRequest, addRemark, createRequest, setRequester } from "./procurement.service";
 import { decideScan } from "./scan-decision.service";
 import { ingestScan } from "./scan-ingest.service";
 
@@ -102,9 +103,10 @@ export const DEMO_INVENTORY = [
 ] as const;
 
 export type DemoSeedResult =
-  { seeded: true; batches: number; scans: number; ms: number } | { seeded: false; reason: string };
+  | { seeded: true; batches: number; scans: number; requests: number; ms: number }
+  | { seeded: false; reason: string };
 
-type Actor = { id: string };
+type Actor = { id: string; role: Role };
 
 export async function seedDemoWeek(
   options: { now?: Date; seed?: number; imageSize?: number } = {},
@@ -409,9 +411,142 @@ export async function seedDemoWeek(
     }
   }
 
-  const result: DemoSeedResult = { seeded: true, batches, scans, ms: Date.now() - started };
+  // ── purchase requests (D-029): the constructor asks, the Floor Manager decides ──
+  const requests = await seedRequests();
+
+  const result: DemoSeedResult = {
+    seeded: true,
+    batches,
+    scans,
+    requests,
+    ms: Date.now() - started,
+  };
   logger.info(result, "Demo week seeded");
   return result;
+
+  /**
+   * A handful of requests through the real services, one in each state: received (posts stock IN,
+   * so the ledger still balances), rejected with a reason, cancelled, approved and waiting for the
+   * delivery, and an urgent one pending for the low Contact cement.
+   */
+  async function seedRequests(): Promise<number> {
+    const found = await findUserByEmail("constructor@cpoint.local");
+    if (!found || !found.isActive) return 0;
+    // Two of the requests are for leather rolls, which need the Floor Manager's OK (D-031).
+    if (!found.canRequestLeatherRolls) await setRequester(found.id, true, fm!);
+    const sc = { id: found.id, role: found.role, canRequestLeatherRolls: true };
+    const item = (sku: string) => itemIds.get(sku);
+    const last = workingDays[workingDays.length - 1];
+    const beforeLast = workingDays[Math.max(0, workingDays.length - 2)];
+    let made = 0;
+
+    const send = async (
+      when: Date,
+      values: {
+        priority: "NORMAL" | "URGENT";
+        neededBy?: string;
+        justification: string;
+        lines: {
+          inventoryItemId?: string;
+          itemName?: string;
+          category?: "OTHER";
+          unit?: string;
+          quantity: number;
+        }[];
+      },
+    ) => {
+      if (!past(when) || values.lines.some((l) => !l.inventoryItemId && !l.itemName)) return null;
+      made += 1;
+      return createRequest(values, sc, when);
+    };
+    const later = (t: Date, hours: number) => {
+      const next = plus(t, hours * HOUR);
+      return past(next) ? next : null;
+    };
+
+    // Monday: thread and tacks for the week, approved, then received the next afternoon.
+    const t1 = at(workingDays[0], 9);
+    const r1 = await send(t1, {
+      priority: "NORMAL",
+      justification: "Thread and tacks for this week's school shoe batches.",
+      lines: [
+        { inventoryItemId: item("TH-001"), quantity: 4 },
+        { inventoryItemId: item("NL-001"), quantity: 5 },
+      ],
+    });
+    if (r1) {
+      const ok = later(t1, 1.5);
+      if (ok) {
+        await actOnRequest(
+          r1.id,
+          { action: "approve", note: "Ordering from the usual supplier today." },
+          fm!,
+          ok,
+        );
+        const note = later(t1, 2);
+        if (note) await addRemark(r1.id, "Supplier delivers tomorrow afternoon.", fm!, note);
+        const got = at(workingDays[1], 14);
+        if (past(got)) await actOnRequest(r1.id, { action: "receive" }, fm!, got);
+      }
+    }
+
+    // Midweek: topsider leather the FM already has coming.
+    const t2 = at(workingDays[2], 10);
+    const r2 = await send(t2, {
+      priority: "NORMAL",
+      justification: "Only two suede rolls left for the topsider orders.",
+      lines: [{ inventoryItemId: item("LR-002"), quantity: 2 }],
+    });
+    const no = r2 && later(t2, 3);
+    if (r2 && no)
+      await actOnRequest(
+        r2.id,
+        { action: "reject", reason: "Two suede rolls arrive with Thursday's leather delivery." },
+        fm!,
+        no,
+      );
+
+    // Something not in inventory, then found in storage.
+    const t3 = at(workingDays[Math.min(3, workingDays.length - 1)], 13);
+    const r3 = await send(t3, {
+      priority: "NORMAL",
+      justification: "Eyelets for the new topsider sample.",
+      lines: [{ itemName: "Brass eyelets, 5 mm", category: "OTHER", unit: "pack", quantity: 2 }],
+    });
+    const off = r3 && later(t3, 1);
+    if (r3 && off)
+      await actOnRequest(
+        r3.id,
+        { action: "cancel", note: "Found a pack in the storage room." },
+        sc,
+        off,
+      );
+
+    // Yesterday: a leather roll, approved and waiting for the delivery.
+    const t4 = at(beforeLast, 15);
+    const r4 = await send(t4, {
+      priority: "NORMAL",
+      justification: "Black cowhide for next week's school shoe batches.",
+      lines: [{ inventoryItemId: item("LR-001"), quantity: 3 }],
+    });
+    const yes = r4 && later(t4, 1);
+    if (r4 && yes)
+      await actOnRequest(
+        r4.id,
+        { action: "approve", note: "Ordered. Arriving early next week." },
+        fm!,
+        yes,
+      );
+
+    // Today: contact cement is low, so an urgent request waits for the Floor Manager.
+    await send(plus(now, -2 * HOUR), {
+      priority: "URGENT",
+      neededBy: last >= manilaToday(plus(now, -2 * HOUR)) ? last : undefined,
+      justification: "The last can is half empty and Upper Making uses it all day.",
+      lines: [{ inventoryItemId: item("AD-001"), quantity: 4 }],
+    });
+    return made;
+  }
 
   /** What people do after each scan: overrides, review decisions, repairs, salvage. */
   async function afterScan(

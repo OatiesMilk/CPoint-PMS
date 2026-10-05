@@ -18,6 +18,7 @@ import {
   ScanLine,
   ScrollText,
   Settings,
+  ShoppingCart,
   Users,
   Wrench,
   type LucideIcon,
@@ -44,6 +45,7 @@ type NavIcon =
   | "rework"
   | "salvage"
   | "inventory"
+  | "procurement"
   | "reports"
   | "users"
   | "settings"
@@ -61,6 +63,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   rework: Wrench,
   salvage: Recycle,
   inventory: Package,
+  procurement: ShoppingCart,
   reports: ChartColumn,
   users: Users,
   settings: Settings,

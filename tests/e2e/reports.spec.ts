@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { createBatch, createDeviceToken, managerApi, sampleJpeg } from "./cv-helpers";
+import { createBatch, createDeviceToken, inspectorApi, managerApi, sampleJpeg } from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -64,7 +64,10 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
     },
   });
   expect(override.status()).toBe(200);
-  const resolve = await api.post(`/api/v1/scans/${unknown.scanId}/decision`, {
+  // A flagged scan is the Quality Inspector's to decide (D-028).
+  const resolve = await (
+    await inspectorApi(browser)
+  ).post(`/api/v1/scans/${unknown.scanId}/decision`, {
     data: { verdict: "PASS", expectedFinalVerdict: null },
   });
   expect(resolve.status()).toBe(200);

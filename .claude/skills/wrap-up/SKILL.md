@@ -16,6 +16,7 @@ description: End-of-session routine for the CPoint rebuild. Runs the quality gat
    made this session (supersede, don't edit).
 5. **`docs/ROADMAP.md`:** tick the completed acceptance criteria.
 6. Update `README.md`, `docs/API.md`, `DESIGN.md` and the `CLAUDE.md` Commands section if they're stale.
-7. Commit (`docs(status): wrap up <phase/topic>` plus any pending code commits) and run
-   `git push -u origin system-rebuild`.
+7. Commit (`docs(status): wrap up <phase/topic>` plus any pending code commits) and push the
+   current working branch: `git push -u origin $(git branch --show-current)`. Never push to `main`;
+   the team opens and merges the PR, which also runs CI (D-032). Name the branch in STATUS.
 8. Print the final report in the format from `docs/prompts/system-rebuild.md` → `<final_report_format>`.
