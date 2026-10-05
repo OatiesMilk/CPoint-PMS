@@ -96,4 +96,22 @@ describe("ensureDemoUsers", () => {
     expect(await ensureDemoUsers()).toBe(3);
     expect(users.createUser).toHaveBeenCalledTimes(3);
   });
+
+  it("designates only the demo Shoe Constructor as a requester, and only when creating it (D-030)", async () => {
+    Object.assign(env, { SEED_DEMO_USERS: true, DEMO_USER_PASSWORD: "demo-pass" });
+    users.findUserByEmail.mockResolvedValue(null);
+    await ensureDemoUsers();
+    const flags = Object.fromEntries(
+      users.createUser.mock.calls.map(([data]) => [
+        data.role,
+        (data as { canRequestMaterials?: boolean }).canRequestMaterials,
+      ]),
+    );
+    expect(flags).toEqual({
+      FLOOR_MANAGER: false,
+      QUALITY_INSPECTOR: false,
+      SYSTEM_ADMIN: false,
+      SHOE_CONSTRUCTOR: true,
+    });
+  });
 });

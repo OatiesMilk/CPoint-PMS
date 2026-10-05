@@ -21,6 +21,7 @@ export type CreateUserData = {
   passwordHash: string;
   role: Role;
   mustChangePassword?: boolean;
+  canRequestMaterials?: boolean;
 };
 
 export function createUser(data: CreateUserData, db: Db = defaultDb()) {
