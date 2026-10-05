@@ -261,7 +261,7 @@ export function listRollMovementsForBatch(batchId: string, db: Db = defaultDb())
 }
 
 /**
- * Active items for the purchase request picker (D-030). Narrow on purpose: Shoe Constructors see
+ * Active items for the purchase request picker (D-031). Narrow on purpose: Shoe Constructors see
  * this without `inventory:read`, so no movements, batches or people.
  */
 export function listRequestableItems(db: Db = defaultDb()) {

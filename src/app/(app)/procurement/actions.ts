@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { toActionError, type ActionResult } from "@/server/lib/action-result";
-import { requirePermission, requirePurchaseRequester } from "@/server/policies/guard";
+import { requirePermission } from "@/server/policies/guard";
 import {
   actOnRequest,
   addRemark,
@@ -42,9 +42,9 @@ async function run<T extends object>(
   }
 }
 
-/** Submit a request. Only a designated requester gets this far (D-030). */
+/** Submit a request. Any Shoe Constructor; leather rolls need the designation (D-031). */
 export async function createRequestAction(input: unknown) {
-  const user = await requirePurchaseRequester();
+  const user = await requirePermission("procurement:request");
   try {
     const result = await createRequest(purchaseRequestSchema.parse(input), user);
     refresh();
@@ -73,7 +73,7 @@ export async function receiveRequestAction(id: string) {
   return run(id, "Receive request", () => actOnRequest(id, { action: "receive" }, user));
 }
 
-/** The requester's own cancel; the service checks it's theirs and they're still designated. */
+/** The requester's own cancel; the service checks it's theirs. */
 export async function cancelRequestAction(id: string, input: { note?: string }) {
   const user = await requirePermission("procurement:request");
   return run(id, "Cancel request", () =>
@@ -89,10 +89,14 @@ export async function addRemarkAction(id: string, input: { body: string }) {
   });
 }
 
-/** Designate a Shoe Constructor as a requester (Floor Manager or System Admin). */
-export async function setRequesterAction(userId: string, canRequestMaterials: boolean) {
+/** Allow a Shoe Constructor to request leather rolls (Floor Manager or System Admin, D-031). */
+export async function setRequesterAction(userId: string, canRequestLeatherRolls: boolean) {
   const user = await requirePermission("procurement:designate");
   return run(userId, "Requester designation", () =>
-    setRequester(userId, requesterSchema.parse({ canRequestMaterials }).canRequestMaterials, user),
+    setRequester(
+      userId,
+      requesterSchema.parse({ canRequestLeatherRolls }).canRequestLeatherRolls,
+      user,
+    ),
   );
 }

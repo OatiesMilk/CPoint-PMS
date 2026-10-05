@@ -2,14 +2,14 @@
  * Intent brief (ui-craft §1)
  * Who:   a Shoe Constructor at the office PC, between jobs on the line.
  * What:  ask for materials when they run low, and see where their open requests stand (D-029).
- *        Constructors who aren't designated requesters learn how to become one.
+ *        Leather rolls only for constructors the Floor Manager allows (D-031).
  * Worst: showing personal performance numbers. Never (client request, D-008). Only their own
  *        requests appear here.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowRight, Hammer, Plus } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { RequestStatusBadge } from "@/components/features/procurement/request-badges";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { formatManilaDateTime } from "@/lib/format";
 import { summarizeItems } from "@/lib/procurement-rules";
 import { requireRole } from "@/server/policies/guard";
-import { canSubmitPurchaseRequest } from "@/server/policies/permissions";
+import { canRequestLeatherRollsFor } from "@/server/policies/permissions";
 import { myOpenRequests } from "@/server/services/procurement.service";
 
 export const metadata: Metadata = { title: "Home" };
@@ -27,30 +27,16 @@ export default async function ConstructorHome() {
   await connection();
   const firstName = user.name.split(" ")[0];
 
-  if (!canSubmitPurchaseRequest(user)) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-24 text-center">
-        <span className="flex size-12 items-center justify-center rounded-lg bg-brand-yellow text-brand-ink">
-          <Hammer aria-hidden className="size-6" />
-        </span>
-        <h1 className="text-2xl font-semibold">Hi {firstName}, you’re signed in</h1>
-        <p className="max-w-md text-muted-foreground">
-          When materials run low, designated constructors send purchase requests from here. Ask your
-          Floor Manager to let you request materials.
-        </p>
-        <Button asChild variant="secondary">
-          <Link href="/procurement">See Procurement</Link>
-        </Button>
-      </div>
-    );
-  }
-
   const open = await myOpenRequests(user.id);
   return (
     <>
       <PageHeader
         title={`Good day, ${firstName}`}
-        description="Ask for materials when they run low. The Floor Manager approves each request."
+        description={
+          canRequestLeatherRollsFor(user)
+            ? "Ask for materials, leather rolls included, when they run low. The Floor Manager approves each request."
+            : "Ask for materials when they run low. The Floor Manager approves each request. Leather rolls need your Floor Manager’s OK first."
+        }
         actions={
           <Button asChild>
             <Link href="/procurement/new">

@@ -168,7 +168,7 @@ test("System Admin journey: thresholds, unknown classes and the audit trail", as
   ).toBeVisible();
 });
 
-test("Shoe Constructor: their requests, and nothing else (D-030)", async ({ page }) => {
+test("Shoe Constructor: their requests, and nothing else (D-031)", async ({ page }) => {
   await signInAs(page, ACCOUNTS.constructor);
   await expectRendered(page);
   await expectAccessible(page);

@@ -102,22 +102,23 @@ enum ActorType {
 
 // ───────────── people & access ─────────────
 model User {
-  id                  String    @id @default(uuid(7)) @db.Uuid
-  name                String
-  email               String    @unique // stored lower-cased
-  passwordHash        String
-  role                Role
-  isActive            Boolean   @default(true)
-  mustChangePassword  Boolean   @default(false) // set by admin reset (Phase 6)
+  id                     String    @id @default(uuid(7)) @db.Uuid
+  name                   String
+  email                  String    @unique // stored lower-cased
+  passwordHash           String
+  role                   Role
+  isActive               Boolean   @default(true)
+  mustChangePassword     Boolean   @default(false) // set by admin reset (Phase 6)
   /// Sessions signed in before this are ended (password reset or change, D-024).
-  sessionsValidFrom   DateTime?
-  failedLoginCount    Int       @default(0)
-  lockedUntil         DateTime?
-  lastLoginAt         DateTime?
-  /// A designated requester may submit purchase requests. Shoe Constructors only (D-030).
-  canRequestMaterials Boolean   @default(false)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  sessionsValidFrom      DateTime?
+  failedLoginCount       Int       @default(0)
+  lockedUntil            DateTime?
+  lastLoginAt            DateTime?
+  /// May ask for leather rolls in purchase requests. Shoe Constructors only (D-031); every
+  /// constructor can request the other materials.
+  canRequestLeatherRolls Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   batchesCreated    Batch[]                 @relation("BatchCreatedBy")
   stageLogsStarted  BatchStageLog[]         @relation("StageStartedBy")
@@ -520,17 +521,19 @@ model PurchaseRequest {
 }
 
 model PurchaseRequestLine {
-  id                    String   @id @default(uuid(7)) @db.Uuid
-  requestId             String   @db.Uuid
-  inventoryItemId       String?  @db.Uuid // null: an item not in inventory yet
+  id                    String            @id @default(uuid(7)) @db.Uuid
+  requestId             String            @db.Uuid
+  inventoryItemId       String?           @db.Uuid // null: an item not in inventory yet
   itemName              String // copied from the item, or typed
+  /// Copied from the item, or chosen for a typed one, so leather rolls are always recognised (D-031).
+  category              InventoryCategory
   unit                  String
-  quantity              Decimal  @db.Decimal(12, 2)
+  quantity              Decimal           @db.Decimal(12, 2)
   note                  String?
   /// Stock when the request was made, so the Floor Manager sees why it was asked for.
-  onHandAtRequest       Decimal? @db.Decimal(12, 2)
-  reorderLevelAtRequest Decimal? @db.Decimal(12, 2)
-  movementId            String?  @db.Uuid // the IN movement posted on receipt
+  onHandAtRequest       Decimal?          @db.Decimal(12, 2)
+  reorderLevelAtRequest Decimal?          @db.Decimal(12, 2)
+  movementId            String?           @db.Uuid // the IN movement posted on receipt
   position              Int
 
   request  PurchaseRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)

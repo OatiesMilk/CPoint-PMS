@@ -7,7 +7,7 @@ import { AppError, Errors } from "@/server/lib/errors";
 import type { DeviceScope } from "@/server/lib/device-token";
 import { authenticateDevice, type DeviceIdentity } from "@/server/services/api-token.service";
 import { checkSession, type SessionState, type SessionUser } from "@/server/services/auth.service";
-import { can, canSubmitPurchaseRequest, type Permission } from "./permissions";
+import { can, type Permission } from "./permissions";
 
 /**
  * Data Access Layer: the real authorization check (src/proxy.ts only does a cookie check).
@@ -65,30 +65,6 @@ export async function requireApiPermission(permission: Permission): Promise<Sess
     );
   }
   if (!can(user.role, permission)) throw Errors.forbidden();
-  return user;
-}
-
-/**
- * Pages and actions that submit purchase requests: a designated requester (D-030). Anyone else is
- * sent to /procurement, which explains how to get access. The flag is read fresh on every request,
- * so un-designating takes effect on the person's next click without signing them out.
- */
-export async function requirePurchaseRequester(): Promise<SessionUser> {
-  const user = await requirePermission("procurement:read");
-  if (!canSubmitPurchaseRequest(user)) redirect("/procurement");
-  return user;
-}
-
-/** API version of requirePurchaseRequester: 403 NOT_A_REQUESTER. */
-export async function requireApiPurchaseRequester(): Promise<SessionUser> {
-  const user = await requireApiPermission("procurement:request");
-  if (!canSubmitPurchaseRequest(user)) {
-    throw new AppError(
-      403,
-      "NOT_A_REQUESTER",
-      "You haven't been designated to request materials. Ask your Floor Manager.",
-    );
-  }
   return user;
 }
 

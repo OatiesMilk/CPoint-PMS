@@ -1,6 +1,6 @@
 import { Errors } from "@/server/lib/errors";
 import { handle, json, readJsonBody } from "@/server/lib/http";
-import { requireApiPermission, requireApiPurchaseRequester } from "@/server/policies/guard";
+import { requireApiPermission } from "@/server/policies/guard";
 import {
   actOnRequest,
   addRemark,
@@ -33,7 +33,7 @@ async function idFrom(ctx: IdContext): Promise<string> {
 
 const query = (request: Request) => Object.fromEntries(new URL(request.url).searchParams);
 
-/** Purchase requests (D-029, D-030). Constructors see and act on their own requests only. */
+/** Purchase requests (D-029, D-031). Constructors see and act on their own requests only. */
 export const procurementController = {
   /** GET /api/v1/procurement/requests?status=&category=&item=&from=&to=&page= */
   index: handle(async (request: Request) => {
@@ -43,7 +43,7 @@ export const procurementController = {
 
   /** POST /api/v1/procurement/requests  { priority, neededBy?, justification, lines[] } */
   create: handle(async (request: Request) => {
-    const user = await requireApiPurchaseRequester();
+    const user = await requireApiPermission("procurement:request");
     const values = purchaseRequestSchema.parse(await readJsonBody(request));
     return json({ data: await createRequest(values, user) }, 201);
   }),
@@ -80,7 +80,7 @@ export const procurementController = {
 
   /** POST …/{id}/cancel  { note? }: the requester only, while pending. */
   cancel: handle(async (request: Request, ctx: IdContext) => {
-    const user = await requireApiPurchaseRequester();
+    const user = await requireApiPermission("procurement:request");
     const { note } = cancelSchema.parse(await readJsonBody(request));
     return json({ data: await actOnRequest(await idFrom(ctx), { action: "cancel", note }, user) });
   }),
@@ -94,8 +94,8 @@ export const procurementController = {
 
   /** GET /api/v1/procurement/items: the request form's picker (no movements, no people). */
   items: handle(async () => {
-    await requireApiPurchaseRequester();
-    return json({ data: await requestableItems() });
+    const user = await requireApiPermission("procurement:request");
+    return json({ data: await requestableItems(user) });
   }),
 
   /** GET /api/v1/procurement/requesters: active Shoe Constructors and their flag. */
@@ -104,12 +104,12 @@ export const procurementController = {
     return json({ data: await listRequesters() });
   }),
 
-  /** PUT /api/v1/procurement/requesters/{userId}  { canRequestMaterials } */
+  /** PUT /api/v1/procurement/requesters/{userId}  { canRequestLeatherRolls }: leather rolls (D-031). */
   setRequester: handle(async (request: Request, ctx: UserContext) => {
     const user = await requireApiPermission("procurement:designate");
     const { userId } = await ctx.params;
     if (!isRequestId(userId)) throw Errors.notFound("This person");
-    const { canRequestMaterials } = requesterSchema.parse(await readJsonBody(request));
-    return json({ data: await setRequester(userId, canRequestMaterials, user) });
+    const { canRequestLeatherRolls } = requesterSchema.parse(await readJsonBody(request));
+    return json({ data: await setRequester(userId, canRequestLeatherRolls, user) });
   }),
 };

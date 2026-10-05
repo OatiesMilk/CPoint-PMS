@@ -20,6 +20,7 @@ export async function nextRequestNumber(year: number, db: Db = defaultDb()): Pro
 export type NewLine = {
   inventoryItemId: string | null;
   itemName: string;
+  category: InventoryCategory;
   unit: string;
   quantity: number;
   note: string | null;
@@ -64,7 +65,7 @@ export type RequestListFilter = {
 function listWhere(filter: Omit<RequestListFilter, "status">): Prisma.PurchaseRequestWhereInput {
   const lineFilter: Prisma.PurchaseRequestLineWhereInput = {
     ...(filter.itemId ? { inventoryItemId: filter.itemId } : {}),
-    ...(filter.category ? { item: { category: filter.category } } : {}),
+    ...(filter.category ? { category: filter.category } : {}),
   };
   return {
     ...(filter.requestedById ? { requestedById: filter.requestedById } : {}),
@@ -91,7 +92,7 @@ const listSelect = {
   receivedAt: true,
   requestedBy: { select: { id: true, name: true } },
   lines: {
-    select: { itemName: true, quantity: true, unit: true },
+    select: { itemName: true, category: true, quantity: true, unit: true },
     orderBy: { position: "asc" },
   },
 } satisfies Prisma.PurchaseRequestSelect;
@@ -151,6 +152,7 @@ const detailSelect = {
       id: true,
       inventoryItemId: true,
       itemName: true,
+      category: true,
       unit: true,
       quantity: true,
       note: true,
@@ -289,25 +291,25 @@ export function openRequestsBy(userId: string, take: number, db: Db = defaultDb(
   });
 }
 
-// ───────────── requesters (D-030) ─────────────
+// ───────────── leather roll requesters (D-031) ─────────────
 
 /** Active Shoe Constructors, for the designation toggles. */
 export function listConstructors(db: Db = defaultDb()) {
   return db.user.findMany({
     where: { role: "SHOE_CONSTRUCTOR", isActive: true },
-    select: { id: true, name: true, email: true, canRequestMaterials: true },
+    select: { id: true, name: true, email: true, canRequestLeatherRolls: true },
     orderBy: { name: "asc" },
   });
 }
 
-export function setCanRequestMaterials(
+export function setCanRequestLeatherRolls(
   userId: string,
-  canRequestMaterials: boolean,
+  canRequestLeatherRolls: boolean,
   db: Db = defaultDb(),
 ) {
   return db.user.update({
     where: { id: userId },
-    data: { canRequestMaterials },
+    data: { canRequestLeatherRolls },
     select: { id: true },
   });
 }

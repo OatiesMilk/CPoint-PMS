@@ -107,10 +107,10 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         {ROLE_LABELS[u.role]}
-                        {u.canRequestMaterials && (
+                        {u.canRequestLeatherRolls && (
                           <Badge tone="neutral">
                             <ShoppingCart aria-hidden />
-                            Requester
+                            Leather rolls
                           </Badge>
                         )}
                       </div>

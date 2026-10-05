@@ -21,7 +21,7 @@ import {
   openRequestsBy,
   openRequestsForItems,
   pendingSummary,
-  setCanRequestMaterials,
+  setCanRequestLeatherRolls,
   setLineMovement,
   transitionStatus,
   type RequestDetailRow,
@@ -30,7 +30,7 @@ import {
 import { findUserById } from "@/server/models/user.model";
 import {
   can,
-  canSubmitPurchaseRequest,
+  canRequestLeatherRollsFor,
   mayActOnRequest,
   mayRemarkOnRequest,
 } from "@/server/policies/permissions";
@@ -42,21 +42,21 @@ import { recordAudit } from "./audit.service";
 import { postMovement } from "./inventory.service";
 
 /**
- * Purchase requests (D-029, D-030). A designated Shoe Constructor asks; the Floor Manager approves
+ * Purchase requests (D-029, D-031). A Shoe Constructor asks (leather rolls only if allowed); the Floor Manager approves
  * or rejects, then marks it received, which posts the stock IN through the inventory ledger
  * (D-023) in the same transaction. Every change writes a timeline event and an audit row.
  */
 
-export type Viewer = { id: string; role: Role; canRequestMaterials: boolean };
+export type Viewer = { id: string; role: Role; canRequestLeatherRolls: boolean };
 
 export const REQUEST_PAGE_SIZE = 25;
 
 const STALE = "Someone else already changed this request. Refresh to see where it stands.";
-const NOT_A_REQUESTER = () =>
+const LEATHER_ROLLS_NOT_ALLOWED = () =>
   new AppError(
     403,
-    "NOT_A_REQUESTER",
-    "You haven't been designated to request materials. Ask your Floor Manager.",
+    "LEATHER_ROLLS_NOT_ALLOWED",
+    "Only constructors your Floor Manager allows can request leather rolls. Ask them, or remove the leather roll.",
   );
 
 const num = (d: { toString(): string } | null | undefined) => (d == null ? null : Number(d));
@@ -72,12 +72,21 @@ export type RequestableItem = {
   onHand: number;
   reorderLevel: number;
   low: boolean;
+  /** False for leather rolls when this person isn't allowed to request them (D-031). */
+  allowed: boolean;
   /** An open request already asking for it ("PR-2026-0007 already asks for this"). */
   openRequestCode: string | null;
 };
 
-/** Active items with their stock, for the request form. No movements and no people. */
-export async function requestableItems(): Promise<RequestableItem[]> {
+/**
+ * Active items with their stock, for the request form. No movements and no people. Leather rolls
+ * are marked not allowed for a constructor who isn't designated for them (D-031).
+ */
+export async function requestableItems(viewer?: {
+  role: Role;
+  canRequestLeatherRolls: boolean;
+}): Promise<RequestableItem[]> {
+  const leatherOk = !viewer || canRequestLeatherRollsFor(viewer);
   const rows = await listRequestableItems();
   const open = await openRequestCodes(rows.map((r) => r.id));
   return rows.map((r) => {
@@ -92,6 +101,7 @@ export async function requestableItems(): Promise<RequestableItem[]> {
       onHand,
       reorderLevel,
       low: onHand <= reorderLevel,
+      allowed: r.category !== "LEATHER_ROLL" || leatherOk,
       openRequestCode: open.get(r.id)?.code ?? null,
     };
   });
@@ -116,7 +126,8 @@ export async function createRequest(
   actor: Viewer,
   now: Date = new Date(),
 ) {
-  if (!canSubmitPurchaseRequest(actor)) throw NOT_A_REQUESTER();
+  if (!can(actor.role, "procurement:request"))
+    throw Errors.forbidden("Only Shoe Constructors send purchase requests.");
   if (values.neededBy && values.neededBy < manilaToday(now)) {
     throw Errors.validation([
       { path: ["neededBy"], message: "Choose today or a later date, or leave it empty." },
@@ -129,6 +140,7 @@ export async function createRequest(
         return {
           inventoryItemId: null,
           itemName: line.itemName!,
+          category: line.category!,
           unit: line.unit!,
           quantity: line.quantity,
           note: line.note ?? null,
@@ -148,6 +160,7 @@ export async function createRequest(
       return {
         inventoryItemId: item.id,
         itemName: item.name,
+        category: item.category,
         unit: item.unit,
         quantity: line.quantity,
         note: line.note ?? null,
@@ -156,6 +169,9 @@ export async function createRequest(
       };
     }),
   );
+  // Leather rolls need the designation, whether picked from inventory or typed (D-031).
+  if (lines.some((l) => l.category === "LEATHER_ROLL") && !canRequestLeatherRollsFor(actor))
+    throw LEATHER_ROLLS_NOT_ALLOWED();
   const open = await openRequestCodes(
     lines.flatMap((l) => (l.inventoryItemId ? [l.inventoryItemId] : [])),
   );
@@ -196,7 +212,12 @@ export async function createRequest(
         priority: values.priority,
         neededBy: values.neededBy ?? null,
         justification: values.justification,
-        lines: lines.map((l) => ({ item: l.itemName, quantity: l.quantity, unit: l.unit })),
+        lines: lines.map((l) => ({
+          item: l.itemName,
+          category: l.category,
+          quantity: l.quantity,
+          unit: l.unit,
+        })),
       },
     });
     return request;
@@ -238,9 +259,7 @@ export async function actOnRequest(
   const request = await findRequestDetail(id);
   if (!request || !visibleTo(request, actor)) throw Errors.notFound("This request");
   if (!mayActOnRequest(actor, request, input.action)) {
-    throw input.action === "cancel" && request.requestedById === actor.id
-      ? NOT_A_REQUESTER()
-      : Errors.forbidden(REFUSED[input.action]);
+    throw Errors.forbidden(REFUSED[input.action]);
   }
   const move = transition(request.status, input.action);
   if (!move.ok) throw Errors.conflict(move.reason);
@@ -441,41 +460,47 @@ export const OPEN_TAB_DEFAULT: Record<Role, PurchaseRequestStatus | undefined> =
   QUALITY_INSPECTOR: undefined,
 };
 
-// ───────────── requesters (D-030) ─────────────
+// ───────────── leather roll requesters (D-031) ─────────────
 
 export function listRequesters() {
   return listConstructors();
 }
 
 /**
- * Designates (or un-designates) a Shoe Constructor as a requester. Used by both the Floor
- * Manager's Requesters tab and the System Admin's Users page. Takes effect on the person's next
- * request: the guard reads the flag from the database every time.
+ * Allows (or stops) a Shoe Constructor to request leather rolls. Every constructor can request the
+ * other materials. Used by both the Floor Manager's Procurement tab and the System Admin's Users
+ * page. Takes effect on the person's next request: the flag is read from the database every time.
  */
 export async function setRequester(
   userId: string,
-  canRequestMaterials: boolean,
+  canRequestLeatherRolls: boolean,
   actor: { id: string; role: Role },
 ) {
   if (!can(actor.role, "procurement:designate"))
-    throw Errors.forbidden("Only the Floor Manager or the System Admin chooses who can request.");
+    throw Errors.forbidden(
+      "Only the Floor Manager or the System Admin chooses who can request leather rolls.",
+    );
   const target = await findUserById(userId);
   if (!target) throw Errors.notFound("This person");
   if (target.role !== "SHOE_CONSTRUCTOR" || !target.isActive) {
-    throw Errors.conflict("Only an active Shoe Constructor can be allowed to request materials.");
+    throw Errors.conflict(
+      "Only an active Shoe Constructor can be allowed to request leather rolls.",
+    );
   }
-  if (target.canRequestMaterials === canRequestMaterials)
-    return { id: userId, canRequestMaterials };
+  if (target.canRequestLeatherRolls === canRequestLeatherRolls)
+    return { id: userId, canRequestLeatherRolls };
   await runInTransaction(async (tx) => {
-    await setCanRequestMaterials(userId, canRequestMaterials, tx);
+    await setCanRequestLeatherRolls(userId, canRequestLeatherRolls, tx);
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
-      action: canRequestMaterials ? "procurement.requester.grant" : "procurement.requester.revoke",
+      action: canRequestLeatherRolls
+        ? "procurement.leather_rolls.grant"
+        : "procurement.leather_rolls.revoke",
       entity: "User",
       entityId: userId,
-      before: { email: target.email, canRequestMaterials: target.canRequestMaterials },
-      after: { email: target.email, canRequestMaterials },
+      before: { email: target.email, canRequestLeatherRolls: target.canRequestLeatherRolls },
+      after: { email: target.email, canRequestLeatherRolls },
     });
   });
-  return { id: userId, canRequestMaterials };
+  return { id: userId, canRequestLeatherRolls };
 }

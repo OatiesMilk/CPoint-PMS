@@ -21,7 +21,7 @@ export type CreateUserData = {
   passwordHash: string;
   role: Role;
   mustChangePassword?: boolean;
-  canRequestMaterials?: boolean;
+  canRequestLeatherRolls?: boolean;
 };
 
 export function createUser(data: CreateUserData, db: Db = defaultDb()) {
@@ -69,7 +69,7 @@ const adminSelect = {
   role: true,
   isActive: true,
   mustChangePassword: true,
-  canRequestMaterials: true,
+  canRequestLeatherRolls: true,
   lockedUntil: true,
   lastLoginAt: true,
   createdAt: true,
@@ -126,7 +126,7 @@ export function updateUser(
     email?: string;
     role?: Role;
     isActive?: boolean;
-    canRequestMaterials?: boolean;
+    canRequestLeatherRolls?: boolean;
   },
   db: Db = defaultDb(),
 ) {

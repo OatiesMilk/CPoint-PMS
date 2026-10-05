@@ -32,6 +32,8 @@ export type PickerItem = {
   onHand: number;
   reorderLevel: number;
   low: boolean;
+  /** False for leather rolls when this constructor isn't allowed to request them (D-031). */
+  allowed: boolean;
   openRequestCode: string | null;
 };
 
@@ -41,6 +43,7 @@ const OTHER = "other";
 type LineValues = {
   inventoryItemId: string;
   itemName: string;
+  category: string;
   unit: string;
   quantity: string;
   note: string;
@@ -55,6 +58,7 @@ type FormValues = {
 const emptyLine = (inventoryItemId = ""): LineValues => ({
   inventoryItemId,
   itemName: "",
+  category: "",
   unit: "",
   quantity: "",
   note: "",
@@ -69,6 +73,7 @@ function toInput(values: FormValues): PurchaseRequestInput {
       return {
         inventoryItemId: other ? undefined : l.inventoryItemId,
         itemName: other ? l.itemName : undefined,
+        category: other ? l.category : undefined,
         unit: other ? l.unit : undefined,
         quantity: l.quantity,
         note: l.note,
@@ -98,9 +103,12 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 export function RequestForm({
   items,
   prefillItemId,
+  canRequestLeatherRolls,
 }: {
   items: PickerItem[];
   prefillItemId?: string;
+  /** Leather rolls need the Floor Manager's OK (D-031); the server checks again. */
+  canRequestLeatherRolls: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -116,7 +124,7 @@ export function RequestForm({
       priority: "NORMAL",
       neededBy: "",
       justification: "",
-      lines: [emptyLine(prefillItemId && byId.has(prefillItemId) ? prefillItemId : "")],
+      lines: [emptyLine(prefillItemId && byId.get(prefillItemId)?.allowed ? prefillItemId : "")],
     },
   });
   const { errors } = form.formState;
@@ -152,6 +160,12 @@ export function RequestForm({
 
       <fieldset className="flex flex-col gap-4">
         <legend className="mb-3 text-lg font-semibold">What you need</legend>
+        {!canRequestLeatherRolls && (
+          <p className="flex items-start gap-2 text-sm text-muted-foreground">
+            <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
+            Leather rolls are greyed out: ask your Floor Manager to let you request them.
+          </p>
+        )}
         {errors.lines?.root?.message || errors.lines?.message ? (
           <FieldError
             id="lines-error"
@@ -187,9 +201,10 @@ export function RequestForm({
                           {items
                             .filter((it) => it.category === c)
                             .map((it) => (
-                              <option key={it.id} value={it.id}>
+                              <option key={it.id} value={it.id} disabled={!it.allowed}>
                                 {it.name} · {formatQuantity(it.onHand, it.unit)} on hand
                                 {it.low ? " (low)" : ""}
+                                {it.allowed ? "" : " (needs your Floor Manager’s OK)"}
                               </option>
                             ))}
                         </optgroup>
@@ -247,7 +262,7 @@ export function RequestForm({
                 )}
 
                 {isOther && (
-                  <div className="grid grid-cols-[minmax(0,1fr)_10rem] gap-3">
+                  <div className="grid grid-cols-[minmax(0,1fr)_11rem_10rem] gap-3">
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor={id("itemName")}>Item name</Label>
                       <Input
@@ -259,6 +274,30 @@ export function RequestForm({
                         {...form.register(`lines.${i}.itemName`)}
                       />
                       <FieldError id={id("itemName-error")} message={e?.itemName?.message} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={id("category")}>Kind</Label>
+                      <Select
+                        id={id("category")}
+                        aria-invalid={!!e?.category}
+                        aria-describedby={e?.category ? id("category-error") : undefined}
+                        {...form.register(`lines.${i}.category`)}
+                      >
+                        <option value="">Choose…</option>
+                        {(Object.keys(CATEGORY_LABELS) as InventoryCategory[]).map((c) => (
+                          <option
+                            key={c}
+                            value={c}
+                            disabled={c === "LEATHER_ROLL" && !canRequestLeatherRolls}
+                          >
+                            {CATEGORY_LABELS[c]}
+                            {c === "LEATHER_ROLL" && !canRequestLeatherRolls
+                              ? " (needs your Floor Manager’s OK)"
+                              : ""}
+                          </option>
+                        ))}
+                      </Select>
+                      <FieldError id={id("category-error")} message={e?.category?.message} />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor={id("unit")}>Unit</Label>

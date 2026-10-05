@@ -1,6 +1,7 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Floor Manager (decides), designated Shoe Constructors (ask for materials), the
+ * Who:   the Floor Manager (decides), Shoe Constructors (ask for materials; leather rolls only if
+ *        allowed, D-031), the
  *        System Admin (reads). A few times a day.
  * What:  see which purchase requests wait for a decision, oldest and urgent first, and open one.
  *        Constructors see and send their own.
@@ -30,7 +31,7 @@ import { formatDuration, formatManilaDateTime } from "@/lib/format";
 import { STATUS_LABELS, summarizeItems } from "@/lib/procurement-rules";
 import { cn } from "@/lib/utils";
 import { requirePermission } from "@/server/policies/guard";
-import { can, canSubmitPurchaseRequest } from "@/server/policies/permissions";
+import { can, canRequestLeatherRollsFor } from "@/server/policies/permissions";
 import {
   listRequesters,
   listRequests,
@@ -50,7 +51,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
   await connection();
   const raw = await searchParams;
   const isConstructor = user.role === "SHOE_CONSTRUCTOR";
-  const canRequest = canSubmitPurchaseRequest(user);
+  const canRequest = can(user.role, "procurement:request");
   const canDesignate = can(user.role, "procurement:designate");
   const tab = raw.tab === "requesters" && canDesignate ? "requesters" : "requests";
 
@@ -105,22 +106,18 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
         }
       />
 
-      {isConstructor && !canRequest && (
-        <div className="flex items-start gap-3 rounded-lg border border-dashed px-5 py-6">
-          <Info aria-hidden className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
-          <div className="flex flex-col gap-1">
-            <h2 className="text-lg font-semibold">You can’t send requests yet</h2>
-            <p className="text-muted-foreground">
-              Ask your Floor Manager to let you request materials. Once they do, a New request
-              button appears here.
-            </p>
-          </div>
-        </div>
+      {isConstructor && !canRequestLeatherRollsFor(user) && (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Info aria-hidden className="size-4" />
+          You can request any material except leather rolls. Ask your Floor Manager if you need to
+          request leather rolls too.
+        </p>
       )}
       {user.role === "SYSTEM_ADMIN" && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Info aria-hidden className="size-4" />
-          You can view requests and choose who may send them. The Floor Manager decides them.
+          You can view requests and choose who may request leather rolls. The Floor Manager decides
+          them.
         </p>
       )}
 
@@ -146,7 +143,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
             current={tab === "requesters"}
             className="ml-auto"
           >
-            Requesters
+            Leather roll requesters
           </TabLink>
         )}
       </nav>
@@ -158,10 +155,8 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
           <h2 className="text-xl font-semibold">No purchase requests yet</h2>
           <p className="max-w-md text-muted-foreground">
             {isConstructor
-              ? canRequest
-                ? "When nails, thread or leather run low, send a request. The Floor Manager sees it right away."
-                : "Requests you send will appear here."
-              : "Designated Shoe Constructors send requests when materials run low. Choose who can under Requesters."}
+              ? "When nails, thread or leather run low, send a request. The Floor Manager sees it right away."
+              : "Shoe Constructors send requests when materials run low. Leather rolls only from those you allow under Leather roll requesters."}
           </p>
           {canRequest && (
             <Button asChild className="mt-2">

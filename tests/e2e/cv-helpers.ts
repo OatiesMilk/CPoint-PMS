@@ -124,16 +124,16 @@ export async function postScan(
  * password.
  */
 export async function makeConstructor(
-  canRequestMaterials = true,
+  canRequestLeatherRolls = true,
 ): Promise<{ id: string; email: string }> {
   const id = randomUUID();
   const email = `sc-${randomBytes(4).toString("hex")}@e2e.local`;
   await withDb((db) =>
     db.query(
-      `INSERT INTO users (id, name, email, "passwordHash", role, "canRequestMaterials", "updatedAt")
+      `INSERT INTO users (id, name, email, "passwordHash", role, "canRequestLeatherRolls", "updatedAt")
        SELECT $1, $2, $3, "passwordHash", 'SHOE_CONSTRUCTOR', $4, now() FROM users
        WHERE email = 'constructor@cpoint.local'`,
-      [id, `E2E Constructor ${email.slice(3, 11)}`, email, canRequestMaterials],
+      [id, `E2E Constructor ${email.slice(3, 11)}`, email, canRequestLeatherRolls],
     ),
   );
   return { id, email };
@@ -150,7 +150,7 @@ export async function urgentPendingRequest(browser: Browser): Promise<void> {
     data: {
       priority: "URGENT",
       justification: "E2E: the line stops without it",
-      lines: [{ itemName: "E2E urgent item", unit: "box", quantity: 1 }],
+      lines: [{ itemName: "E2E urgent item", category: "OTHER", unit: "box", quantity: 1 }],
     },
   });
   expect(res.status()).toBe(201);

@@ -16,6 +16,11 @@ const lineSchema = z
   .object({
     inventoryItemId: z.preprocess(blankToUndefined, z.uuid("Choose an item.").optional()),
     itemName: optionalText(80, "item name"),
+    /** Typed items only: their category (leather rolls need the designation, D-031). */
+    category: z.preprocess(
+      blankToUndefined,
+      z.enum(InventoryCategory, { error: "Choose what kind of item it is." }).optional(),
+    ),
     unit: optionalText(20, "unit"),
     quantity: quantity({ min: 0, exclusiveMin: true, label: "quantity" }),
     note: optionalText(200, "note"),
@@ -27,6 +32,12 @@ const lineSchema = z
         code: "custom",
         path: ["itemName"],
         message: "Choose an item, or type the name of one that isn't in inventory yet.",
+      });
+    if (!line.category)
+      ctx.addIssue({
+        code: "custom",
+        path: ["category"],
+        message: "Choose what kind of item it is.",
       });
     if (!line.unit)
       ctx.addIssue({ code: "custom", path: ["unit"], message: "Enter the unit, e.g. box, roll." });
@@ -80,7 +91,7 @@ export const remarkSchema = z.object({
     .min(1, "Write a remark.")
     .max(500, "Keep the remark under 500 characters."),
 });
-export const requesterSchema = z.object({ canRequestMaterials: z.boolean() });
+export const requesterSchema = z.object({ canRequestLeatherRolls: z.boolean() });
 
 /** List query (URL search params). Invalid values are dropped rather than erroring. */
 export const requestListQuerySchema = z.object({

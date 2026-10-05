@@ -49,7 +49,7 @@ const mocks = {
     id: email,
     role: email.startsWith("inspector") ? "QUALITY_INSPECTOR" : "FLOOR_MANAGER",
     isActive: true,
-    canRequestMaterials: true,
+    canRequestLeatherRolls: true,
   })),
 };
 

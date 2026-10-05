@@ -220,7 +220,7 @@ type Row = {
   role: Role;
   isActive: boolean;
   status: "ACTIVE" | "DEACTIVATED" | "LOCKED";
-  canRequestMaterials: boolean;
+  canRequestLeatherRolls: boolean;
 };
 
 /**
@@ -275,7 +275,7 @@ export function UserRowActions({
     });
   }
 
-  /** Designated requesters (D-030): the same action the Floor Manager uses under Procurement. */
+  /** Leather roll requesters (D-031): the same action the Floor Manager uses under Procurement. */
   function setRequester(value: boolean, quiet = false) {
     startTransition(async () => {
       const result = await setRequesterAction(user.id, value);
@@ -283,8 +283,8 @@ export function UserRowActions({
       if (quiet) return;
       toast.success(
         value
-          ? `${user.name} can now send purchase requests.`
-          : `${user.name} can no longer send purchase requests.`,
+          ? `${user.name} can now request leather rolls.`
+          : `${user.name} can no longer request leather rolls.`,
         { duration: 6000, action: { label: "Undo", onClick: () => setRequester(!value, true) } },
       );
     });
@@ -324,8 +324,10 @@ export function UserRowActions({
               <DropdownMenuItem onSelect={unlock}>Unlock</DropdownMenuItem>
             )}
             {user.role === "SHOE_CONSTRUCTOR" && user.isActive && (
-              <DropdownMenuItem onSelect={() => setRequester(!user.canRequestMaterials)}>
-                {user.canRequestMaterials ? "Stop purchase requests" : "Allow purchase requests"}
+              <DropdownMenuItem onSelect={() => setRequester(!user.canRequestLeatherRolls)}>
+                {user.canRequestLeatherRolls
+                  ? "Stop leather roll requests"
+                  : "Allow leather roll requests"}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

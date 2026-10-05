@@ -3,7 +3,7 @@ import { expect, test, type APIRequestContext, type Browser, type Page } from "@
 import { ACCOUNTS, signIn } from "./helpers";
 import { inspectorApi, makeConstructor, managerApi, withDb } from "./cv-helpers";
 
-// Purchase requests (D-029, D-030). Each test gets its own Shoe Constructor (makeConstructor).
+// Purchase requests (D-029, D-031). Each test gets its own Shoe Constructor (makeConstructor).
 
 async function signedIn(browser: Browser, email: string, home: string): Promise<Page> {
   const page = await browser.newPage();
@@ -13,14 +13,19 @@ async function signedIn(browser: Browser, email: string, home: string): Promise<
   return page;
 }
 
-async function createItem(api: APIRequestContext, openingStock: number) {
-  const sku = `OT-P${randomBytes(3).toString("hex").toUpperCase()}`;
+async function createItem(
+  api: APIRequestContext,
+  openingStock: number,
+  category: "OTHER" | "LEATHER_ROLL" = "OTHER",
+) {
+  const leather = category === "LEATHER_ROLL";
+  const sku = `${leather ? "LR" : "OT"}-P${randomBytes(3).toString("hex").toUpperCase()}`;
   const res = await api.post("/api/v1/inventory", {
     data: {
       sku,
       name: `E2E request item ${sku}`,
-      category: "OTHER",
-      unit: "box",
+      category,
+      unit: leather ? "roll" : "box",
       reorderLevel: 5,
       openingStock,
     },
@@ -153,42 +158,51 @@ test("the requester cancels their own pending request; others can't", async ({ b
   await expect(page.getByRole("button", { name: "Cancel request…" })).toHaveCount(0);
 });
 
-test("un-designating applies on the next request without signing the person out", async ({
+test("every constructor requests supplies; leather rolls need the Floor Manager's OK, effective on the next request (D-031)", async ({
   browser,
   page,
 }) => {
-  const item = await createItem(await managerApi(browser), 1);
-  const sc = await makeConstructor();
+  const fmApi = await managerApi(browser);
+  const nails = await createItem(fmApi, 1);
+  const roll = await createItem(fmApi, 1, "LEATHER_ROLL");
+  const sc = await makeConstructor(false);
   await page.goto("/login");
   await signIn(page, sc.email);
   await expect(page).toHaveURL("/constructor");
   await expect(page.getByRole("link", { name: "New request" })).toBeVisible();
 
-  // The Floor Manager stops their requests from the Requesters tab.
+  const ask = (itemId: string) =>
+    page.request.post("/api/v1/procurement/requests", {
+      data: {
+        priority: "NORMAL",
+        justification: "E2E: running low",
+        lines: [{ inventoryItemId: itemId, quantity: 1 }],
+      },
+    });
+
+  // Supplies: yes. Leather rolls: no, and the picker greys them out.
+  expect((await ask(nails.id)).status()).toBe(201);
+  const refused = await ask(roll.id);
+  expect(refused.status()).toBe(403);
+  expect((await refused.json()).error.code).toBe("LEATHER_ROLLS_NOT_ALLOWED");
+  await page.goto("/procurement/new");
+  await expect(page.getByText("Leather rolls are greyed out")).toBeVisible();
+  await expect(page.locator(`#lines-0-item option[value="${roll.id}"]`)).toBeDisabled();
+
+  // The Floor Manager allows leather rolls: the next request goes through, still signed in.
   const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
   await fm.goto("/procurement?tab=requesters");
   const row = fm.getByRole("row", { name: new RegExp(sc.email.slice(3, 11)) });
-  await row.getByRole("button", { name: "Stop requests" }).click();
+  await row.getByRole("button", { name: "Allow leather rolls" }).click();
+  await expect(row.getByText("Can request")).toBeVisible();
+  expect((await ask(roll.id)).status()).toBe(201);
+
+  // And stops them again: refused on the next request.
+  await row.getByRole("button", { name: "Stop leather rolls" }).click();
   await expect(row.getByText("Can’t request")).toBeVisible();
   await fm.close();
-
-  const refused = await page.request.post("/api/v1/procurement/requests", {
-    data: {
-      priority: "NORMAL",
-      justification: "E2E: should be refused",
-      lines: [{ inventoryItemId: item.id, quantity: 1 }],
-    },
-  });
-  expect(refused.status()).toBe(403);
-  expect((await refused.json()).error.code).toBe("NOT_A_REQUESTER");
-
-  await page.goto("/procurement/new");
-  await expect(page).toHaveURL("/procurement"); // still signed in, sent to the explainer
-  await expect(
-    page.getByText("Ask your Floor Manager to let you request materials."),
-  ).toBeVisible();
-  await page.goto("/constructor");
-  await expect(page.getByRole("link", { name: "New request" })).toHaveCount(0);
+  expect((await ask(roll.id)).status()).toBe(403);
+  expect((await ask(nails.id)).status()).toBe(201);
 });
 
 test("the Quality Inspector has no procurement access", async ({ browser, page }) => {

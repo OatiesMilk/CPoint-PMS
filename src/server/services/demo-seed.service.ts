@@ -432,8 +432,9 @@ export async function seedDemoWeek(
   async function seedRequests(): Promise<number> {
     const found = await findUserByEmail("constructor@cpoint.local");
     if (!found || !found.isActive) return 0;
-    if (!found.canRequestMaterials) await setRequester(found.id, true, fm!);
-    const sc = { id: found.id, role: found.role, canRequestMaterials: true };
+    // Two of the requests are for leather rolls, which need the Floor Manager's OK (D-031).
+    if (!found.canRequestLeatherRolls) await setRequester(found.id, true, fm!);
+    const sc = { id: found.id, role: found.role, canRequestLeatherRolls: true };
     const item = (sku: string) => itemIds.get(sku);
     const last = workingDays[workingDays.length - 1];
     const beforeLast = workingDays[Math.max(0, workingDays.length - 2)];
@@ -445,7 +446,13 @@ export async function seedDemoWeek(
         priority: "NORMAL" | "URGENT";
         neededBy?: string;
         justification: string;
-        lines: { inventoryItemId?: string; itemName?: string; unit?: string; quantity: number }[];
+        lines: {
+          inventoryItemId?: string;
+          itemName?: string;
+          category?: "OTHER";
+          unit?: string;
+          quantity: number;
+        }[];
       },
     ) => {
       if (!past(when) || values.lines.some((l) => !l.inventoryItemId && !l.itemName)) return null;
@@ -504,7 +511,7 @@ export async function seedDemoWeek(
     const r3 = await send(t3, {
       priority: "NORMAL",
       justification: "Eyelets for the new topsider sample.",
-      lines: [{ itemName: "Brass eyelets, 5 mm", unit: "pack", quantity: 2 }],
+      lines: [{ itemName: "Brass eyelets, 5 mm", category: "OTHER", unit: "pack", quantity: 2 }],
     });
     const off = r3 && later(t3, 1);
     if (r3 && off)

@@ -4,7 +4,7 @@ import { navigationFor } from "@/server/policies/navigation";
 import {
   PERMISSIONS,
   can,
-  canSubmitPurchaseRequest,
+  canRequestLeatherRollsFor,
   mayActOnRequest,
   mayRemarkOnRequest,
   requiredDecisionPermission,
@@ -57,7 +57,7 @@ describe("permissions matrix", () => {
     }
   }
 
-  it("gives the Shoe Constructor procurement permissions only (D-030)", () => {
+  it("gives the Shoe Constructor procurement permissions only (D-031)", () => {
     const granted = Object.keys(PERMISSIONS).filter((p) => can(SC, p as Permission));
     expect(granted.every((p) => p.startsWith("procurement:"))).toBe(true);
   });
@@ -119,24 +119,25 @@ describe("deciding a scan (D-028)", () => {
   });
 });
 
-describe("procurement access (D-030)", () => {
-  const sc = { id: "sc1", role: SC, canRequestMaterials: true };
-  const scOff = { ...sc, canRequestMaterials: false };
-  const fm = { id: "fm1", role: FM, canRequestMaterials: false };
+describe("procurement access (D-031)", () => {
+  const sc = { id: "sc1", role: SC, canRequestLeatherRolls: true };
+  const scNoLeather = { ...sc, canRequestLeatherRolls: false };
+  const fm = { id: "fm1", role: FM, canRequestLeatherRolls: false };
   const own = { requestedById: "sc1" };
   const other = { requestedById: "sc2" };
 
-  it("needs both the role and the flag to submit", () => {
-    expect(canSubmitPurchaseRequest(sc)).toBe(true);
-    expect(canSubmitPurchaseRequest(scOff)).toBe(false);
+  it("lets every Shoe Constructor request; leather rolls need the flag too", () => {
+    expect(can(SC, "procurement:request")).toBe(true);
+    expect(canRequestLeatherRollsFor(sc)).toBe(true);
+    expect(canRequestLeatherRollsFor(scNoLeather)).toBe(false);
     // The flag alone does nothing for another role.
-    expect(canSubmitPurchaseRequest({ role: FM, canRequestMaterials: true })).toBe(false);
+    expect(canRequestLeatherRollsFor({ role: FM, canRequestLeatherRolls: true })).toBe(false);
   });
 
-  it("lets only the designated requester cancel their own request", () => {
+  it("lets a constructor cancel only their own request, flag or not", () => {
     expect(mayActOnRequest(sc, own, "cancel")).toBe(true);
+    expect(mayActOnRequest(scNoLeather, own, "cancel")).toBe(true);
     expect(mayActOnRequest(sc, other, "cancel")).toBe(false);
-    expect(mayActOnRequest(scOff, own, "cancel")).toBe(false);
     expect(mayActOnRequest(fm, own, "cancel")).toBe(false);
   });
 
@@ -144,17 +145,18 @@ describe("procurement access (D-030)", () => {
     for (const action of ["approve", "reject", "receive"] as const) {
       expect(mayActOnRequest(fm, own, action)).toBe(true);
       expect(mayActOnRequest(sc, own, action)).toBe(false);
-      expect(mayActOnRequest({ id: "a", role: AD, canRequestMaterials: false }, own, action)).toBe(
-        false,
-      );
+      expect(
+        mayActOnRequest({ id: "a", role: AD, canRequestLeatherRolls: false }, own, action),
+      ).toBe(false);
     }
   });
 
-  it("allows remarks from the Floor Manager, and from a designated requester on their own", () => {
+  it("allows remarks from the Floor Manager, and from a constructor on their own", () => {
     expect(mayRemarkOnRequest(fm, other)).toBe(true);
-    expect(mayRemarkOnRequest(sc, own)).toBe(true);
+    expect(mayRemarkOnRequest(scNoLeather, own)).toBe(true);
     expect(mayRemarkOnRequest(sc, other)).toBe(false);
-    expect(mayRemarkOnRequest(scOff, own)).toBe(false);
-    expect(mayRemarkOnRequest({ id: "q", role: QI, canRequestMaterials: false }, own)).toBe(false);
+    expect(mayRemarkOnRequest({ id: "q", role: QI, canRequestLeatherRolls: false }, own)).toBe(
+      false,
+    );
   });
 });

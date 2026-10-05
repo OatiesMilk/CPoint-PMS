@@ -133,12 +133,12 @@ export async function updateAccount(id: string, values: UserFormValues, actor: A
     const other = await findUserByEmail(values.email);
     if (other && other.id !== id) throw Errors.validation([EMAIL_TAKEN(values.email)]);
   }
-  // Only a Shoe Constructor can be a designated requester (D-030): a role change ends it.
-  const endsRequester = before.canRequestMaterials && values.role !== "SHOE_CONSTRUCTOR";
+  // Only a Shoe Constructor can be allowed leather rolls (D-031): a role change ends it.
+  const endsRequester = before.canRequestLeatherRolls && values.role !== "SHOE_CONSTRUCTOR";
   return runInTransaction(async (tx) => {
     const after = await updateUserRow(
       id,
-      endsRequester ? { ...values, canRequestMaterials: false } : values,
+      endsRequester ? { ...values, canRequestLeatherRolls: false } : values,
       tx,
     ).catch((e: unknown) => emailTaken(e, values.email));
     if (before.role === "SYSTEM_ADMIN") await assertAdminRemains(tx);
@@ -151,13 +151,13 @@ export async function updateAccount(id: string, values: UserFormValues, actor: A
         name: before.name,
         email: before.email,
         role: before.role,
-        ...(endsRequester ? { canRequestMaterials: true } : {}),
+        ...(endsRequester ? { canRequestLeatherRolls: true } : {}),
       },
       after: {
         name: after.name,
         email: after.email,
         role: after.role,
-        ...(endsRequester ? { canRequestMaterials: false } : {}),
+        ...(endsRequester ? { canRequestLeatherRolls: false } : {}),
       },
     });
     return after;

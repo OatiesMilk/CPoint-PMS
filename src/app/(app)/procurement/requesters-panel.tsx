@@ -15,10 +15,10 @@ import {
 } from "@/components/ui/table";
 import { setRequesterAction } from "./actions";
 
-type Person = { id: string; name: string; email: string; canRequestMaterials: boolean };
+type Person = { id: string; name: string; email: string; canRequestLeatherRolls: boolean };
 
 /**
- * Who may send purchase requests (D-030). Reversible, so no confirmation: an undo toast instead.
+ * Who may request leather rolls (D-031); every constructor can request the other materials. Reversible, so no confirmation: an undo toast instead.
  * The change applies on the person's next click; they stay signed in.
  */
 export function RequestersPanel({ people }: { people: Person[] }) {
@@ -33,8 +33,8 @@ export function RequestersPanel({ people }: { people: Person[] }) {
       if (quiet) return;
       toast.success(
         value
-          ? `${person.name} can now send purchase requests.`
-          : `${person.name} can no longer send purchase requests.`,
+          ? `${person.name} can now request leather rolls.`
+          : `${person.name} can no longer request leather rolls.`,
         {
           duration: 6000,
           action: { label: "Undo", onClick: () => set(person, !value, true) },
@@ -55,11 +55,11 @@ export function RequestersPanel({ people }: { people: Person[] }) {
     <section aria-labelledby="requesters-heading" className="flex flex-col gap-3">
       <div>
         <h2 id="requesters-heading" className="text-xl font-semibold">
-          Who can request materials
+          Who can request leather rolls
         </h2>
         <p className="text-muted-foreground">
-          Only the Shoe Constructors you allow here can send purchase requests. A change applies on
-          their next click.
+          Every Shoe Constructor can request nails, thread, adhesive and other supplies. Only those
+          you allow here can also request leather rolls. A change applies on their next click.
         </p>
       </div>
       {error && <p className="text-sm text-reject">{error}</p>}
@@ -68,7 +68,7 @@ export function RequestersPanel({ people }: { people: Person[] }) {
           <TableRow className="hover:bg-transparent">
             <TableHead>Shoe Constructor</TableHead>
             <TableHead>Email</TableHead>
-            <TableHead>Requests</TableHead>
+            <TableHead>Leather rolls</TableHead>
             <TableHead className="text-right">
               <span className="sr-only">Change</span>
             </TableHead>
@@ -80,7 +80,7 @@ export function RequestersPanel({ people }: { people: Person[] }) {
               <TableCell className="font-medium">{p.name}</TableCell>
               <TableCell className="text-muted-foreground">{p.email}</TableCell>
               <TableCell>
-                {p.canRequestMaterials ? (
+                {p.canRequestLeatherRolls ? (
                   <Badge tone="success">
                     <CircleCheck aria-hidden />
                     Can request
@@ -95,11 +95,11 @@ export function RequestersPanel({ people }: { people: Person[] }) {
               <TableCell className="text-right">
                 <Button
                   size="sm"
-                  variant={p.canRequestMaterials ? "ghost" : "secondary"}
+                  variant={p.canRequestLeatherRolls ? "ghost" : "secondary"}
                   disabled={pending}
-                  onClick={() => set(p, !p.canRequestMaterials)}
+                  onClick={() => set(p, !p.canRequestLeatherRolls)}
                 >
-                  {p.canRequestMaterials ? "Stop requests" : "Allow requests"}
+                  {p.canRequestLeatherRolls ? "Stop leather rolls" : "Allow leather rolls"}
                 </Button>
               </TableCell>
             </TableRow>

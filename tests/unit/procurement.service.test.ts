@@ -11,7 +11,7 @@ const proc = {
   openRequestsBy: vi.fn(),
   openRequestsForItems: vi.fn(async () => [] as unknown[]),
   pendingSummary: vi.fn(),
-  setCanRequestMaterials: vi.fn(),
+  setCanRequestLeatherRolls: vi.fn(),
   setLineMovement: vi.fn(),
   transitionStatus: vi.fn(
     async (_id: string, _from: string, _data: Record<string, unknown>, _tx?: unknown) => 1,
@@ -35,9 +35,9 @@ vi.mock("@/server/services/inventory.service", () => ({ postMovement }));
 const svc = await import("@/server/services/procurement.service");
 
 const now = new Date("2026-10-05T02:00:00.000Z"); // 10:00 in Manila
-const sc = { id: "sc1", role: "SHOE_CONSTRUCTOR" as const, canRequestMaterials: true };
-const fm = { id: "fm1", role: "FLOOR_MANAGER" as const, canRequestMaterials: false };
-const admin = { id: "ad1", role: "SYSTEM_ADMIN" as const, canRequestMaterials: false };
+const sc = { id: "sc1", role: "SHOE_CONSTRUCTOR" as const, canRequestLeatherRolls: true };
+const fm = { id: "fm1", role: "FLOOR_MANAGER" as const, canRequestLeatherRolls: false };
+const admin = { id: "ad1", role: "SYSTEM_ADMIN" as const, canRequestLeatherRolls: false };
 
 const nails = {
   id: "i1",
@@ -83,16 +83,56 @@ beforeEach(() => {
 });
 
 describe("createRequest", () => {
-  it("refuses a constructor who isn't a designated requester", async () => {
+  it("lets any Shoe Constructor request materials other than leather rolls (D-031)", async () => {
     await expect(
-      svc.createRequest(values, { ...sc, canRequestMaterials: false }, now),
-    ).rejects.toMatchObject({ status: 403, code: "NOT_A_REQUESTER" });
+      svc.createRequest(values, { ...sc, canRequestLeatherRolls: false }, now),
+    ).resolves.toMatchObject({ code: "PR-2026-0007" });
+  });
+
+  it("refuses leather rolls without the Floor Manager's OK, picked or typed (D-031)", async () => {
+    const noLeather = { ...sc, canRequestLeatherRolls: false };
+    inventory.findInventoryItem.mockResolvedValueOnce({ ...nails, category: "LEATHER_ROLL" });
+    await expect(svc.createRequest(values, noLeather, now)).rejects.toMatchObject({
+      status: 403,
+      code: "LEATHER_ROLLS_NOT_ALLOWED",
+    });
+    const typed = {
+      ...values,
+      lines: [
+        { itemName: "Tan cowhide", category: "LEATHER_ROLL" as const, unit: "roll", quantity: 1 },
+      ],
+    };
+    await expect(svc.createRequest(typed, noLeather, now)).rejects.toMatchObject({
+      code: "LEATHER_ROLLS_NOT_ALLOWED",
+    });
     expect(proc.insertRequest).not.toHaveBeenCalled();
+    // With the OK, the same leather roll goes through.
+    await expect(svc.createRequest(typed, sc, now)).resolves.toMatchObject({ id: "pr1" });
+    expect(proc.insertRequest.mock.calls[0][0]).toMatchObject({
+      lines: [{ inventoryItemId: null, itemName: "Tan cowhide", category: "LEATHER_ROLL" }],
+    });
+  });
+
+  it("marks leather rolls not allowed in the picker for a constructor without the OK", async () => {
+    inventory.listRequestableItems.mockResolvedValue([
+      { ...nails, quantityOnHand: "2", reorderLevel: "5" },
+      { ...nails, id: "i2", name: "Black cowhide", category: "LEATHER_ROLL" },
+    ]);
+    const off = await svc.requestableItems({
+      role: "SHOE_CONSTRUCTOR",
+      canRequestLeatherRolls: false,
+    });
+    expect(off.map((i) => [i.id, i.allowed])).toEqual([
+      ["i1", true],
+      ["i2", false],
+    ]);
+    const on = await svc.requestableItems(sc);
+    expect(on.every((i) => i.allowed)).toBe(true);
   });
 
   it("refuses everyone but a Shoe Constructor, even with the flag", async () => {
     await expect(
-      svc.createRequest(values, { ...fm, canRequestMaterials: true }, now),
+      svc.createRequest(values, { ...fm, canRequestLeatherRolls: true }, now),
     ).rejects.toMatchObject({ status: 403 });
   });
 
@@ -255,14 +295,14 @@ describe("decisions", () => {
 });
 
 describe("remarks", () => {
-  it("allow the Floor Manager anywhere and a designated requester on their own", async () => {
+  it("allow the Floor Manager anywhere and the requester on their own", async () => {
     proc.findRequestDetail.mockResolvedValue(request());
     await svc.addRemark("pr1", "Supplier delivers Thursday", fm, now);
-    await svc.addRemark("pr1", "Thanks", sc, now);
+    await svc.addRemark("pr1", "Thanks", { ...sc, canRequestLeatherRolls: false }, now);
     expect(proc.insertRemark).toHaveBeenCalledTimes(2);
-    await expect(
-      svc.addRemark("pr1", "Hi", { ...sc, canRequestMaterials: false }, now),
-    ).rejects.toMatchObject({ status: 403 });
+    await expect(svc.addRemark("pr1", "Hi", { ...sc, id: "sc2" }, now)).rejects.toMatchObject({
+      status: 404,
+    });
     await expect(svc.addRemark("pr1", "Hi", admin, now)).rejects.toMatchObject({ status: 403 });
   });
 });
@@ -277,19 +317,19 @@ describe("getRequest", () => {
   });
 });
 
-describe("setRequester (D-030)", () => {
-  it("designates an active Shoe Constructor and audits it", async () => {
+describe("setRequester: leather rolls (D-031)", () => {
+  it("allows an active Shoe Constructor leather rolls and audits it", async () => {
     users.findUserById.mockResolvedValue({
       id: "sc1",
       email: "c@cpoint.local",
       role: "SHOE_CONSTRUCTOR",
       isActive: true,
-      canRequestMaterials: false,
+      canRequestLeatherRolls: false,
     });
     await svc.setRequester("sc1", true, fm);
-    expect(proc.setCanRequestMaterials).toHaveBeenCalledWith("sc1", true, "tx");
+    expect(proc.setCanRequestLeatherRolls).toHaveBeenCalledWith("sc1", true, "tx");
     expect(recordAudit.mock.calls[0][1]).toMatchObject({
-      action: "procurement.requester.grant",
+      action: "procurement.leather_rolls.grant",
       entity: "User",
     });
   });
@@ -310,6 +350,6 @@ describe("setRequester (D-030)", () => {
     await expect(
       svc.setRequester("sc1", true, { id: "q2", role: "QUALITY_INSPECTOR" }),
     ).rejects.toMatchObject({ status: 403 });
-    expect(proc.setCanRequestMaterials).not.toHaveBeenCalled();
+    expect(proc.setCanRequestLeatherRolls).not.toHaveBeenCalled();
   });
 });
