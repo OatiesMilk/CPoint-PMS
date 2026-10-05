@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { loginSchema, type LoginInput } from "@/server/validators/auth.validator";
 import { loginAction } from "./actions";
 
+const noSubscribe = () => () => {};
+
 export function LoginForm({
   callbackUrl,
   showContinueNotice = false,
@@ -20,6 +22,13 @@ export function LoginForm({
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Until React takes over, a submit would be a native browser submit. Keep the button disabled
+  // so credentials never go anywhere without the action (and never in a URL: method="post").
+  const ready = useSyncExternalStore(
+    noSubscribe,
+    () => true, // in the browser, once hydrated
+    () => false, // in the server render
+  );
 
   // Validate on blur, then live once a field has errored (DESIGN.md → Patterns).
   const form = useForm<LoginInput>({
@@ -41,7 +50,7 @@ export function LoginForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+    <form method="post" onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       {serverError ? (
         <Alert tone="danger">{serverError}</Alert>
       ) : (
@@ -84,7 +93,7 @@ export function LoginForm({
         )}
       </div>
 
-      <Button type="submit" size="lg" disabled={pending} className="mt-1">
+      <Button type="submit" size="lg" disabled={pending || !ready} className="mt-1">
         {pending && <LoaderCircle aria-hidden className="animate-spin" />}
         {pending ? "Signing in…" : "Sign in"}
       </Button>

@@ -151,3 +151,20 @@ test.describe("deactivation", () => {
     await expect(page.getByText("This account is deactivated")).toBeVisible();
   });
 });
+
+test("the sign-in form never sends credentials before the page is ready, nor in a URL", async ({
+  request,
+  page,
+}) => {
+  // The server-rendered form posts (never GET) and its button is disabled until React hydrates,
+  // so an early click can't submit the password natively, let alone put it in the address bar.
+  const html = await (await request.get("/login")).text();
+  expect(html).toMatch(/<form[^>]*method="post"/);
+  expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
+  await signIn(page, ACCOUNTS.manager.email);
+  await expect(page).toHaveURL(ACCOUNTS.manager.home);
+  expect(page.url()).not.toContain("password");
+});
