@@ -66,6 +66,7 @@ test("the sign-in page passes axe in light and dark", async ({ browser }) => {
 test.describe("dark mode", () => {
   test.use({ colorScheme: "dark" });
   test("every page in the manager's sidebar passes axe in dark mode", async ({ browser, page }) => {
+    test.setTimeout(90_000); // every sidebar page, each scanned by axe
     await urgentPendingRequest(browser); // the FM home's urgent state is checked too
     await signInAs(page, ACCOUNTS.manager);
     for (const href of await sidebarLinks(page)) {
@@ -78,6 +79,7 @@ test.describe("dark mode", () => {
 
 for (const [role, account] of Object.entries(ACCOUNTS)) {
   test(`every page in the ${role}'s sidebar renders and passes axe`, async ({ browser, page }) => {
+    test.setTimeout(90_000); // up to ten pages, each scanned by axe
     if (role === "manager") await urgentPendingRequest(browser); // the FM home's urgent state
     await signInAs(page, account);
     const links = await sidebarLinks(page);
