@@ -18,7 +18,8 @@ vi.mock("@/server/models/db", () => ({
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 
 const { decideScan } = await import("@/server/services/scan-decision.service");
-const qi = { id: "qi1" };
+const qi = { id: "qi1", role: "QUALITY_INSPECTOR" as const };
+const fm = { id: "fm1", role: "FLOOR_MANAGER" as const };
 const now = new Date("2026-10-02T08:00:00.000Z");
 
 function scan(overrides: Record<string, unknown> = {}) {
@@ -191,4 +192,47 @@ it("refuses changes on a closed batch", async () => {
   await expect(
     decideScan("s1", { verdict: "PASS", reason: "x y z", expectedFinalVerdict: "REJECT" }, qi, now),
   ).rejects.toMatchObject({ status: 409 });
+});
+
+describe("who may decide a flagged scan (D-028)", () => {
+  const flagged = (overrides: Record<string, unknown> = {}) =>
+    scan({ aiVerdict: "NEEDS_REVIEW", finalVerdict: null, status: "PENDING_REVIEW", ...overrides });
+
+  it("refuses the Floor Manager on a scan waiting for review, and writes nothing", async () => {
+    scans.findScanById.mockResolvedValue(flagged());
+    await expect(
+      decideScan("s1", { verdict: "PASS", expectedFinalVerdict: null }, fm, now),
+    ).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+    expect(scans.updateScanDecision).not.toHaveBeenCalled();
+    expect(recordAudit).not.toHaveBeenCalled();
+  });
+
+  it("lets the Quality Inspector resolve it", async () => {
+    scans.findScanById.mockResolvedValue(flagged());
+    const result = await decideScan("s1", { verdict: "PASS", expectedFinalVerdict: null }, qi, now);
+    expect(result).toMatchObject({ finalVerdict: "PASS", isOverride: false });
+  });
+
+  it("refuses the Floor Manager after a Quality Inspector resolved it, too", async () => {
+    scans.findScanById.mockResolvedValue(flagged({ finalVerdict: "PASS", status: "DECIDED" }));
+    await expect(
+      decideScan(
+        "s1",
+        { verdict: "REJECT", reason: "Looks like a hole", expectedFinalVerdict: "PASS" },
+        fm,
+        now,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("still lets the Floor Manager override an automatic call, with a reason", async () => {
+    scans.findScanById.mockResolvedValue(scan());
+    const result = await decideScan(
+      "s1",
+      { verdict: "REWORK", reason: "Only a surface scuff", expectedFinalVerdict: "REJECT" },
+      fm,
+      now,
+    );
+    expect(result).toMatchObject({ finalVerdict: "REWORK", isOverride: true });
+  });
 });

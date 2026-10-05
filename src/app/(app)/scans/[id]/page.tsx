@@ -3,6 +3,7 @@
  * Who:   Quality Inspector / Floor Manager verifying one leather section.
  * What:  see what the camera saw, where, how sure it was, and confirm or change the decision.
  * Worst: overriding the wrong scan or without a record. Overrides need a reason and show who did it.
+ *         A scan the camera flagged is decided by a Quality Inspector only (D-028).
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -15,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatManilaDateTime, formatPercent } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
-import { can } from "@/server/policies/permissions";
+import { can, requiredDecisionPermission } from "@/server/policies/permissions";
 import { getScanDetail } from "@/server/services/scan-query.service";
 import { isScanId } from "@/server/validators/scan.validator";
 import { DecisionPanel } from "./decision-panel";
@@ -52,7 +53,9 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
   };
   const label = `${scan.batch.code} · section #${scan.sequence}`;
   const batchOpen = scan.batch.status === "IN_PROGRESS" || scan.batch.status === "PLANNED";
-  const canDecide = can(user.role, "scan:decide") && batchOpen;
+  const flagged = scan.aiVerdict === "NEEDS_REVIEW";
+  const allowed = can(user.role, requiredDecisionPermission(scan));
+  const canDecide = allowed && batchOpen;
   const unknown = [
     ...new Set(scan.detections.filter((d) => d.isUnknownClass).map((d) => d.rawClassKey)),
   ];
@@ -161,11 +164,19 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
               </dl>
               {canDecide ? (
                 <DecisionPanel scanId={scan.id} label={label} finalVerdict={scan.finalVerdict} />
+              ) : !batchOpen ? (
+                <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
+                  Batch {scan.batch.code} is closed, so this decision is final.
+                </p>
               ) : (
-                !batchOpen && (
+                flagged &&
+                !allowed && (
                   <p className="flex items-start gap-2 text-sm text-muted-foreground">
                     <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
-                    Batch {scan.batch.code} is closed, so this decision is final.
+                    {scan.status === "PENDING_REVIEW"
+                      ? "Waiting for a Quality Inspector. The camera flagged a defect it doesn’t know, so a Quality Inspector decides."
+                      : "The camera flagged this scan, so only a Quality Inspector can change its decision."}
                   </p>
                 )
               )}

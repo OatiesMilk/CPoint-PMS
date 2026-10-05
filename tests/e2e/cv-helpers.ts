@@ -39,12 +39,24 @@ export async function shoeTypeId(): Promise<string> {
 }
 
 /** An API client signed in as the Floor Manager (for setting up batches quickly). */
-export async function managerApi(browser: Browser): Promise<APIRequestContext> {
+async function apiAs(
+  browser: Browser,
+  account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS],
+): Promise<APIRequestContext> {
   const page = await browser.newPage();
   await page.goto("/login");
-  await signIn(page, ACCOUNTS.manager.email);
-  await expect(page).toHaveURL(ACCOUNTS.manager.home);
+  await signIn(page, account.email);
+  await expect(page).toHaveURL(account.home);
   return page.request;
+}
+
+export function managerApi(browser: Browser): Promise<APIRequestContext> {
+  return apiAs(browser, ACCOUNTS.manager);
+}
+
+/** Flagged scans are the Quality Inspector's to decide (D-028). */
+export function inspectorApi(browser: Browser): Promise<APIRequestContext> {
+  return apiAs(browser, ACCOUNTS.inspector);
 }
 
 export async function createBatch(

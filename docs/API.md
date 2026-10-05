@@ -132,15 +132,18 @@ or `404 NO_BATCH_AT_PREPARATION`.
 
 ## Scans (session)
 
-| Method & path                      | Permission    | Notes                                                                                                                               |
-| ---------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/scans`                | `scan:read`   | filters `verdict`, `status`, `source`, `batch` (code), `override=1`, `page`; or `limit=1…50` for the latest scans (the live widget) |
-| `GET /api/v1/scans/{id}`           | `scan:read`   | scan, detections (with boxes), rework/salvage history, who decided                                                                  |
-| `GET /api/v1/scans/{id}/image`     | `scan:read`   | the captured image (`Cache-Control: private`)                                                                                       |
-| `POST /api/v1/scans/{id}/decision` | `scan:decide` | `{ verdict: PASS\|REWORK\|REJECT, reason?, expectedFinalVerdict }`                                                                  |
+| Method & path                      | Permission                                      | Notes                                                                                                                               |
+| ---------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/scans`                | `scan:read`                                     | filters `verdict`, `status`, `source`, `batch` (code), `override=1`, `page`; or `limit=1…50` for the latest scans (the live widget) |
+| `GET /api/v1/scans/{id}`           | `scan:read`                                     | scan, detections (with boxes), rework/salvage history, who decided                                                                  |
+| `GET /api/v1/scans/{id}/image`     | `scan:read`                                     | the captured image (`Cache-Control: private`)                                                                                       |
+| `POST /api/v1/scans/{id}/decision` | `scan:decide`; `scan:review` for a flagged scan | `{ verdict: PASS\|REWORK\|REJECT, reason?, expectedFinalVerdict }`                                                                  |
 
 **Decisions:**
 
+- A scan the camera flagged (`aiVerdict: NEEDS_REVIEW`) is decided only by a Quality Inspector
+  (`scan:review`), both while it waits and after it's resolved. Anyone else gets `403 FORBIDDEN`
+  (D-028). Other scans can be overridden by the Floor Manager or the Quality Inspector.
 - Resolving a `NEEDS_REVIEW` scan needs no reason. Changing an existing decision (an override)
   needs a `reason` (3–300 characters).
 - `expectedFinalVerdict` is the verdict the person saw (`null` for pending). If it changed, the

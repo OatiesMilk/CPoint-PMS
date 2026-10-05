@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Role } from "@/lib/domain";
 import { navigationFor } from "@/server/policies/navigation";
-import { PERMISSIONS, can, type Permission } from "@/server/policies/permissions";
+import {
+  PERMISSIONS,
+  can,
+  requiredDecisionPermission,
+  type Permission,
+} from "@/server/policies/permissions";
 
 const FM: Role = "FLOOR_MANAGER";
 const QI: Role = "QUALITY_INSPECTOR";
@@ -16,6 +21,7 @@ const EXPECTED: Record<Permission, Role[]> = {
   "camera:manage": [FM, QI],
   "scan:read": [FM, QI, AD],
   "scan:decide": [FM, QI],
+  "scan:review": [QI],
   "rework:manage": [FM, QI],
   "salvage:read": [FM, QI],
   "salvage:manage": [FM],
@@ -89,5 +95,15 @@ describe("navigationFor", () => {
 
   it("links each role's first item to its own home", () => {
     expect(navigationFor(QI)[0].items[0].href).toBe("/quality-inspector");
+  });
+});
+
+describe("deciding a scan (D-028)", () => {
+  it("needs scan:review for a flagged scan and scan:decide otherwise", () => {
+    expect(requiredDecisionPermission({ aiVerdict: "NEEDS_REVIEW" })).toBe("scan:review");
+    for (const v of ["PASS", "REWORK", "REJECT"])
+      expect(requiredDecisionPermission({ aiVerdict: v })).toBe("scan:decide");
+    expect(can(FM, requiredDecisionPermission({ aiVerdict: "NEEDS_REVIEW" }))).toBe(false);
+    expect(can(QI, requiredDecisionPermission({ aiVerdict: "NEEDS_REVIEW" }))).toBe(true);
   });
 });

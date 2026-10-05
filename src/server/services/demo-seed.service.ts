@@ -1,4 +1,4 @@
-import type { Stage } from "@/lib/domain";
+import type { Role, Stage } from "@/lib/domain";
 import { manilaToday } from "@/lib/format";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
@@ -104,7 +104,7 @@ export const DEMO_INVENTORY = [
 export type DemoSeedResult =
   { seeded: true; batches: number; scans: number; ms: number } | { seeded: false; reason: string };
 
-type Actor = { id: string };
+type Actor = { id: string; role: Role };
 
 export async function seedDemoWeek(
   options: { now?: Date; seed?: number; imageSize?: number } = {},
