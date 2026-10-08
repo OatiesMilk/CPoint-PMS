@@ -290,13 +290,18 @@ Aggregates per Manila day, defect type or stage, never per person (D-025, D-008)
 `?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
 default is the last 14 days, at most 92, and never past today.
 
-| Method & path                     | Permission          | Returns                                                                       |
-| --------------------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| `GET /api/v1/reports/quality`     | `report:quality`    | `{ range, totals, days[], defects[], matrix[] }`                              |
-| `GET /api/v1/reports/production`  | `report:production` | `{ range, stages[], bottleneck, days[], totals }` (stage times in ms)         |
-| `GET /api/v1/reports/daily.csv`   | `report:quality`    | one row per day: scanned, verdicts, pending, overridden, agreement %, repairs |
-| `GET /api/v1/reports/defects.csv` | `report:quality`    | one row per defect type (by each scan's top detection), by final verdict      |
-| `GET /api/v1/reports/stages.csv`  | `report:production` | per stage: visits, median/average hours, in stage now, bottleneck             |
+| Method & path                        | Permission          | Returns                                                                                             |
+| ------------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/reports/quality`        | `report:quality`    | `{ range, totals, days[], defects[], matrix[] }`                                                    |
+| `GET /api/v1/reports/production`     | `report:production` | `{ range, stages[], bottleneck, days[], totals }` (stage times in ms)                               |
+| `GET /api/v1/reports/daily.csv`      | `report:quality`    | one row per day: scanned, verdicts, pending, overridden, agreement %, repairs                       |
+| `GET /api/v1/reports/defects.csv`    | `report:quality`    | one row per defect type (by each scan's top detection), by final verdict                            |
+| `GET /api/v1/reports/stages.csv`     | `report:production` | per stage: visits, median/average hours, in stage now, bottleneck                                   |
+| `GET /api/v1/reports/operations`     | `report:production` | `{ kpis, attention[], flow, days[], repairs, stock, procurement, suppliers[], checkpoint }` (D-033) |
+| `GET /api/v1/reports/repairs`        | `report:quality`    | `{ waiting, beingRepaired, doneInRange, medianTurnaroundMs, rows[] }` repair station now            |
+| `GET /api/v1/reports/operations.csv` | `report:production` | one row per day: batches started and completed, scans by verdict, repairs done                      |
+| `GET /api/v1/reports/stock.csv`      | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                 |
+| `GET /api/v1/reports/suppliers.csv`  | `report:production` | per supplier: batches, sections, verdict counts, pass %, rework + reject %                          |
 
 - **Verdicts** count the **final** verdict.
 - **AI agreement** = scans the AI decided whose final verdict is the same / scans the AI decided

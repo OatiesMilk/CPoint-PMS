@@ -10,7 +10,7 @@ export function StageProgress({ status, currentStage, durations }: Props) {
   const currentIndex = STAGE_ORDER.indexOf(currentStage);
 
   return (
-    <ol aria-label="Production stages" className="grid grid-cols-4 gap-2">
+    <ol aria-label="Production stages" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {STAGE_ORDER.map((stage, index) => {
         const done = status === "COMPLETED" || (status !== "PLANNED" && index < currentIndex);
         const current = status === "IN_PROGRESS" && index === currentIndex;

@@ -75,7 +75,7 @@ export default async function RequestDetailPage({ params }: PageProps<"/procurem
         </p>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_22rem] items-start gap-6">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
@@ -260,7 +260,7 @@ export default async function RequestDetailPage({ params }: PageProps<"/procurem
               <ol className="flex flex-col gap-3">
                 {request.events.map((e) => (
                   <li key={e.id} className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <RequestStatusBadge status={e.toStatus} />
                       <span className="text-sm text-muted-foreground">
                         {e.fromStatus === null ? "Sent" : ""} by {e.actor.name}

@@ -136,3 +136,8 @@ export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
   for (const row of rows) lines.push(columns.map((c) => csvCell(c.value(row))).join(","));
   return `${BOM}${lines.join("\r\n")}\r\n`;
 }
+
+/** The range just before this one, of the same length, for "vs previous period" comparisons. */
+export function previousRange(range: ReportRange, now: Date = new Date()): ReportRange {
+  return parseRange({ from: addDays(range.from, -range.days), to: addDays(range.from, -1) }, now);
+}

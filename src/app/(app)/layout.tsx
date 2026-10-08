@@ -6,7 +6,7 @@ import { requireUser } from "@/server/policies/guard";
 import { navigationFor } from "@/server/policies/navigation";
 import { signOutAction } from "./actions";
 
-// Everything inside (app) requires a signed-in, active user. Desktop layout only (D-008).
+// Everything inside (app) requires a signed-in, active user. Desktop first; the layout adapts to narrower windows (D-034).
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
 
@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         user={{ name: user.name, email: user.email, roleLabel: ROLE_LABELS[user.role] }}
         signOutAction={signOutAction}
       />
-      <main className="min-w-0 flex-1 px-10 py-8">
+      <main className="min-w-0 flex-1 px-4 py-6 lg:px-10 lg:py-8">
         <QueryProvider>
           <div className="mx-auto flex max-w-6xl flex-col gap-8">{children}</div>
         </QueryProvider>

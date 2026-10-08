@@ -41,7 +41,7 @@ export default async function FloorManagerHome() {
         title={`Good day, ${user.name.split(" ")[0]}`}
         description="Today on the production line."
       />
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <BatchesByStageCard planned={summary.planned} stages={summary.stages} />
         <LatestScansWidget />
         <InspectionSplitCard totals={split} />

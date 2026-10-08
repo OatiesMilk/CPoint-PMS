@@ -14,8 +14,8 @@ export default function Loading() {
         ))}
       </div>
       <div className="h-40 animate-pulse rounded-lg bg-muted/60" />
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 h-48 animate-pulse rounded-lg bg-muted/60" />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="h-48 animate-pulse rounded-lg bg-muted/60 xl:col-span-2" />
         <div className="h-48 animate-pulse rounded-lg bg-muted/60" />
       </div>
     </div>

@@ -68,7 +68,7 @@ export default async function QualityInspectorHome() {
           )
         }
       />
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {tiles.map((t) => (
           <Card key={t.label}>
             <CardHeader>
@@ -87,7 +87,7 @@ export default async function QualityInspectorHome() {
             </CardContent>
           </Card>
         ))}
-        <LatestScansWidget className="col-span-2" />
+        <LatestScansWidget className="xl:col-span-2" />
         <div className="flex flex-col gap-4">
           <DefectsTodayCard defects={defects} />
           <AgreementCard {...agreement} />

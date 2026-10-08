@@ -579,3 +579,63 @@ matched how the repo is used.
 
 **Consequences:** STATUS names the branch that holds unmerged work. A session that finds its
 branch already merged restarts it from `main`.
+
+### D-033 · 2026-10-08 · Accepted — Operations-first reports for the Floor Manager
+
+**Context:** the team said the Reports tab was centred on quality inspection. As a product
+monitoring system it should show what is happening on the production floor in the chosen days
+and what is wrong. Minor-defect detection before cutting stays. The Quality Inspector keeps a
+quality report and also wants to see what is at the repair station.
+**Decision:**
+
+- **Two views on `/reports`.** The Floor Manager (`report:production`) lands on **Operations**
+  and has a **Quality** tab. The Quality Inspector only has Quality, with no tab bar.
+- **Operations answers, in order:** what needs attention; where the batches are and which wait
+  longer than usual; is work flowing (started vs completed, typical lead time, time per stage);
+  what is at the repair station and how far each section has got; which materials are out, low
+  or about to run out; how purchasing is moving; how each supplier's leather scanned; and the
+  checkpoint before cutting in brief.
+- **Measures (standard manufacturing KPIs):** throughput (batches completed), WIP (batches in
+  production), lead time and per-stage cycle time (median plus 90th percentile), bottleneck
+  (highest median stage, as before), first-pass yield (pass ÷ decided), days of cover (stock ÷
+  daily use over the range), request decision and receipt times, supplier pass and rework +
+  reject share, and a Pareto on defect types. Each key figure shows the change against the
+  previous period of the same length, in words and an arrow, never colour.
+- **Attention rules** live in `src/lib/ops-rules.ts` (`ATTENTION`): a batch is late past 1.5×
+  its stage's median over the last 30 days (needs 3 visits, at least 1 hour); a repair waiting
+  over a day; stock under 3 days of cover; a pending request over 2 days or any urgent one; an
+  approved request not received after 7 days; a supplier 10 points above the line with 30+
+  sections. They are constants for now, not settings.
+- **Still no people (D-008).** Every query groups by day, stage, batch, item, supplier or
+  request. A unit test checks that the payloads carry no person keys. Suppliers are companies,
+  not staff.
+- **Repair station** is live (now), not filtered by the range; only "repaired in the last N
+  days" and typical time to repair use the range.
+
+**Consequences:**
+
+- New: `ops-report.model.ts`, `ops-report.service.ts`, `ops-rules.ts`; the page's views live in
+  `reports/_components`. `stageDurations` also returns the 90th percentile.
+- Not done: batch targets (`targetQuotaPairs`) vs output, because output is counted in sections,
+  not pairs; supplier lead time, because requests don't record a supplier; component tracking.
+- Open: should the Floor Manager home (inspection split, daily summary) lead with operations too?
+
+### D-034 · 2026-10-08 · Accepted — The layout adapts to narrower windows (extends D-008)
+
+**Context:** D-008 made the app desktop-only, but people tile the window to half a screen, and
+several screens broke (fixed column counts, clipped numbers, tables pushing the page sideways).
+**Decision:**
+
+- The target is still a desktop browser. Nothing is designed for touch or phones.
+- **Below 1024px** the sidebar becomes an icon rail (labels move to tooltips and screen readers).
+  Page padding shrinks.
+- **Grids reflow by the space they have:** card groups use `repeat(auto-fit, minmax(...))`;
+  layouts with a wide main column and a side column stack below 1280px (`xl:`); form pairs stack
+  below 640px (`sm:`).
+- **Tables scroll inside their own container.** The page never scrolls sideways. The table
+  wrapper is `relative` so hidden screen-reader text can't escape the scroll area.
+- Button groups wrap (`flex-wrap`).
+- Checked at 960px and 640px on every page for the Floor Manager, Admin and Quality Inspector.
+
+**Consequences:** new screens use these patterns. Not checked: the Shoe Constructor home and
+long tables at 640px, which scroll inside their card.

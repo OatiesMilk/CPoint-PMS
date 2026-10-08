@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 // Dense data table (DESIGN.md → Hierarchy rules): one row height, numbers right-aligned via `numeric`.
 export function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
-    <div className="overflow-x-auto rounded-lg border bg-card shadow-1">
+    <div className="relative max-w-full min-w-0 overflow-x-auto rounded-lg border bg-card shadow-1">
       <table
         data-slot="table"
         className={cn("w-full border-collapse text-sm", className)}

@@ -114,7 +114,7 @@ export function ItemForm({ suggestedCode = "", item }: Props) {
       <fieldset className="flex flex-col gap-5">
         <legend className="mb-3 text-lg font-semibold">Item</legend>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="category">Category</Label>
             <Select
@@ -173,7 +173,7 @@ export function ItemForm({ suggestedCode = "", item }: Props) {
       <fieldset className="flex flex-col gap-5">
         <legend className="mb-3 text-lg font-semibold">Stock</legend>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="unit">Unit</Label>
             <Input

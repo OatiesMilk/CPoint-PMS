@@ -164,7 +164,7 @@ export function BatchForm({ shoeTypes, suppliers, rollItems = [], today, batch }
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="supplierId">
               Supplier <span className="font-normal text-muted-foreground">(optional)</span>
@@ -203,7 +203,7 @@ export function BatchForm({ shoeTypes, suppliers, rollItems = [], today, batch }
       <fieldset className="flex flex-col gap-5">
         <legend className="mb-3 text-lg font-semibold">Production</legend>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="shoeTypeId">Shoe type</Label>
             <Select

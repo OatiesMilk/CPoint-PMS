@@ -14,6 +14,27 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-08 — Rework board: collapsible columns
+
+**Who:** team (local copy, not committed)
+**Summary:** The three Rework columns fold to their header; the choice is saved in the browser. Layout is three columns or one stack, so a folded column never leaves a gap.
+**Changed:** `rework/rework-column.tsx` (client, open/closed only), `rework/page.tsx` (container query layout), `tests/e2e/rework-columns.spec.ts`, DESIGN.md.
+**Gates:** lint ✅ · typecheck ✅ · e2e written, not run (needs a build) · checked by hand at 640, 960 and 1440 px.
+
+---
+
+## 2026-10-08 — Phase 10: Operations reports
+
+**Who:** team (local copy, not committed)
+**Summary:** Rebuilt the Floor Manager's Reports around operations (D-033); the Quality report stays as a tab and is the Quality Inspector's report, now with the repair station.
+**Changed:**
+
+- `/reports`: Operations and Quality views, attention list, line by stage, flow chart, repair station, materials at risk, purchasing, suppliers, checkpoint summary, Pareto on defects.
+- API and CSVs: operations, repairs, operations.csv, stock.csv, suppliers.csv. `stageDurations` adds the 90th percentile.
+- Tests: new unit tests for the rules and service; e2e reports spec updated.
+  - Responsive pass (D-034): sidebar rail below 1024px, auto-fit and stacking grids on every page, wrapping action rows, Table wrapper fix.
+    **Gates:** lint ✅ · typecheck ✅ · unit tests ✅ (388) · build not run (a dev server was using `.next`) · e2e not run (needs a build) · docker not run. Checked by hand in the browser against the demo week: Floor Manager Operations and Quality tabs. The Quality Inspector's view was not opened in a browser.
+
 ---
 
 ## 2026-10-05 — Phase 9 follow-up: leather-roll requesters, branch workflow

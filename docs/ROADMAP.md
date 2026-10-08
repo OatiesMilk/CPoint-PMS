@@ -101,3 +101,17 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
       axe smoke on the new pages
 - [x] Client follow-up (D-031): every Shoe Constructor requests materials; only those the FM or
       Admin allows request leather rolls (also when typed); D-028 confirmed by the team
+
+## Phase 10 — Operations reports
+
+- [x] Floor Manager's Reports lands on **Operations**: key figures vs the previous period, "what
+      needs attention", the line by stage with late batches, flow, time in each stage, repair
+      station, materials at risk, purchasing, suppliers, and the checkpoint before cutting in brief
+- [x] **Quality** tab kept for the FM; it is the Quality Inspector's only report, now with the
+      repair station on top and a Pareto on defects
+- [x] API: `/reports/operations`, `/reports/repairs`, three new CSVs (D-033)
+- [x] Tests: unit (rules, service, no person keys), e2e updated for the new tabs
+- [ ] Floor Manager home still shows the inspection split; decide whether it should lead with
+      operations too
+- [x] Layout adapts to narrower windows (D-034): icon-rail sidebar, auto-fit grids, wrapping
+      button groups, tables scroll in their card
