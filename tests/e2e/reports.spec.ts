@@ -136,7 +136,7 @@ test("the Floor Manager sees time in each stage with the bottleneck", async ({ b
   await signInAs(page, ACCOUNTS.manager);
   await page.goto("/reports?preset=today");
   // The Floor Manager lands on Operations: the line now, with one bottleneck, and what's wrong.
-  await expect(page.getByRole("link", { name: "Operations" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -175,7 +175,7 @@ test("the Quality Inspector gets quality reports only, and both homes show live 
   // The Quality Inspector gets the quality report plus the repair station, with no Operations tab.
   await expect(page.getByTestId("total-scanned")).toBeVisible();
   await expect(page.getByTestId("repair-station")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Operations" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveCount(0);
   await page.goto("/reports?view=operations");
   await expect(page.getByTestId("total-scanned")).toBeVisible();
   await expect(page.getByTestId("attention")).toHaveCount(0);
