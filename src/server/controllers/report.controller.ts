@@ -1,5 +1,12 @@
 import { parseRange } from "@/lib/report-rules";
 import { handle, json } from "@/server/lib/http";
+import {
+  operationsCsv,
+  operationsReport,
+  repairStation,
+  stockCsv,
+  suppliersCsv,
+} from "@/server/services/ops-report.service";
 import { requireApiPermission } from "@/server/policies/guard";
 import {
   dailyCsv,
@@ -37,6 +44,36 @@ export const reportController = {
   production: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     return json({ data: await productionReport(rangeFrom(request)) });
+  }),
+
+  /** GET /api/v1/reports/operations?preset=|from=&to= (Floor Manager) */
+  operations: handle(async (request: Request) => {
+    await requireApiPermission("report:production");
+    return json({ data: await operationsReport(rangeFrom(request)) });
+  }),
+
+  /** GET /api/v1/reports/repairs?preset=|from=&to= (Floor Manager, Quality Inspector) */
+  repairs: handle(async (request: Request) => {
+    await requireApiPermission("report:quality");
+    return json({ data: await repairStation(rangeFrom(request)) });
+  }),
+
+  operationsCsv: handle(async (request: Request) => {
+    await requireApiPermission("report:production");
+    const range = rangeFrom(request);
+    return csv(await operationsCsv(range), "operations", range);
+  }),
+
+  suppliersCsv: handle(async (request: Request) => {
+    await requireApiPermission("report:production");
+    const range = rangeFrom(request);
+    return csv(await suppliersCsv(range), "suppliers", range);
+  }),
+
+  stockCsv: handle(async (request: Request) => {
+    await requireApiPermission("report:production");
+    const range = rangeFrom(request);
+    return csv(await stockCsv(range), "stock", range);
   }),
 
   dailyCsv: handle(async (request: Request) => {

@@ -105,7 +105,7 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
 
   // The page shows the same numbers for that day.
   await signInAs(page, ACCOUNTS.manager);
-  await page.goto(`/reports?from=${day}&to=${day}`);
+  await page.goto(`/reports?view=quality&from=${day}&to=${day}`);
   await expect(page.getByTestId("total-scanned")).toHaveText(String(after.totals.scanned));
   await expect(page.getByTestId("daily-table").getByRole("row", { name: day })).toContainText(
     String(after.totals.overridden),
@@ -135,14 +135,29 @@ test("the Floor Manager sees time in each stage with the bottleneck", async ({ b
   }
   await signInAs(page, ACCOUNTS.manager);
   await page.goto("/reports?preset=today");
-  const production = page.getByTestId("production-section");
-  await expect(production).toContainText("Time in each stage");
-  await expect(production.getByText("Bottleneck", { exact: true })).toHaveCount(1);
+  // The Floor Manager lands on Operations: the line now, with one bottleneck, and what's wrong.
+  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(page.getByTestId("production-section")).toContainText("Time in each stage");
+  await expect(page.getByTestId("flow-lanes").getByText("Bottleneck", { exact: true })).toHaveCount(
+    1,
+  );
+  await expect(page.getByTestId("attention")).toContainText("What needs attention");
+  await expect(page.getByTestId("repair-station")).toBeVisible();
+  await expect(page.getByTestId("stock-risk")).toBeVisible();
+  await expect(page.getByTestId("suppliers")).toBeVisible();
+  await expect(page.getByTestId("kpi-wip")).toBeVisible();
+  for (const path of ["operations", "repairs"])
+    expect((await page.request.get(`/api/v1/reports/${path}?preset=today`)).status()).toBe(200);
+  for (const csv of ["operations", "stock", "suppliers"])
+    expect((await page.request.get(`/api/v1/reports/${csv}.csv?preset=today`)).status()).toBe(200);
   expect((await page.request.get("/api/v1/reports/stages.csv?preset=today")).status()).toBe(200);
 
   // Range presets live in the URL.
   await page.getByRole("link", { name: "7 days" }).click();
-  await expect(page).toHaveURL("/reports?preset=7d");
+  await expect(page).toHaveURL("/reports?view=operations&preset=7d");
   await expect(page.getByTestId("report-range")).toContainText("7 days");
 });
 
@@ -157,6 +172,15 @@ test("the Quality Inspector gets quality reports only, and both homes show live 
 
   await page.goto("/reports");
   await expect(page.getByTestId("report-range")).toBeVisible();
+  // The Quality Inspector gets the quality report plus the repair station, with no Operations tab.
+  await expect(page.getByTestId("total-scanned")).toBeVisible();
+  await expect(page.getByTestId("repair-station")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveCount(0);
+  await page.goto("/reports?view=operations");
+  await expect(page.getByTestId("total-scanned")).toBeVisible();
+  await expect(page.getByTestId("attention")).toHaveCount(0);
+  expect((await page.request.get("/api/v1/reports/operations")).status()).toBe(403);
+  expect((await page.request.get("/api/v1/reports/repairs")).status()).toBe(200);
   await expect(page.getByTestId("production-section")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Stages CSV" })).toHaveCount(0);
   expect((await page.request.get("/api/v1/reports/production")).status()).toBe(403);

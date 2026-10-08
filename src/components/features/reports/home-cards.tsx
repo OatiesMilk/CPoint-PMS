@@ -40,7 +40,7 @@ export function InspectionSplitCard({ totals }: { totals: Totals }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <SplitBar counts={totals} />
-        <dl className="grid grid-cols-4 gap-2 text-sm">
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(4.5rem,1fr))] gap-2 text-sm">
           {VERDICT_SERIES.map((s) => (
             <div key={s.key}>
               <dt className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">

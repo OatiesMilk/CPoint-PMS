@@ -48,14 +48,15 @@ export function BarList({ items, label }: { items: BarItem[]; label: string }) {
               )}
             </span>
             <span className="flex min-w-0 items-center gap-2">
-              <span
-                aria-hidden
-                className={cn(
-                  "h-4 rounded-r-sm",
-                  item.muted ? "bg-(--chart-bar-muted)" : "bg-(--chart-bar)",
-                )}
-                style={{ width }}
-              />
+              <span aria-hidden className="min-w-0 flex-1">
+                <span
+                  className={cn(
+                    "block h-4 rounded-r-sm",
+                    item.muted ? "bg-(--chart-bar-muted)" : "bg-(--chart-bar)",
+                  )}
+                  style={{ width }}
+                />
+              </span>
               <span className="shrink-0 font-medium tabular-nums">
                 {item.valueLabel ?? item.value}
               </span>

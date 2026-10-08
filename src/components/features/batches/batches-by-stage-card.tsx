@@ -22,7 +22,7 @@ export function BatchesByStageCard({ planned, stages }: Props) {
   const total = stages.reduce((n, s) => n + s.count, 0);
 
   return (
-    <Card className="col-span-2">
+    <Card className="xl:col-span-2">
       <CardHeader>
         <div className="flex items-start justify-between">
           <div>
@@ -43,7 +43,7 @@ export function BatchesByStageCard({ planned, stages }: Props) {
         </div>
       </CardHeader>
       <CardContent>
-        <ul className="grid grid-cols-4 gap-3">
+        <ul className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-3">
           {stages.map((s) => (
             <li key={s.stage}>
               <Link

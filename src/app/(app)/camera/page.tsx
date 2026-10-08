@@ -65,8 +65,8 @@ export default async function CameraPage() {
         }
       />
 
-      <div className="grid grid-cols-3 items-start gap-6">
-        <div className="col-span-2 flex flex-col gap-3">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
+        <div className="flex flex-col gap-3 xl:col-span-2">
           {last?.imagePath ? (
             <>
               <ScanImage

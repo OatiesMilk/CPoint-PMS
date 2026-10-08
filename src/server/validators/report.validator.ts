@@ -11,4 +11,6 @@ export const reportQuerySchema = z.object({
   preset: z.enum(["today", "7d", "14d", "30d"]).optional().catch(undefined),
   from: day,
   to: day,
+  /** Which report: Operations (Floor Manager) or Quality. */
+  view: z.enum(["operations", "quality"]).optional().catch(undefined),
 });

@@ -112,8 +112,8 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
         </Alert>
       )}
 
-      <div className="grid grid-cols-3 items-start gap-6">
-        <div className="col-span-2">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
+        <div className="xl:col-span-2">
           <ScanViewer
             src={`/api/v1/scans/${scan.id}/image`}
             alt={`Leather section #${scan.sequence} of batch ${scan.batch.code}`}

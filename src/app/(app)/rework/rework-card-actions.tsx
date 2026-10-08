@@ -56,7 +56,7 @@ export function ReworkCardActions({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {primary && (
           <Button size="sm" disabled={pending} onClick={() => run(primary, status)}>
             {spinner}

@@ -158,8 +158,8 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
         )}
       </section>
 
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="col-span-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
           <CardHeader>
             <CardTitle>Details</CardTitle>
           </CardHeader>

@@ -186,7 +186,7 @@ export function RequestForm({
                 aria-label={`Item ${i + 1}`}
                 className="flex flex-col gap-3 rounded-lg border bg-card p-4"
               >
-                <div className="grid grid-cols-[minmax(0,1fr)_10rem_auto] items-start gap-3">
+                <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto]">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor={id("item")}>Item</Label>
                     <Select
@@ -262,7 +262,7 @@ export function RequestForm({
                 )}
 
                 {isOther && (
-                  <div className="grid grid-cols-[minmax(0,1fr)_11rem_10rem] gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_10rem]">
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor={id("itemName")}>Item name</Label>
                       <Input
@@ -332,7 +332,7 @@ export function RequestForm({
           })}
         </ol>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
             variant="secondary"
@@ -352,7 +352,7 @@ export function RequestForm({
 
       <fieldset className="flex flex-col gap-5">
         <legend className="mb-3 text-lg font-semibold">Why and when</legend>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="priority">Priority</Label>
             <Select id="priority" {...form.register("priority")}>
@@ -392,7 +392,7 @@ export function RequestForm({
         Requests can’t be edited after you send them. To change one, cancel it and send a new one.
       </p>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending}>
           {pending && <LoaderCircle aria-hidden className="animate-spin" />}
           {pending ? "Sending…" : "Send request"}

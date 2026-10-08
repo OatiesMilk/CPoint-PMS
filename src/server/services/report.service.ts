@@ -110,6 +110,7 @@ export async function productionReport(range: ReportRange, now: Date = new Date(
       label: STAGE_LABELS[stage],
       visits: d?.visits ?? 0,
       medianMs: d?.medianMs ?? null,
+      p90Ms: d?.p90Ms ?? null,
       avgMs: d?.avgMs ?? null,
       inStageNow: w?.batches ?? 0,
       longestWaitMs: w?.longestMs ?? null,

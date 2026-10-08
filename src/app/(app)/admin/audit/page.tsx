@@ -135,7 +135,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
             {entries.map((e) => (
               <li key={e.id} data-testid="audit-entry">
                 <details className="group">
-                  <summary className="grid cursor-pointer grid-cols-[11rem_12rem_14rem_1fr_auto] items-center gap-3 px-4 py-2 hover:bg-accent [&::-webkit-details-marker]:hidden">
+                  <summary className="grid cursor-pointer grid-cols-1 items-center gap-1 px-4 py-2 hover:bg-accent xl:grid-cols-[11rem_12rem_14rem_1fr_auto] xl:gap-3 [&::-webkit-details-marker]:hidden">
                     <span className="text-muted-foreground tabular-nums">
                       {formatManilaDateTime(e.createdAt)}
                     </span>

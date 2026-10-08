@@ -14,11 +14,11 @@ import { ScanThumb } from "@/components/features/scans/scan-thumb";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatDuration, formatManilaDateTime } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { requirePermission } from "@/server/policies/guard";
 import { reworkBoard, type ReworkCard } from "@/server/services/rework.service";
 import { reworkListQuerySchema } from "@/server/validators/outcome.validator";
 import { ReworkCardActions } from "./rework-card-actions";
+import { ReworkColumn } from "./rework-column";
 
 export const metadata: Metadata = { title: "Rework" };
 
@@ -66,6 +66,7 @@ function Card({ card, now }: { card: ReworkCard; now: number }) {
 }
 
 function Column({
+  id,
   title,
   icon: Icon,
   cards,
@@ -74,6 +75,7 @@ function Column({
   tone,
   limit,
 }: {
+  id: string;
   title: string;
   icon: typeof Wrench;
   cards: ReworkCard[];
@@ -85,12 +87,13 @@ function Column({
 }) {
   const shown = limit ? cards.slice(0, limit) : cards;
   return (
-    <section aria-label={title} className="flex min-w-0 flex-col gap-3 rounded-lg bg-muted/50 p-3">
-      <h2 className={cn("flex items-center gap-2 font-semibold", tone)}>
-        <Icon aria-hidden className="size-4" />
-        {title}
-        <span className="text-muted-foreground tabular-nums">({cards.length})</span>
-      </h2>
+    <ReworkColumn
+      id={id}
+      title={title}
+      count={cards.length}
+      tone={tone}
+      icon={<Icon aria-hidden className="size-4 shrink-0" />}
+    >
       {cards.length === 0 ? (
         <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
           {empty}
@@ -107,7 +110,7 @@ function Column({
           )}
         </ul>
       )}
-    </section>
+    </ReworkColumn>
   );
 }
 
@@ -146,31 +149,39 @@ export default async function ReworkPage({ searchParams }: PageProps<"/rework">)
           </Button>
         )}
       </form>
-      <div className="grid grid-cols-3 items-start gap-4">
-        <Column
-          title="Waiting"
-          icon={Hourglass}
-          cards={board.waiting}
-          now={now}
-          tone="text-rework"
-          empty="Nothing waiting. Sections the camera sends to rework appear here."
-        />
-        <Column
-          title="Being repaired"
-          icon={Wrench}
-          cards={board.inProgress}
-          now={now}
-          empty="No repairs in progress."
-        />
-        <Column
-          title="Repaired, last 7 days"
-          icon={CircleCheck}
-          cards={board.done}
-          limit={12}
-          now={now}
-          tone="text-pass"
-          empty="No repairs finished in the last 7 days."
-        />
+      {/* Three columns when they fit, one stack otherwise. Never a second row, so a folded column
+          can't leave a gap above the next row (a container query, so it follows the page, not the
+          screen). */}
+      <div className="@container">
+        <div className="grid grid-cols-1 items-start gap-4 @min-[52rem]:grid-cols-3">
+          <Column
+            id="waiting"
+            title="Waiting"
+            icon={Hourglass}
+            cards={board.waiting}
+            now={now}
+            tone="text-rework"
+            empty="Nothing waiting. Sections the camera sends to rework appear here."
+          />
+          <Column
+            id="repairing"
+            title="Being repaired"
+            icon={Wrench}
+            cards={board.inProgress}
+            now={now}
+            empty="No repairs in progress."
+          />
+          <Column
+            id="repaired"
+            title="Repaired, last 7 days"
+            icon={CircleCheck}
+            cards={board.done}
+            limit={12}
+            now={now}
+            tone="text-pass"
+            empty="No repairs finished in the last 7 days."
+          />
+        </div>
       </div>
     </>
   );
