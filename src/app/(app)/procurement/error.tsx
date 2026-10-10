@@ -12,9 +12,10 @@ export default function ProcurementError({
   return (
     <div className="flex max-w-xl flex-col gap-4 py-10">
       <Alert tone="danger">
-        <strong className="font-semibold">Couldn’t load purchase requests.</strong>
+        <strong className="font-semibold">Couldn’t load the requests.</strong>
         <span>
-          Nothing was changed. This is usually a brief connection problem with the database.
+          Nothing was changed. This is usually a brief connection problem with the database. Try
+          again; if it keeps happening, tell the System Admin.
         </span>
       </Alert>
       <div>

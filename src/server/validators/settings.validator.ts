@@ -1,44 +1,49 @@
 import { z } from "zod";
+import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
 
-const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
-const optionalText = (max: number, label: string) =>
-  z.preprocess(
-    blankToUndefined,
-    z.string().trim().max(max, `Keep the ${label} under ${max} characters.`).optional(),
-  );
 const sortOrder = z.preprocess(
   (v) => (v === "" || v === undefined || v === null ? 0 : v),
   z.coerce
-    .number({ error: "Enter a whole number." })
-    .int("Enter a whole number.")
-    .min(0, "Use 0 or more.")
-    .max(999, "Use 999 or less."),
+    .number({ error: "Enter the sort order as a whole number, like 10." })
+    .int("Enter the sort order as a whole number, like 10.")
+    .min(0, "The sort order can't be below 0. Enter 0 or more.")
+    .max(999, "The sort order can't be above 999. Enter 999 or less."),
 );
 
 /** Thresholds as percentages in the form; the service stores fractions (D-011). */
 const percent = (label: string) =>
   z.coerce
-    .number({ error: `Enter the ${label} as a percentage.` })
-    .refine((n) => Number.isFinite(n) && n > 0 && n <= 100, `Use a value above 0 and up to 100.`)
-    .refine((n) => Math.abs(n * 10 - Math.round(n * 10)) < 1e-6, "Use at most one decimal place.");
+    .number({ error: `Enter the ${label} as a percentage, like 90.` })
+    .refine(
+      (n) => Number.isFinite(n) && n > 0 && n <= 100,
+      `The ${label} must be above 0 and at most 100.`,
+    )
+    .refine(
+      (n) => Math.abs(n * 10 - Math.round(n * 10)) < 1e-6,
+      `The ${label} can have at most one decimal place, like 87.5.`,
+    );
 
 export const thresholdsSchema = z.object({
-  rejectPercent: percent("Reject threshold"),
-  reworkPercent: percent("Rework threshold"),
+  rejectPercent: percent("reject threshold"),
+  reworkPercent: percent("rework threshold"),
 });
 
 export type ThresholdsInput = z.output<typeof thresholdsSchema>;
 
 export const defectTypeCreateSchema = z.object({
   key: z
-    .string()
+    .string({ error: "Enter the class key exactly as the camera model sends it, e.g. scratch." })
     .trim()
     .toLowerCase()
     .regex(
       /^[a-z0-9][a-z0-9_-]{0,39}$/,
-      "Use the class name exactly as the camera model sends it: lower-case letters, numbers, - or _.",
+      "Enter the class key exactly as the camera model sends it: up to 40 lower-case letters, numbers, - or _.",
     ),
-  label: z.string().trim().min(1, "Enter a label people will read, e.g. Scratch.").max(40),
+  label: z
+    .string({ error: "Enter a label people will read, e.g. Scratch." })
+    .trim()
+    .min(1, "Enter a label people will read, e.g. Scratch.")
+    .max(40, "Keep the label under 40 characters."),
   description: optionalText(200, "description"),
   sortOrder,
 });
@@ -47,31 +52,46 @@ export const defectTypeUpdateSchema = defectTypeCreateSchema.omit({ key: true })
 
 export const shoeTypeSchema = z.object({
   code: z
-    .string()
+    .string({ error: "Enter a code for the shoe type, e.g. SCH." })
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z0-9]{2,10}$/, "Use 2–10 letters or numbers, e.g. SCH."),
-  name: z.string().trim().min(2, "Enter the shoe type's name.").max(40),
+    .regex(/^[A-Z0-9]{2,10}$/, "The code must be 2 to 10 letters or numbers, e.g. SCH."),
+  name: z
+    .string({ error: "Enter the shoe type's name, e.g. School shoe." })
+    .trim()
+    .min(2, "Enter the shoe type's name (at least 2 characters), e.g. School shoe.")
+    .max(40, "Keep the shoe type's name under 40 characters."),
   sortOrder,
 });
 
 export const supplierSchema = z.object({
-  name: z.string().trim().min(2, "Enter the supplier's name.").max(80),
+  name: z
+    .string({ error: "Enter the supplier's name." })
+    .trim()
+    .min(2, "Enter the supplier's name (at least 2 characters).")
+    .max(80, "Keep the supplier's name under 80 characters."),
   contactPerson: optionalText(80, "contact person"),
   phone: z.preprocess(
     blankToUndefined,
     z
-      .string()
+      .string({ error: "Enter the phone number using digits, like 0917 123 4567." })
       .trim()
-      .max(30, "Keep the phone under 30 characters.")
-      .regex(/^[0-9+()\- ]+$/, "Use digits, spaces, +, - or brackets only.")
+      .max(30, "Keep the phone number under 30 characters.")
+      .regex(
+        /^[0-9+()\- ]+$/,
+        "The phone number can only have digits, spaces, +, - or brackets, like 0917 123 4567.",
+      )
       .optional(),
   ),
   notes: optionalText(300, "notes"),
 });
 
 export const componentTypeSchema = z.object({
-  name: z.string().trim().min(2, "Enter the component's name, e.g. Vamp.").max(60),
+  name: z
+    .string({ error: "Enter the component's name, e.g. Vamp." })
+    .trim()
+    .min(2, "Enter the component's name (at least 2 characters), e.g. Vamp.")
+    .max(60, "Keep the component's name under 60 characters."),
   shoeTypeId: z.preprocess(
     blankToUndefined,
     z.uuid("Choose a shoe type from the list.").optional(),
@@ -89,7 +109,7 @@ export const referenceSchemas = {
   componentType: { create: componentTypeSchema, update: componentTypeSchema },
 } as const;
 
-export const referenceActiveSchema = z.object({ isActive: z.boolean() });
+export const referenceActiveSchema = z.object({ isActive: z.boolean({ error: OUT_OF_DATE }) });
 
 export function isReferenceKind(value: string): value is ReferenceKind {
   return (REFERENCE_KINDS as readonly string[]).includes(value);

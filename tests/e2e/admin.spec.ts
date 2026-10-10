@@ -57,7 +57,7 @@ test("a new account signs in with its temporary password, must choose its own, a
   await page.getByLabel("New password").fill("short");
   await page.getByLabel("Type it again").fill("short");
   await page.getByRole("button", { name: "Save new password" }).click();
-  await expect(page.getByText("Use at least 10 characters")).toBeVisible();
+  await expect(page.getByText("The new password needs at least 10 characters")).toBeVisible();
   const chosen = `leather roll ${suffix()}`;
   await page.getByLabel("New password").fill(chosen);
   await page.getByLabel("Type it again").fill(chosen);

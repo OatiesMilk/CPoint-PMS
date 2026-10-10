@@ -2,9 +2,16 @@ import type { PurchaseRequestStatus, Role } from "@/lib/domain";
 import { manilaToday, manilaYear } from "@/lib/format";
 import {
   ACTION_VERB,
+  calendarDay,
+  daysLeftLabel,
   formatRequestCode,
+  NEEDED_BY_MAX_DAYS,
   transition,
+  urgencyCutoffs,
+  urgencyDateRange,
+  urgencyOf,
   type PurchaseAction,
+  type Urgency,
 } from "@/lib/procurement-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import { AppError, Errors } from "@/server/lib/errors";
@@ -42,9 +49,10 @@ import { recordAudit } from "./audit.service";
 import { postMovement } from "./inventory.service";
 
 /**
- * Purchase requests (D-029, D-031). A Shoe Constructor asks (leather rolls only if allowed); the Floor Manager approves
- * or rejects, then marks it received, which posts the stock IN through the inventory ledger
- * (D-023) in the same transaction. Every change writes a timeline event and an audit row.
+ * Material requests (D-029, D-031, D-035 to D-037). A Shoe Constructor asks (leather rolls only if
+ * allowed); the Floor Manager approves or rejects, then marks it received, which posts the stock
+ * IN through the inventory ledger (D-023) in the same transaction. Every change writes a timeline
+ * event and an audit row. Urgency is worked out from the needed-by date on every read.
  */
 
 export type Viewer = { id: string; role: Role; canRequestLeatherRolls: boolean };
@@ -127,10 +135,25 @@ export async function createRequest(
   now: Date = new Date(),
 ) {
   if (!can(actor.role, "procurement:request"))
-    throw Errors.forbidden("Only Shoe Constructors send purchase requests.");
-  if (values.neededBy && values.neededBy < manilaToday(now)) {
+    throw Errors.forbidden(
+      "Only Shoe Constructors send material requests. Ask one of them to send it for you.",
+    );
+  // The schema checks the date against the clock; this checks it against the caller's `now`.
+  const today = manilaToday(now);
+  if (values.neededBy < today) {
     throw Errors.validation([
-      { path: ["neededBy"], message: "Choose today or a later date, or leave it empty." },
+      {
+        path: ["neededBy"],
+        message: "Needed by can't be in the past. Pick today or a later date.",
+      },
+    ]);
+  }
+  if (values.neededBy > addDays(today, NEEDED_BY_MAX_DAYS)) {
+    throw Errors.validation([
+      {
+        path: ["neededBy"],
+        message: `Needed by can be at most ${NEEDED_BY_MAX_DAYS} days ahead. Pick an earlier date.`,
+      },
     ]);
   }
 
@@ -153,7 +176,8 @@ export async function createRequest(
         throw Errors.validation([
           {
             path: ["lines", i, "inventoryItemId"],
-            message: "This item is no longer in inventory. Choose another, or type its name.",
+            message:
+              "This item is no longer in inventory. Choose another item, or pick “Something not in inventory yet” and type its name.",
           },
         ]);
       }
@@ -183,9 +207,7 @@ export async function createRequest(
       {
         code,
         requestedById: actor.id,
-        priority: values.priority,
-        neededBy: values.neededBy ? new Date(`${values.neededBy}T00:00:00Z`) : null,
-        justification: values.justification,
+        neededBy: new Date(`${values.neededBy}T00:00:00Z`),
         createdAt: now,
         lines,
       },
@@ -202,6 +224,13 @@ export async function createRequest(
       },
       tx,
     );
+    // Why it's needed, if they said: the request's first remark (D-036).
+    if (values.remarks) {
+      await insertRemark(
+        { requestId: request.id, authorId: actor.id, body: values.remarks, createdAt: now },
+        tx,
+      );
+    }
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "procurement.request.create",
@@ -209,9 +238,8 @@ export async function createRequest(
       entityId: request.id,
       after: {
         code,
-        priority: values.priority,
-        neededBy: values.neededBy ?? null,
-        justification: values.justification,
+        neededBy: values.neededBy,
+        ...(values.remarks ? { remarks: values.remarks } : {}),
         lines: lines.map((l) => ({
           item: l.itemName,
           category: l.category,
@@ -243,10 +271,10 @@ type ActionInput =
   | { action: "receive" };
 
 const REFUSED: Record<PurchaseAction, string> = {
-  approve: "Only the Floor Manager can approve requests.",
-  reject: "Only the Floor Manager can reject requests.",
-  cancel: "Only the person who sent this request can cancel it.",
-  receive: "Only the Floor Manager can mark requests received.",
+  approve: "Only the Floor Manager can approve requests. Ask them to decide this one.",
+  reject: "Only the Floor Manager can reject requests. Ask them to decide this one.",
+  cancel: "Only the person who sent this request can cancel it. Ask them, or add a remark.",
+  receive: "Only the Floor Manager can mark requests received. Tell them the delivery arrived.",
 };
 
 /** Approve, reject, cancel or receive. Conditional on the status loaded here (409 STALE). */
@@ -353,8 +381,8 @@ export async function addRemark(id: string, body: string, actor: Viewer, now: Da
   if (!mayRemarkOnRequest(actor, request)) {
     throw Errors.forbidden(
       actor.role === "SHOE_CONSTRUCTOR"
-        ? "You can add remarks to your own requests while you're a designated requester."
-        : "Your role can't add remarks to requests.",
+        ? "You can add remarks to your own requests only. Open one of yours to add a remark."
+        : "Only the Floor Manager and the requester can add remarks. Ask the Floor Manager to add it.",
     );
   }
   return runInTransaction(async (tx) => {
@@ -380,12 +408,34 @@ function visibleTo(request: { requestedById: string }, viewer: Viewer): boolean 
   return viewer.role !== "SHOE_CONSTRUCTOR" || request.requestedById === viewer.id;
 }
 
+/** Urgency and "in 2 working days", or nulls once the request is closed (D-037). */
+function urgencyFields(
+  row: { status: PurchaseRequestStatus; neededBy: Date },
+  today: string,
+): { urgency: Urgency | null; daysLeft: string | null } {
+  const urgency = urgencyOf(row.status, row.neededBy, today);
+  return {
+    urgency,
+    daysLeft: urgency ? daysLeftLabel(calendarDay(row.neededBy), today) : null,
+  };
+}
+
+const dayToDate = (day: string | undefined) => (day ? new Date(`${day}T00:00:00Z`) : undefined);
+
 export type RequestListItem = Omit<RequestListRow, "lines"> & {
   lines: { itemName: string; quantity: number; unit: string }[];
+  urgency: Urgency | null;
+  daysLeft: string | null;
 };
 
-export async function listRequests(query: RequestListQuery, viewer: Viewer) {
+export async function listRequests(
+  query: RequestListQuery,
+  viewer: Viewer,
+  now: Date = new Date(),
+) {
   const page = query.page ?? 1;
+  const today = manilaToday(now);
+  const band = query.urgency ? urgencyDateRange(query.urgency, today) : undefined;
   const { rows, total, counts } = await listRequestRows(
     {
       status: query.status,
@@ -394,11 +444,12 @@ export async function listRequests(query: RequestListQuery, viewer: Viewer) {
       from: query.from ? manilaDayStart(query.from) : undefined,
       to: query.to ? manilaDayStart(addDays(query.to, 1)) : undefined,
       requestedById: viewer.role === "SHOE_CONSTRUCTOR" ? viewer.id : undefined,
+      neededBy: band && { after: dayToDate(band.after), through: dayToDate(band.through) },
     },
     { skip: (page - 1) * REQUEST_PAGE_SIZE, take: REQUEST_PAGE_SIZE },
   );
   return {
-    rows: rows.map(toListItem),
+    rows: rows.map((row) => toListItem(row, today)),
     total,
     counts,
     page,
@@ -406,18 +457,23 @@ export async function listRequests(query: RequestListQuery, viewer: Viewer) {
   };
 }
 
-function toListItem(row: RequestListRow): RequestListItem {
-  return { ...row, lines: row.lines.map((l) => ({ ...l, quantity: Number(l.quantity) })) };
+function toListItem(row: RequestListRow, today: string): RequestListItem {
+  return {
+    ...row,
+    ...urgencyFields(row, today),
+    lines: row.lines.map((l) => ({ ...l, quantity: Number(l.quantity) })),
+  };
 }
 
 export type RequestDetail = ReturnType<typeof toDetail>;
 
-function toDetail(row: RequestDetailRow, viewer: Viewer) {
+function toDetail(row: RequestDetailRow, viewer: Viewer, today: string) {
   const actions = (["approve", "reject", "receive", "cancel"] as const).filter(
     (a) => mayActOnRequest(viewer, row, a) && transition(row.status, a).ok,
   );
   return {
     ...row,
+    ...urgencyFields(row, today),
     lines: row.lines.map((l) => ({
       ...l,
       quantity: Number(l.quantity),
@@ -437,20 +493,21 @@ function toDetail(row: RequestDetailRow, viewer: Viewer) {
   };
 }
 
-export async function getRequest(id: string, viewer: Viewer) {
+export async function getRequest(id: string, viewer: Viewer, now: Date = new Date()) {
   const row = await findRequestDetail(id);
   if (!row || !visibleTo(row, viewer)) return null;
-  return toDetail(row, viewer);
+  return toDetail(row, viewer, manilaToday(now));
 }
 
-/** The Floor Manager's home card: pending requests and the oldest wait. */
-export function pendingRequestsCard() {
-  return pendingSummary();
+/** The Floor Manager's home card: pending requests, how many are High urgency, the oldest wait. */
+export function pendingRequestsCard(now: Date = new Date()) {
+  return pendingSummary(dayToDate(urgencyCutoffs(manilaToday(now)).highThrough)!);
 }
 
 /** The constructor's home: their open requests. */
-export async function myOpenRequests(userId: string, take = 5) {
-  return (await openRequestsBy(userId, take)).map(toListItem);
+export async function myOpenRequests(userId: string, take = 5, now: Date = new Date()) {
+  const today = manilaToday(now);
+  return (await openRequestsBy(userId, take)).map((row) => toListItem(row, today));
 }
 
 export const OPEN_TAB_DEFAULT: Record<Role, PurchaseRequestStatus | undefined> = {

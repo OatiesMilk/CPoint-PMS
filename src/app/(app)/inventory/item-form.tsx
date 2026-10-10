@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldError } from "@/components/ui/field-error";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -31,15 +32,6 @@ const DEFAULT_UNIT: Record<InventoryCategory, string> = {
   OTHER: "",
 };
 const FIELDS = ["sku", "name", "category", "unit", "reorderLevel", "openingStock"] as const;
-
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null;
-  return (
-    <p id={id} className="text-sm text-reject">
-      {message}
-    </p>
-  );
-}
 
 type Props = {
   /** Create mode: the code suggested for the default category. */

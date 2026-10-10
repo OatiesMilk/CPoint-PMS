@@ -174,12 +174,18 @@ export async function stockPosition(range: Range, db: Db = defaultDb()): Promise
  * Purchasing flow: what is waiting now, and how fast requests were decided and received in the
  * range. Counts and times only; the requester is never selected.
  */
-export async function procurementFlow(range: Range, now: Date, db: Db = defaultDb()) {
+export async function procurementFlow(
+  range: Range,
+  now: Date,
+  /** The last needed-by date (YYYY-MM-DD) that counts as High urgency today (D-037). */
+  highThrough: string,
+  db: Db = defaultDb(),
+) {
   const [waiting, byStatus, timings] = await Promise.all([
     db.$queryRaw<
       {
         pending: bigint;
-        urgent: bigint;
+        high: bigint;
         oldestPendingMs: number | null;
         awaiting: bigint;
         late: bigint;
@@ -187,7 +193,7 @@ export async function procurementFlow(range: Range, now: Date, db: Db = defaultD
     >`
       SELECT
         count(*) FILTER (WHERE status = 'PENDING') AS pending,
-        count(*) FILTER (WHERE status = 'PENDING' AND priority = 'URGENT') AS urgent,
+        count(*) FILTER (WHERE status = 'PENDING' AND "neededBy" <= ${highThrough}::date) AS high,
         max(extract(epoch FROM (${iso(now)}::timestamptz AT TIME ZONE 'UTC') - "createdAt")) FILTER (WHERE status = 'PENDING') * 1000 AS "oldestPendingMs",
         count(*) FILTER (WHERE status = 'APPROVED') AS awaiting,
         count(*) FILTER (WHERE status = 'APPROVED'
@@ -214,7 +220,7 @@ export async function procurementFlow(range: Range, now: Date, db: Db = defaultD
   const w = waiting[0];
   return {
     pending: n(w?.pending),
-    urgentPending: n(w?.urgent),
+    highPending: n(w?.high),
     oldestPendingMs: num(w?.oldestPendingMs),
     awaitingDelivery: n(w?.awaiting),
     lateAwaitingDelivery: n(w?.late),

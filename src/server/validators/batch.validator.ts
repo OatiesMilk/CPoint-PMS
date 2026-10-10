@@ -1,35 +1,34 @@
 import { z } from "zod";
 import { BatchStatus, Stage } from "@/lib/domain";
 import { manilaToday } from "@/lib/format";
-
-const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
 
 /** Create/edit form. Shared by the batch form (client) and the API. */
 export const batchFormSchema = z.object({
   rollCode: z
-    .string()
+    .string({ error: "Enter the roll code from the leather roll's tag." })
     .trim()
     .min(1, "Enter the roll code from the leather roll's tag.")
     .max(50, "Keep the roll code under 50 characters."),
-  shoeTypeId: z.uuid("Choose a shoe type."),
+  shoeTypeId: z.uuid("Choose a shoe type from the list."),
   supplierId: z.preprocess(blankToUndefined, z.uuid("Choose a supplier from the list.").optional()),
   receivedAt: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date the roll arrived.")
-    .refine((d) => d <= manilaToday(), "The date can't be in the future."),
+    .string({ error: "Enter the date the roll arrived." })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date the roll arrived, like 2026-10-31.")
+    .refine(
+      (d) => d <= manilaToday(),
+      "The arrival date can't be in the future. Pick today or an earlier date.",
+    ),
   targetQuotaPairs: z.preprocess(
     blankToUndefined,
     z.coerce
-      .number({ error: "Enter a whole number of pairs." })
-      .int("Enter a whole number of pairs.")
-      .min(1, "The quota must be at least 1 pair.")
-      .max(100_000, "That's more than 100,000 pairs. Check the number.")
+      .number({ error: "Enter the target quota as a whole number of pairs, like 120." })
+      .int("Enter the target quota as a whole number of pairs, like 120.")
+      .min(1, "The target quota must be at least 1 pair.")
+      .max(100_000, "The target quota can't be more than 100,000 pairs. Check the number.")
       .optional(),
   ),
-  notes: z.preprocess(
-    blankToUndefined,
-    z.string().trim().max(500, "Keep notes under 500 characters.").optional(),
-  ),
+  notes: optionalText(500, "notes"),
   /** Create only (D-023): take one roll from this leather-roll inventory item. Ignored on edit. */
   rollItemId: z.preprocess(
     blankToUndefined,
@@ -41,15 +40,15 @@ export type BatchFormInput = z.input<typeof batchFormSchema>;
 export type BatchFormValues = z.output<typeof batchFormSchema>;
 
 const reason = z
-  .string()
+  .string({ error: "Enter a reason, so the change makes sense in the batch's history." })
   .trim()
-  .min(3, "Give a short reason (at least 3 characters).")
+  .min(3, "Enter a reason of at least 3 characters, so it makes sense in the batch's history.")
   .max(300, "Keep the reason under 300 characters.");
 
 export const transitionSchema = z
   .object({
-    action: z.enum(["start", "advance", "complete", "move_back"]),
-    expectedStage: z.enum(Stage),
+    action: z.enum(["start", "advance", "complete", "move_back"], { error: OUT_OF_DATE }),
+    expectedStage: z.enum(Stage, { error: OUT_OF_DATE }),
     reason: z.preprocess(blankToUndefined, reason.optional()),
   })
   .superRefine((value, ctx) => {
@@ -57,14 +56,17 @@ export const transitionSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["reason"],
-        message: "Say why the batch is moving back.",
+        message: "Enter a reason for moving the batch back, e.g. “Soles came loose.”",
       });
     }
   });
 
 export type TransitionInput = z.infer<typeof transitionSchema>;
 
-export const cancelSchema = z.object({ reason, expectedStage: z.enum(Stage).optional() });
+export const cancelSchema = z.object({
+  reason,
+  expectedStage: z.enum(Stage, { error: OUT_OF_DATE }).optional(),
+});
 
 /** List query (URL search params). Unknown or invalid values are dropped rather than erroring. */
 export const batchListQuerySchema = z.object({

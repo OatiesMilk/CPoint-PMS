@@ -89,11 +89,6 @@ enum PurchaseRequestStatus {
   RECEIVED
 }
 
-enum PurchasePriority {
-  NORMAL
-  URGENT
-}
-
 enum ActorType {
   USER
   DEVICE
@@ -490,16 +485,15 @@ model PurchaseRequestSequence {
   @@map("purchase_request_sequences")
 }
 
-/// A designated Shoe Constructor asks for materials; the Floor Manager decides. Never edited after
-/// it's submitted: cancel and send a new one.
+/// A Shoe Constructor asks for materials; the Floor Manager decides. Never edited after it's
+/// submitted: cancel and send a new one. Why it's needed goes in the first remark (D-036).
 model PurchaseRequest {
   id              String                @id @default(uuid(7)) @db.Uuid
   code            String                @unique // PR-2026-0001
   requestedById   String                @db.Uuid
   status          PurchaseRequestStatus @default(PENDING)
-  priority        PurchasePriority      @default(NORMAL)
-  neededBy        DateTime?             @db.Date
-  justification   String
+  /// Required. Urgency is worked out from it at read time and never stored (D-037).
+  neededBy        DateTime              @db.Date
   decidedById     String?               @db.Uuid
   decidedAt       DateTime?
   rejectionReason String?

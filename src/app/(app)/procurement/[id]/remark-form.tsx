@@ -6,6 +6,7 @@ import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { remarkSchema } from "@/server/validators/procurement.validator";
 import { addRemarkAction } from "../actions";
 
 /** Remarks are only ever added: there's no edit or delete (D-029). */
@@ -21,7 +22,12 @@ export function RemarkForm({ id }: { id: string }) {
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
-        if (!body.trim()) return setError("Write a remark first.");
+        // Same rule and words as the API (remarkSchema), checked before the round trip.
+        const parsed = remarkSchema.safeParse({ body });
+        if (!parsed.success) {
+          e.currentTarget.querySelector("textarea")?.focus();
+          return setError(parsed.error.issues[0].message);
+        }
         startTransition(async () => {
           const result = await addRemarkAction(id, { body });
           if (!result.ok) return setError(result.fieldErrors?.body ?? result.error);

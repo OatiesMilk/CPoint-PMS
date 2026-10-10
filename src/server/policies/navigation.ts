@@ -1,4 +1,5 @@
 import { ROLE_HOME, type Role } from "@/lib/domain";
+import { requestLabelsFor } from "@/lib/procurement-rules";
 import { can, type Permission } from "./permissions";
 
 export type NavIcon =
@@ -116,7 +117,13 @@ export function navigationFor(role: Role): NavSection[] {
     title: section.title,
     items: section.items
       .filter((item) => can(role, item.permission))
-      .map(({ label, href, icon, phase }) => ({ label, href, icon, phase })),
+      // Constructors see "Material requests"; the same page is "Procurement" for the rest (D-035).
+      .map(({ label, href, icon, phase }) => ({
+        label: href === "/procurement" ? requestLabelsFor(role).nav : label,
+        href,
+        icon,
+        phase,
+      })),
   })).filter((section) => section.items.length > 0);
   return [home, ...sections];
 }

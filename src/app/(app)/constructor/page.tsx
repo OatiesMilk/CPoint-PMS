@@ -11,11 +11,11 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { ArrowRight, Plus } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
-import { RequestStatusBadge } from "@/components/features/procurement/request-badges";
+import { RequestStatusBadge, UrgencyBadge } from "@/components/features/procurement/request-badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatManilaDateTime } from "@/lib/format";
-import { summarizeItems } from "@/lib/procurement-rules";
+import { requestLabelsFor, summarizeItems } from "@/lib/procurement-rules";
 import { requireRole } from "@/server/policies/guard";
 import { canRequestLeatherRollsFor } from "@/server/policies/permissions";
 import { myOpenRequests } from "@/server/services/procurement.service";
@@ -27,6 +27,7 @@ export default async function ConstructorHome() {
   await connection();
   const firstName = user.name.split(" ")[0];
 
+  const labels = requestLabelsFor(user.role);
   const open = await myOpenRequests(user.id);
   return (
     <>
@@ -41,7 +42,7 @@ export default async function ConstructorHome() {
           <Button asChild>
             <Link href="/procurement/new">
               <Plus aria-hidden />
-              New request
+              {labels.create}
             </Link>
           </Button>
         }
@@ -50,10 +51,10 @@ export default async function ConstructorHome() {
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle>My open requests</CardTitle>
+              <CardTitle>My {labels.many}</CardTitle>
               <CardDescription>
                 {open.length === 0
-                  ? "Nothing waiting. Requests you send appear here until they’re received."
+                  ? "Nothing open. Requests you send appear here until they’re received."
                   : "Waiting for a decision, or approved and waiting for the delivery."}
               </CardDescription>
             </div>
@@ -61,7 +62,7 @@ export default async function ConstructorHome() {
               href="/procurement?status=all"
               className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
             >
-              All my requests
+              All my {labels.many}
               <ArrowRight aria-hidden className="size-4" />
             </Link>
           </div>
@@ -82,7 +83,10 @@ export default async function ConstructorHome() {
                       {summarizeItems(r.lines)} · sent {formatManilaDateTime(r.createdAt)}
                     </p>
                   </div>
-                  <RequestStatusBadge status={r.status} />
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <UrgencyBadge urgency={r.urgency} daysLeft={r.daysLeft} />
+                    <RequestStatusBadge status={r.status} />
+                  </div>
                 </li>
               ))}
             </ul>

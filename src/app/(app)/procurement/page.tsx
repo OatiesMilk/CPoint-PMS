@@ -3,20 +3,17 @@
  * Who:   the Floor Manager (decides), Shoe Constructors (ask for materials; leather rolls only if
  *        allowed, D-031), the
  *        System Admin (reads). A few times a day.
- * What:  see which purchase requests wait for a decision, oldest and urgent first, and open one.
- *        Constructors see and send their own.
+ * What:  see which requests wait for a decision, the soonest needed first, and open one.
+ *        Constructors see and send their own, as "Material requests" (D-035).
  * Worst: a request for leather or nails sits unnoticed until the line stops (survey Q13). Pending
- *        is the Floor Manager's default tab, urgent on top, with the age of each request.
+ *        is the Floor Manager's default tab, High urgency on top (D-037), with each one's age.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { ChevronLeft, ChevronRight, Info, Plus } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
-import {
-  PriorityLabel,
-  RequestStatusBadge,
-} from "@/components/features/procurement/request-badges";
+import { RequestStatusBadge, UrgencyBadge } from "@/components/features/procurement/request-badges";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -28,9 +25,9 @@ import {
 } from "@/components/ui/table";
 import type { PurchaseRequestStatus } from "@/lib/domain";
 import { formatDuration, formatManilaDateTime } from "@/lib/format";
-import { STATUS_LABELS, summarizeItems } from "@/lib/procurement-rules";
+import { requestLabelsFor, STATUS_LABELS, summarizeItems } from "@/lib/procurement-rules";
 import { cn } from "@/lib/utils";
-import { requirePermission } from "@/server/policies/guard";
+import { getCurrentUser, requirePermission } from "@/server/policies/guard";
 import { can, canRequestLeatherRollsFor } from "@/server/policies/permissions";
 import {
   listRequesters,
@@ -42,7 +39,11 @@ import { requestListQuerySchema } from "@/server/validators/procurement.validato
 import { RequestFilters } from "./request-filters";
 import { RequestersPanel } from "./requesters-panel";
 
-export const metadata: Metadata = { title: "Procurement" };
+/** "Material requests" for a Shoe Constructor, "Procurement" for everyone else (D-035). */
+export async function generateMetadata(): Promise<Metadata> {
+  const user = await getCurrentUser();
+  return { title: user ? requestLabelsFor(user.role).nav : "Procurement" };
+}
 
 const TABS: PurchaseRequestStatus[] = ["PENDING", "APPROVED", "RECEIVED", "REJECTED", "CANCELLED"];
 
@@ -59,7 +60,8 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
   const all = raw.status === "all";
   const status = all ? undefined : (parsed.status ?? OPEN_TAB_DEFAULT[user.role]);
   const query = { ...parsed, status };
-  const filtered = Boolean(query.category || query.item || query.from || query.to);
+  const filtered = Boolean(query.category || query.urgency || query.item || query.from || query.to);
+  const labels = requestLabelsFor(user.role);
 
   const [list, items, requesters] = await Promise.all([
     listRequests(query, user), // the tab counts show on every tab
@@ -74,6 +76,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
     const merged = {
       status: all ? "all" : raw.status === undefined ? undefined : String(raw.status),
       category: query.category,
+      urgency: query.urgency,
       item: query.item,
       from: query.from,
       to: query.to,
@@ -88,18 +91,18 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
   return (
     <>
       <PageHeader
-        title="Procurement"
+        title={labels.nav}
         description={
           isConstructor
             ? "Ask for materials when stock runs low. The Floor Manager approves each request."
-            : "Materials the Shoe Constructors asked for. Approve or reject, then mark them received."
+            : "Materials the Shoe Constructors asked for, the most urgent first. Approve or reject, then mark them received."
         }
         actions={
           canRequest && (
             <Button asChild>
               <Link href="/procurement/new">
                 <Plus aria-hidden />
-                New request
+                {labels.create}
               </Link>
             </Button>
           )
@@ -152,15 +155,15 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
         <RequestersPanel people={requesters} />
       ) : !anyRequest && !filtered ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-16 text-center">
-          <h2 className="text-xl font-semibold">No purchase requests yet</h2>
+          <h2 className="text-xl font-semibold">No {labels.many} yet</h2>
           <p className="max-w-md text-muted-foreground">
             {isConstructor
-              ? "When nails, thread or leather run low, send a request. The Floor Manager sees it right away."
+              ? "When nails, thread or leather run low, send a material request. The Floor Manager sees it right away."
               : "Shoe Constructors send requests when materials run low. Leather rolls only from those you allow under Leather roll requesters."}
           </p>
           {canRequest && (
             <Button asChild className="mt-2">
-              <Link href="/procurement/new">Send the first request</Link>
+              <Link href="/procurement/new">Send your first {labels.one}</Link>
             </Button>
           )}
         </div>
@@ -179,6 +182,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                   <Link
                     href={href({
                       category: undefined,
+                      urgency: undefined,
                       item: undefined,
                       from: undefined,
                       to: undefined,
@@ -196,7 +200,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Request</TableHead>
                     <TableHead>Items</TableHead>
-                    <TableHead>Priority</TableHead>
+                    <TableHead>Urgency</TableHead>
                     {!isConstructor && <TableHead>Requested by</TableHead>}
                     <TableHead>Sent</TableHead>
                     <TableHead>Status</TableHead>
@@ -215,7 +219,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                       </TableCell>
                       <TableCell className="max-w-80 truncate">{summarizeItems(r.lines)}</TableCell>
                       <TableCell>
-                        <PriorityLabel priority={r.priority} />
+                        <UrgencyBadge urgency={r.urgency} daysLeft={r.daysLeft} />
                       </TableCell>
                       {!isConstructor && <TableCell>{r.requestedBy.name}</TableCell>}
                       <TableCell className="whitespace-nowrap text-muted-foreground">

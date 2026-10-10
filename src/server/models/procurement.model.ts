@@ -1,9 +1,4 @@
-import type {
-  InventoryCategory,
-  Prisma,
-  PurchasePriority,
-  PurchaseRequestStatus,
-} from "@/generated/prisma/client";
+import type { InventoryCategory, Prisma, PurchaseRequestStatus } from "@/generated/prisma/client";
 import { type Db, defaultDb } from "./db";
 
 // Purchase requests (D-029). A request's status changes only through transitionStatus, which is
@@ -32,9 +27,7 @@ export function insertRequest(
   data: {
     code: string;
     requestedById: string;
-    priority: PurchasePriority;
-    neededBy: Date | null;
-    justification: string;
+    neededBy: Date;
     createdAt: Date;
     lines: NewLine[];
   },
@@ -58,9 +51,13 @@ export type RequestListFilter = {
   itemId?: string;
   from?: Date;
   to?: Date; // exclusive
+  /** Open requests whose needed-by date is in this range (an urgency band, D-037). */
+  neededBy?: { after?: Date; through?: Date };
   /** Constructors see only their own requests. */
   requestedById?: string;
 };
+
+const OPEN: PurchaseRequestStatus[] = ["PENDING", "APPROVED"];
 
 function listWhere(filter: Omit<RequestListFilter, "status">): Prisma.PurchaseRequestWhereInput {
   const lineFilter: Prisma.PurchaseRequestLineWhereInput = {
@@ -69,6 +66,20 @@ function listWhere(filter: Omit<RequestListFilter, "status">): Prisma.PurchaseRe
   };
   return {
     ...(filter.requestedById ? { requestedById: filter.requestedById } : {}),
+    // Closed requests have no urgency, so an urgency filter only ever matches open ones.
+    ...(filter.neededBy
+      ? {
+          AND: [
+            { status: { in: OPEN } },
+            {
+              neededBy: {
+                ...(filter.neededBy.after ? { gt: filter.neededBy.after } : {}),
+                ...(filter.neededBy.through ? { lte: filter.neededBy.through } : {}),
+              },
+            },
+          ],
+        }
+      : {}),
     ...(Object.keys(lineFilter).length ? { lines: { some: lineFilter } } : {}),
     ...(filter.from || filter.to
       ? {
@@ -85,7 +96,6 @@ const listSelect = {
   id: true,
   code: true,
   status: true,
-  priority: true,
   neededBy: true,
   createdAt: true,
   decidedAt: true,
@@ -101,7 +111,8 @@ export type RequestListRow = Prisma.PurchaseRequestGetPayload<{ select: typeof l
 
 /**
  * One page of requests plus a count per status (for the tabs, under the same non-status filters).
- * Pending: urgent first, then oldest first, so the longest wait is on top. Others: newest first.
+ * Pending: the nearest needed-by date first (so High urgency is on top, then Medium, then Low),
+ * then oldest first. Others: newest first.
  */
 export async function listRequests(
   filter: RequestListFilter,
@@ -112,7 +123,7 @@ export async function listRequests(
   const where = { ...base, ...(filter.status ? { status: filter.status } : {}) };
   const orderBy: Prisma.PurchaseRequestOrderByWithRelationInput[] =
     filter.status === "PENDING"
-      ? [{ priority: "desc" }, { createdAt: "asc" }]
+      ? [{ neededBy: "asc" }, { createdAt: "asc" }]
       : [{ createdAt: "desc" }];
   const [rows, total, byStatus] = await Promise.all([
     db.purchaseRequest.findMany({ where, select: listSelect, orderBy, ...page }),
@@ -136,9 +147,7 @@ const detailSelect = {
   id: true,
   code: true,
   status: true,
-  priority: true,
   neededBy: true,
-  justification: true,
   rejectionReason: true,
   approvalNote: true,
   createdAt: true,
@@ -251,8 +260,6 @@ export function setLineMovement(lineId: string, movementId: string, db: Db = def
 
 // ───────────── summaries ─────────────
 
-const OPEN: PurchaseRequestStatus[] = ["PENDING", "APPROVED"];
-
 /** Open (pending or approved) requests that ask for any of these items: one entry per line. */
 export function openRequestsForItems(itemIds: string[], db: Db = defaultDb()) {
   if (itemIds.length === 0) return Promise.resolve([]);
@@ -266,19 +273,22 @@ export function openRequestsForItems(itemIds: string[], db: Db = defaultDb()) {
   });
 }
 
-/** Pending requests waiting on the Floor Manager: how many, how many urgent, the oldest. */
-export async function pendingSummary(db: Db = defaultDb()) {
+/**
+ * Pending requests waiting on the Floor Manager: how many, how many are High urgency (needed on or
+ * before `highThrough`), and the oldest.
+ */
+export async function pendingSummary(highThrough: Date, db: Db = defaultDb()) {
   const where = { status: "PENDING" as const };
-  const [count, urgent, oldest] = await Promise.all([
+  const [count, high, oldest] = await Promise.all([
     db.purchaseRequest.count({ where }),
-    db.purchaseRequest.count({ where: { ...where, priority: "URGENT" } }),
+    db.purchaseRequest.count({ where: { ...where, neededBy: { lte: highThrough } } }),
     db.purchaseRequest.findFirst({
       where,
       select: { id: true, code: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
   ]);
-  return { count, urgent, oldest };
+  return { count, high, oldest };
 }
 
 /** A requester's open requests, newest first (the constructor home). */

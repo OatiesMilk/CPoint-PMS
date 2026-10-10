@@ -8,15 +8,25 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Info, LoaderCircle, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
+import { UrgencyBadge } from "@/components/features/procurement/request-badges";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
+import { FormErrorSummary, type SummaryError } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { InventoryCategory } from "@/lib/domain";
 import { CATEGORY_LABELS, formatQuantity, stockLevel } from "@/lib/inventory-rules";
-import { MAX_LINES, PRIORITY_LABELS } from "@/lib/procurement-rules";
+import {
+  daysLeftLabel,
+  MAX_LINES,
+  NEEDED_BY_MAX_DAYS,
+  URGENCY_BANDS,
+  urgencyFor,
+} from "@/lib/procurement-rules";
+import { addDays } from "@/lib/report-rules";
 import {
   purchaseRequestSchema,
   type PurchaseRequestInput,
@@ -49,11 +59,23 @@ type LineValues = {
   note: string;
 };
 type FormValues = {
-  priority: "NORMAL" | "URGENT";
   neededBy: string;
-  justification: string;
+  remarks: string;
   lines: LineValues[];
 };
+
+const LINE_FIELDS = [
+  "inventoryItemId",
+  "quantity",
+  "itemName",
+  "category",
+  "unit",
+  "note",
+] as const;
+/** The input each line error belongs to. The item picker is `lines-0-item`. */
+const lineFieldId = (i: number, field: (typeof LINE_FIELDS)[number]) =>
+  `lines-${i}-${field === "inventoryItemId" ? "item" : field}`;
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 const emptyLine = (inventoryItemId = ""): LineValues => ({
   inventoryItemId,
@@ -86,29 +108,40 @@ function toInput(values: FormValues): PurchaseRequestInput {
 const schemaResolver = zodResolver(purchaseRequestSchema);
 const resolver: Resolver<FormValues> = async (values, context, options) => {
   const result = await schemaResolver(toInput(values), context, options as never);
+  // With no item picked, the typed-item fields aren't on screen. Their messages would point at
+  // nothing, so the line gets one message on the picker instead.
+  const lineErrors = (result.errors as { lines?: Record<string, unknown>[] }).lines;
+  values.lines.forEach((line, i) => {
+    const e = lineErrors?.[i];
+    if (!e || line.inventoryItemId === OTHER) return;
+    if (e.itemName || e.category || e.unit) {
+      e.inventoryItemId ??= {
+        type: "custom",
+        message:
+          "Choose an item from the list. If it isn't there, pick “Something not in inventory yet”.",
+      };
+    }
+    delete e.itemName;
+    delete e.category;
+    delete e.unit;
+  });
   return Object.keys(result.errors).length
     ? { values: {}, errors: result.errors as never }
     : { values, errors: {} };
 };
 
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null;
-  return (
-    <p id={id} className="text-sm text-reject">
-      {message}
-    </p>
-  );
-}
-
 export function RequestForm({
   items,
   prefillItemId,
   canRequestLeatherRolls,
+  today,
 }: {
   items: PickerItem[];
   prefillItemId?: string;
   /** Leather rolls need the Floor Manager's OK (D-031); the server checks again. */
   canRequestLeatherRolls: boolean;
+  /** Today in Manila (YYYY-MM-DD), from the server, so the urgency preview matches the list. */
+  today: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -121,15 +154,36 @@ export function RequestForm({
     mode: "onTouched",
     shouldFocusError: true,
     defaultValues: {
-      priority: "NORMAL",
       neededBy: "",
-      justification: "",
+      remarks: "",
       lines: [emptyLine(prefillItemId && byId.get(prefillItemId)?.allowed ? prefillItemId : "")],
     },
   });
   const { errors } = form.formState;
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
   const lines = useWatch({ control: form.control, name: "lines" });
+  const neededBy = useWatch({ control: form.control, name: "neededBy" });
+  // Shown before sending, so the urgency is never a surprise. Only for a date the form accepts.
+  const previewable =
+    ISO_DAY.test(neededBy ?? "") &&
+    neededBy >= today &&
+    neededBy <= addDays(today, NEEDED_BY_MAX_DAYS);
+
+  // Every message with the input it belongs to, in the order the fields appear on the page.
+  const summary: SummaryError[] = [];
+  const listError = errors.lines?.root?.message ?? errors.lines?.message;
+  if (listError) summary.push({ fieldId: "lines-0-item", message: listError });
+  fields.forEach((_, i) => {
+    for (const field of LINE_FIELDS) {
+      const message = errors.lines?.[i]?.[field]?.message;
+      if (message)
+        summary.push({ fieldId: lineFieldId(i, field), message: `Item ${i + 1}: ${message}` });
+    }
+  });
+  if (errors.neededBy?.message)
+    summary.push({ fieldId: "neededBy", message: errors.neededBy.message });
+  if (errors.remarks?.message)
+    summary.push({ fieldId: "remarks", message: errors.remarks.message });
 
   const onSubmit = form.handleSubmit((values) => {
     setFormError(null);
@@ -142,14 +196,20 @@ export function RequestForm({
         router.push(`/procurement/${result.id}`);
         return;
       }
-      setFormError(
-        result.fieldErrors?.lines
-          ? `${result.fieldErrors.lines} Your entries are kept.`
-          : `${result.error} Your entries are kept.`,
-      );
-      for (const field of ["justification", "neededBy", "priority"] as const) {
-        const message = result.fieldErrors?.[field];
-        if (message) form.setError(field, { message }, { shouldFocus: true });
+      // The server names the exact field ("lines.2.quantity", "neededBy"): put each message under
+      // its input and focus the first one. Anything it can't place goes in the alert on top.
+      let placed = 0;
+      for (const [path, message] of Object.entries(result.fieldErrors ?? {})) {
+        const known =
+          path === "neededBy" ||
+          path === "remarks" ||
+          /^lines\.\d+\.(inventoryItemId|quantity|itemName|category|unit|note)$/.test(path);
+        if (!known) continue;
+        form.setError(path as never, { message }, { shouldFocus: placed === 0 });
+        placed += 1;
+      }
+      if (placed === 0) {
+        setFormError(`${result.fieldErrors?.lines ?? result.error} What you typed is still here.`);
       }
     });
   });
@@ -157,6 +217,7 @@ export function RequestForm({
   return (
     <form onSubmit={onSubmit} noValidate className="flex max-w-3xl flex-col gap-6">
       {formError && <Alert tone="danger">{formError}</Alert>}
+      {form.formState.submitCount > 0 && <FormErrorSummary errors={summary} />}
 
       <fieldset className="flex flex-col gap-4">
         <legend className="mb-3 text-lg font-semibold">What you need</legend>
@@ -191,8 +252,8 @@ export function RequestForm({
                     <Label htmlFor={id("item")}>Item</Label>
                     <Select
                       id={id("item")}
-                      aria-invalid={!!e?.inventoryItemId || !!e?.itemName}
-                      aria-describedby={e?.itemName ? id("itemName-error") : undefined}
+                      aria-invalid={!!e?.inventoryItemId}
+                      aria-describedby={e?.inventoryItemId ? id("item-error") : undefined}
                       {...form.register(`lines.${i}.inventoryItemId`)}
                     >
                       <option value="">Choose an item…</option>
@@ -323,6 +384,7 @@ export function RequestForm({
                     autoComplete="off"
                     placeholder="Size, colour, brand…"
                     aria-invalid={!!e?.note}
+                    aria-describedby={e?.note ? id("note-error") : undefined}
                     {...form.register(`lines.${i}.note`)}
                   />
                   <FieldError id={id("note-error")} message={e?.note?.message} />
@@ -351,39 +413,59 @@ export function RequestForm({
       </fieldset>
 
       <fieldset className="flex flex-col gap-5">
-        <legend className="mb-3 text-lg font-semibold">Why and when</legend>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="priority">Priority</Label>
-            <Select id="priority" {...form.register("priority")}>
-              <option value="NORMAL">{PRIORITY_LABELS.NORMAL}</option>
-              <option value="URGENT">{PRIORITY_LABELS.URGENT}: the line stops without it</option>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="neededBy">
-              Needed by <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              id="neededBy"
-              type="date"
-              aria-invalid={!!errors.neededBy}
-              aria-describedby={errors.neededBy ? "neededBy-error" : undefined}
-              {...form.register("neededBy")}
-            />
-            <FieldError id="neededBy-error" message={errors.neededBy?.message} />
-          </div>
+        <legend className="mb-3 text-lg font-semibold">When you need it</legend>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="neededBy">Needed by</Label>
+          <Input
+            id="neededBy"
+            type="date"
+            className="sm:max-w-56"
+            min={today}
+            max={addDays(today, NEEDED_BY_MAX_DAYS)}
+            aria-required="true"
+            aria-invalid={!!errors.neededBy}
+            aria-describedby={errors.neededBy ? "neededBy-error" : "neededBy-hint"}
+            {...form.register("neededBy")}
+          />
+          {errors.neededBy ? (
+            <FieldError id="neededBy-error" message={errors.neededBy.message} />
+          ) : previewable ? (
+            <p
+              id="neededBy-hint"
+              className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+            >
+              The Floor Manager will see this as
+              <UrgencyBadge
+                urgency={urgencyFor(neededBy, today)}
+                daysLeft={daysLeftLabel(neededBy, today)}
+              />
+            </p>
+          ) : (
+            <p id="neededBy-hint" className="text-sm text-muted-foreground">
+              The date sets the urgency: High within {URGENCY_BANDS.highMaxDays} working days,
+              Medium within {URGENCY_BANDS.mediumMaxDays}, Low after that. Weekends don’t count.
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="justification">Why it’s needed</Label>
+          <Label htmlFor="remarks">
+            Remarks <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
           <Textarea
-            id="justification"
+            id="remarks"
             placeholder="e.g. Nails for Friday’s topsider batch; we have half a box left."
-            aria-invalid={!!errors.justification}
-            aria-describedby={errors.justification ? "justification-error" : undefined}
-            {...form.register("justification")}
+            aria-invalid={!!errors.remarks}
+            aria-describedby={errors.remarks ? "remarks-error" : "remarks-hint"}
+            {...form.register("remarks")}
           />
-          <FieldError id="justification-error" message={errors.justification?.message} />
+          {errors.remarks ? (
+            <FieldError id="remarks-error" message={errors.remarks.message} />
+          ) : (
+            <p id="remarks-hint" className="text-sm text-muted-foreground">
+              Anything that helps the Floor Manager decide. It shows as the first remark on the
+              request.
+            </p>
+          )}
         </div>
       </fieldset>
 

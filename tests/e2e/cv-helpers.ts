@@ -150,7 +150,17 @@ export async function makeConstructor(
   return { id, email };
 }
 
-/** An urgent purchase request waiting on the Floor Manager, so the FM home shows that state. */
+/** A Manila calendar date `days` from today, as YYYY-MM-DD (for needed-by dates). */
+export function daysAhead(days: number): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(
+    new Date(Date.now() + days * 86_400_000),
+  );
+}
+
+/**
+ * A request needed today (High urgency, D-037) waiting on the Floor Manager, so the FM home shows
+ * that state.
+ */
 export async function urgentPendingRequest(browser: Browser): Promise<void> {
   const sc = await makeConstructor();
   const page = await browser.newPage();
@@ -159,8 +169,8 @@ export async function urgentPendingRequest(browser: Browser): Promise<void> {
   await expect(page).toHaveURL("/constructor");
   const res = await page.request.post("/api/v1/procurement/requests", {
     data: {
-      priority: "URGENT",
-      justification: "E2E: the line stops without it",
+      neededBy: daysAhead(0),
+      remarks: "E2E: the line stops without it",
       lines: [{ itemName: "E2E urgent item", category: "OTHER", unit: "box", quantity: 1 }],
     },
   });

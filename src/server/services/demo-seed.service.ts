@@ -427,7 +427,8 @@ export async function seedDemoWeek(
   /**
    * A handful of requests through the real services, one in each state: received (posts stock IN,
    * so the ledger still balances), rejected with a reason, cancelled, approved and waiting for the
-   * delivery, and an urgent one pending for the low Contact cement.
+   * delivery, and one pending for the low Contact cement that is needed tomorrow (High urgency).
+   * What used to be "why it's needed" is each request's first remark (D-036).
    */
   async function seedRequests(): Promise<number> {
     const found = await findUserByEmail("constructor@cpoint.local");
@@ -436,16 +437,14 @@ export async function seedDemoWeek(
     if (!found.canRequestLeatherRolls) await setRequester(found.id, true, fm!);
     const sc = { id: found.id, role: found.role, canRequestLeatherRolls: true };
     const item = (sku: string) => itemIds.get(sku);
-    const last = workingDays[workingDays.length - 1];
     const beforeLast = workingDays[Math.max(0, workingDays.length - 2)];
     let made = 0;
 
     const send = async (
       when: Date,
       values: {
-        priority: "NORMAL" | "URGENT";
-        neededBy?: string;
-        justification: string;
+        neededBy: string;
+        remarks?: string;
         lines: {
           inventoryItemId?: string;
           itemName?: string;
@@ -467,8 +466,8 @@ export async function seedDemoWeek(
     // Monday: thread and tacks for the week, approved, then received the next afternoon.
     const t1 = at(workingDays[0], 9);
     const r1 = await send(t1, {
-      priority: "NORMAL",
-      justification: "Thread and tacks for this week's school shoe batches.",
+      neededBy: addDays(workingDays[0], 3),
+      remarks: "Thread and tacks for this week's school shoe batches.",
       lines: [
         { inventoryItemId: item("TH-001"), quantity: 4 },
         { inventoryItemId: item("NL-001"), quantity: 5 },
@@ -493,8 +492,8 @@ export async function seedDemoWeek(
     // Midweek: topsider leather the FM already has coming.
     const t2 = at(workingDays[2], 10);
     const r2 = await send(t2, {
-      priority: "NORMAL",
-      justification: "Only two suede rolls left for the topsider orders.",
+      neededBy: addDays(manilaToday(t2), 5),
+      remarks: "Only two suede rolls left for the topsider orders.",
       lines: [{ inventoryItemId: item("LR-002"), quantity: 2 }],
     });
     const no = r2 && later(t2, 3);
@@ -509,8 +508,8 @@ export async function seedDemoWeek(
     // Something not in inventory, then found in storage.
     const t3 = at(workingDays[Math.min(3, workingDays.length - 1)], 13);
     const r3 = await send(t3, {
-      priority: "NORMAL",
-      justification: "Eyelets for the new topsider sample.",
+      neededBy: addDays(manilaToday(t3), 7),
+      remarks: "Eyelets for the new topsider sample.",
       lines: [{ itemName: "Brass eyelets, 5 mm", category: "OTHER", unit: "pack", quantity: 2 }],
     });
     const off = r3 && later(t3, 1);
@@ -525,8 +524,8 @@ export async function seedDemoWeek(
     // Yesterday: a leather roll, approved and waiting for the delivery.
     const t4 = at(beforeLast, 15);
     const r4 = await send(t4, {
-      priority: "NORMAL",
-      justification: "Black cowhide for next week's school shoe batches.",
+      neededBy: addDays(manilaToday(t4), 7),
+      remarks: "Black cowhide for next week's school shoe batches.",
       lines: [{ inventoryItemId: item("LR-001"), quantity: 3 }],
     });
     const yes = r4 && later(t4, 1);
@@ -538,11 +537,12 @@ export async function seedDemoWeek(
         yes,
       );
 
-    // Today: contact cement is low, so an urgent request waits for the Floor Manager.
-    await send(plus(now, -2 * HOUR), {
-      priority: "URGENT",
-      neededBy: last >= manilaToday(plus(now, -2 * HOUR)) ? last : undefined,
-      justification: "The last can is half empty and Upper Making uses it all day.",
+    // Today: contact cement is low and needed tomorrow, so a High-urgency request waits for the
+    // Floor Manager.
+    const t5 = plus(now, -2 * HOUR);
+    await send(t5, {
+      neededBy: addDays(manilaToday(t5), 1),
+      remarks: "The last can is half empty and Upper Making uses it all day.",
       lines: [{ inventoryItemId: item("AD-001"), quantity: 4 }],
     });
     return made;

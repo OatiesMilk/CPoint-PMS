@@ -1,5 +1,6 @@
 "use client";
 
+import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import { useState, useTransition } from "react";
 import { LoaderCircle, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -110,6 +111,7 @@ export function ReferenceManager({
         setEditing(null);
       } else if (result.fieldErrors && Object.keys(result.fieldErrors).length > 0) {
         setErrors(result.fieldErrors);
+        focusFirstInvalid(document.querySelector('[role="dialog"]'));
       } else setFormError(result.error);
     });
   }

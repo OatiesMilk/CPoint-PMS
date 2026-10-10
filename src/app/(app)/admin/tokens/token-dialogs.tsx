@@ -1,5 +1,6 @@
 "use client";
 
+import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import { useState, useTransition } from "react";
 import { Check, Copy, LoaderCircle, Plus, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -92,11 +93,15 @@ export function NewTokenDialog() {
             className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
+              const form = e.currentTarget;
               setError(null);
               startTransition(async () => {
                 const result = await createTokenAction({ name });
                 if (result.ok) setCreated({ token: result.token, name: result.name });
-                else setError(result.fieldErrors?.name ?? result.error);
+                else {
+                  setError(result.fieldErrors?.name ?? result.error);
+                  focusFirstInvalid(form);
+                }
               });
             }}
           >

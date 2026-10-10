@@ -83,6 +83,8 @@ const eslintConfig = defineConfig([
     "src/generated/**",
     "playwright-report/**",
     "test-results/**",
+    // Codex's throwaway QA scripts, screenshots and logs (qa/README.md): not project code.
+    "qa/reports/artifacts/**",
   ]),
 ]);
 

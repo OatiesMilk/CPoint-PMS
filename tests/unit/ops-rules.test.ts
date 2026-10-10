@@ -112,7 +112,7 @@ describe("buildAttention", () => {
     stuck: [],
     repairs: { waitingOverDay: 0, open: 0, oldestWaitingMs: null },
     stock: { out: 0, low: 0, shortCover: [] },
-    requests: { urgentPending: 0, pending: 0, oldestPendingMs: null, lateAwaitingDelivery: 0 },
+    requests: { highPending: 0, pending: 0, oldestPendingMs: null, lateAwaitingDelivery: 0 },
     suppliers: [],
     lineProblemShare: null,
     flaggedScans: 0,
@@ -160,11 +160,11 @@ describe("buildAttention", () => {
     expect(flagged[0].title).toContain("Tannery A");
   });
 
-  it("prefers the urgent-request message over the age message", () => {
+  it("prefers the high-urgency message over the age message (D-037)", () => {
     const items = buildAttention({
       ...quiet,
-      requests: { urgentPending: 1, pending: 3, oldestPendingMs: 100 * H, lateAwaitingDelivery: 1 },
+      requests: { highPending: 1, pending: 3, oldestPendingMs: 100 * H, lateAwaitingDelivery: 1 },
     });
-    expect(items.map((i) => i.id)).toEqual(["requests-urgent", "requests-late"]);
+    expect(items.map((i) => i.id)).toEqual(["requests-high", "requests-late"]);
   });
 });

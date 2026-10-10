@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import {
   Dialog,
   DialogClose,
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { PurchaseAction } from "@/lib/procurement-rules";
+import { rejectSchema } from "@/server/validators/procurement.validator";
 import {
   approveRequestAction,
   cancelRequestAction,
@@ -47,6 +49,7 @@ export function RequestActions({ id, code, actions, stocked, notStocked }: Props
   const [text, setText] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
 
   function finish(
     result: { ok: boolean; error?: string; code?: string; fieldErrors?: Record<string, string> },
@@ -58,10 +61,16 @@ export function RequestActions({ id, code, actions, stocked, notStocked }: Props
       router.refresh();
       return;
     }
-    const field = result.fieldErrors?.reason;
-    if (field) return setFieldError(field);
+    const field = result.fieldErrors?.reason ?? result.fieldErrors?.note;
+    if (field) {
+      reasonRef.current?.focus();
+      return setFieldError(field);
+    }
     setDialog(null);
-    setError(result.error ?? "That didn't work. Nothing was changed.");
+    setError(
+      result.error ??
+        `${code} couldn't be updated and nothing was changed. Refresh the page and try again.`,
+    );
     if (result.code === "STALE" || result.code === "CONFLICT") router.refresh();
   }
 
@@ -140,8 +149,12 @@ export function RequestActions({ id, code, actions, stocked, notStocked }: Props
               e.preventDefault();
               setFieldError(null);
               if (dialog === "reject") {
-                if (text.trim().length < 3)
-                  return setFieldError("Say why it's rejected (at least 3 characters).");
+                // Same rule and words as the API (rejectSchema), checked before the round trip.
+                const parsed = rejectSchema.safeParse({ reason: text });
+                if (!parsed.success) {
+                  reasonRef.current?.focus();
+                  return setFieldError(parsed.error.issues[0].message);
+                }
                 startTransition(async () =>
                   finish(await rejectRequestAction(id, { reason: text }), `${code} rejected.`),
                 );
@@ -212,6 +225,7 @@ export function RequestActions({ id, code, actions, stocked, notStocked }: Props
                 </Label>
                 <Textarea
                   id="request-text"
+                  ref={reasonRef}
                   rows={2}
                   value={text}
                   aria-invalid={!!fieldError}
@@ -223,11 +237,7 @@ export function RequestActions({ id, code, actions, stocked, notStocked }: Props
                   }
                   onChange={(e) => setText(e.target.value)}
                 />
-                {fieldError && (
-                  <p id="request-text-error" className="text-sm text-reject">
-                    {fieldError}
-                  </p>
-                )}
+                <FieldError id="request-text-error" message={fieldError} />
               </div>
             )}
 

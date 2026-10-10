@@ -58,7 +58,9 @@ test.describe("Floor Manager", () => {
 
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "Move back", exact: true }).click();
-    await expect(dialog.getByText("Say why the batch is moving back.")).toBeVisible();
+    await expect(
+      dialog.getByText("Enter a reason for moving the batch back (at least 3 characters)."),
+    ).toBeVisible();
 
     await dialog.getByLabel("Reason").fill("Wrong cutting guide used");
     await dialog.getByRole("button", { name: "Move back", exact: true }).click();
@@ -84,7 +86,7 @@ test.describe("Floor Manager", () => {
     await page.goto("/batches/new");
     await page.getByRole("button", { name: "Create batch" }).click();
     await expect(page.getByText("Enter the roll code from the leather roll's tag.")).toBeVisible();
-    await expect(page.getByText("Choose a shoe type.")).toBeVisible();
+    await expect(page.getByText("Choose a shoe type from the list.")).toBeVisible();
     await expect(page.getByLabel("Roll code")).toBeFocused();
 
     const url = await createBatch(page, unique());

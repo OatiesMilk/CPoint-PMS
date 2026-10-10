@@ -285,7 +285,7 @@ export function ProcurementFlowCard({ p }: { p: OperationsReport["procurement"] 
             <dt className="text-muted-foreground">Waiting for a decision</dt>
             <dd className="text-2xl font-semibold tabular-nums">{p.pending}</dd>
             <dd className="text-xs text-muted-foreground">
-              {p.urgentPending > 0 ? `${p.urgentPending} urgent` : "none urgent"}
+              {p.highPending > 0 ? `${p.highPending} high urgency` : "none high urgency"}
               {p.oldestPendingMs !== null && ` · oldest ${formatDuration(p.oldestPendingMs)}`}
             </dd>
           </div>

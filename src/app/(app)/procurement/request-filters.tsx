@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import type { InventoryCategory } from "@/lib/domain";
 import { CATEGORY_LABELS } from "@/lib/inventory-rules";
+import { URGENCIES, URGENCY_LABELS } from "@/lib/procurement-rules";
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as InventoryCategory[];
 
@@ -38,6 +39,21 @@ export function RequestFilters({ items }: { items: { id: string; name: string }[
           {CATEGORIES.map((c) => (
             <option key={c} value={c}>
               {CATEGORY_LABELS[c]}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="flex w-40 flex-col gap-1.5">
+        <Label htmlFor="filter-urgency">Urgency</Label>
+        <Select
+          id="filter-urgency"
+          value={params.get("urgency") ?? ""}
+          onChange={(e) => update("urgency", e.target.value)}
+        >
+          <option value="">Any urgency</option>
+          {URGENCIES.map((u) => (
+            <option key={u} value={u}>
+              {URGENCY_LABELS[u]}
             </option>
           ))}
         </Select>

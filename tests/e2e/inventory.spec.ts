@@ -90,7 +90,7 @@ test("the Floor Manager adds an item, receives, uses (and undoes), and counts st
   await count.getByLabel("Counted quantity").fill("7.5");
   await expect(count.getByTestId("count-difference")).toHaveText("Difference: −0.5 spool");
   await count.getByRole("button", { name: "Save count" }).click();
-  await expect(count.getByText("Say why the count differs")).toBeVisible();
+  await expect(count.getByText(/Enter a reason .*count difference/)).toBeVisible();
   await count.getByLabel("Reason").fill("Half a spool was tangled");
   await count.getByRole("button", { name: "Save count" }).click();
   await expect(page.getByTestId("on-hand")).toHaveText("7.5 spools");

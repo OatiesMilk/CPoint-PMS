@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { AppError, Errors } from "./errors";
+import { AppError, Errors, summarizeIssues } from "./errors";
 import { logger } from "./logger";
 
 export type ApiErrorBody = { error: { code: string; message: string; details?: unknown } };
@@ -29,7 +29,7 @@ export function toErrorResponse(error: unknown): Response {
     const body: ApiErrorBody = {
       error: {
         code: "VALIDATION_FAILED",
-        message: "Some fields need fixing.",
+        message: summarizeIssues(error.issues),
         details: error.issues,
       },
     };
@@ -39,7 +39,7 @@ export function toErrorResponse(error: unknown): Response {
   const body: ApiErrorBody = {
     error: {
       code: "INTERNAL",
-      message: "Something failed on our side. Your data was not changed.",
+      message: "The server hit an error, so nothing was saved. Try again in a moment.",
     },
   };
   return Response.json(body, { status: 500 });

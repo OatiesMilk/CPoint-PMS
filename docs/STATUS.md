@@ -3,11 +3,11 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-05
-**Branch:** `claude/compassionate-darwin-uys0sv`, from `main`. Not merged yet; the team opens and
-merges the PR (D-032).
-**Current phase:** Phase 9 — Procurement & review access (done)
-**Overall:** 10 / 10 phases complete
+**Last updated:** 2026-10-10
+**Branch:** `main` checkout with Phase 11 **uncommitted** (Dylan decides when to branch and
+commit; the team opens and merges the PR, D-032).
+**Current phase:** Phase 11 — Material requests (built; waiting for Codex's QA run)
+**Overall:** 12 / 14 phases built (Phases 12 and 13 are in `material-requests.md`)
 
 ## Phase progress
 
@@ -21,10 +21,15 @@ merges the PR (D-032).
 - [x] 7. Dashboards & reports
 - [x] 8. Hardening & demo
 - [x] 9. Procurement & review access
+- [x] 10. Operations reports
+- [x] 11. Material requests: naming, remarks, urgency, specific messages (QA pending)
+- [ ] 12. Item-level decisions guided by stock
+- [ ] 13. Ordering, delivery with proof, and the remaining gaps
 
 ## What works right now
 
-- **Database:** 6 migrations (the latest is `leather_roll_requesters`). UUIDv7 ids (D-018).
+- **Database:** 7 migrations (the latest is `material_requests_remarks_urgency`). UUIDv7 ids
+  (D-018).
 - **Bootstrap on start** (D-017):
   - reference data and the first System Admin;
   - demo users and inventory when `SEED_DEMO_USERS=true`. The demo constructor is a designated
@@ -40,31 +45,40 @@ merges the PR (D-032).
   - **flagged scans are decided by the Quality Inspector only** (D-028, team-confirmed). The FM
     sees them read-only;
   - rework & salvage (D-021, D-022), the inventory ledger (D-023), admin (D-024), reports (D-025).
-- **Procurement** (D-029, D-031):
-  - every Shoe Constructor sends purchase requests (1–10 items, with the stock snapshot);
-    **leather rolls** only by constructors the FM or Admin allows, also when typed;
+- **Material requests / Procurement** (D-029, D-031, D-035 to D-037):
+  - constructors see "Material requests", the FM and Admin "Procurement" (one label map);
+  - every Shoe Constructor sends requests (1–10 items, with the stock snapshot, a required
+    needed-by date and an optional first remark); **leather rolls** only by constructors the FM
+    or Admin allows, also when typed;
+  - urgency (High / Medium / Low) is worked out from the needed-by date by working days, shown
+    as a badge, sorted and filterable; closed requests have none;
   - the FM approves, rejects with a reason, or marks them received, which posts stock IN through
     the ledger;
   - every request has a timeline and remarks;
   - the FM home card, an Inventory "Requested" badge and "My requests" on the constructor home;
   - who may request leather rolls is chosen by the FM (Procurement tab) or the Admin (Users).
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
+- **Form messages** (D-038): every message names the field and the fix; errors sit under their
+  field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 364 unit and 64 e2e tests, with axe (WCAG 2.1 A/AA) on every page of every role;
+  - 435 unit tests pass. 67 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
+    role; the e2e run for Phase 11 is Codex's (`qa/handoffs/`), not yet reported;
   - ui-craft audit in `docs/UI_AUDIT.md`, now with a Phase 9 section;
   - CI checks the Docker stack with the demo week.
 
 ## Next step (exact)
 
-Open the PR from `claude/compassionate-darwin-uys0sv` into `main` (the team does this by hand). CI
-runs the check, e2e and Docker demo-week jobs; merge when it's green. Then rehearse the panel demo
-on a new branch from `main`. Paste into Claude Code:
+1. Codex tests Phase 11: paste `qa/CODEX_PROMPT.md` into Codex (VS Code, this folder). It reads
+   `qa/handoffs/2026-10-11-phase-11-material-requests.md` and writes its report in `qa/reports/`.
+2. Claude reads the newest report and fixes what failed, after Dylan approves.
+3. When the report says PASS, Dylan decides on the branch and commit. Run the Docker demo-week
+   check before the PR, because the seed changed.
+4. Then Phase 12. Paste into Claude Code:
 
-> /resume, then help us rehearse the panel demo: walk the README "Demo script" (all four roles,
-> including the procurement walkthrough) against a fresh `docker compose up --build -d` with
-> `SEED_DEMO_WEEK=true`, list anything that doesn't match, and fix it. Start in plan mode.
+> Read `material-requests.md` and run Phase 12. Check `qa/reports/` first. Start in plan mode and
+> stop for my approval before writing code.
 
-After the panel:
+Later:
 
 - Apply CPoint's answers to the open questions below.
 - Plug in the real YOLO service. Its classes are data (Settings → Defect types).
@@ -92,7 +106,11 @@ After the panel:
 - Decided (D-021/D-022, team-confirmed): salvage reused in a batch is shown separately, and a
   batch can be completed with repairs open ("In repair"). Still to confirm with CPoint.
 - ASSUMPTION (D-029): a request is received as a whole (no partial deliveries), and requests
-  aren't edited after they're sent (cancel and resend).
+  aren't edited after they're sent (cancel and resend). Phase 13 adds partial deliveries.
+- ASSUMPTION (D-037, team 2026-10-10): urgency bands are High 0–3 working days or overdue,
+  Medium 4–7, Low 8 or more; working days are Monday to Friday; holidays aren't skipped. Confirm
+  all three with CPoint (does the factory work Saturdays?).
+- Open (survey Q14): who orders leather rolls. Matters for Phase 13's ordering step.
 - ASSUMPTION (D-026): the demo week's stage times match the survey.
 - Unknown: components per shoe type. Blocks component tracking only.
 - Pending: the new YOLO training photos will change the defect classes. They arrive as
