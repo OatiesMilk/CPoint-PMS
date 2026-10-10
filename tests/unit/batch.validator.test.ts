@@ -31,13 +31,15 @@ describe("batchFormSchema", () => {
   it("accepts today (Manila) but not tomorrow", () => {
     expect(batchFormSchema.safeParse({ ...base, receivedAt: "2026-10-02" }).success).toBe(true);
     const result = batchFormSchema.safeParse({ ...base, receivedAt: "2026-10-03" });
-    expect(result.error?.issues[0].message).toBe("The date can't be in the future.");
+    expect(result.error?.issues[0].message).toBe(
+      "The arrival date can't be in the future. Pick today or an earlier date.",
+    );
   });
 
   it.each([
-    ["0", "The quota must be at least 1 pair."],
-    ["2.5", "Enter a whole number of pairs."],
-    ["100001", "That's more than 100,000 pairs. Check the number."],
+    ["0", "The target quota must be at least 1 pair."],
+    ["2.5", "Enter the target quota as a whole number of pairs, like 120."],
+    ["100001", "The target quota can't be more than 100,000 pairs. Check the number."],
   ])("rejects quota %s", (quota, message) => {
     const result = batchFormSchema.safeParse({ ...base, targetQuotaPairs: quota });
     expect(result.error?.issues[0].message).toBe(message);

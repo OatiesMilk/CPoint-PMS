@@ -5,13 +5,14 @@ import { formatDuration } from "@/lib/format";
 
 type Props = {
   count: number;
-  urgent: number;
+  /** Pending requests that are High urgency: needed within 3 working days, or overdue (D-037). */
+  high: number;
   oldest: { id: string; code: string; createdAt: Date } | null;
   now: Date;
 };
 
 /** Purchase requests waiting on the Floor Manager (FM home, D-029). A late roll stops the line. */
-export function PendingRequestsCard({ count, urgent, oldest, now }: Props) {
+export function PendingRequestsCard({ count, high, oldest, now }: Props) {
   return (
     <Card data-testid="pending-requests-card">
       <CardHeader>
@@ -62,11 +63,14 @@ export function PendingRequestsCard({ count, urgent, oldest, now }: Props) {
               </div>
             </dl>
             {/* Outside the <dl>: a definition list may only hold term/value pairs (axe). */}
-            {urgent > 0 && (
-              <p className="flex items-center gap-1.5 text-sm text-reject">
+            {high > 0 && (
+              <Link
+                href="/procurement?status=PENDING&urgency=HIGH"
+                className="flex w-fit items-center gap-1.5 text-sm text-reject underline-offset-4 hover:underline"
+              >
                 <Siren aria-hidden className="size-4" />
-                {urgent} marked urgent
-              </p>
+                {high} high urgency, needed within 3 working days
+              </Link>
             )}
           </div>
         )}

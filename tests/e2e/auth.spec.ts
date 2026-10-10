@@ -48,7 +48,7 @@ const EXPECTED_NAV = {
     "API tokens",
     "Audit log",
   ],
-  constructor: ["Home", "Procurement"],
+  constructor: ["Home", "Material requests"],
 } as const;
 
 for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
@@ -99,7 +99,7 @@ test("client-side validation explains a malformed email", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Email").fill("not-an-email");
   await page.getByLabel("Password").focus();
-  await expect(page.getByText("Enter a valid email")).toBeVisible();
+  await expect(page.getByText("Enter your email in full, like name@cpoint.local.")).toBeVisible();
 });
 
 test("sign out returns to login and protects pages again", async ({ page }) => {

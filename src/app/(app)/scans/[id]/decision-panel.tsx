@@ -80,7 +80,9 @@ export function DecisionPanel({ scanId, label, finalVerdict }: Props) {
   function submit() {
     if (!choice) return setFieldError("Choose a decision.");
     if (!reviewing && reason.trim().length < 3)
-      return setFieldError("Say why you're changing the camera's decision.");
+      return setFieldError(
+        "Enter a reason for changing the camera's decision (at least 3 characters).",
+      );
     setFieldError(null);
     setError(null);
     startTransition(async () => {

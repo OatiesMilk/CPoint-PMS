@@ -4,7 +4,7 @@ export default function Loading() {
     <div
       role="status"
       aria-busy="true"
-      aria-label="Loading purchase request"
+      aria-label="Loading the request"
       className="flex flex-col gap-6"
     >
       <div className="flex flex-col gap-2 border-b pb-5">

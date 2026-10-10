@@ -102,7 +102,9 @@ export function BatchActionsBar({ id, code, currentStage, actions, openRepairs }
     const trimmed = reason.trim();
     if (trimmed.length < 3) {
       setReasonError(
-        kind === "cancel" ? "Say why the batch is cancelled." : "Say why the batch is moving back.",
+        kind === "cancel"
+          ? "Enter a reason for cancelling the batch (at least 3 characters)."
+          : "Enter a reason for moving the batch back (at least 3 characters).",
       );
       return;
     }

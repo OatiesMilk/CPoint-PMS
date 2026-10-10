@@ -1,20 +1,37 @@
 import { z } from "zod";
-import { InventoryCategory, PurchasePriority, PurchaseRequestStatus } from "@/lib/domain";
-import { MAX_LINES } from "@/lib/procurement-rules";
+import { InventoryCategory, PurchaseRequestStatus } from "@/lib/domain";
+import { manilaToday } from "@/lib/format";
+import { MAX_LINES, NEEDED_BY_MAX_DAYS, URGENCIES } from "@/lib/procurement-rules";
+import { addDays } from "@/lib/report-rules";
 import { quantity } from "./inventory.validator";
+import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
 
-const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
-const optionalText = (max: number, label: string) =>
-  z.preprocess(
-    blankToUndefined,
-    z.string().trim().max(max, `Keep the ${label} under ${max} characters.`).optional(),
-  );
-const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-10-31.");
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const isoDay = z.string().regex(ISO_DAY);
+
+/** Required. Urgency is worked out from it (D-037), so each rule says what to pick instead. */
+const neededBy = z.preprocess(
+  blankToUndefined,
+  z
+    .string({ error: "Choose the date you need the items by." })
+    .regex(ISO_DAY, "Enter Needed by as a date, like 2026-10-31.")
+    .refine(
+      (day) => day >= manilaToday(),
+      "Needed by can't be in the past. Pick today or a later date.",
+    )
+    .refine(
+      (day) => day <= addDays(manilaToday(), NEEDED_BY_MAX_DAYS),
+      `Needed by can be at most ${NEEDED_BY_MAX_DAYS} days ahead. Pick an earlier date.`,
+    ),
+);
 
 /** One line: an inventory item, or a typed name and unit for something not in inventory yet. */
 const lineSchema = z
   .object({
-    inventoryItemId: z.preprocess(blankToUndefined, z.uuid("Choose an item.").optional()),
+    inventoryItemId: z.preprocess(
+      blankToUndefined,
+      z.uuid("Choose an item from the list.").optional(),
+    ),
     itemName: optionalText(80, "item name"),
     /** Typed items only: their category (leather rolls need the designation, D-031). */
     category: z.preprocess(
@@ -46,16 +63,12 @@ const lineSchema = z
 /** The request form, shared by the page (client) and the API. */
 export const purchaseRequestSchema = z
   .object({
-    priority: z.enum(PurchasePriority, { error: "Choose a priority." }).default("NORMAL"),
-    neededBy: z.preprocess(blankToUndefined, isoDay.optional()),
-    justification: z
-      .string({ error: "Say why it's needed." })
-      .trim()
-      .min(3, "Say why it's needed, e.g. “Nails for Friday’s topsider batch.”")
-      .max(500, "Keep it under 500 characters."),
+    neededBy,
+    /** Optional. Saved as the request's first remark (D-036). */
+    remarks: optionalText(500, "remarks"),
     lines: z
-      .array(lineSchema)
-      .min(1, "Add at least one item.")
+      .array(lineSchema, { error: "Add at least one item to the request." })
+      .min(1, "Add at least one item to the request.")
       .max(MAX_LINES, `A request can have up to ${MAX_LINES} items. Send another for the rest.`),
   })
   .superRefine((v, ctx) => {
@@ -78,25 +91,28 @@ export type PurchaseRequestValues = z.output<typeof purchaseRequestSchema>;
 export const approveSchema = z.object({ note: optionalText(300, "note") });
 export const rejectSchema = z.object({
   reason: z
-    .string({ error: "Say why it's rejected." })
+    .string({ error: "Enter a reason, so the requester knows why it's rejected." })
     .trim()
-    .min(3, "Say why it's rejected (at least 3 characters).")
+    .min(3, "Enter a reason of at least 3 characters, so the requester knows why it's rejected.")
     .max(300, "Keep the reason under 300 characters."),
 });
 export const cancelSchema = z.object({ note: optionalText(300, "note") });
 export const remarkSchema = z.object({
   body: z
-    .string({ error: "Write a remark." })
+    .string({ error: "Write a remark before you add it." })
     .trim()
-    .min(1, "Write a remark.")
+    .min(1, "Write a remark before you add it.")
     .max(500, "Keep the remark under 500 characters."),
 });
-export const requesterSchema = z.object({ canRequestLeatherRolls: z.boolean() });
+export const requesterSchema = z.object({
+  canRequestLeatherRolls: z.boolean({ error: OUT_OF_DATE }),
+});
 
 /** List query (URL search params). Invalid values are dropped rather than erroring. */
 export const requestListQuerySchema = z.object({
   status: z.enum(PurchaseRequestStatus).optional().catch(undefined),
   category: z.enum(InventoryCategory).optional().catch(undefined),
+  urgency: z.enum(URGENCIES).optional().catch(undefined),
   item: z.uuid().optional().catch(undefined),
   from: isoDay.optional().catch(undefined),
   to: isoDay.optional().catch(undefined),

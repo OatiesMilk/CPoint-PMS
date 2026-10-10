@@ -639,3 +639,86 @@ several screens broke (fixed column counts, clipped numbers, tables pushing the 
 
 **Consequences:** new screens use these patterns. Not checked: the Shoe Constructor home and
 long tables at 640px, which scroll inside their card.
+
+### D-035 · 2026-10-10 · Accepted — "Material requests" for constructors, "Procurement" for the FM and Admin
+
+**Context:** the team's review of Phase 9: Shoe Constructors only ask for materials; they don't
+procure anything. Calling their screen "Procurement" was wrong for them.
+**Decision:**
+
+- Shoe Constructors see **Material requests** everywhere: the sidebar, page titles and browser
+  titles, "New material request", empty states, and "My material requests" on their home.
+- The Floor Manager and System Admin see **Procurement** / "purchase request". It becomes real
+  procurement once Phase 13 adds ordering.
+- The names come from one map, `requestLabelsFor(role)` in `src/lib/procurement-rules.ts`. The
+  sidebar (`navigation.ts`) and every page header read it, so they can't drift.
+- URLs (`/procurement`), permission keys (`procurement:*`), table names and request codes
+  (`PR-…`) don't change, so there is no data migration for the rename.
+
+**Consequences:** a new screen in this module takes its title from the map, never a literal.
+
+### D-036 · 2026-10-10 · Accepted — Remarks replace "Why it's needed" (supersedes part of D-029)
+
+**Context:** the required justification duplicated what remarks already do.
+**Decision:**
+
+- The request form has an optional **Remarks** box (up to 500 characters). If filled in, it is
+  saved as the request's first `PurchaseRequestRemark`, by the requester, in the create
+  transaction, and is in the audit row.
+- `purchase_requests.justification` is dropped. Migration
+  `20261010153000_material_requests_remarks_urgency` first copies every non-empty justification
+  into a remark by the requester at the request's `createdAt`.
+
+**Consequences:** a request can be sent with no reason at all; the needed-by date and the stock
+snapshot carry the case. The copied remarks have random (v4) ids, not UUIDv7; they sort by
+`createdAt`, so this has no visible effect.
+
+### D-037 · 2026-10-10 · Accepted — Urgency is automatic, from the needed-by date (supersedes the manual priority in D-029; updates D-033)
+
+**Context:** a manual Normal/Urgent pick was subjective. The team asked for three classes worked
+out from the date.
+**Decision:**
+
+- **Needed by is required**: today or later in Manila time, at most 180 days ahead. Existing
+  requests without one got `createdAt` (Manila date) + 7 days in the migration.
+- Urgency is **computed on every read and never stored** (`urgencyFor` in
+  `procurement-rules.ts`), by **working days** left, Monday to Friday (Dylan, 2026-10-10):
+  **High** 0–3 working days or overdue, **Medium** 4–7, **Low** 8 or more. Holidays aren't
+  skipped. The bands and working days are constants (`URGENCY_BANDS`, `WORKING_WEEKDAYS`).
+- Closed requests (received, rejected, cancelled) have no urgency and show no badge.
+- The Pending tab sorts by needed-by date, then oldest first. That gives High, Medium, Low order
+  without storing anything; inside a band the nearer date comes first.
+- The urgency filter and the High counts (FM home card, Operations report) are needed-by date
+  ranges worked out from today (`urgencyCutoffs`).
+- The `PurchasePriority` enum and the `priority` column are dropped. In D-033's attention rules,
+  "any urgent one" is now "any High-urgency pending request" (`requests-high`).
+
+**Consequences:** ASSUMPTION to confirm with CPoint: the 3/7 bands, Monday–Friday, and no
+holidays. A request's urgency rises by itself as its date approaches. `POST
+/api/v1/procurement/requests` no longer takes `priority` or `justification`.
+
+### D-038 · 2026-10-10 · Accepted — Every form message names the field and the fix
+
+**Context:** the team asked for inline messages that say which input is wrong and how to fix it.
+An audit found most were specific, with generic leftovers ("Some fields need fixing.", "Something
+went wrong.") and several fields falling back to Zod's built-in English text.
+**Decision:**
+
+- Messages are written once in the Zod schemas, shared by the forms and the API. Each one names
+  its field and the fix ("Enter a quantity greater than 0.", "Needed by can't be in the past.
+  Pick today or a later date."). Shared pieces live in `src/server/validators/shared.ts`.
+- Values the page sends by itself (expected status, which button) answer "This page is out of
+  date. Refresh it and try again."
+- The form-level line is built from the field messages (`summarizeIssues`): one issue is shown
+  as itself; several are counted and the first is quoted.
+- Server field errors are keyed by the full path (`lines.2.quantity`), so the message lands
+  under the exact input.
+- Each message sits under its field with `aria-describedby`; submitting moves focus to the first
+  invalid field (`shouldFocusError` or `focusFirstInvalid`); a summary on top appears only with 3
+  or more errors (`FormErrorSummary`, used on the request form).
+- `tests/unit/validator-messages.test.ts` feeds every schema bad input and fails on a generic or
+  built-in message.
+
+**Consequences:** a new field needs its own messages or that test fails. API clients see the same
+sentences in `details[].message`. Not done: the summary component on the batch and inventory item
+forms (they have it available but rarely reach 3 errors).

@@ -2,7 +2,8 @@
  * Intent brief (ui-craft §1)
  * Who:   the Floor Manager deciding a request; the Shoe Constructor who sent it, following it up;
  *        the System Admin reading it.
- * What:  see what's asked for and why, with the stock then and now, decide it, and talk it over.
+ * What:  see what's asked for and by when, with the stock then and now, decide it, and talk it
+ *        over in the remarks (the requester's reason, if any, is the first remark, D-036).
  * Worst: approving something already on the shelf, or the requester never learning why it was
  *        rejected. Stock at request time sits next to current stock; a rejection needs a reason
  *        and shows on the request and its timeline.
@@ -11,10 +12,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CircleCheck, Info, PackageX } from "lucide-react";
-import {
-  PriorityLabel,
-  RequestStatusBadge,
-} from "@/components/features/procurement/request-badges";
+import { RequestStatusBadge, UrgencyBadge } from "@/components/features/procurement/request-badges";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,15 +26,19 @@ import {
 } from "@/components/ui/table";
 import { formatCalendarDate, formatManilaDateTime } from "@/lib/format";
 import { formatQuantity, stockLevel } from "@/lib/inventory-rules";
-import { STATUS_LABELS } from "@/lib/procurement-rules";
-import { requirePermission } from "@/server/policies/guard";
+import { requestLabelsFor, STATUS_LABELS } from "@/lib/procurement-rules";
+import { getCurrentUser, requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { getRequest } from "@/server/services/procurement.service";
 import { isRequestId } from "@/server/validators/procurement.validator";
 import { RemarkForm } from "./remark-form";
 import { RequestActions } from "./request-actions";
 
-export const metadata: Metadata = { title: "Purchase request" };
+/** "Material request" for a Shoe Constructor, "Purchase request" for everyone else (D-035). */
+export async function generateMetadata(): Promise<Metadata> {
+  const user = await getCurrentUser();
+  return { title: user ? requestLabelsFor(user.role).detail : "Request" };
+}
 
 export default async function RequestDetailPage({ params }: PageProps<"/procurement/[id]">) {
   const user = await requirePermission("procurement:read");
@@ -62,16 +64,18 @@ export default async function RequestDetailPage({ params }: PageProps<"/procurem
           className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:underline"
         >
           <ArrowLeft aria-hidden className="size-4" />
-          All requests
+          {user.role === "SHOE_CONSTRUCTOR" ? "All my material requests" : "All requests"}
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-mono text-3xl font-semibold tracking-tight">{request.code}</h1>
           <RequestStatusBadge status={request.status} />
-          <PriorityLabel priority={request.priority} />
+          {request.urgency && (
+            <UrgencyBadge urgency={request.urgency} daysLeft={request.daysLeft} />
+          )}
         </div>
         <p className="text-lg text-muted-foreground">
-          Requested by {request.requestedBy.name} · sent {formatManilaDateTime(request.createdAt)}
-          {request.neededBy && <> · needed by {formatCalendarDate(request.neededBy)}</>}
+          Requested by {request.requestedBy.name} · sent {formatManilaDateTime(request.createdAt)} ·
+          needed by {formatCalendarDate(request.neededBy)}
         </p>
       </div>
 
@@ -155,15 +159,6 @@ export default async function RequestDetailPage({ params }: PageProps<"/procurem
                   record the delivery there.
                 </p>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Why it’s needed</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="whitespace-pre-line">{request.justification}</p>
             </CardContent>
           </Card>
 

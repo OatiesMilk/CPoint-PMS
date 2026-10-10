@@ -1,4 +1,4 @@
-import type { PurchasePriority, PurchaseRequestStatus } from "./domain";
+import type { PurchaseRequestStatus, Role } from "./domain";
 
 /**
  * Purchase request lifecycle (D-029), pure and client-safe. Services enforce it, and the database
@@ -21,15 +21,149 @@ export const STATUS_LABELS: Record<PurchaseRequestStatus, string> = {
   RECEIVED: "Received",
 };
 
-export const PRIORITY_LABELS: Record<PurchasePriority, string> = {
-  NORMAL: "Normal",
-  URGENT: "Urgent",
-};
-
 /** Requests still waiting on someone: shown as "open" on homes and inventory. */
 export const OPEN_STATUSES: readonly PurchaseRequestStatus[] = ["PENDING", "APPROVED"];
 
 export const MAX_LINES = 10;
+
+// ───────────── names by role (D-035) ─────────────
+
+export type RequestLabels = {
+  /** Sidebar item and list page title. */
+  nav: string;
+  /** "material request" / "purchase request", for sentences. */
+  one: string;
+  many: string;
+  /** The "new" button and the new-request page title. */
+  create: string;
+  /** Title of a single request's page. */
+  detail: string;
+};
+
+const MATERIAL_LABELS: RequestLabels = {
+  nav: "Material requests",
+  one: "material request",
+  many: "material requests",
+  create: "New material request",
+  detail: "Material request",
+};
+const PROCUREMENT_LABELS: RequestLabels = {
+  nav: "Procurement",
+  one: "purchase request",
+  many: "purchase requests",
+  create: "New purchase request",
+  detail: "Purchase request",
+};
+
+/**
+ * What the module is called for each role (D-035). Shoe Constructors only ask for materials, so
+ * they see "Material requests"; the Floor Manager and the System Admin see "Procurement". The
+ * sidebar and every page header read this one map. URLs and permission keys stay `procurement`.
+ */
+export function requestLabelsFor(role: Role): RequestLabels {
+  return role === "SHOE_CONSTRUCTOR" ? MATERIAL_LABELS : PROCUREMENT_LABELS;
+}
+
+// ───────────── urgency (D-037) ─────────────
+
+export const URGENCIES = ["HIGH", "MEDIUM", "LOW"] as const;
+export type Urgency = (typeof URGENCIES)[number];
+
+export const URGENCY_LABELS: Record<Urgency, string> = {
+  HIGH: "High",
+  MEDIUM: "Medium",
+  LOW: "Low",
+};
+
+/**
+ * ASSUMPTION (team, 2026-10-10; to confirm with CPoint): urgency comes from how many working days
+ * are left until the needed-by date. High is up to 3 working days (or overdue), Medium up to 7,
+ * Low anything later. Working days are Monday to Friday; holidays aren't skipped.
+ */
+export const URGENCY_BANDS = { highMaxDays: 3, mediumMaxDays: 7 } as const;
+/** Days of the week that count, as Date#getUTCDay numbers (0 = Sunday). */
+export const WORKING_WEEKDAYS: readonly number[] = [1, 2, 3, 4, 5];
+/** How far ahead a needed-by date may be. */
+export const NEEDED_BY_MAX_DAYS = 180;
+
+const DAY_MS = 86_400_000;
+const dayMs = (day: string) => Date.parse(`${day}T00:00:00Z`);
+const toDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** A @db.Date value (UTC midnight) or a YYYY-MM-DD string, as YYYY-MM-DD. */
+export function calendarDay(value: Date | string): string {
+  return typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10);
+}
+
+export function isWorkingDay(day: string): boolean {
+  return WORKING_WEEKDAYS.includes(new Date(dayMs(day)).getUTCDay());
+}
+
+/**
+ * Working days from `today` (not counted) up to and including `neededBy`. Negative when the date
+ * has passed: the working days gone since it.
+ */
+export function workingDaysUntil(neededBy: string, today: string): number {
+  const [from, to, sign] =
+    neededBy >= today ? [dayMs(today), dayMs(neededBy), 1] : [dayMs(neededBy), dayMs(today), -1];
+  let n = 0;
+  for (let t = from + DAY_MS; t <= to; t += DAY_MS) if (isWorkingDay(toDay(t))) n += 1;
+  return n === 0 ? 0 : sign * n;
+}
+
+/** Urgency of an open request, from Manila calendar dates (YYYY-MM-DD). */
+export function urgencyFor(neededBy: string, today: string): Urgency {
+  const left = workingDaysUntil(neededBy, today);
+  if (neededBy < today || left <= URGENCY_BANDS.highMaxDays) return "HIGH";
+  return left <= URGENCY_BANDS.mediumMaxDays ? "MEDIUM" : "LOW";
+}
+
+const CLOSED: readonly PurchaseRequestStatus[] = ["RECEIVED", "REJECTED", "CANCELLED"];
+
+/** Urgency stops counting once a request is closed: those have none. */
+export function urgencyOf(
+  status: PurchaseRequestStatus,
+  neededBy: Date | string,
+  today: string,
+): Urgency | null {
+  return CLOSED.includes(status) ? null : urgencyFor(calendarDay(neededBy), today);
+}
+
+/** "today", "in 2 working days", "overdue by 1 working day". */
+export function daysLeftLabel(neededBy: string, today: string): string {
+  if (neededBy === today) return "today";
+  const left = workingDaysUntil(neededBy, today);
+  const days = (n: number) => `${n} working day${n === 1 ? "" : "s"}`;
+  if (neededBy < today) return left === 0 ? "overdue" : `overdue by ${days(-left)}`;
+  return left === 0 ? "this weekend" : `in ${days(left)}`;
+}
+
+/**
+ * The last needed-by dates that still count as High and as Medium today, so a list can be
+ * filtered and counted by date in the database (urgency itself is never stored).
+ */
+export function urgencyCutoffs(today: string): { highThrough: string; mediumThrough: string } {
+  const through = (maxDays: number) => {
+    let t = dayMs(today);
+    while (workingDaysUntil(toDay(t + DAY_MS), today) <= maxDays) t += DAY_MS;
+    return toDay(t);
+  };
+  return {
+    highThrough: through(URGENCY_BANDS.highMaxDays),
+    mediumThrough: through(URGENCY_BANDS.mediumMaxDays),
+  };
+}
+
+/** Needed-by dates (inclusive, either end open) that fall in an urgency band today. */
+export function urgencyDateRange(
+  urgency: Urgency,
+  today: string,
+): { after?: string; through?: string } {
+  const { highThrough, mediumThrough } = urgencyCutoffs(today);
+  if (urgency === "HIGH") return { through: highThrough };
+  if (urgency === "MEDIUM") return { after: highThrough, through: mediumThrough };
+  return { after: mediumThrough };
+}
 
 const MOVES: Record<PurchaseAction, { from: PurchaseRequestStatus; to: PurchaseRequestStatus }> = {
   approve: { from: "PENDING", to: "APPROVED" },

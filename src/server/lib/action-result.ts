@@ -1,5 +1,5 @@
 import { ZodError } from "zod";
-import { AppError } from "./errors";
+import { AppError, summarizeIssues } from "./errors";
 import { logger } from "./logger";
 
 /** What a server action returns to its form or button. Never carries internals. */
@@ -9,10 +9,14 @@ export type ActionResult<T = object> =
 
 type Issue = { path: PropertyKey[]; message: string };
 
+/**
+ * One message per field, keyed by the field's full path joined with dots ("quantity",
+ * "lines.2.quantity"), so a form can put each message under the exact input it is about.
+ */
 function fieldErrorsFrom(issues: Issue[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const issue of issues) {
-    const key = String(issue.path[0] ?? "");
+    const key = issue.path.map(String).join(".");
     if (key && !out[key]) out[key] = issue.message;
   }
   return out;
@@ -22,7 +26,7 @@ export function toActionError(error: unknown, context: string): ActionResult<nev
   if (error instanceof ZodError) {
     return {
       ok: false,
-      error: "Some fields need fixing.",
+      error: summarizeIssues(error.issues),
       fieldErrors: fieldErrorsFrom(error.issues),
     };
   }
@@ -33,5 +37,8 @@ export function toActionError(error: unknown, context: string): ActionResult<nev
     return { ok: false, error: error.message, code: error.code, fieldErrors };
   }
   logger.error({ err: error }, `${context} failed`);
-  return { ok: false, error: "Something failed on our side. Nothing was changed. Try again." };
+  return {
+    ok: false,
+    error: `${context} couldn't be saved because the server hit an error. Nothing was changed. Try again in a moment.`,
+  };
 }

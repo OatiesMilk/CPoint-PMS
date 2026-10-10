@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { FieldError } from "@/components/ui/field-error";
 import {
   Dialog,
   DialogClose,
@@ -17,6 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { BATCH_STATUS_LABELS, type BatchStatus, type SalvageStatus } from "@/lib/domain";
+import { focusFirstInvalid } from "@/lib/focus-first-invalid";
+import { salvageAssignSchema, salvageDiscardSchema } from "@/server/validators/outcome.validator";
 import { assignSalvageAction, discardSalvageAction, unassignSalvageAction } from "./actions";
 
 type BatchOption = { id: string; code: string; rollCode: string; status: BatchStatus };
@@ -44,7 +47,10 @@ export function SalvageActions({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
   const targets = batches.filter((b) => b.id !== originBatchId);
+  // The one message belongs to the batch picker while no batch is chosen, otherwise to the text.
+  const textInvalid = !!fieldError && (dialog === "discard" || !!batchId);
 
   function open(kind: "assign" | "discard") {
     setBatchId("");
@@ -62,10 +68,17 @@ export function SalvageActions({
       success();
       return;
     }
-    const field = result.fieldErrors?.batchId ?? result.fieldErrors?.reason;
-    if (field) return setFieldError(field);
+    const field =
+      result.fieldErrors?.batchId ?? result.fieldErrors?.reason ?? result.fieldErrors?.note;
+    if (field) {
+      setFieldError(field);
+      return focusFirstInvalid(formRef.current);
+    }
     setDialog(null);
-    setError(result.error ?? "Something went wrong.");
+    setError(
+      result.error ??
+        `${label} couldn't be updated and nothing was changed. Refresh the page and try again.`,
+    );
     if (result.code === "STALE") router.refresh();
   }
 
@@ -126,16 +139,30 @@ export function SalvageActions({
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent>
           <form
+            ref={formRef}
             className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
               setFieldError(null);
+              // Same rules and words as the API (outcome.validator), checked before the round trip.
+              const invalid = (message: string) => {
+                setFieldError(message);
+                focusFirstInvalid(formRef.current);
+              };
               if (dialog === "assign") {
-                if (!batchId) return setFieldError("Choose the batch that will use this section.");
+                const parsed = salvageAssignSchema.safeParse({
+                  batchId,
+                  expectedStatus: "AVAILABLE",
+                  note: text,
+                });
+                if (!parsed.success) return invalid(parsed.error.issues[0].message);
                 assign(batchId, "AVAILABLE", text);
               } else {
-                if (text.trim().length < 3)
-                  return setFieldError("Say why this section is discarded.");
+                const parsed = salvageDiscardSchema.safeParse({
+                  reason: text,
+                  expectedStatus: "AVAILABLE",
+                });
+                if (!parsed.success) return invalid(parsed.error.issues[0].message);
                 startTransition(async () => {
                   const result = await discardSalvageAction(id, {
                     reason: text,
@@ -166,6 +193,7 @@ export function SalvageActions({
                     id="salvage-batch"
                     value={batchId}
                     aria-invalid={!!fieldError && !batchId}
+                    aria-describedby={fieldError && !batchId ? "salvage-error" : undefined}
                     onChange={(e) => setBatchId(e.target.value)}
                   >
                     <option value="">Choose…</option>
@@ -192,6 +220,8 @@ export function SalvageActions({
                 id="salvage-text"
                 rows={2}
                 value={text}
+                aria-invalid={textInvalid}
+                aria-describedby={textInvalid ? "salvage-error" : undefined}
                 placeholder={
                   dialog === "assign"
                     ? "e.g. For tongue pieces"
@@ -200,7 +230,7 @@ export function SalvageActions({
                 onChange={(e) => setText(e.target.value)}
               />
             </div>
-            {fieldError && <p className="text-sm text-reject">{fieldError}</p>}
+            <FieldError id="salvage-error" message={fieldError} />
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="ghost">

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldError } from "@/components/ui/field-error";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -42,15 +43,6 @@ const FIELDS = [
   "notes",
   "rollItemId",
 ] as const;
-
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) return null;
-  return (
-    <p id={id} className="text-sm text-reject">
-      {message}
-    </p>
-  );
-}
 
 export function BatchForm({ shoeTypes, suppliers, rollItems = [], today, batch }: Props) {
   const router = useRouter();

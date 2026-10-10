@@ -148,15 +148,21 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 3. **Reports → Camera call vs final verdict:** the off-diagonal numbers are overrides. A high
    agreement (about 95% in the demo week) means the thresholds suit the line.
 
-### 3. Shoe Constructor → Floor Manager: a purchase request (2 min)
+### 3. Shoe Constructor → Floor Manager: a material request (2 min)
 
-1. **Constructor home** (`constructor@cpoint.local`): their open requests. **New request**: pick
-   **Contact cement** (the picker shows it's low, and that PR-… already asks for it), 2 cans,
-   mark it **Urgent**, say why, and send it. Requests can't be edited afterwards: cancel and
-   resend. Every constructor can request supplies; **leather rolls** only once the Floor Manager
-   or Admin allows it (the demo constructor is allowed).
-2. **Floor Manager → Procurement:** the **Pending** tab, urgent first, with how long each has
-   waited. Open the request: the stock **when asked** sits next to the stock **now**.
+1. **Constructor home** (`constructor@cpoint.local`): **My material requests**. The constructor's
+   side is called **Material requests** everywhere; the Floor Manager and Admin see the same
+   module as **Procurement**. **New material request**: pick **Contact cement** (the picker shows
+   it's low, and that PR-… already asks for it), 2 cans, set **Needed by** to tomorrow (the form
+   says the Floor Manager will see it as **High**), add a remark if it helps, and send it. Try
+   sending it empty first: each field says exactly what is missing. Requests can't be edited
+   afterwards: cancel and resend. Every constructor can request supplies; **leather rolls** only
+   once the Floor Manager or Admin allows it (the demo constructor is allowed).
+2. **Floor Manager → Procurement:** the **Pending** tab, the soonest needed-by date first, each
+   with its urgency (**High** within 3 working days or overdue, **Medium** within 7, **Low**
+   after that) and how long it has waited. Filter by **Urgency**. Open the request: the stock
+   **when asked** sits next to the stock **now**, and the constructor's remark is the first one
+   under Remarks.
 
    ![A pending purchase request](docs/screenshots/purchase-request.png)
 
@@ -295,7 +301,7 @@ erDiagram
   PurchaseRequest {
     string code "PR-2026-0001"
     enum status "PENDING, APPROVED, REJECTED, CANCELLED, RECEIVED"
-    enum priority "NORMAL, URGENT"
+    date neededBy "required; urgency is worked out from it"
     string rejectionReason
   }
   PurchaseRequestLine {

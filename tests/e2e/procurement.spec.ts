@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { inspectorApi, makeConstructor, managerApi, withDb } from "./cv-helpers";
+import { daysAhead, inspectorApi, makeConstructor, managerApi, withDb } from "./cv-helpers";
 
-// Purchase requests (D-029, D-031). Each test gets its own Shoe Constructor (makeConstructor).
+// Material requests / procurement (D-029, D-031, D-035 to D-038). Each test gets its own Shoe
+// Constructor (makeConstructor).
 
 async function signedIn(browser: Browser, email: string, home: string): Promise<Page> {
   const page = await browser.newPage();
@@ -44,11 +45,11 @@ async function onHand(itemId: string): Promise<number> {
 }
 
 /** A request straight through the API, as the given constructor's session. */
-async function apiRequest(page: Page, itemId: string, quantity = 2) {
+async function apiRequest(page: Page, itemId: string, quantity = 2, neededBy = daysAhead(30)) {
   const res = await page.request.post("/api/v1/procurement/requests", {
     data: {
-      priority: "NORMAL",
-      justification: "E2E: running low",
+      neededBy,
+      remarks: "E2E: running low",
       lines: [{ inventoryItemId: itemId, quantity }],
     },
   });
@@ -67,24 +68,49 @@ test("a constructor asks, the Floor Manager approves and receives, and stock goe
   await page.goto("/login");
   await signIn(page, sc.email);
   await expect(page).toHaveURL("/constructor");
-  await page.getByRole("link", { name: "New request" }).click();
+  // A constructor's side is "Material requests" everywhere (D-035).
+  await expect(page.getByRole("link", { name: "Material requests", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My material requests" })).toBeVisible();
+  await page.getByRole("link", { name: "New material request" }).click();
   await expect(page).toHaveURL("/procurement/new");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("New material request");
+  // No priority and no "why it's needed" any more (D-036, D-037).
+  await expect(page.getByLabel("Priority")).toHaveCount(0);
+  await expect(page.getByLabel("Why it’s needed")).toHaveCount(0);
   await page.locator("#lines-0-item").selectOption(item.id);
   await expect(page.getByText("2 boxes on hand · reorder at 5 boxes")).toBeVisible();
   await page.locator("#lines-0-quantity").fill("3");
-  await page.getByLabel("Priority").selectOption("URGENT");
-  await page.getByLabel("Why it’s needed").fill("Half a box left for the topsider batch");
+  // Needed today: the form says how the Floor Manager will see it before it's sent.
+  await page.getByLabel("Needed by").fill(daysAhead(0));
+  await expect(page.locator("#neededBy-hint")).toContainText("High");
+  await page.getByLabel("Remarks").fill("Half a box left for the topsider batch");
   await page.getByRole("button", { name: "Send request" }).click();
   await expect(page).toHaveURL(/\/procurement\/[0-9a-f-]{36}$/);
   const url = new URL(page.url()).pathname;
   const code = (await page.locator("h1").textContent())!.trim();
   await expect(page.getByText("Pending", { exact: true }).first()).toBeVisible();
+  // The remarks became the request's first remark.
+  await expect(page.getByText("Half a box left for the topsider batch")).toBeVisible();
+  await expect(page.getByText("Why it’s needed")).toHaveCount(0);
+  await page.goto("/procurement");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Material requests");
+  await expect(page).toHaveTitle(/Material requests/);
 
-  // The Floor Manager: pending tab, urgent; approve with a note; receive.
+  // The Floor Manager sees "Procurement": pending tab, High urgency; approve with a note; receive.
   const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
-  // Filtered to this item: other runs leave urgent requests pending, ahead of this one.
+  await expect(fm.getByRole("link", { name: "Procurement", exact: true }).first()).toBeVisible();
+  // Filtered to this item: other runs leave requests pending around this one.
   await fm.goto(`/procurement?status=PENDING&item=${item.id}`);
-  await expect(fm.getByRole("row", { name: code })).toContainText("Urgent");
+  await expect(fm.getByRole("heading", { level: 1 })).toHaveText("Procurement");
+  await expect(fm.getByRole("row", { name: code })).toContainText("High");
+  await expect(fm.getByRole("row", { name: code })).toContainText("needed today");
+  // The urgency filter: it is in High, and not in Low.
+  await fm.getByLabel("Urgency").selectOption("HIGH");
+  await expect(fm).toHaveURL(/urgency=HIGH/);
+  await expect(fm.getByRole("row", { name: code })).toBeVisible();
+  await fm.getByLabel("Urgency").selectOption("LOW");
+  await expect(fm).toHaveURL(/urgency=LOW/);
+  await expect(fm.getByRole("row", { name: code })).toHaveCount(0);
   await fm.goto(`/inventory?q=${item.sku}`);
   await expect(fm.getByRole("link", { name: `Requested in ${code}` })).toBeVisible();
   await fm.goto(url);
@@ -97,11 +123,95 @@ test("a constructor asks, the Floor Manager approves and receives, and stock goe
   await expect(fm.getByText("Added to stock on receipt")).toBeVisible();
   expect(await onHand(item.id)).toBe(5);
 
-  // The requester sees the outcome and the timeline.
-  await page.reload();
+  // The requester sees the outcome and the timeline. A closed request has no urgency badge.
+  await page.goto(url);
   await expect(page.locator("header, main").getByText("Received").first()).toBeVisible();
   await expect(page.getByText("Ordering today").first()).toBeVisible();
+  await expect(page.getByText("needed today")).toHaveCount(0);
   await fm.close();
+});
+
+test("the pending list puts the soonest needed-by date first (D-037)", async ({ browser }) => {
+  const fmApi = await managerApi(browser);
+  const item = await createItem(fmApi, 1);
+  const sc = await makeConstructor();
+  const scPage = await signedIn(browser, sc.email, "/constructor");
+  // Sent in the "wrong" order: the far-off one first, then the one needed today.
+  const low = await apiRequest(scPage, item.id, 1, daysAhead(60));
+  const high = await apiRequest(scPage, item.id, 1, daysAhead(0));
+  await scPage.close();
+
+  const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
+  await fm.goto(`/procurement?status=PENDING&item=${item.id}`);
+  const rows = fm.getByRole("row").filter({ hasText: /PR-\d{4}-\d+/ });
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText(high.code);
+  await expect(rows.nth(0)).toContainText("High");
+  await expect(rows.nth(1)).toContainText(low.code);
+  await expect(rows.nth(1)).toContainText("Low");
+  await fm.close();
+});
+
+test("the request form says exactly which field is wrong and how to fix it (D-038)", async ({
+  browser,
+  page,
+}) => {
+  const item = await createItem(await managerApi(browser), 1);
+  const sc = await makeConstructor();
+  await page.goto("/login");
+  await signIn(page, sc.email);
+  await expect(page).toHaveURL("/constructor");
+  await page.goto("/procurement/new");
+
+  // Nothing filled in: each field gets its own message, and focus goes to the first one.
+  await page.getByRole("button", { name: "Send request" }).click();
+  await expect(page.locator("#lines-0-item-error")).toHaveText(
+    "Choose an item from the list. If it isn't there, pick “Something not in inventory yet”.",
+  );
+  await expect(page.locator("#lines-0-item")).toBeFocused();
+  await expect(page.locator("#lines-0-quantity-error")).toHaveText(
+    "Enter a quantity greater than 0.",
+  );
+  await expect(page.locator("#neededBy-error")).toHaveText(
+    "Choose the date you need the items by.",
+  );
+  await expect(page.locator("#neededBy")).toHaveAttribute("aria-describedby", "neededBy-error");
+  await expect(page.locator("#lines-0-quantity")).toHaveAttribute("aria-invalid", "true");
+  // Three or more problems: a summary on top links to each field.
+  const summary = page.getByTestId("form-error-summary");
+  await expect(summary).toContainText("fields need fixing");
+  await expect(summary.getByRole("link").first()).toBeVisible();
+  await expect(page.getByText("Some fields need fixing.")).toHaveCount(0);
+
+  // One by one, each rule answers in its own words.
+  await page.locator("#lines-0-item").selectOption(item.id);
+  await page.locator("#lines-0-quantity").fill("0");
+  await page.getByLabel("Needed by").fill("2020-01-01");
+  await page.getByRole("button", { name: "Send request" }).click();
+  await expect(page.locator("#lines-0-quantity-error")).toHaveText(
+    "Enter a quantity greater than 0.",
+  );
+  await expect(page.locator("#neededBy-error")).toHaveText(
+    "Needed by can't be in the past. Pick today or a later date.",
+  );
+  // Two problems left: the summary steps aside, the messages stay under their fields.
+  await expect(summary).toHaveCount(0);
+
+  await page.locator("#lines-0-quantity").fill("1.234");
+  await page.getByLabel("Needed by").fill(daysAhead(400));
+  await page.getByRole("button", { name: "Send request" }).click();
+  await expect(page.locator("#lines-0-quantity-error")).toHaveText(
+    "Quantity can have at most 2 decimal places.",
+  );
+  await expect(page.locator("#neededBy-error")).toHaveText(
+    "Needed by can be at most 180 days ahead. Pick an earlier date.",
+  );
+
+  // Fixed: it goes through, and nothing typed was lost on the way.
+  await page.locator("#lines-0-quantity").fill("1.5");
+  await page.getByLabel("Needed by").fill(daysAhead(20));
+  await page.getByRole("button", { name: "Send request" }).click();
+  await expect(page).toHaveURL(/\/procurement\/[0-9a-f-]{36}$/);
 });
 
 test("rejecting needs a reason, and the requester sees it", async ({ browser, page }) => {
@@ -118,7 +228,10 @@ test("rejecting needs a reason, and the requester sees it", async ({ browser, pa
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText(`Reject ${request.code}?`);
   await dialog.getByRole("button", { name: "Reject request" }).click();
-  await expect(dialog.getByText(/Say why it's rejected/)).toBeVisible();
+  await expect(dialog.locator("#request-text-error")).toHaveText(
+    "Enter a reason of at least 3 characters, so the requester knows why it's rejected.",
+  );
+  await expect(dialog.getByLabel("Reason")).toBeFocused();
   await dialog.getByLabel("Reason").fill("Three boxes in the back room");
   await dialog.getByRole("button", { name: "Reject request" }).click();
   await expect(dialog).toBeHidden();
@@ -170,13 +283,12 @@ test("every constructor requests supplies; leather rolls need the Floor Manager'
   await page.goto("/login");
   await signIn(page, sc.email);
   await expect(page).toHaveURL("/constructor");
-  await expect(page.getByRole("link", { name: "New request" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "New material request" })).toBeVisible();
 
   const ask = (itemId: string) =>
     page.request.post("/api/v1/procurement/requests", {
       data: {
-        priority: "NORMAL",
-        justification: "E2E: running low",
+        neededBy: daysAhead(30),
         lines: [{ inventoryItemId: itemId, quantity: 1 }],
       },
     });

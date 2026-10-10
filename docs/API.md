@@ -207,10 +207,17 @@ Low stock means an active item with `quantityOnHand ≤ reorderLevel` (out of st
 
 ## Procurement (session)
 
-Purchase requests (D-029, D-031). Any Shoe Constructor asks for materials; **leather rolls** only
+Material requests (D-029, D-031, D-035 to D-037). The UI calls this "Material requests" for Shoe
+Constructors and "Procurement" for the Floor Manager and System Admin; the paths and permission
+keys stay `procurement`. Any Shoe Constructor asks for materials; **leather rolls** only
 if the Floor Manager or System Admin has allowed them. The Floor Manager approves or rejects every
 request, then marks it received. A request is never edited after it's
 sent: cancel it and send a new one. Every change adds a timeline event and an audit row.
+
+**Urgency** is never stored. Every read works it out from `neededBy` and today's Manila date,
+counting working days (Monday to Friday): `HIGH` up to 3 working days or overdue, `MEDIUM` up to
+7, `LOW` after that. Rows and the detail carry `urgency` and `daysLeft` ("in 2 working days");
+both are `null` once the request is received, rejected or cancelled.
 
 ```
 PENDING ─approve─▶ APPROVED ─receive─▶ RECEIVED
@@ -218,26 +225,33 @@ PENDING ─approve─▶ APPROVED ─receive─▶ RECEIVED
    └─cancel (requester)─▶ CANCELLED
 ```
 
-| Method & path                                    | Who                                                             | Body / query                                                                                                                                       |
-| ------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/procurement/requests`               | `procurement:read` (constructors: own)                          | `?status=&category=&item=&from=&to=&page=` → `{ rows, total, counts, page, pageCount }`                                                            |
-| `POST /api/v1/procurement/requests`              | `procurement:request` (constructors; leather rolls need the OK) | `RequestForm` → `201 { id, code, alreadyRequested[] }`                                                                                             |
-| `GET /api/v1/procurement/requests/{id}`          | `procurement:read` (constructors: own)                          | lines (stock snapshot + current stock), `events`, `remarks`, `actions`, `canRemark`                                                                |
-| `POST /api/v1/procurement/requests/{id}/approve` | `procurement:decide` (FM)                                       | `{ note? }` (send `{}` for none)                                                                                                                   |
-| `POST /api/v1/procurement/requests/{id}/reject`  | `procurement:decide` (FM)                                       | `{ reason }` (3–300)                                                                                                                               |
-| `POST /api/v1/procurement/requests/{id}/receive` | `procurement:decide` (FM)                                       | no body. Posts an inventory **IN** ("Received for PR-…") for every line linked to an item                                                          |
-| `POST /api/v1/procurement/requests/{id}/cancel`  | the requester                                                   | `{ note? }`                                                                                                                                        |
-| `POST /api/v1/procurement/requests/{id}/remarks` | FM; the requester on their own                                  | `{ body }` (1–500) → `201`. Remarks are never edited or deleted                                                                                    |
-| `GET /api/v1/procurement/items`                  | `procurement:request`                                           | active items: `sku, name, category, unit, onHand, reorderLevel, low, allowed, openRequestCode` (`allowed: false` for leather rolls without the OK) |
-| `GET /api/v1/procurement/requesters`             | `procurement:designate` (FM, Admin)                             | active Shoe Constructors with `canRequestLeatherRolls`                                                                                             |
-| `PUT /api/v1/procurement/requesters/{userId}`    | `procurement:designate` (FM, Admin)                             | `{ canRequestLeatherRolls }`. `409` unless the person is an active Shoe Constructor                                                                |
+| Method & path                                    | Who                                                             | Body / query                                                                                                                                                                                                |
+| ------------------------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/procurement/requests`               | `procurement:read` (constructors: own)                          | `?status=&category=&urgency=&item=&from=&to=&page=` → `{ rows, total, counts, page, pageCount }`. `urgency` (`HIGH\|MEDIUM\|LOW`) matches open requests only. Pending is ordered by `neededBy`, then oldest |
+| `POST /api/v1/procurement/requests`              | `procurement:request` (constructors; leather rolls need the OK) | `RequestForm` → `201 { id, code, alreadyRequested[] }`                                                                                                                                                      |
+| `GET /api/v1/procurement/requests/{id}`          | `procurement:read` (constructors: own)                          | lines (stock snapshot + current stock), `events`, `remarks`, `actions`, `canRemark`                                                                                                                         |
+| `POST /api/v1/procurement/requests/{id}/approve` | `procurement:decide` (FM)                                       | `{ note? }` (send `{}` for none)                                                                                                                                                                            |
+| `POST /api/v1/procurement/requests/{id}/reject`  | `procurement:decide` (FM)                                       | `{ reason }` (3–300)                                                                                                                                                                                        |
+| `POST /api/v1/procurement/requests/{id}/receive` | `procurement:decide` (FM)                                       | no body. Posts an inventory **IN** ("Received for PR-…") for every line linked to an item                                                                                                                   |
+| `POST /api/v1/procurement/requests/{id}/cancel`  | the requester                                                   | `{ note? }`                                                                                                                                                                                                 |
+| `POST /api/v1/procurement/requests/{id}/remarks` | FM; the requester on their own                                  | `{ body }` (1–500) → `201`. Remarks are never edited or deleted                                                                                                                                             |
+| `GET /api/v1/procurement/items`                  | `procurement:request`                                           | active items: `sku, name, category, unit, onHand, reorderLevel, low, allowed, openRequestCode` (`allowed: false` for leather rolls without the OK)                                                          |
+| `GET /api/v1/procurement/requesters`             | `procurement:designate` (FM, Admin)                             | active Shoe Constructors with `canRequestLeatherRolls`                                                                                                                                                      |
+| `PUT /api/v1/procurement/requesters/{userId}`    | `procurement:designate` (FM, Admin)                             | `{ canRequestLeatherRolls }`. `409` unless the person is an active Shoe Constructor                                                                                                                         |
 
-**`RequestForm`**: `priority` (`NORMAL|URGENT`, default `NORMAL`), `neededBy?` (`YYYY-MM-DD`, today
-or later), `justification` (3–500), `lines` (1–10). Each line is `{ inventoryItemId, quantity,
+**`RequestForm`** (changed in Phase 11: `priority` and `justification` are gone): `neededBy`
+(required, `YYYY-MM-DD`, today or later in Manila time and at most 180 days ahead), `remarks?`
+(up to 500; saved as the request's first remark), `lines` (1–10). Each line is `{ inventoryItemId, quantity,
 note? }`, or `{ itemName, category, unit, quantity, note? }` for something not in inventory yet
 (`category` is an inventory category, so a typed leather roll is recognised). The same
 item can't appear twice. `alreadyRequested` lists items another open request already asks for:
 a heads-up, never a block.
+
+**Validation errors (D-038).** A `422` carries `details[]` with one issue per field: `path` is the
+full path (`["lines", 1, "quantity"]`) and `message` names the field and the fix ("Enter a
+quantity greater than 0."). The top-level `message` is that sentence when there is one issue, or
+"N fields need fixing. Start with this one: …" when there are several. This holds for every
+endpoint, not only procurement.
 
 **Errors:**
 

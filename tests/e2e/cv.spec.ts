@@ -114,7 +114,11 @@ test.describe("people deciding", () => {
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("radio", { name: /Rework/ }).check();
     await dialog.getByRole("button", { name: "Override" }).click();
-    await expect(dialog.getByText("Say why you're changing the camera's decision.")).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Enter a reason for changing the camera's decision (at least 3 characters).",
+      ),
+    ).toBeVisible();
     await dialog.getByLabel("Reason").fill("Surface cut only, can be skived");
     await dialog.getByRole("button", { name: "Override" }).click();
 

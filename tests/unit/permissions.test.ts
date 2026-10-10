@@ -101,7 +101,8 @@ describe("navigationFor", () => {
       "API tokens",
       "Audit log",
     ]);
-    expect(labels(SC)).toEqual(["Home", "Procurement"]);
+    // Constructors only ask for materials, so the same page is named for that (D-035).
+    expect(labels(SC)).toEqual(["Home", "Material requests"]);
   });
 
   it("links each role's first item to its own home", () => {

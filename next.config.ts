@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
+  // `next dev` logs every Server Function call with its arguments, which printed sign-in
+  // passwords in the terminal (QA report 2026-10-11). Development only, but keep it off.
+  logging: { serverFunctions: false },
 };
 
 export default nextConfig;

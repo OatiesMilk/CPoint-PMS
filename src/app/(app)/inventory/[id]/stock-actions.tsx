@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, Minus, Pencil, Plus, RefreshCw, ClipboardCheck } from "lucide-react";
@@ -15,11 +15,13 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { MovementType } from "@/lib/domain";
+import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import {
   DEFAULT_REASON,
   formatDelta,
@@ -67,6 +69,7 @@ export function StockActions({ item, openBatches }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [stale, setStale] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const counted = Number(amount);
   const countDiff =
@@ -112,10 +115,11 @@ export function StockActions({ item, openBatches }: Props) {
     }
     if (result.fieldErrors && Object.keys(result.fieldErrors).length > 0) {
       setErrors(result.fieldErrors);
-      return;
+      return focusFirstInvalid(formRef.current);
     }
     // Not enough stock and similar: keep the dialog open so the number can be fixed.
     setErrors({ [dialog === "ADJUST" ? "counted" : "quantity"]: result.error });
+    focusFirstInvalid(formRef.current);
   }
 
   function submit() {
@@ -137,7 +141,7 @@ export function StockActions({ item, openBatches }: Props) {
         next[key] ??= issue.message;
       }
       setErrors(next);
-      return;
+      return focusFirstInvalid(formRef.current);
     }
     setErrors({});
     startTransition(async () => afterResult(await recordMovementAction(item.id, parsed.data)));
@@ -235,6 +239,7 @@ export function StockActions({ item, openBatches }: Props) {
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent>
           <form
+            ref={formRef}
             noValidate
             className="flex flex-col gap-4"
             onSubmit={(e) => {
@@ -294,6 +299,8 @@ export function StockActions({ item, openBatches }: Props) {
                 <Select
                   id="movement-batch"
                   value={batchId}
+                  aria-invalid={!!errors.batchId}
+                  aria-describedby={errors.batchId ? "movement-batch-error" : undefined}
                   onChange={(e) => setBatchId(e.target.value)}
                 >
                   <option value="">Not for a specific batch</option>
@@ -303,6 +310,7 @@ export function StockActions({ item, openBatches }: Props) {
                     </option>
                   ))}
                 </Select>
+                <FieldError id="movement-batch-error" message={errors.batchId} />
               </div>
             )}
 

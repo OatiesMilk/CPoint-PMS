@@ -1,33 +1,30 @@
 import { z } from "zod";
 import { ReworkStatus, SalvageStatus } from "@/lib/domain";
-
-const optionalText = (max: number) =>
-  z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.string().trim().max(max, `Keep it under ${max} characters.`).optional(),
-  );
+import { optionalText, OUT_OF_DATE } from "./shared";
 
 export const reworkMoveSchema = z.object({
-  move: z.enum(["start", "done", "reopen", "unstart"]),
-  expectedStatus: z.enum(ReworkStatus),
-  note: optionalText(300),
+  move: z.enum(["start", "done", "reopen", "unstart"], { error: OUT_OF_DATE }),
+  expectedStatus: z.enum(ReworkStatus, { error: OUT_OF_DATE }),
+  note: optionalText(300, "note"),
 });
 
 export const salvageAssignSchema = z.object({
   batchId: z.uuid("Choose the batch that will use this section."),
-  expectedStatus: z.enum(SalvageStatus),
-  note: optionalText(300),
+  expectedStatus: z.enum(SalvageStatus, { error: OUT_OF_DATE }),
+  note: optionalText(300, "note"),
 });
 
-export const salvageUnassignSchema = z.object({ expectedStatus: z.enum(SalvageStatus) });
+export const salvageUnassignSchema = z.object({
+  expectedStatus: z.enum(SalvageStatus, { error: OUT_OF_DATE }),
+});
 
 export const salvageDiscardSchema = z.object({
   reason: z
-    .string()
+    .string({ error: "Enter a reason for discarding this section, e.g. “Too small to cut.”" })
     .trim()
-    .min(3, "Say why this section is discarded (at least 3 characters).")
-    .max(300),
-  expectedStatus: z.enum(SalvageStatus),
+    .min(3, "Enter a reason of at least 3 characters for discarding this section.")
+    .max(300, "Keep the reason under 300 characters."),
+  expectedStatus: z.enum(SalvageStatus, { error: OUT_OF_DATE }),
 });
 
 export const salvageListQuerySchema = z.object({

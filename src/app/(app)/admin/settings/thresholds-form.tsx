@@ -1,5 +1,6 @@
 "use client";
 
+import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import { useState, useTransition } from "react";
 import { CircleCheck, CircleX, LoaderCircle, Wrench } from "lucide-react";
 import { toast } from "sonner";
@@ -68,14 +69,17 @@ export function ThresholdsForm({ reject, rework }: { reject: number; rework: num
       className="flex max-w-2xl flex-col gap-6"
       onSubmit={(e) => {
         e.preventDefault();
+        const form = e.currentTarget;
         setFormError(null);
         startTransition(async () => {
           const result = await saveThresholdsAction(values);
           if (result.ok) {
             setErrors({});
             toast.success("Thresholds saved. New scans use them from now on.");
-          } else if (result.fieldErrors) setErrors(result.fieldErrors);
-          else setFormError(result.error);
+          } else if (result.fieldErrors) {
+            setErrors(result.fieldErrors);
+            focusFirstInvalid(form);
+          } else setFormError(result.error);
         });
       }}
     >

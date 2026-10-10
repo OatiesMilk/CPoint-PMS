@@ -56,6 +56,7 @@ function request(overrides: Record<string, unknown> = {}) {
     code: "PR-2026-0007",
     status: "PENDING",
     requestedById: "sc1",
+    neededBy: new Date("2026-10-08T00:00:00.000Z"),
     lines: [
       {
         id: "l1",
@@ -71,8 +72,8 @@ function request(overrides: Record<string, unknown> = {}) {
 }
 
 const values = {
-  priority: "NORMAL" as const,
-  justification: "Nails for Friday's topsider batch",
+  neededBy: "2026-10-08", // a Thursday: 3 working days after `now`
+  remarks: "Nails for Friday's topsider batch",
   lines: [{ inventoryItemId: "i1", quantity: 4 }],
 };
 
@@ -173,6 +174,32 @@ describe("createRequest", () => {
     expect(recordAudit.mock.calls[0][1]).toMatchObject({ action: "procurement.request.create" });
   });
 
+  it("saves the remarks as the request's first remark, in the same transaction (D-036)", async () => {
+    await svc.createRequest(values, sc, now);
+    expect(proc.insertRequest.mock.calls[0][0]).toMatchObject({
+      neededBy: new Date("2026-10-08T00:00:00.000Z"),
+    });
+    expect(proc.insertRequest.mock.calls[0][0]).not.toHaveProperty("justification");
+    expect(proc.insertRequest.mock.calls[0][0]).not.toHaveProperty("priority");
+    expect(proc.insertRemark).toHaveBeenCalledWith(
+      {
+        requestId: "pr1",
+        authorId: "sc1",
+        body: "Nails for Friday's topsider batch",
+        createdAt: now,
+      },
+      "tx",
+    );
+    expect(recordAudit.mock.calls[0][1]).toMatchObject({
+      after: { neededBy: "2026-10-08", remarks: "Nails for Friday's topsider batch" },
+    });
+  });
+
+  it("adds no remark when the remarks box is left empty", async () => {
+    await svc.createRequest({ ...values, remarks: undefined }, sc, now);
+    expect(proc.insertRemark).not.toHaveBeenCalled();
+  });
+
   it("warns, without blocking, when an open request already asks for the item", async () => {
     proc.openRequestsForItems.mockResolvedValueOnce([
       { inventoryItemId: "i1", request: { id: "pr0", code: "PR-2026-0003", status: "PENDING" } },
@@ -185,7 +212,17 @@ describe("createRequest", () => {
   it("refuses a needed-by date in the past and a deactivated item, as field errors", async () => {
     await expect(
       svc.createRequest({ ...values, neededBy: "2026-10-04" }, sc, now),
-    ).rejects.toMatchObject({ status: 422, details: [{ path: ["neededBy"] }] });
+    ).rejects.toMatchObject({
+      status: 422,
+      message: "Needed by can't be in the past. Pick today or a later date.",
+      details: [{ path: ["neededBy"] }],
+    });
+    await expect(
+      svc.createRequest({ ...values, neededBy: "2027-04-04" }, sc, now), // 181 days ahead
+    ).rejects.toMatchObject({
+      status: 422,
+      message: "Needed by can be at most 180 days ahead. Pick an earlier date.",
+    });
     inventory.findInventoryItem.mockResolvedValueOnce({ ...nails, isActive: false });
     await expect(svc.createRequest(values, sc, now)).rejects.toMatchObject({
       status: 422,
@@ -304,6 +341,44 @@ describe("remarks", () => {
       status: 404,
     });
     await expect(svc.addRemark("pr1", "Hi", admin, now)).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("urgency on reads (D-037)", () => {
+  it("is worked out from the needed-by date, and gone once the request is closed", async () => {
+    proc.findRequestDetail.mockResolvedValue(request());
+    expect(await svc.getRequest("pr1", fm, now)).toMatchObject({
+      urgency: "HIGH",
+      daysLeft: "in 3 working days",
+    });
+    // The same request read a week earlier is Medium, and Low two weeks earlier.
+    expect(await svc.getRequest("pr1", fm, new Date("2026-09-29T02:00:00.000Z"))).toMatchObject({
+      urgency: "MEDIUM",
+      daysLeft: "in 7 working days",
+    });
+    expect(await svc.getRequest("pr1", fm, new Date("2026-09-21T02:00:00.000Z"))).toMatchObject({
+      urgency: "LOW",
+    });
+    for (const status of ["RECEIVED", "REJECTED", "CANCELLED"]) {
+      proc.findRequestDetail.mockResolvedValue(request({ status }));
+      expect(await svc.getRequest("pr1", fm, now)).toMatchObject({
+        urgency: null,
+        daysLeft: null,
+      });
+    }
+  });
+
+  it("filters the list by a needed-by range and counts High for the home card", async () => {
+    proc.listRequests.mockResolvedValue({ rows: [], total: 0, counts: {} });
+    await svc.listRequests({ urgency: "MEDIUM" }, fm, now); // Monday 5 Oct
+    expect(proc.listRequests.mock.calls[0][0]).toMatchObject({
+      neededBy: {
+        after: new Date("2026-10-08T00:00:00.000Z"), // High runs through Thursday
+        through: new Date("2026-10-14T00:00:00.000Z"), // Medium through next Wednesday
+      },
+    });
+    await svc.pendingRequestsCard(now);
+    expect(proc.pendingSummary).toHaveBeenCalledWith(new Date("2026-10-08T00:00:00.000Z"));
   });
 });
 

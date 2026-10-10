@@ -8,7 +8,11 @@ describe("API error shape", () => {
     const res = toErrorResponse(Errors.notFound("Batch B-2026-0001"));
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({
-      error: { code: "NOT_FOUND", message: "Batch B-2026-0001 was not found." },
+      error: {
+        code: "NOT_FOUND",
+        message:
+          "Batch B-2026-0001 was not found. It may have been removed. Go back to the list and open it again.",
+      },
     });
   });
 

@@ -115,3 +115,27 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
       operations too
 - [x] Layout adapts to narrower windows (D-034): icon-rail sidebar, auto-fit grids, wrapping
       button groups, tables scroll in their card
+
+## Phase 11 — Material requests: naming, remarks, urgency, specific messages
+
+Brief: `material-requests.md` (project root), Phase 11. Phases 12 and 13 are in the same file.
+
+- [x] Naming (D-035): Shoe Constructors see **Material requests** (nav, titles, buttons, empty
+      states, "My material requests" on their home); the Floor Manager and Admin see
+      **Procurement**. One role → label map (`requestLabelsFor`); URLs, permissions and tables
+      unchanged
+- [x] Remarks replace the justification (D-036): optional Remarks box, saved as the first remark
+      in the create transaction; migration copies old justifications into remarks, then drops the
+      column
+- [x] Automatic urgency (D-037): Needed by is required (today to 180 days ahead); High / Medium /
+      Low from working days left, computed on read, never stored; badge with icon, label and days
+      left; Pending sorted by needed-by date; urgency filter; High count on the FM home card and in
+      the Operations report; `PurchasePriority` dropped
+- [x] Specific messages system-wide (D-038): every validator message names the field and the fix;
+      form-level alerts are built from the field messages; server field errors land on the exact
+      input; focus moves to the first invalid field; a summary appears at 3 or more errors
+- [x] Tests: unit (urgency bands and ranges, label map, first remark, validator-message sweep,
+      field-error paths); e2e specs updated and extended
+- [ ] E2E and browser checks are run by Codex through `qa/handoffs/` (not run in the build
+      session)
+- [ ] Docker demo-week check not run in this session

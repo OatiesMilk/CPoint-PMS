@@ -149,7 +149,7 @@ export type AttentionInput = {
   repairs: { waitingOverDay: number; open: number; oldestWaitingMs: number | null };
   stock: { out: number; low: number; shortCover: { item: string; days: number }[] };
   requests: {
-    urgentPending: number;
+    highPending: number;
     pending: number;
     oldestPendingMs: number | null;
     lateAwaitingDelivery: number;
@@ -235,12 +235,12 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
       href: "/rework",
     });
 
-  if (i.requests.urgentPending > 0)
+  if (i.requests.highPending > 0)
     out.push({
-      id: "requests-urgent",
+      id: "requests-high",
       severity: "warning",
-      title: `${plural(i.requests.urgentPending, "urgent purchase request")} waiting for a decision`,
-      detail: "Urgent requests are listed first in the Pending tab.",
+      title: `${plural(i.requests.highPending, "high-urgency purchase request")} waiting for a decision`,
+      detail: "They are needed within 3 working days and are listed first in the Pending tab.",
       href: "/procurement?status=PENDING",
     });
   else if (

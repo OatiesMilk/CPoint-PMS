@@ -149,7 +149,7 @@ beforeEach(() => {
   ]);
   ops.procurementFlow.mockResolvedValue({
     pending: 2,
-    urgentPending: 1,
+    highPending: 1,
     oldestPendingMs: 10 * H,
     awaitingDelivery: 1,
     lateAwaitingDelivery: 0,
@@ -253,7 +253,7 @@ describe("operationsReport", () => {
         "bottleneck",
         "stuck",
         "repairs-waiting",
-        "requests-urgent",
+        "requests-high",
         "supplier",
         "flagged",
       ]),

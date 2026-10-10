@@ -1,5 +1,6 @@
 "use client";
 
+import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import { useState, useTransition } from "react";
 import { LoaderCircle, MoreHorizontal, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -177,15 +178,18 @@ export function NewUserDialog() {
             className="flex flex-col gap-4"
             onSubmit={(e) => {
               e.preventDefault();
+              const form = e.currentTarget;
               const invalid = validate(values);
               setErrors(invalid ?? {});
-              if (invalid) return;
+              if (invalid) return focusFirstInvalid(form);
               setFormError(null);
               startTransition(async () => {
                 const result = await createUserAction(values);
                 if (result.ok) setSecret(result);
-                else if (result.fieldErrors) setErrors(result.fieldErrors);
-                else setFormError(result.error);
+                else if (result.fieldErrors) {
+                  setErrors(result.fieldErrors);
+                  focusFirstInvalid(form);
+                } else setFormError(result.error);
               });
             }}
           >
@@ -359,16 +363,19 @@ export function UserRowActions({
               className="flex flex-col gap-4"
               onSubmit={(e) => {
                 e.preventDefault();
+                const form = e.currentTarget;
                 const invalid = validate(values);
                 setErrors(invalid ?? {});
-                if (invalid) return;
+                if (invalid) return focusFirstInvalid(form);
                 startTransition(async () => {
                   const result = await updateUserAction(user.id, values);
                   if (result.ok) {
                     toast.success(`${values.name} saved.`);
                     setDialog(null);
-                  } else if (result.fieldErrors) setErrors(result.fieldErrors);
-                  else setError(result.error);
+                  } else if (result.fieldErrors) {
+                    setErrors(result.fieldErrors);
+                    focusFirstInvalid(form);
+                  } else setError(result.error);
                 });
               }}
             >

@@ -14,6 +14,32 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-10 — Phase 11: Material requests (naming, remarks, urgency, specific messages)
+
+**Who:** Dylan (local copy, not committed; no branch, by his instruction)
+**Summary:** Constructors now see "Material requests" and the FM/Admin "Procurement"; an optional first remark replaces the required justification; urgency (High/Medium/Low) is worked out from a required needed-by date by working days; every form message in the system names the field and the fix.
+**Changed:**
+
+- Schema: migration `20261010153000_material_requests_remarks_urgency`, applied to the dev DB. It copied each justification into a first remark, gave requests without a needed-by date `createdAt + 7 days`, then dropped `justification`, `priority` and the `PurchasePriority` enum. The three existing dev requests kept their text as remarks.
+- Rules: `procurement-rules.ts` gains `requestLabelsFor`, `urgencyFor`, `urgencyOf`, `daysLeftLabel`, `urgencyCutoffs`, `urgencyDateRange` and the constants.
+- Server: procurement validator, model and service; Operations report counts High urgency; navigation label by role; demo seed uses needed-by dates and remarks.
+- UI: request form (Needed by required with a live urgency preview, Remarks, no Priority), `UrgencyBadge`, urgency filter, list and detail pages, FM home card, constructor home.
+- Messages: all validators, `errors.ts` (`summarizeIssues`), `action-result.ts` (full-path keys), shared `FieldError`, `FormErrorSummary`, `focusFirstInvalid`; salvage, stock, user, token and settings dialogs focus the first invalid field.
+- Tests: `validator-messages.test.ts` (new), urgency and label tests, service tests; e2e specs updated and three scenarios added.
+- `vitest.config.mts`: the `server-only` stub path now uses `fileURLToPath`. With `.pathname`, a project folder with spaces in its name broke `format.test.ts` on this machine.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (435) · build ✅ · e2e not run by Claude (Codex runs it from `qa/handoffs/`; one partial run on this machine was unreliable because Playwright's browser isn't installed) · docker demo-week not run · screens not checked in a browser by Claude.
+**QA:** Codex's report `qa/reports/2026-10-11-phase-11-material-requests.md`: 34 of 35 scenarios passed and all 50 e2e tests in six specs passed on a production build. The one failure (F1, fields not stacking at 960px) was a wrong expectation in the handoff, not an app fault (D-034 stacks below 640px); the handoff was corrected. From its observations: `next.config.ts` now sets `logging.serverFunctions: false`, because `next dev` printed sign-in passwords in the terminal.
+**Decisions:** D-035, D-036, D-037, D-038
+**Follow-ups:**
+
+- The e2e server logs "The destination stream closed early." while tests pass; cause not confirmed.
+- Confirm with CPoint: the 3/7 working-day bands, Monday–Friday, no holidays.
+- Run the Docker demo-week check before the PR.
+- Phase 12 next (item-level decisions guided by stock).
+
+---
+
 ## 2026-10-08 — Rework board: collapsible columns
 
 **Who:** team (local copy, not committed)

@@ -1,4 +1,6 @@
 import { STAGE_ORDER, type Stage } from "@/lib/domain";
+import { manilaToday } from "@/lib/format";
+import { urgencyCutoffs } from "@/lib/procurement-rules";
 import {
   ATTENTION,
   buildAttention,
@@ -95,7 +97,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     stageDurations(baseline),
     repairStation(range, now),
     stockPosition(range),
-    procurementFlow(range, now),
+    procurementFlow(range, now, urgencyCutoffs(manilaToday(now)).highThrough),
     supplierQuality(range),
   ]);
 
@@ -219,7 +221,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
       shortCover: shortCover.map((i) => ({ item: i.item, days: i.coverDays ?? 0 })),
     },
     requests: {
-      urgentPending: procurement.urgentPending,
+      highPending: procurement.highPending,
       pending: procurement.pending,
       oldestPendingMs: procurement.oldestPendingMs,
       lateAwaitingDelivery: procurement.lateAwaitingDelivery,
