@@ -20,7 +20,14 @@ import { cancelBatch, createBatch, transitionBatchStage } from "./batch.service"
 import { createItem, recordMovement } from "./inventory.service";
 import { moveReworkTicket } from "./rework.service";
 import { assignSalvage, discardSalvage } from "./salvage.service";
-import { actOnRequest, addRemark, createRequest, setRequester } from "./procurement.service";
+import {
+  actOnRequest,
+  addRemark,
+  createRequest,
+  decideRequest,
+  getRequest,
+  setRequester,
+} from "./procurement.service";
 import { decideScan } from "./scan-decision.service";
 import { ingestScan } from "./scan-ingest.service";
 
@@ -426,8 +433,8 @@ export async function seedDemoWeek(
 
   /**
    * A handful of requests through the real services, one in each state: received (posts stock IN,
-   * so the ledger still balances), rejected with a reason, cancelled, approved and waiting for the
-   * delivery, and one pending for the low Contact cement that is needed tomorrow (High urgency).
+   * so the ledger still balances), rejected with a reason, cancelled, approved in part (one item
+   * rejected, D-039) and waiting for the delivery, and one pending for the low Contact cement that is needed tomorrow (High urgency).
    * What used to be "why it's needed" is each request's first remark (D-036).
    */
   async function seedRequests(): Promise<number> {
@@ -521,21 +528,40 @@ export async function seedDemoWeek(
         off,
       );
 
-    // Yesterday: a leather roll, approved and waiting for the delivery.
+    // Yesterday: a leather roll and more thread. Decided item by item (D-039): the roll is
+    // approved and waiting for the delivery, the thread is rejected because Monday's order came in.
     const t4 = at(beforeLast, 15);
     const r4 = await send(t4, {
       neededBy: addDays(manilaToday(t4), 7),
-      remarks: "Black cowhide for next week's school shoe batches.",
-      lines: [{ inventoryItemId: item("LR-001"), quantity: 3 }],
+      remarks: "Black cowhide and thread for next week's school shoe batches.",
+      lines: [
+        { inventoryItemId: item("LR-001"), quantity: 3 },
+        { inventoryItemId: item("TH-001"), quantity: 2 },
+      ],
     });
     const yes = r4 && later(t4, 1);
-    if (r4 && yes)
-      await actOnRequest(
-        r4.id,
-        { action: "approve", note: "Ordered. Arriving early next week." },
-        fm!,
-        yes,
-      );
+    if (r4 && yes) {
+      const detail = await getRequest(r4.id, fm!, yes);
+      const thread = item("TH-001");
+      if (detail)
+        await decideRequest(
+          r4.id,
+          {
+            note: "Roll ordered. Arriving early next week.",
+            lines: detail.lines.map((line) =>
+              line.inventoryItemId === thread
+                ? {
+                    lineId: line.id,
+                    decision: "REJECTED" as const,
+                    reason: "Four spools came in with Tuesday's delivery, so we have enough.",
+                  }
+                : { lineId: line.id, decision: "APPROVED" as const },
+            ),
+          },
+          fm!,
+          yes,
+        );
+    }
 
     // Today: contact cement is low and needed tomorrow, so a High-urgency request waits for the
     // Floor Manager.

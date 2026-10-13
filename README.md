@@ -14,8 +14,8 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
   alerts.
 - **Procurement:** Shoe Constructors request materials when they run low. Leather rolls only by
   the constructor the Floor Manager or Admin allows (usually the one who orders leather). The
-  Floor Manager approves or rejects each request, then marks it received, which adds the stock to
-  inventory.
+  Floor Manager approves or rejects each item of a request, guided by the stock on hand, then
+  marks it received, which adds the approved items to inventory.
 - **Reports:** daily totals, defects by type, how often people kept the camera's call, and time
   per stage (the bottleneck), with CSV for Excel. Nothing is ranked per person.
 
@@ -166,9 +166,14 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 
    ![A pending purchase request](docs/screenshots/purchase-request.png)
 
-3. **Approve** with a note, or **Reject…** with a reason the constructor will see. Open the
-   approved request from earlier in the week and **Mark received…**: the dialog lists what goes
-   into stock, and Inventory shows the delivery in the ledger ("Received for PR-…").
+3. **Decide each item.** Every item has **Approve** and **Reject**, with the stock now and when it
+   was requested beside it. An item that is still well stocked (more than twice its reorder
+   level) shows **Still in stock** and starts on Reject with the reason filled in; a low one
+   starts on Approve. These are suggestions: change any of them, then **Save decisions**.
+   **Reject whole request…** turns everything down with one reason. The constructor sees
+   "1 of 2 items approved" and the reason on each rejected item. Open the approved request from
+   earlier in the week and **Mark received…**: the dialog lists what goes into stock (approved
+   items only), and Inventory shows the delivery in the ledger ("Received for PR-…").
 4. The **timeline** and **remarks** on the request show who did what and when. The **Leather roll
    requesters** tab chooses who may also request leather rolls. Stop it for the demo
    constructor: on their next try, leather rolls are greyed out in the form, without signing

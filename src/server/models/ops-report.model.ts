@@ -143,6 +143,7 @@ export async function stockPosition(range: Range, db: Db = defaultDb()): Promise
       EXISTS (
         SELECT 1 FROM purchase_request_lines pl JOIN purchase_requests pr ON pr.id = pl."requestId"
         WHERE pl."inventoryItemId" = i.id AND pr.status IN ('PENDING', 'APPROVED')
+          AND pl.decision <> 'REJECTED'
       ) AS requested
     FROM inventory_items i
     LEFT JOIN (

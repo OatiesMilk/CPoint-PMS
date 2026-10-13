@@ -114,8 +114,11 @@ test("a constructor asks, the Floor Manager approves and receives, and stock goe
   await fm.goto(`/inventory?q=${item.sku}`);
   await expect(fm.getByRole("link", { name: `Requested in ${code}` })).toBeVisible();
   await fm.goto(url);
+  // 2 boxes on hand against a reorder level of 5: low, so the item starts on Approve (D-040).
+  await expect(fm.locator("#line-0-approve")).toBeChecked();
   await fm.getByLabel("Note to the requester").fill("Ordering today");
-  await fm.getByRole("button", { name: "Approve" }).click();
+  await fm.getByRole("button", { name: "Save decisions" }).click();
+  await expect(fm.getByText("Approved by", { exact: true })).toBeVisible(); // once saved
   await expect(fm.getByText("Ordering today").first()).toBeVisible();
   await fm.getByRole("button", { name: "Mark received…" }).click();
   await expect(fm.getByRole("dialog")).toContainText(`${item.name}: +3 boxes`);
@@ -224,7 +227,7 @@ test("rejecting needs a reason, and the requester sees it", async ({ browser, pa
   await signIn(page, ACCOUNTS.manager.email);
   await expect(page).toHaveURL(ACCOUNTS.manager.home);
   await page.goto(`/procurement/${request.id}`);
-  await page.getByRole("button", { name: "Reject…" }).click();
+  await page.getByRole("button", { name: "Reject whole request…" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toContainText(`Reject ${request.code}?`);
   await dialog.getByRole("button", { name: "Reject request" }).click();
@@ -241,6 +244,161 @@ test("rejecting needs a reason, and the requester sees it", async ({ browser, pa
   await scPage.goto(`/procurement/${request.id}`);
   await expect(scPage.getByText("Three boxes in the back room").first()).toBeVisible();
   await scPage.close();
+});
+
+test("the Floor Manager decides each item with stock guidance; the requester sees the result per item (D-039, D-040)", async ({
+  browser,
+  page,
+}) => {
+  const fmApi = await managerApi(browser);
+  // Reorder level 5 for both: 40 on hand is more than twice it, 2 on hand is low.
+  const nails = await createItem(fmApi, 40);
+  const adhesive = await createItem(fmApi, 2);
+  const sc = await makeConstructor();
+  const scPage = await signedIn(browser, sc.email, "/constructor");
+  const res = await scPage.request.post("/api/v1/procurement/requests", {
+    data: {
+      neededBy: daysAhead(30),
+      lines: [
+        { inventoryItemId: nails.id, quantity: 3 },
+        { inventoryItemId: adhesive.id, quantity: 4 },
+      ],
+    },
+  });
+  expect(res.status()).toBe(201);
+  const request = (await res.json()).data as { id: string; code: string };
+
+  await page.goto("/login");
+  await signIn(page, ACCOUNTS.manager.email);
+  await expect(page).toHaveURL(ACCOUNTS.manager.home);
+  await page.goto(`/procurement/${request.id}`);
+
+  // The well-stocked item: badge, stock now and when requested, Reject with the reason filled in.
+  const first = page.getByTestId("decision-line-0");
+  await expect(first).toContainText(nails.name);
+  await expect(first.getByText("Still in stock")).toBeVisible();
+  await expect(first).toContainText("On hand 40 boxes · reorder at 5 · was 40 when requested");
+  await expect(page.locator("#line-0-reject")).toBeChecked();
+  await expect(page.locator("#line-0-reason")).toHaveValue(
+    "Stock is still high (40 boxes on hand, reorder at 5).",
+  );
+  // The low one starts on Approve, with no reason box.
+  const second = page.getByTestId("decision-line-1");
+  await expect(second).toContainText("On hand 2 boxes · reorder at 5 · was 2 when requested");
+  await expect(page.locator("#line-1-approve")).toBeChecked();
+  await expect(page.locator("#line-1-reason")).toHaveCount(0);
+  // Nothing is decided until it's saved.
+  await expect(page.getByText("Pending", { exact: true }).first()).toBeVisible();
+
+  // A rejection needs a reason, and the message names the item.
+  await page.locator("#line-0-reason").fill("");
+  await page.getByRole("button", { name: "Save decisions" }).click();
+  await expect(page.locator("#line-0-reason-error")).toHaveText(
+    `Enter a reason of at least 3 characters for rejecting ${nails.name}, so the requester knows why.`,
+  );
+  await expect(page.locator("#line-0-reason")).toBeFocused();
+  await expect(page.locator("#line-0-reason")).toHaveAttribute("aria-invalid", "true");
+
+  // Keep the suggestions: Reject comes back with its reason, then save.
+  await page.locator("#line-0-approve").check();
+  await page.locator("#line-0-reject").check();
+  await expect(page.locator("#line-0-reason")).toHaveValue(
+    "Stock is still high (40 boxes on hand, reorder at 5).",
+  );
+  await page.getByRole("button", { name: "Save decisions" }).click();
+  await expect(page.getByText("Decided by", { exact: true })).toBeVisible(); // once saved
+  await expect(page.getByText("1 of 2 items approved").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save decisions" })).toHaveCount(0);
+  // An item rejected inside an approved request is no longer "requested" in Inventory.
+  await page.goto(`/inventory?q=${nails.sku}`);
+  await expect(page.getByRole("link", { name: `Requested in ${request.code}` })).toHaveCount(0);
+  await page.goto(`/inventory?q=${adhesive.sku}`);
+  await expect(page.getByRole("link", { name: `Requested in ${request.code}` })).toBeVisible();
+
+  // The requester: approved overall, 1 of 2, with the reason on the rejected item.
+  await scPage.goto(`/procurement/${request.id}`);
+  await expect(scPage.getByText("Approved", { exact: true }).first()).toBeVisible();
+  await expect(scPage.getByText("1 of 2 items approved").first()).toBeVisible();
+  const nailsRow = scPage.getByRole("row", { name: nails.name });
+  await expect(nailsRow).toContainText("Rejected");
+  await expect(nailsRow).toContainText(
+    "Reason: Stock is still high (40 boxes on hand, reorder at 5).",
+  );
+  await expect(scPage.getByRole("row", { name: adhesive.name })).toContainText("Approved");
+  await scPage.goto("/procurement?status=all");
+  await expect(scPage.getByRole("row", { name: request.code })).toContainText(
+    "1 of 2 items approved",
+  );
+  await scPage.close();
+
+  // Receiving adds only the approved item to stock.
+  await page.goto(`/procurement/${request.id}`);
+  await page.getByRole("button", { name: "Mark received…" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText(`${adhesive.name}: +4 boxes`);
+  await expect(dialog).not.toContainText(nails.name);
+  await dialog.getByRole("button", { name: "Mark received" }).click();
+  await expect(page.getByText("Added to stock on receipt")).toBeVisible();
+  expect(await onHand(adhesive.id)).toBe(6);
+  expect(await onHand(nails.id)).toBe(40);
+});
+
+test("every item needs a decision before saving; Approve all remaining fills the rest (D-039)", async ({
+  browser,
+  page,
+}) => {
+  const fmApi = await managerApi(browser);
+  // 8 on hand against a reorder level of 5: neither low nor well stocked, so nothing is suggested.
+  const item = await createItem(fmApi, 8);
+  const sc = await makeConstructor();
+  const scPage = await signedIn(browser, sc.email, "/constructor");
+  const res = await scPage.request.post("/api/v1/procurement/requests", {
+    data: {
+      neededBy: daysAhead(30),
+      lines: [
+        { inventoryItemId: item.id, quantity: 1 },
+        { itemName: "E2E brass eyelets", category: "OTHER", unit: "pack", quantity: 2 },
+      ],
+    },
+  });
+  expect(res.status()).toBe(201);
+  const request = (await res.json()).data as { id: string; code: string };
+
+  // Only the Floor Manager decides: the requester's own API call is refused.
+  const refused = await scPage.request.post(`/api/v1/procurement/requests/${request.id}/decide`, {
+    data: { lines: [] },
+  });
+  expect(refused.status()).toBe(403);
+  await scPage.close();
+
+  await page.goto("/login");
+  await signIn(page, ACCOUNTS.manager.email);
+  await expect(page).toHaveURL(ACCOUNTS.manager.home);
+  await page.goto(`/procurement/${request.id}`);
+  await expect(page.getByTestId("decision-line-1").getByText("Not in inventory")).toBeVisible();
+  for (const id of ["#line-0-approve", "#line-0-reject", "#line-1-approve", "#line-1-reject"])
+    await expect(page.locator(id)).not.toBeChecked();
+  await expect(page.getByText("2 of 2 items still to decide.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Save decisions" }).click();
+  await expect(page.locator("#line-0-decision-error")).toHaveText(
+    `Choose Approve or Reject for ${item.name}.`,
+  );
+  await expect(page.locator("#line-1-decision-error")).toHaveText(
+    "Choose Approve or Reject for E2E brass eyelets.",
+  );
+  await expect(page.locator("#line-0-approve")).toBeFocused();
+
+  // Reject one by hand, then let the button approve what's left.
+  await page.locator("#line-1-reject").check();
+  await page.locator("#line-1-reason").fill("Found a pack in the storage room");
+  await page.getByRole("button", { name: "Approve all remaining" }).click();
+  await expect(page.locator("#line-0-approve")).toBeChecked();
+  await expect(page.locator("#line-1-reject")).toBeChecked();
+  await expect(page.getByRole("button", { name: "Approve all remaining" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save decisions" }).click();
+  await expect(page.getByText("1 of 2 items approved").first()).toBeVisible();
+  await expect(page.getByText("Found a pack in the storage room").first()).toBeVisible();
 });
 
 test("the requester cancels their own pending request; others can't", async ({ browser, page }) => {

@@ -1,15 +1,23 @@
-import type { PurchaseRequestStatus, Role } from "@/lib/domain";
+import type { PurchaseLineDecision, PurchaseRequestStatus, Role } from "@/lib/domain";
 import { manilaToday, manilaYear } from "@/lib/format";
 import {
   ACTION_VERB,
   calendarDay,
   daysLeftLabel,
+  decisionEventNote,
+  decisionSummary,
+  deriveRequestStatus,
   formatRequestCode,
+  isWellStocked,
   NEEDED_BY_MAX_DAYS,
+  STATUS_LABELS,
+  suggestedDecision,
   transition,
   urgencyCutoffs,
   urgencyDateRange,
   urgencyOf,
+  wellStockedReason,
+  type LineOutcome,
   type PurchaseAction,
   type Urgency,
 } from "@/lib/procurement-rules";
@@ -29,6 +37,7 @@ import {
   openRequestsForItems,
   pendingSummary,
   setCanRequestLeatherRolls,
+  setLineDecision,
   setLineMovement,
   transitionStatus,
   type RequestDetailRow,
@@ -49,9 +58,10 @@ import { recordAudit } from "./audit.service";
 import { postMovement } from "./inventory.service";
 
 /**
- * Material requests (D-029, D-031, D-035 to D-037). A Shoe Constructor asks (leather rolls only if
- * allowed); the Floor Manager approves or rejects, then marks it received, which posts the stock
- * IN through the inventory ledger (D-023) in the same transaction. Every change writes a timeline
+ * Material requests (D-029, D-031, D-035 to D-040). A Shoe Constructor asks (leather rolls only if
+ * allowed); the Floor Manager approves or rejects each item, then marks the request received,
+ * which posts the approved items' stock IN through the inventory ledger (D-023) in the same
+ * transaction. Every change writes a timeline
  * event and an audit row. Urgency is worked out from the needed-by date on every read.
  */
 
@@ -277,7 +287,149 @@ const REFUSED: Record<PurchaseAction, string> = {
   receive: "Only the Floor Manager can mark requests received. Tell them the delivery arrived.",
 };
 
-/** Approve, reject, cancel or receive. Conditional on the status loaded here (409 STALE). */
+export type LineDecisionInput = {
+  lineId: string;
+  decision: LineOutcome;
+  reason?: string;
+};
+
+/**
+ * The Floor Manager's decision on every item of a pending request (D-039), saved together: each
+ * item approved, or rejected with a reason. The request's status follows from the items: approved
+ * if at least one is, rejected if every one is. Conditional on PENDING (409 STALE), one timeline
+ * event listing the items, one audit row.
+ */
+export async function decideRequest(
+  id: string,
+  input: { lines: LineDecisionInput[]; note?: string },
+  actor: Viewer,
+  now: Date = new Date(),
+) {
+  const request = await findRequestDetail(id);
+  if (!request || !visibleTo(request, actor)) throw Errors.notFound("This request");
+  if (!mayActOnRequest(actor, request, "approve")) throw Errors.forbidden(REFUSED.approve);
+  if (request.status !== "PENDING") {
+    throw Errors.conflict(
+      `Only a pending request can be decided. This one is ${STATUS_LABELS[request.status].toLowerCase()}.`,
+    );
+  }
+
+  // Every item of the request gets exactly one decision; nothing else is accepted.
+  const known = new Set(request.lines.map((l) => l.id));
+  const byLine = new Map<string, LineDecisionInput>();
+  const issues: { path: PropertyKey[]; message: string }[] = [];
+  input.lines.forEach((line, i) => {
+    if (!known.has(line.lineId) || byLine.has(line.lineId))
+      issues.push({
+        path: ["lines", i, "lineId"],
+        message: "This item isn't on the request as you saw it. Refresh the page and decide again.",
+      });
+    else byLine.set(line.lineId, line);
+  });
+  const decided = request.lines.map((line, i) => {
+    const choice = byLine.get(line.id);
+    if (!choice) {
+      issues.push({
+        path: ["lines", i, "decision"],
+        message: `Choose Approve or Reject for ${line.itemName}.`,
+      });
+      return null;
+    }
+    const reason = choice.decision === "REJECTED" ? (choice.reason?.trim() ?? "") : null;
+    if (reason !== null && reason.length < 3)
+      issues.push({
+        path: ["lines", i, "reason"],
+        message: `Enter a reason of at least 3 characters for rejecting ${line.itemName}, so the requester knows why.`,
+      });
+    return { id: line.id, itemName: line.itemName, decision: choice.decision, reason };
+  });
+  if (issues.length) throw Errors.validation(issues);
+  const lines = decided.flatMap((d) => (d ? [d] : []));
+
+  const status = deriveRequestStatus(lines.map((l) => l.decision));
+  if (status === "PENDING") throw Errors.conflict("This request has no items to decide.");
+  const reasons = new Set(lines.map((l) => l.reason));
+  // One reason for every item: it is the request's reason too, as a whole-request rejection was.
+  const sharedReason = status === "REJECTED" && reasons.size === 1 ? lines[0].reason : null;
+  const note = input.note ?? null;
+  const approved = lines.filter((l) => l.decision === "APPROVED").length;
+  const action = approved === lines.length ? "approve" : approved === 0 ? "reject" : "decide";
+
+  return runInTransaction(async (tx) => {
+    const count = await transitionStatus(
+      id,
+      "PENDING",
+      {
+        status,
+        decidedById: actor.id,
+        decidedAt: now,
+        approvalNote: note,
+        rejectionReason: sharedReason,
+      },
+      tx,
+    );
+    if (count !== 1) throw Errors.stale(STALE);
+    for (const line of lines) {
+      const changed = await setLineDecision(
+        id,
+        line.id,
+        {
+          decision: line.decision,
+          rejectionReason: line.reason,
+          decidedById: actor.id,
+          decidedAt: now,
+        },
+        tx,
+      );
+      if (changed !== 1) throw Errors.stale(STALE);
+    }
+    await insertEvent(
+      {
+        requestId: id,
+        fromStatus: "PENDING",
+        toStatus: status,
+        actorId: actor.id,
+        note: decisionEventNote(lines, note),
+        createdAt: now,
+      },
+      tx,
+    );
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: `procurement.request.${action}`,
+      entity: "PurchaseRequest",
+      entityId: id,
+      before: { code: request.code, status: "PENDING" },
+      after: {
+        code: request.code,
+        status,
+        ...(note ? { note } : {}),
+        lines: lines.map((l) => ({
+          item: l.itemName,
+          decision: l.decision,
+          ...(l.reason ? { reason: l.reason } : {}),
+        })),
+      },
+    });
+    const summary = decisionSummary(lines);
+    return {
+      id,
+      code: request.code,
+      status,
+      message:
+        approved === lines.length
+          ? `${request.code} approved.`
+          : approved === 0
+            ? `${request.code} rejected.`
+            : `${request.code} decided: ${summary.label}.`,
+    };
+  });
+}
+
+/**
+ * Approve, reject, cancel or receive. Approve and reject are the same decision applied to every
+ * item (D-039). Conditional on the status loaded here (409 STALE).
+ */
 export async function actOnRequest(
   id: string,
   input: ActionInput,
@@ -292,20 +444,22 @@ export async function actOnRequest(
   const move = transition(request.status, input.action);
   if (!move.ok) throw Errors.conflict(move.reason);
 
-  const decision =
-    input.action === "approve"
-      ? { decidedById: actor.id, decidedAt: now, approvalNote: input.note ?? null }
-      : input.action === "reject"
-        ? { decidedById: actor.id, decidedAt: now, rejectionReason: input.reason }
-        : input.action === "receive"
-          ? { receivedAt: now }
-          : {};
-  const note =
-    input.action === "reject"
-      ? input.reason
-      : input.action === "approve" || input.action === "cancel"
-        ? (input.note ?? null)
-        : null;
+  if (input.action === "approve" || input.action === "reject") {
+    const lines = request.lines.map((line) =>
+      input.action === "reject"
+        ? { lineId: line.id, decision: "REJECTED" as const, reason: input.reason }
+        : { lineId: line.id, decision: "APPROVED" as const },
+    );
+    return decideRequest(
+      id,
+      { lines, note: input.action === "approve" ? input.note : undefined },
+      actor,
+      now,
+    );
+  }
+
+  const decision = input.action === "receive" ? { receivedAt: now } : {};
+  const note = input.action === "cancel" ? (input.note ?? null) : null;
 
   return runInTransaction(async (tx) => {
     const count = await transitionStatus(id, move.from, { status: move.to, ...decision }, tx);
@@ -314,6 +468,7 @@ export async function actOnRequest(
     const received: { itemName: string; quantity: number; unit: string }[] = [];
     if (input.action === "receive") {
       for (const line of request.lines) {
+        if (line.decision !== "APPROVED") continue; // rejected items aren't coming (D-039)
         if (!line.item) continue; // typed items: added to inventory by hand
         const { movementId } = await postMovement(
           tx,
@@ -423,7 +578,9 @@ function urgencyFields(
 const dayToDate = (day: string | undefined) => (day ? new Date(`${day}T00:00:00Z`) : undefined);
 
 export type RequestListItem = Omit<RequestListRow, "lines"> & {
-  lines: { itemName: string; quantity: number; unit: string }[];
+  lines: { itemName: string; quantity: number; unit: string; decision: PurchaseLineDecision }[];
+  /** "1 of 2 items approved" when some items were rejected and others approved, else null. */
+  partlyApproved: string | null;
   urgency: Urgency | null;
   daysLeft: string | null;
 };
@@ -458,10 +615,12 @@ export async function listRequests(
 }
 
 function toListItem(row: RequestListRow, today: string): RequestListItem {
+  const summary = decisionSummary(row.lines);
   return {
     ...row,
     ...urgencyFields(row, today),
     lines: row.lines.map((l) => ({ ...l, quantity: Number(l.quantity) })),
+    partlyApproved: summary.approved > 0 && summary.rejected > 0 ? summary.label : null,
   };
 }
 
@@ -474,19 +633,34 @@ function toDetail(row: RequestDetailRow, viewer: Viewer, today: string) {
   return {
     ...row,
     ...urgencyFields(row, today),
-    lines: row.lines.map((l) => ({
-      ...l,
-      quantity: Number(l.quantity),
-      onHandAtRequest: num(l.onHandAtRequest),
-      reorderLevelAtRequest: num(l.reorderLevelAtRequest),
-      item: l.item
+    lines: row.lines.map((l) => {
+      const item = l.item
         ? {
             ...l.item,
             quantityOnHand: Number(l.item.quantityOnHand),
             reorderLevel: Number(l.item.reorderLevel),
           }
-        : null,
-    })),
+        : null;
+      // Stock guidance for the decision panel (D-040), from the stock as it is now. A suggestion
+      // only: nothing is decided until the Floor Manager saves.
+      const stock = item && { onHand: item.quantityOnHand, reorderLevel: item.reorderLevel };
+      const wellStocked = !!stock && isWellStocked(stock.onHand, stock.reorderLevel);
+      return {
+        ...l,
+        quantity: Number(l.quantity),
+        onHandAtRequest: num(l.onHandAtRequest),
+        reorderLevelAtRequest: num(l.reorderLevelAtRequest),
+        item,
+        wellStocked,
+        suggestedDecision: suggestedDecision(stock),
+        suggestedReason:
+          wellStocked && item
+            ? wellStockedReason(item.quantityOnHand, item.reorderLevel, item.unit)
+            : null,
+      };
+    }),
+    /** "1 of 2 items approved", once the request is decided. */
+    decided: row.lines.some((l) => l.decision !== "PENDING") ? decisionSummary(row.lines) : null,
     /** What this viewer can do now: drives the buttons, and the service checks again. */
     actions,
     canRemark: mayRemarkOnRequest(viewer, row),

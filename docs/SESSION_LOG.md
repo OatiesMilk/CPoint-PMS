@@ -14,6 +14,32 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-13 — Phase 12: Item-level decisions guided by stock
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** The Floor Manager now approves or rejects each item of a request, with the stock now and when requested beside it; well-stocked items start on Reject and low ones on Approve, as suggestions only. The request's status follows from its items, the requester sees the result per item, and receiving adds only approved items to stock.
+**Changed:**
+
+- Start of session: local `main` was 2 commits behind GitHub; fast-forwarded to `8adab3a` (Phase 11, PR #4). `docs/STATUS.md` corrected (it still said Phase 11 was uncommitted).
+- Schema: migration `20261013030000_purchase_line_decisions`, written by hand and applied to the dev DB with `db:deploy` (`prisma migrate diff` shows no drift). New enum `PurchaseLineDecision`; lines gain `decision`, `rejectionReason`, `decidedById`, `decidedAt`. Decided requests had their outcome copied onto their lines. The dev DB also had Phase 11's migration pending; it was applied in the same run.
+- Rules: `procurement-rules.ts` gains `deriveRequestStatus`, `decisionSummary`, `decisionEventNote`, `WELL_STOCKED_FACTOR`, `isWellStocked`, `suggestedDecision`, `wellStockedReason`, `stockGuidanceLine`.
+- Server: `decideRequest` in the service (approve and reject now go through it); `setLineDecision` in the model; `decideSchema`; `POST /api/v1/procurement/requests/{id}/decide`; receive posts approved lines only; open-request queries and the Operations stock table skip rejected lines.
+- UI: new `line-decisions.tsx` (the decision panel in the Items card); the request page shows each item's decision and reason and "N of M items approved"; "Reject whole request…" in the Decision card; the list and the constructor home show "1 of 2 items approved" on mixed requests.
+- Seed: the approved demo request has two items, one rejected.
+- Tests: rules, service, validator-message and seed tests; `procurement.spec.ts` updated (Approve and Reject buttons changed) and two scenarios added.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (454) · build ✅ · e2e not run by Claude (Codex runs it from `qa/handoffs/2026-10-13-phase-12-material-requests.md`) · docker demo-week not run · screens not checked in a browser by Claude.
+**QA:** read `qa/reports/2026-10-11-phase-11-material-requests.md` first. Its one failure (F1) was already closed in Phase 11 as a wrong handoff expectation, so nothing to fix. Codex's Phase 12 report `qa/reports/2026-10-13-phase-12-material-requests.md`: 28 of 31 checks passed and all 39 e2e tests in five specs passed on a production build. The one failure (S17) was a wrong expectation in the handoff, not an app fault: receiving REQ-A had raised the item to 6 boxes, between its reorder level and 2×, so nothing is pre-selected (D-040); the handoff was corrected. Two migration checks (S20, S21) were blocked because the dev DB had no request approved or rejected before the change, so the migration's backfill of approved and rejected requests has only been checked on a received one (S22).
+**Decisions:** D-039, D-040
+**Follow-ups:**
+
+- Confirm the 2× well-stocked factor with CPoint.
+- An item between its reorder level and 2× gets no pre-selection; say so to CPoint when confirming the factor.
+- Run the Docker demo-week check before the PR (the seed changed).
+- Phase 13 next (ordering, delivery with proof, the remaining gaps). It needs received quantities per line; Phase 12 added none.
+
+---
+
 ## 2026-10-10 — Phase 11: Material requests (naming, remarks, urgency, specific messages)
 
 **Who:** Dylan (local copy, not committed; no branch, by his instruction)

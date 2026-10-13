@@ -722,3 +722,56 @@ went wrong.") and several fields falling back to Zod's built-in English text.
 **Consequences:** a new field needs its own messages or that test fails. API clients see the same
 sentences in `details[].message`. Not done: the summary component on the batch and inventory item
 forms (they have it available but rarely reach 3 errors).
+
+### D-039 · 2026-10-13 · Accepted — The Floor Manager decides each item of a request (supersedes the whole-request decision in D-029)
+
+**Context:** the team's review of Phase 9: a request often mixes items that are really needed with
+items still on the shelf. Deciding the whole request forced the Floor Manager to approve too much
+or reject too much.
+**Decision:**
+
+- Each `PurchaseRequestLine` has its own `decision` (`PENDING | APPROVED | REJECTED`),
+  `rejectionReason`, `decidedById` and `decidedAt`. A rejected item needs a reason of 3 to 300
+  characters.
+- The request's status is **derived** from its items (`deriveRequestStatus` in
+  `procurement-rules.ts`): pending until every item is decided, **approved** when at least one
+  item is, **rejected** when every item is.
+- **Every item is decided in one save** (Dylan, 2026-10-13). There is no half-decided request:
+  `decideRequest` refuses a save that leaves an item out, in one transaction, conditional on the
+  request still being pending (409 STALE, D-019), with one timeline event that lists the items and
+  one audit row.
+- "Reject whole request" stays as a shortcut: one reason, copied to every item. The old
+  `POST …/approve` and `POST …/reject` routes still work and mean "every item".
+- **Receiving adds only approved items to stock.** A rejected item inside an approved request no
+  longer counts as requested (the Inventory "Requested" badge and the Operations stock table).
+- Migration `20261013030000_purchase_line_decisions`: approved and received requests get every
+  line approved; rejected requests get every line rejected with the request's reason; pending and
+  cancelled requests keep their lines pending.
+
+**Consequences:** `purchase_requests.rejectionReason` is only set when every item was rejected for
+the same reason; otherwise the reasons are on the items. The requester sees "1 of 2 items
+approved" and each rejected item's reason. Phase 13 builds receiving on the approved lines.
+
+### D-040 · 2026-10-13 · Accepted — Stock guidance on each item: "still well stocked" is more than 2× the reorder level
+
+**Context:** the Floor Manager should see at a glance which items in a request are still on the
+shelf, without the system deciding for them.
+**Decision:**
+
+- An item is **still well stocked** when its stock on hand is more than `WELL_STOCKED_FACTOR` (2)
+  times its reorder level. Exactly 2× is not. The factor is **one constant** in
+  `procurement-rules.ts`, not an admin setting (Dylan, 2026-10-13): CPoint hasn't confirmed the
+  number, and one constant is easy to turn into a setting later.
+- An item with **no reorder level** (0) gets no well-stocked call (Dylan, 2026-10-13): 2 × 0 is
+  0, so any stock at all would count.
+- The decision panel shows, per item, the stock now and when it was requested ("On hand 40 boxes ·
+  reorder at 10 · was 38 when requested"), and pre-selects: **Reject** with the reason "Stock is
+  still high (40 boxes on hand, reorder at 10)." for a well-stocked item, **Approve** for a low or
+  out-of-stock one, and **nothing** for an item in between, with no reorder level, or not in
+  inventory.
+- **Nothing is decided automatically.** The pre-selection is a suggestion from the stock as it is
+  when the page loads; the Floor Manager can change the choice and the reason, and nothing is
+  saved until "Save decisions".
+
+**Consequences:** ASSUMPTION to confirm with CPoint: the 2× factor. The guidance uses current
+stock, so it can differ from the snapshot taken when the request was sent; both are shown.
