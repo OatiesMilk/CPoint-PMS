@@ -96,6 +96,36 @@ export const rejectSchema = z.object({
     .min(3, "Enter a reason of at least 3 characters, so the requester knows why it's rejected.")
     .max(300, "Keep the reason under 300 characters."),
 });
+/** One item's decision (D-039). Rejecting an item needs a reason, as rejecting a request does. */
+const lineDecisionSchema = z
+  .object({
+    lineId: z.uuid(OUT_OF_DATE),
+    decision: z.enum(["APPROVED", "REJECTED"], {
+      error: "Choose Approve or Reject for this item.",
+    }),
+    reason: optionalText(300, "reason"),
+  })
+  .superRefine((line, ctx) => {
+    if (line.decision === "REJECTED" && (!line.reason || line.reason.length < 3))
+      ctx.addIssue({
+        code: "custom",
+        path: ["reason"],
+        message:
+          "Enter a reason of at least 3 characters, so the requester knows why this item is rejected.",
+      });
+  });
+
+/** The decision panel: every item of the request, each approved or rejected, saved together. */
+export const decideSchema = z.object({
+  note: optionalText(300, "note"),
+  lines: z
+    .array(lineDecisionSchema, { error: "Choose Approve or Reject for each item, then save." })
+    .min(1, "Choose Approve or Reject for each item, then save.")
+    .max(MAX_LINES, OUT_OF_DATE),
+});
+
+export type DecideValues = z.output<typeof decideSchema>;
+
 export const cancelSchema = z.object({ note: optionalText(300, "note") });
 export const remarkSchema = z.object({
   body: z

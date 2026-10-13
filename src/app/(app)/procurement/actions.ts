@@ -7,11 +7,13 @@ import {
   actOnRequest,
   addRemark,
   createRequest,
+  decideRequest,
   setRequester,
 } from "@/server/services/procurement.service";
 import {
   approveSchema,
   cancelSchema,
+  decideSchema,
   isRequestId,
   purchaseRequestSchema,
   rejectSchema,
@@ -52,6 +54,12 @@ export async function createRequestAction(input: unknown) {
   } catch (error) {
     return toActionError(error, "Purchase request");
   }
+}
+
+/** The decision panel: every item approved or rejected, saved together (D-039). */
+export async function decideRequestAction(id: string, input: unknown) {
+  const user = await requirePermission("procurement:decide");
+  return run(id, "Request decision", () => decideRequest(id, decideSchema.parse(input), user));
 }
 
 export async function approveRequestAction(id: string, input: { note?: string }) {

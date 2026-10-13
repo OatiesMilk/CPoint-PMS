@@ -139,3 +139,32 @@ Brief: `material-requests.md` (project root), Phase 11. Phases 12 and 13 are in 
 - [ ] E2E and browser checks are run by Codex through `qa/handoffs/` (not run in the build
       session)
 - [ ] Docker demo-week check not run in this session
+
+## Phase 12 — Item-level decisions guided by stock
+
+Brief: `material-requests.md` (project root), Phase 12.
+
+- [x] Per-item decisions (D-039): each line has `decision`, `rejectionReason`, `decidedById` and
+      `decidedAt`; the decision panel lists every item with Approve or Reject (reason required),
+      "Approve all remaining" and "Save decisions" in one transaction; the request status is
+      derived from the items (`deriveRequestStatus`)
+- [x] "Reject whole request" stays as the shortcut: one reason, every item rejected
+- [x] Migration `20261013030000_purchase_line_decisions`: decided requests get their status copied
+      onto their lines; rejected ones copy the reason to each line
+- [x] The requester and the history show the result per item: "1 of 2 items approved", each
+      rejected item with its reason, and one timeline event listing the items
+- [x] Stock guidance (D-040): stock now and when requested next to each item; "Still in stock"
+      badge above 2× the reorder level (`WELL_STOCKED_FACTOR`, one constant); well-stocked items
+      pre-selected Reject with the reason filled in, low or out-of-stock items pre-selected
+      Approve, items not in inventory "Not in inventory" with nothing selected; never decided
+      automatically
+- [x] Receiving adds only approved items to stock; a rejected item is no longer "requested" in
+      Inventory or the Operations report
+- [x] Tests: unit (status derivation for all-approved, mixed, all-rejected and still-pending; a
+      concurrent decision; the well-stocked rule at exactly 2× and just above; reorder level 0;
+      service and validator-message cases); e2e scenarios written (nails high, adhesive low; an
+      undecided item; receive after a mixed decision)
+- [ ] E2E and browser checks are run by Codex through `qa/handoffs/` (not run in the build
+      session)
+- [ ] Docker demo-week check not run in this session (the seed changed: one request is now
+      decided item by item)

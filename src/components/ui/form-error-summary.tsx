@@ -9,11 +9,20 @@ export const SUMMARY_MIN_ERRORS = 3;
  * A list of what needs fixing, at the top of a long form. It only appears with three or more
  * errors; each line jumps to its field. The same message also sits under the field itself.
  */
-export function FormErrorSummary({ errors }: { errors: SummaryError[] }) {
+export function FormErrorSummary({
+  errors,
+  outcome = "sent",
+}: {
+  errors: SummaryError[];
+  /** What the form does once it's right: "sent" (the default), "saved". */
+  outcome?: string;
+}) {
   if (errors.length < SUMMARY_MIN_ERRORS) return null;
   return (
     <Alert tone="danger" data-testid="form-error-summary">
-      <p className="font-medium">{errors.length} fields need fixing before this can be sent:</p>
+      <p className="font-medium">
+        {errors.length} fields need fixing before this can be {outcome}:
+      </p>
       <ul className="list-disc pl-5">
         {errors.map((e) => (
           <li key={e.fieldId}>

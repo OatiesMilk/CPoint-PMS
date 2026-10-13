@@ -2,10 +2,16 @@ import { describe, expect, it } from "vitest";
 import type { PurchaseRequestStatus } from "@/lib/domain";
 import {
   daysLeftLabel,
+  decisionEventNote,
+  decisionSummary,
+  deriveRequestStatus,
   formatRequestCode,
+  isWellStocked,
   isWorkingDay,
   NEEDED_BY_MAX_DAYS,
   requestLabelsFor,
+  stockGuidanceLine,
+  suggestedDecision,
   summarizeItems,
   transition,
   URGENCY_BANDS,
@@ -13,6 +19,8 @@ import {
   urgencyDateRange,
   urgencyFor,
   urgencyOf,
+  WELL_STOCKED_FACTOR,
+  wellStockedReason,
   WORKING_WEEKDAYS,
   workingDaysUntil,
   type PurchaseAction,
@@ -143,6 +151,105 @@ describe("urgency from the needed-by date (D-037)", () => {
     expect(URGENCY_BANDS).toEqual({ highMaxDays: 3, mediumMaxDays: 7 });
     expect(WORKING_WEEKDAYS).toEqual([1, 2, 3, 4, 5]);
     expect(NEEDED_BY_MAX_DAYS).toBe(180);
+  });
+});
+
+describe("item decisions (D-039)", () => {
+  it("derives the request's status from its items", () => {
+    expect(deriveRequestStatus(["APPROVED", "APPROVED"])).toBe("APPROVED"); // all approved
+    expect(deriveRequestStatus(["APPROVED", "REJECTED", "REJECTED"])).toBe("APPROVED"); // mixed
+    expect(deriveRequestStatus(["REJECTED", "REJECTED"])).toBe("REJECTED"); // all rejected
+    expect(deriveRequestStatus(["APPROVED"])).toBe("APPROVED");
+    expect(deriveRequestStatus(["REJECTED"])).toBe("REJECTED");
+  });
+
+  it("stays pending until every item has a decision", () => {
+    expect(deriveRequestStatus(["PENDING", "PENDING"])).toBe("PENDING");
+    expect(deriveRequestStatus(["APPROVED", "PENDING"])).toBe("PENDING");
+    expect(deriveRequestStatus(["REJECTED", "PENDING"])).toBe("PENDING");
+    expect(deriveRequestStatus([])).toBe("PENDING");
+  });
+
+  it("summarizes the decision for the requester", () => {
+    const lines = (...d: ("PENDING" | "APPROVED" | "REJECTED")[]) =>
+      d.map((decision) => ({ decision }));
+    expect(decisionSummary(lines("APPROVED", "REJECTED"))).toEqual({
+      approved: 1,
+      rejected: 1,
+      total: 2,
+      label: "1 of 2 items approved",
+    });
+    expect(decisionSummary(lines("APPROVED", "APPROVED", "REJECTED")).label).toBe(
+      "2 of 3 items approved",
+    );
+    expect(decisionSummary(lines("APPROVED")).label).toBe("1 of 1 item approved");
+    expect(decisionSummary(lines("REJECTED", "REJECTED")).label).toBe("0 of 2 items approved");
+  });
+
+  it("writes one timeline note that lists the items, grouped by reason", () => {
+    expect(
+      decisionEventNote(
+        [
+          { itemName: "Adhesive", decision: "APPROVED" },
+          { itemName: "Nails", decision: "REJECTED", reason: "Stock is still high." },
+          { itemName: "Thread", decision: "REJECTED", reason: "Stock is still high." },
+          { itemName: "Eyelets", decision: "REJECTED", reason: "Not needed" },
+        ],
+        "Ordering today",
+      ),
+    ).toBe(
+      "Approved: Adhesive.\nRejected: Nails, Thread. Stock is still high.\nRejected: Eyelets. Not needed\nOrdering today",
+    );
+    expect(decisionEventNote([{ itemName: "Adhesive", decision: "APPROVED" }])).toBe(
+      "Approved: Adhesive.",
+    );
+  });
+});
+
+describe("stock guidance (D-040)", () => {
+  it("keeps the factor in one place", () => {
+    expect(WELL_STOCKED_FACTOR).toBe(2);
+  });
+
+  it("calls an item well stocked only above twice its reorder level", () => {
+    expect(isWellStocked(20, 10)).toBe(false); // exactly 2×: not well stocked
+    expect(isWellStocked(20.01, 10)).toBe(true); // just above
+    expect(isWellStocked(40, 10)).toBe(true);
+    expect(isWellStocked(19.99, 10)).toBe(false);
+    expect(isWellStocked(0.3, 0.1)).toBe(true); // hundredths, so 0.1 × 2 stays exact
+    expect(isWellStocked(0.2, 0.1)).toBe(false);
+  });
+
+  it("never calls an item well stocked when no reorder level is set", () => {
+    expect(isWellStocked(500, 0)).toBe(false);
+    expect(isWellStocked(0, 0)).toBe(false);
+  });
+
+  it("suggests Reject for a well-stocked item and Approve for a low or empty one", () => {
+    expect(suggestedDecision({ onHand: 40, reorderLevel: 10 })).toBe("REJECTED");
+    expect(suggestedDecision({ onHand: 10, reorderLevel: 10 })).toBe("APPROVED"); // low
+    expect(suggestedDecision({ onHand: 3, reorderLevel: 10 })).toBe("APPROVED");
+    expect(suggestedDecision({ onHand: 0, reorderLevel: 10 })).toBe("APPROVED"); // out
+    expect(suggestedDecision({ onHand: 0, reorderLevel: 0 })).toBe("APPROVED"); // out, no level
+  });
+
+  it("suggests nothing in between, with no reorder level, or for an item not in inventory", () => {
+    expect(suggestedDecision({ onHand: 15, reorderLevel: 10 })).toBeNull();
+    expect(suggestedDecision({ onHand: 20, reorderLevel: 10 })).toBeNull(); // exactly 2×
+    expect(suggestedDecision({ onHand: 500, reorderLevel: 0 })).toBeNull();
+    expect(suggestedDecision(null)).toBeNull();
+  });
+
+  it("words the reason and the stock line for the Floor Manager", () => {
+    expect(wellStockedReason(40, 10, "box")).toBe(
+      "Stock is still high (40 boxes on hand, reorder at 10).",
+    );
+    expect(stockGuidanceLine({ onHand: 40, reorderLevel: 10, unit: "box" }, 38)).toBe(
+      "On hand 40 boxes · reorder at 10 · was 38 when requested",
+    );
+    expect(stockGuidanceLine({ onHand: 1, reorderLevel: 5, unit: "roll" }, null)).toBe(
+      "On hand 1 roll · reorder at 5",
+    );
   });
 });
 

@@ -15,17 +15,11 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { PurchaseAction } from "@/lib/procurement-rules";
 import { rejectSchema } from "@/server/validators/procurement.validator";
-import {
-  approveRequestAction,
-  cancelRequestAction,
-  receiveRequestAction,
-  rejectRequestAction,
-} from "../actions";
+import { cancelRequestAction, receiveRequestAction, rejectRequestAction } from "../actions";
 
 type Props = {
   id: string;
@@ -37,15 +31,15 @@ type Props = {
 };
 
 /**
- * The decision panel (D-029). Approve is one click with an optional note. Reject, receive and
- * cancel are confirmed in a dialog that names the request: reject needs a reason, and receive says
- * exactly what goes into stock.
+ * The request-level actions (D-029). Items are approved or rejected one by one in the Items card
+ * (`LineDecisions`, D-039); here are the whole-request reject, receive and cancel, each confirmed
+ * in a dialog that names the request: reject needs a reason, and receive says exactly what goes
+ * into stock.
  */
 export function RequestActions({ id, code, actions, stocked, notStocked }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [dialog, setDialog] = useState<"reject" | "receive" | "cancel" | null>(null);
-  const [note, setNote] = useState("");
   const [text, setText] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -87,46 +81,22 @@ export function RequestActions({ id, code, actions, stocked, notStocked }: Props
     <div className="flex flex-col gap-3">
       {error && <Alert tone="danger">{error}</Alert>}
 
-      {actions.includes("approve") && (
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setError(null);
-            startTransition(async () =>
-              finish(await approveRequestAction(id, { note }), `${code} approved.`),
-            );
-          }}
-        >
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="approve-note">
-              Note to the requester{" "}
-              <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              id="approve-note"
-              value={note}
-              autoComplete="off"
-              placeholder="e.g. Ordering from the usual supplier today"
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </div>
-          {/* Destructive set apart from the primary (DESIGN.md → Hierarchy). */}
-          <div className="flex items-center justify-between gap-6">
-            <Button type="submit" disabled={pending}>
-              {pending && !dialog && <LoaderCircle aria-hidden className="animate-spin" />}
-              Approve
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={pending}
-              onClick={() => open("reject")}
-            >
-              Reject…
-            </Button>
-          </div>
-        </form>
+      {/* Each item is decided under Items (D-039). This is the shortcut for turning it all down,
+          kept apart from that panel's primary button (DESIGN.md → Hierarchy). */}
+      {actions.includes("reject") && (
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-sm text-muted-foreground">
+            Decide each item under Items, then save. To turn down everything with one reason:
+          </p>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={pending}
+            onClick={() => open("reject")}
+          >
+            Reject whole request…
+          </Button>
+        </div>
       )}
 
       {actions.includes("receive") && (
@@ -178,7 +148,7 @@ export function RequestActions({ id, code, actions, stocked, notStocked }: Props
             </DialogTitle>
             <DialogDescription>
               {dialog === "reject"
-                ? "The requester sees your reason on the request. They can send a new one."
+                ? "Every item on it is rejected with this one reason. The requester sees it on the request and can send a new one."
                 : dialog === "receive"
                   ? "Use this when the delivery is on the shelf. The quantities are added to inventory as a delivery."
                   : "The Floor Manager won't act on it any more. To change a request, cancel it and send a new one."}

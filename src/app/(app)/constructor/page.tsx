@@ -81,6 +81,7 @@ export default async function ConstructorHome() {
                     </Link>
                     <p className="truncate text-sm text-muted-foreground">
                       {summarizeItems(r.lines)} · sent {formatManilaDateTime(r.createdAt)}
+                      {r.partlyApproved ? ` · ${r.partlyApproved}` : ""}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2">

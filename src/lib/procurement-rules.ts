@@ -1,13 +1,17 @@
-import type { PurchaseRequestStatus, Role } from "./domain";
+import type { PurchaseLineDecision, PurchaseRequestStatus, Role } from "./domain";
+import { formatQuantity } from "./inventory-rules";
 
 /**
- * Purchase request lifecycle (D-029), pure and client-safe. Services enforce it, and the database
- * update is conditional on the status the caller saw, so two people can't both decide a request.
+ * Purchase request lifecycle (D-029, D-039), pure and client-safe. Services enforce it, and the
+ * database update is conditional on the status the caller saw, so two people can't both decide a
+ * request.
  *
- *   PENDING ─approve─▶ APPROVED ─receive─▶ RECEIVED
- *      ├────reject──▶ REJECTED
+ *   PENDING ─decide every item─▶ APPROVED (at least one item approved) ─receive─▶ RECEIVED
+ *      │                       └▶ REJECTED (every item rejected)
  *      └────cancel──▶ CANCELLED (the requester only)
  *
+ * The Floor Manager decides each item; the request's status follows from them
+ * (`deriveRequestStatus`). "Approve" and "reject" are the same decision applied to every item.
  * A request is never edited after it's submitted: cancel it and send a new one.
  */
 
@@ -163,6 +167,112 @@ export function urgencyDateRange(
   if (urgency === "HIGH") return { through: highThrough };
   if (urgency === "MEDIUM") return { after: highThrough, through: mediumThrough };
   return { after: mediumThrough };
+}
+
+// ───────────── item decisions (D-039) ─────────────
+
+export type LineOutcome = Exclude<PurchaseLineDecision, "PENDING">;
+
+export const LINE_DECISION_LABELS: Record<PurchaseLineDecision, string> = {
+  PENDING: "Not decided yet",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+};
+
+/**
+ * A request's status while it is being decided, from its items: still pending until every item
+ * has a decision, approved when at least one item is, rejected when every item is.
+ */
+export function deriveRequestStatus(
+  decisions: readonly PurchaseLineDecision[],
+): "PENDING" | "APPROVED" | "REJECTED" {
+  if (decisions.length === 0 || decisions.includes("PENDING")) return "PENDING";
+  return decisions.includes("APPROVED") ? "APPROVED" : "REJECTED";
+}
+
+/** "1 of 2 items approved", for the requester and the history. */
+export function decisionSummary(lines: readonly { decision: PurchaseLineDecision }[]) {
+  const approved = lines.filter((l) => l.decision === "APPROVED").length;
+  const rejected = lines.filter((l) => l.decision === "REJECTED").length;
+  const total = lines.length;
+  return {
+    approved,
+    rejected,
+    total,
+    label: `${approved} of ${total} item${total === 1 ? "" : "s"} approved`,
+  };
+}
+
+/**
+ * The decision's timeline note: one line for the approved items, one per rejection reason, then
+ * the Floor Manager's note. Shown with its line breaks.
+ */
+export function decisionEventNote(
+  lines: readonly { itemName: string; decision: LineOutcome; reason?: string | null }[],
+  note?: string | null,
+): string {
+  const out: string[] = [];
+  const approved = lines.filter((l) => l.decision === "APPROVED").map((l) => l.itemName);
+  if (approved.length) out.push(`Approved: ${approved.join(", ")}.`);
+  const byReason = new Map<string, string[]>();
+  for (const l of lines) {
+    if (l.decision !== "REJECTED") continue;
+    const reason = l.reason?.trim() ?? "";
+    byReason.set(reason, [...(byReason.get(reason) ?? []), l.itemName]);
+  }
+  for (const [reason, names] of byReason)
+    out.push(`Rejected: ${names.join(", ")}.${reason ? ` ${reason}` : ""}`);
+  if (note) out.push(note);
+  return out.join("\n");
+}
+
+// ───────────── stock guidance (D-040) ─────────────
+
+/**
+ * ASSUMPTION (team, 2026-10-13; to confirm with CPoint): an item is "still well stocked" when
+ * there is more on hand than this many times its reorder level. Exactly this many times is not.
+ */
+export const WELL_STOCKED_FACTOR = 2;
+
+const hundredths = (n: number) => Math.round(n * 100);
+
+/** An item with no reorder level set (0) is never called well stocked: there is nothing to compare. */
+export function isWellStocked(onHand: number, reorderLevel: number): boolean {
+  if (reorderLevel <= 0) return false;
+  return hundredths(onHand) > WELL_STOCKED_FACTOR * hundredths(reorderLevel);
+}
+
+/**
+ * What the decision panel pre-selects for an item. Only a suggestion: the Floor Manager confirms
+ * every item. Well stocked → reject; low or out → approve; anything else (in between, no reorder
+ * level, or not in inventory) → nothing.
+ */
+export function suggestedDecision(
+  stock: { onHand: number; reorderLevel: number } | null,
+): LineOutcome | null {
+  if (!stock) return null;
+  if (isWellStocked(stock.onHand, stock.reorderLevel)) return "REJECTED";
+  if (stock.onHand <= 0) return "APPROVED";
+  if (stock.reorderLevel > 0 && stock.onHand <= stock.reorderLevel) return "APPROVED";
+  return null;
+}
+
+/** The reason filled in for a well-stocked item. The Floor Manager can change it. */
+export function wellStockedReason(onHand: number, reorderLevel: number, unit: string): string {
+  return `Stock is still high (${formatQuantity(onHand, unit)} on hand, reorder at ${formatQuantity(reorderLevel)}).`;
+}
+
+/** "On hand 40 boxes · reorder at 10 · was 38 when requested". */
+export function stockGuidanceLine(
+  stock: { onHand: number; reorderLevel: number; unit: string },
+  onHandAtRequest: number | null,
+): string {
+  const parts = [
+    `On hand ${formatQuantity(stock.onHand, stock.unit)}`,
+    `reorder at ${formatQuantity(stock.reorderLevel)}`,
+  ];
+  if (onHandAtRequest !== null) parts.push(`was ${formatQuantity(onHandAtRequest)} when requested`);
+  return parts.join(" · ");
 }
 
 const MOVES: Record<PurchaseAction, { from: PurchaseRequestStatus; to: PurchaseRequestStatus }> = {

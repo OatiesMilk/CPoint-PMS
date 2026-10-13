@@ -94,6 +94,16 @@ const procurement = {
   actOnRequest: vi.fn(async (_id: string, _input: unknown, _actor: unknown, now: Date) => {
     calls.push({ fn: "request", batchId: "procurement", now });
   }),
+  decideRequest: vi.fn(async (_id: string, _input: unknown, _actor: unknown, now: Date) => {
+    calls.push({ fn: "request", batchId: "procurement", now });
+  }),
+  // The request decided item by item: two lines, the second one for an item that isn't the thread.
+  getRequest: vi.fn(async () => ({
+    lines: [
+      { id: "line-a", inventoryItemId: "not-the-thread" },
+      { id: "line-b", inventoryItemId: "also-not-the-thread" },
+    ],
+  })),
   addRemark: vi.fn(),
   setRequester: vi.fn(),
 };
@@ -204,5 +214,16 @@ describe("seedDemoWeek", () => {
     expect(
       procurement.actOnRequest.mock.calls.map((c) => (c[1] as { action: string }).action),
     ).toEqual(expect.arrayContaining(["approve", "receive", "reject", "cancel"]));
+    // One request is decided item by item (D-039): every line gets a decision, with a note.
+    expect(procurement.decideRequest).toHaveBeenCalledTimes(1);
+    const decided = procurement.decideRequest.mock.calls[0][1] as {
+      note: string;
+      lines: { lineId: string; decision: string }[];
+    };
+    expect(decided.lines.map((l) => l.lineId)).toEqual(["line-a", "line-b"]);
+    expect(decided.lines.every((l) => l.decision === "APPROVED" || l.decision === "REJECTED")).toBe(
+      true,
+    );
+    expect(decided.note).toMatch(/ordered/i);
   });
 });

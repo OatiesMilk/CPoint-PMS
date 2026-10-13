@@ -20,6 +20,7 @@ import {
 import {
   approveSchema,
   cancelSchema,
+  decideSchema,
   purchaseRequestSchema,
   rejectSchema,
   remarkSchema,
@@ -203,6 +204,32 @@ const CASES: [string, ZodType, unknown[]][] = [
   ],
   ["request approve", approveSchema, [{ note: long(301) }, { note: 5 }]],
   ["request reject", rejectSchema, [{}, { reason: "" }, { reason: "x" }, { reason: long(301) }]],
+  [
+    "request item decisions",
+    decideSchema,
+    [
+      {},
+      { lines: [] },
+      { lines: [{}] },
+      { lines: [{ lineId: "nope", decision: "MAYBE" }] },
+      { lines: [{ lineId: "0199a8f0-0000-7000-8000-000000000001", decision: "REJECTED" }] },
+      {
+        lines: [
+          { lineId: "0199a8f0-0000-7000-8000-000000000001", decision: "REJECTED", reason: "x" },
+        ],
+      },
+      {
+        note: long(301),
+        lines: [
+          {
+            lineId: "0199a8f0-0000-7000-8000-000000000001",
+            decision: "REJECTED",
+            reason: long(301),
+          },
+        ],
+      },
+    ],
+  ],
   ["request cancel", cancelSchema, [{ note: long(301) }]],
   ["request remark", remarkSchema, [{}, { body: "" }, { body: "   " }, { body: long(501) }]],
   ["leather roll requester", requesterSchema, [{}, { canRequestLeatherRolls: "yes" }]],

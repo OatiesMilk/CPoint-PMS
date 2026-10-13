@@ -228,7 +228,14 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                           : formatManilaDateTime(r.createdAt)}
                       </TableCell>
                       <TableCell>
-                        <RequestStatusBadge status={r.status} />
+                        <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <RequestStatusBadge status={r.status} />
+                          {r.partlyApproved && (
+                            <span className="text-sm text-muted-foreground">
+                              {r.partlyApproved}
+                            </span>
+                          )}
+                        </span>
                       </TableCell>
                     </TableRow>
                   ))}

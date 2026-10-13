@@ -207,12 +207,24 @@ Low stock means an active item with `quantityOnHand ≤ reorderLevel` (out of st
 
 ## Procurement (session)
 
-Material requests (D-029, D-031, D-035 to D-037). The UI calls this "Material requests" for Shoe
+Material requests (D-029, D-031, D-035 to D-040). The UI calls this "Material requests" for Shoe
 Constructors and "Procurement" for the Floor Manager and System Admin; the paths and permission
 keys stay `procurement`. Any Shoe Constructor asks for materials; **leather rolls** only
-if the Floor Manager or System Admin has allowed them. The Floor Manager approves or rejects every
-request, then marks it received. A request is never edited after it's
-sent: cancel it and send a new one. Every change adds a timeline event and an audit row.
+if the Floor Manager or System Admin has allowed them. The Floor Manager approves or rejects
+**each item** of a request (D-039), then marks the request received. A request is never edited
+after it's sent: cancel it and send a new one. Every change adds a timeline event and an audit row.
+
+**Item decisions (D-039).** Each line carries `decision` (`PENDING | APPROVED | REJECTED`) and
+`rejectionReason`. The request's status follows from its lines: `APPROVED` when at least one line
+is approved, `REJECTED` when every line is rejected. The detail also carries `decided`
+(`{ approved, rejected, total, label }`, e.g. "1 of 2 items approved", or `null` while pending),
+and list rows carry `partlyApproved` (that label when some lines were rejected, else `null`).
+
+**Stock guidance (D-040).** On the detail, each line has `wellStocked` (on hand is more than 2×
+the reorder level; never true with a reorder level of 0), `suggestedDecision` (`REJECTED` for a
+well-stocked item, `APPROVED` for a low or out-of-stock one, otherwise `null`) and
+`suggestedReason`. These are suggestions for the decision panel; nothing is decided until
+`POST …/decide`.
 
 **Urgency** is never stored. Every read works it out from `neededBy` and today's Manila date,
 counting working days (Monday to Friday): `HIGH` up to 3 working days or overdue, `MEDIUM` up to
@@ -220,8 +232,8 @@ counting working days (Monday to Friday): `HIGH` up to 3 working days or overdue
 both are `null` once the request is received, rejected or cancelled.
 
 ```
-PENDING ─approve─▶ APPROVED ─receive─▶ RECEIVED
-   ├─reject (reason)─▶ REJECTED
+PENDING ─decide every item─▶ APPROVED (at least one item approved) ─receive─▶ RECEIVED
+   │                       └▶ REJECTED (every item rejected)
    └─cancel (requester)─▶ CANCELLED
 ```
 
@@ -229,10 +241,11 @@ PENDING ─approve─▶ APPROVED ─receive─▶ RECEIVED
 | ------------------------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/procurement/requests`               | `procurement:read` (constructors: own)                          | `?status=&category=&urgency=&item=&from=&to=&page=` → `{ rows, total, counts, page, pageCount }`. `urgency` (`HIGH\|MEDIUM\|LOW`) matches open requests only. Pending is ordered by `neededBy`, then oldest |
 | `POST /api/v1/procurement/requests`              | `procurement:request` (constructors; leather rolls need the OK) | `RequestForm` → `201 { id, code, alreadyRequested[] }`                                                                                                                                                      |
-| `GET /api/v1/procurement/requests/{id}`          | `procurement:read` (constructors: own)                          | lines (stock snapshot + current stock), `events`, `remarks`, `actions`, `canRemark`                                                                                                                         |
-| `POST /api/v1/procurement/requests/{id}/approve` | `procurement:decide` (FM)                                       | `{ note? }` (send `{}` for none)                                                                                                                                                                            |
-| `POST /api/v1/procurement/requests/{id}/reject`  | `procurement:decide` (FM)                                       | `{ reason }` (3–300)                                                                                                                                                                                        |
-| `POST /api/v1/procurement/requests/{id}/receive` | `procurement:decide` (FM)                                       | no body. Posts an inventory **IN** ("Received for PR-…") for every line linked to an item                                                                                                                   |
+| `GET /api/v1/procurement/requests/{id}`          | `procurement:read` (constructors: own)                          | lines (stock snapshot + current stock, decision, stock guidance), `decided`, `events`, `remarks`, `actions`, `canRemark`                                                                                    |
+| `POST /api/v1/procurement/requests/{id}/decide`  | `procurement:decide` (FM)                                       | `{ lines: [{ lineId, decision: "APPROVED"\|"REJECTED", reason? }], note? }`. Every line of the request exactly once; `reason` (3–300) is required to reject. One transaction                                |
+| `POST /api/v1/procurement/requests/{id}/approve` | `procurement:decide` (FM)                                       | `{ note? }` (send `{}` for none). Approves every line                                                                                                                                                       |
+| `POST /api/v1/procurement/requests/{id}/reject`  | `procurement:decide` (FM)                                       | `{ reason }` (3–300). Rejects every line with the one reason                                                                                                                                                |
+| `POST /api/v1/procurement/requests/{id}/receive` | `procurement:decide` (FM)                                       | no body. Posts an inventory **IN** ("Received for PR-…") for every **approved** line linked to an item                                                                                                      |
 | `POST /api/v1/procurement/requests/{id}/cancel`  | the requester                                                   | `{ note? }`                                                                                                                                                                                                 |
 | `POST /api/v1/procurement/requests/{id}/remarks` | FM; the requester on their own                                  | `{ body }` (1–500) → `201`. Remarks are never edited or deleted                                                                                                                                             |
 | `GET /api/v1/procurement/items`                  | `procurement:request`                                           | active items: `sku, name, category, unit, onHand, reorderLevel, low, allowed, openRequestCode` (`allowed: false` for leather rolls without the OK)                                                          |
@@ -258,7 +271,11 @@ endpoint, not only procurement.
 - `403 LEATHER_ROLLS_NOT_ALLOWED`: a line is a leather roll (picked or typed) and the constructor
   isn't allowed leather rolls. A change to the flag applies on their next request; they stay
   signed in.
-- `409 CONFLICT`: the status doesn't allow it ("Only a pending request can be approved…").
+- `422` on `decide`: a line of the request has no decision (`["lines", i, "decision"]`, "Choose
+  Approve or Reject for Shoe tacks."), a rejected line has no reason (`["lines", i, "reason"]`),
+  or a `lineId` isn't on the request. `i` is the line's position on the request.
+- `409 CONFLICT`: the status doesn't allow it ("Only a pending request can be approved…", "Only a
+  pending request can be decided…").
 - `409 STALE`: someone else changed the request after it was loaded.
 - `404`: a constructor asking for someone else's request.
 

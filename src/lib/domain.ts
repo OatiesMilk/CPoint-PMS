@@ -7,6 +7,7 @@ export {
   BatchStatus,
   InventoryCategory,
   MovementType,
+  PurchaseLineDecision,
   PurchaseRequestStatus,
   ReworkStatus,
   Role,

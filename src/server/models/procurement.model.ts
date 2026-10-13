@@ -102,7 +102,7 @@ const listSelect = {
   receivedAt: true,
   requestedBy: { select: { id: true, name: true } },
   lines: {
-    select: { itemName: true, category: true, quantity: true, unit: true },
+    select: { itemName: true, category: true, quantity: true, unit: true, decision: true },
     orderBy: { position: "asc" },
   },
 } satisfies Prisma.PurchaseRequestSelect;
@@ -168,6 +168,8 @@ const detailSelect = {
       onHandAtRequest: true,
       reorderLevelAtRequest: true,
       movementId: true,
+      decision: true,
+      rejectionReason: true,
       item: {
         select: {
           id: true,
@@ -216,13 +218,35 @@ export async function transitionStatus(
     status: PurchaseRequestStatus;
     decidedById?: string;
     decidedAt?: Date;
-    rejectionReason?: string;
+    rejectionReason?: string | null;
     approvalNote?: string | null;
     receivedAt?: Date;
   },
   db: Db = defaultDb(),
 ): Promise<number> {
   const { count } = await db.purchaseRequest.updateMany({ where: { id, status: from }, data });
+  return count;
+}
+
+/**
+ * Records the decision on one item (D-039), only if it's this request's and still undecided.
+ * Returns how many rows changed (0 or 1).
+ */
+export async function setLineDecision(
+  requestId: string,
+  lineId: string,
+  data: {
+    decision: "APPROVED" | "REJECTED";
+    rejectionReason: string | null;
+    decidedById: string;
+    decidedAt: Date;
+  },
+  db: Db = defaultDb(),
+): Promise<number> {
+  const { count } = await db.purchaseRequestLine.updateMany({
+    where: { id: lineId, requestId, decision: "PENDING" },
+    data,
+  });
   return count;
 }
 
@@ -260,11 +284,18 @@ export function setLineMovement(lineId: string, movementId: string, db: Db = def
 
 // ───────────── summaries ─────────────
 
-/** Open (pending or approved) requests that ask for any of these items: one entry per line. */
+/**
+ * Open (pending or approved) requests that still ask for any of these items: one entry per line.
+ * An item rejected inside an approved request is no longer asked for (D-039).
+ */
 export function openRequestsForItems(itemIds: string[], db: Db = defaultDb()) {
   if (itemIds.length === 0) return Promise.resolve([]);
   return db.purchaseRequestLine.findMany({
-    where: { inventoryItemId: { in: itemIds }, request: { status: { in: OPEN } } },
+    where: {
+      inventoryItemId: { in: itemIds },
+      decision: { not: "REJECTED" },
+      request: { status: { in: OPEN } },
+    },
     select: {
       inventoryItemId: true,
       request: { select: { id: true, code: true, status: true } },

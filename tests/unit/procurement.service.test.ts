@@ -12,6 +12,9 @@ const proc = {
   openRequestsForItems: vi.fn(async () => [] as unknown[]),
   pendingSummary: vi.fn(),
   setCanRequestLeatherRolls: vi.fn(),
+  setLineDecision: vi.fn(
+    async (_requestId: string, _lineId: string, _data: Record<string, unknown>, _tx?: unknown) => 1,
+  ),
   setLineMovement: vi.fn(),
   transitionStatus: vi.fn(
     async (_id: string, _from: string, _data: Record<string, unknown>, _tx?: unknown) => 1,
@@ -50,7 +53,8 @@ const nails = {
   isActive: true,
 };
 
-function request(overrides: Record<string, unknown> = {}) {
+/** `decisions`: each line's decision, in order (both PENDING unless given). */
+function request(overrides: Record<string, unknown> = {}, decisions: string[] = []) {
   return {
     id: "pr1",
     code: "PR-2026-0007",
@@ -63,9 +67,19 @@ function request(overrides: Record<string, unknown> = {}) {
         itemName: "Shoe nails",
         unit: "box",
         quantity: "4",
+        decision: decisions[0] ?? "PENDING",
+        rejectionReason: null,
         item: { ...nails },
       },
-      { id: "l2", itemName: "Brass eyelets", unit: "pack", quantity: "1", item: null },
+      {
+        id: "l2",
+        itemName: "Brass eyelets",
+        unit: "pack",
+        quantity: "1",
+        decision: decisions[1] ?? "PENDING",
+        rejectionReason: null,
+        item: null,
+      },
     ],
     ...overrides,
   };
@@ -80,6 +94,7 @@ const values = {
 beforeEach(() => {
   vi.clearAllMocks();
   proc.transitionStatus.mockResolvedValue(1);
+  proc.setLineDecision.mockResolvedValue(1);
   inventory.findInventoryItem.mockResolvedValue(nails);
 });
 
@@ -244,29 +259,56 @@ describe("decisions", () => {
     expect(proc.transitionStatus).toHaveBeenCalledWith(
       "pr1",
       "PENDING",
-      { status: "APPROVED", decidedById: "fm1", decidedAt: now, approvalNote: "Order today" },
+      {
+        status: "APPROVED",
+        decidedById: "fm1",
+        decidedAt: now,
+        approvalNote: "Order today",
+        rejectionReason: null,
+      },
       "tx",
     );
+    // Approving the request approves every item on it (D-039).
+    expect(proc.setLineDecision.mock.calls.map((c) => [c[1], c[2].decision])).toEqual([
+      ["l1", "APPROVED"],
+      ["l2", "APPROVED"],
+    ]);
     expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
       fromStatus: "PENDING",
       toStatus: "APPROVED",
-      note: "Order today",
+      note: "Approved: Shoe nails, Brass eyelets.\nOrder today",
     });
     expect(recordAudit.mock.calls[0][1]).toMatchObject({ action: "procurement.request.approve" });
   });
 
-  it("records the rejection reason", async () => {
+  it("records the rejection reason on the request and on every item", async () => {
     proc.findRequestDetail.mockResolvedValue(request());
-    await svc.actOnRequest(
+    const result = await svc.actOnRequest(
       "pr1",
       { action: "reject", reason: "We have 3 boxes in the back" },
       fm,
       now,
     );
+    expect(result).toMatchObject({ status: "REJECTED", message: "PR-2026-0007 rejected." });
     expect(proc.transitionStatus.mock.calls[0][2]).toMatchObject({
       status: "REJECTED",
       rejectionReason: "We have 3 boxes in the back",
     });
+    expect(proc.setLineDecision.mock.calls.map((c) => c[2])).toEqual([
+      expect.objectContaining({
+        decision: "REJECTED",
+        rejectionReason: "We have 3 boxes in the back",
+      }),
+      expect.objectContaining({
+        decision: "REJECTED",
+        rejectionReason: "We have 3 boxes in the back",
+      }),
+    ]);
+    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
+      toStatus: "REJECTED",
+      note: "Rejected: Shoe nails, Brass eyelets. We have 3 boxes in the back",
+    });
+    expect(recordAudit.mock.calls[0][1]).toMatchObject({ action: "procurement.request.reject" });
   });
 
   it("answers STALE when someone else changed the request first", async () => {
@@ -311,8 +353,24 @@ describe("decisions", () => {
     ).resolves.toMatchObject({ status: "CANCELLED" });
   });
 
+  it("receiving adds nothing to stock for an item that was rejected (D-039)", async () => {
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "APPROVED" }, ["REJECTED", "APPROVED"]),
+    );
+    const result = await svc.actOnRequest("pr1", { action: "receive" }, fm, now);
+    expect(result.status).toBe("RECEIVED");
+    expect(postMovement).not.toHaveBeenCalled();
+    expect(proc.setLineMovement).not.toHaveBeenCalled();
+    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
+      toStatus: "RECEIVED",
+      note: "No inventory items on this request; nothing added to stock.",
+    });
+  });
+
   it("receiving posts stock IN for inventory lines only, in the same transaction", async () => {
-    proc.findRequestDetail.mockResolvedValue(request({ status: "APPROVED" }));
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "APPROVED" }, ["APPROVED", "APPROVED"]),
+    );
     const result = await svc.actOnRequest("pr1", { action: "receive" }, fm, now);
     expect(result.status).toBe("RECEIVED");
     expect(postMovement).toHaveBeenCalledTimes(1);
@@ -327,6 +385,230 @@ describe("decisions", () => {
     expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
       toStatus: "RECEIVED",
       note: "Added to stock: Shoe nails.",
+    });
+  });
+});
+
+describe("item decisions (D-039)", () => {
+  const mixed = {
+    note: "Nails are fine for now",
+    lines: [
+      { lineId: "l1", decision: "REJECTED" as const, reason: "Stock is still high" },
+      { lineId: "l2", decision: "APPROVED" as const },
+    ],
+  };
+
+  it("approves some items and rejects others in one transaction; the request is approved", async () => {
+    proc.findRequestDetail.mockResolvedValue(request());
+    const result = await svc.decideRequest("pr1", mixed, fm, now);
+    expect(result).toMatchObject({
+      status: "APPROVED",
+      message: "PR-2026-0007 decided: 1 of 2 items approved.",
+    });
+    expect(proc.transitionStatus).toHaveBeenCalledWith(
+      "pr1",
+      "PENDING",
+      {
+        status: "APPROVED",
+        decidedById: "fm1",
+        decidedAt: now,
+        approvalNote: "Nails are fine for now",
+        rejectionReason: null,
+      },
+      "tx",
+    );
+    expect(proc.setLineDecision.mock.calls).toEqual([
+      [
+        "pr1",
+        "l1",
+        {
+          decision: "REJECTED",
+          rejectionReason: "Stock is still high",
+          decidedById: "fm1",
+          decidedAt: now,
+        },
+        "tx",
+      ],
+      [
+        "pr1",
+        "l2",
+        { decision: "APPROVED", rejectionReason: null, decidedById: "fm1", decidedAt: now },
+        "tx",
+      ],
+    ]);
+    // One timeline event that lists the items, and one audit row with every decision.
+    expect(proc.insertEvent).toHaveBeenCalledTimes(1);
+    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
+      fromStatus: "PENDING",
+      toStatus: "APPROVED",
+      note: "Approved: Brass eyelets.\nRejected: Shoe nails. Stock is still high\nNails are fine for now",
+    });
+    expect(recordAudit.mock.calls[0][1]).toMatchObject({
+      action: "procurement.request.decide",
+      after: {
+        status: "APPROVED",
+        lines: [
+          { item: "Shoe nails", decision: "REJECTED", reason: "Stock is still high" },
+          { item: "Brass eyelets", decision: "APPROVED" },
+        ],
+      },
+    });
+  });
+
+  it("rejects the request when every item is rejected, keeping each item's own reason", async () => {
+    proc.findRequestDetail.mockResolvedValue(request());
+    const result = await svc.decideRequest(
+      "pr1",
+      {
+        lines: [
+          { lineId: "l1", decision: "REJECTED", reason: "Stock is still high" },
+          { lineId: "l2", decision: "REJECTED", reason: "Not needed this month" },
+        ],
+      },
+      fm,
+      now,
+    );
+    expect(result).toMatchObject({ status: "REJECTED", message: "PR-2026-0007 rejected." });
+    // Two different reasons: none of them is the request's reason.
+    expect(proc.transitionStatus.mock.calls[0][2]).toMatchObject({
+      status: "REJECTED",
+      rejectionReason: null,
+    });
+    expect(proc.insertEvent.mock.calls[0][0].note).toBe(
+      "Rejected: Shoe nails. Stock is still high\nRejected: Brass eyelets. Not needed this month",
+    );
+  });
+
+  it("needs a decision on every item and a reason for each rejection, naming the item", async () => {
+    proc.findRequestDetail.mockResolvedValue(request());
+    await expect(
+      svc.decideRequest("pr1", { lines: [{ lineId: "l1", decision: "APPROVED" }] }, fm, now),
+    ).rejects.toMatchObject({
+      status: 422,
+      message: "Choose Approve or Reject for Brass eyelets.",
+      details: [{ path: ["lines", 1, "decision"] }],
+    });
+    await expect(
+      svc.decideRequest(
+        "pr1",
+        {
+          lines: [
+            { lineId: "l1", decision: "REJECTED", reason: " x " },
+            { lineId: "l2", decision: "APPROVED" },
+          ],
+        },
+        fm,
+        now,
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      message:
+        "Enter a reason of at least 3 characters for rejecting Shoe nails, so the requester knows why.",
+      details: [{ path: ["lines", 0, "reason"] }],
+    });
+    expect(proc.transitionStatus).not.toHaveBeenCalled();
+    expect(proc.setLineDecision).not.toHaveBeenCalled();
+  });
+
+  it("refuses an item that isn't on the request, and the same item twice", async () => {
+    proc.findRequestDetail.mockResolvedValue(request());
+    await expect(
+      svc.decideRequest(
+        "pr1",
+        {
+          lines: [
+            { lineId: "l1", decision: "APPROVED" },
+            { lineId: "l2", decision: "APPROVED" },
+            { lineId: "l9", decision: "APPROVED" },
+          ],
+        },
+        fm,
+        now,
+      ),
+    ).rejects.toMatchObject({ status: 422, details: [{ path: ["lines", 2, "lineId"] }] });
+    await expect(
+      svc.decideRequest(
+        "pr1",
+        {
+          lines: [
+            { lineId: "l1", decision: "APPROVED" },
+            { lineId: "l1", decision: "REJECTED", reason: "Twice" },
+          ],
+        },
+        fm,
+        now,
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(proc.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it("answers STALE when someone else decided first, on the request or on an item", async () => {
+    proc.findRequestDetail.mockResolvedValue(request());
+    proc.transitionStatus.mockResolvedValueOnce(0);
+    await expect(svc.decideRequest("pr1", mixed, fm, now)).rejects.toMatchObject({
+      status: 409,
+      code: "STALE",
+    });
+    expect(proc.setLineDecision).not.toHaveBeenCalled();
+    proc.setLineDecision.mockResolvedValueOnce(0);
+    await expect(svc.decideRequest("pr1", mixed, fm, now)).rejects.toMatchObject({
+      status: 409,
+      code: "STALE",
+    });
+    expect(proc.insertEvent).not.toHaveBeenCalled();
+    expect(recordAudit).not.toHaveBeenCalled();
+  });
+
+  it("only decides a pending request, and only for the Floor Manager", async () => {
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "APPROVED" }, ["APPROVED", "APPROVED"]),
+    );
+    await expect(svc.decideRequest("pr1", mixed, fm, now)).rejects.toMatchObject({
+      status: 409,
+      message: "Only a pending request can be decided. This one is approved.",
+    });
+    proc.findRequestDetail.mockResolvedValue(request());
+    await expect(svc.decideRequest("pr1", mixed, admin, now)).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(svc.decideRequest("pr1", mixed, sc, now)).rejects.toMatchObject({ status: 403 });
+    await expect(svc.decideRequest("pr1", mixed, { ...sc, id: "sc2" }, now)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("reads back each item's decision, the stock guidance and the summary", async () => {
+    // 11 boxes on hand against a reorder level of 5: more than twice, so still well stocked.
+    const stocked = request();
+    stocked.lines[0].item = { ...nails, quantityOnHand: "11" };
+    proc.findRequestDetail.mockResolvedValue(stocked);
+    const pending = await svc.getRequest("pr1", fm, now);
+    expect(pending?.decided).toBeNull();
+    expect(pending?.lines[0]).toMatchObject({
+      wellStocked: true,
+      suggestedDecision: "REJECTED",
+      suggestedReason: "Stock is still high (11 boxes on hand, reorder at 5).",
+    });
+    // A typed item has no stock to compare: nothing is suggested.
+    expect(pending?.lines[1]).toMatchObject({
+      wellStocked: false,
+      suggestedDecision: null,
+      suggestedReason: null,
+    });
+    // Low stock (2 on hand, reorder at 5) suggests Approve.
+    proc.findRequestDetail.mockResolvedValue(request());
+    expect((await svc.getRequest("pr1", fm, now))?.lines[0]).toMatchObject({
+      wellStocked: false,
+      suggestedDecision: "APPROVED",
+    });
+
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "APPROVED" }, ["REJECTED", "APPROVED"]),
+    );
+    expect((await svc.getRequest("pr1", sc, now))?.decided).toMatchObject({
+      approved: 1,
+      rejected: 1,
+      label: "1 of 2 items approved",
     });
   });
 });

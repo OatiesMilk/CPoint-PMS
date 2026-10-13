@@ -5,6 +5,7 @@ import {
   actOnRequest,
   addRemark,
   createRequest,
+  decideRequest,
   getRequest,
   listRequesters,
   listRequests,
@@ -14,6 +15,7 @@ import {
 import {
   approveSchema,
   cancelSchema,
+  decideSchema,
   isRequestId,
   purchaseRequestSchema,
   rejectSchema,
@@ -41,7 +43,7 @@ export const procurementController = {
     return json({ data: await listRequests(requestListQuerySchema.parse(query(request)), user) });
   }),
 
-  /** POST /api/v1/procurement/requests  { priority, neededBy?, justification, lines[] } */
+  /** POST /api/v1/procurement/requests  { neededBy, remarks?, lines[] } */
   create: handle(async (request: Request) => {
     const user = await requireApiPermission("procurement:request");
     const values = purchaseRequestSchema.parse(await readJsonBody(request));
@@ -56,14 +58,24 @@ export const procurementController = {
     return json({ data: detail });
   }),
 
-  /** POST …/{id}/approve  { note? } */
+  /**
+   * POST …/{id}/decide  { lines: [{ lineId, decision, reason? }], note? }: every item approved or
+   * rejected (a reason is needed to reject), saved together (D-039).
+   */
+  decide: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("procurement:decide");
+    const input = decideSchema.parse(await readJsonBody(request));
+    return json({ data: await decideRequest(await idFrom(ctx), input, user) });
+  }),
+
+  /** POST …/{id}/approve  { note? }: approves every item. */
   approve: handle(async (request: Request, ctx: IdContext) => {
     const user = await requireApiPermission("procurement:decide");
     const { note } = approveSchema.parse(await readJsonBody(request));
     return json({ data: await actOnRequest(await idFrom(ctx), { action: "approve", note }, user) });
   }),
 
-  /** POST …/{id}/reject  { reason } */
+  /** POST …/{id}/reject  { reason }: rejects every item with the one reason. */
   reject: handle(async (request: Request, ctx: IdContext) => {
     const user = await requireApiPermission("procurement:decide");
     const { reason } = rejectSchema.parse(await readJsonBody(request));
@@ -72,7 +84,7 @@ export const procurementController = {
     });
   }),
 
-  /** POST …/{id}/receive: posts stock IN for every inventory line. */
+  /** POST …/{id}/receive: posts stock IN for every approved inventory line. */
   receive: handle(async (_request: Request, ctx: IdContext) => {
     const user = await requireApiPermission("procurement:decide");
     return json({ data: await actOnRequest(await idFrom(ctx), { action: "receive" }, user) });
