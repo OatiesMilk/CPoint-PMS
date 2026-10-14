@@ -108,7 +108,7 @@ const procurement = {
   ),
   // The request decided item by item: two lines, the second one for an item that isn't the thread.
   getRequest: vi.fn(async () => ({
-    code: "PR-2026-0001",
+    code: "MR-2026-0001",
     lines: [
       {
         id: "line-a",

@@ -5,9 +5,9 @@
  * Worst: missing that the camera is wrong. Overrides are marked and filterable.
  */
 import type { Metadata } from "next";
+import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { VerdictFlow } from "@/components/features/scans/verdict-flow";
 import { Button } from "@/components/ui/button";
@@ -137,33 +137,13 @@ export default async function ScansPage({ searchParams }: PageProps<"/scans">) {
               ))}
             </TableBody>
           </Table>
-          <nav
-            aria-label="Pagination"
-            className="flex items-center justify-between text-sm text-muted-foreground"
-          >
-            <span>
-              {total.toLocaleString("en-PH")} scan{total === 1 ? "" : "s"} · page {page} of{" "}
-              {pageCount}
-            </span>
-            <div className="flex gap-2">
-              {page > 1 && (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page - 1)}>
-                    <ChevronLeft aria-hidden />
-                    Previous
-                  </Link>
-                </Button>
-              )}
-              {page < pageCount && (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page + 1)}>
-                    Next
-                    <ChevronRight aria-hidden />
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </nav>
+          <TablePager
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            noun={["scan", "scans"]}
+            href={pageHref}
+          />
         </div>
       )}
     </>

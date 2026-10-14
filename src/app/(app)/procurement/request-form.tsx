@@ -103,6 +103,10 @@ const emptyLine = (inventoryItemId = ""): LineValues => ({
   copyKey: "",
 });
 
+/** A row nobody has touched: no item, nothing typed. */
+const isBlankLine = (l: LineValues) =>
+  !l.inventoryItemId && !l.itemName && !l.quantity && !l.note && !l.copyKey;
+
 /** The form keeps "other" as a picker choice; the shared schema wants a typed name instead. */
 function toInput(values: FormValues, copiedFromId?: string): PurchaseRequestInput {
   return {
@@ -310,8 +314,12 @@ export function RequestForm({
                       disabled={pending || full}
                       aria-describedby={`${key}-reason`}
                       onChange={(e) => {
-                        if (e.target.checked) append(fromCopy(line, key));
-                        else if (at >= 0 && fields.length > 1) remove(at);
+                        if (e.target.checked) {
+                          // Fill the untouched starter row rather than leaving it empty above.
+                          const blank = form.getValues("lines").findIndex(isBlankLine);
+                          if (blank >= 0) form.setValue(`lines.${blank}`, fromCopy(line, key));
+                          else append(fromCopy(line, key));
+                        } else if (at >= 0 && fields.length > 1) remove(at);
                         else if (at >= 0) form.setValue(`lines.${at}`, emptyLine());
                       }}
                     />

@@ -6,16 +6,10 @@
  *        in use. The last-admin rule is enforced and explained; temporary passwords force a change.
  */
 import type { Metadata } from "next";
+import { MATCHING, TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import {
-  ChevronLeft,
-  ChevronRight,
-  CircleCheck,
-  CircleSlash,
-  LockKeyhole,
-  ShoppingCart,
-} from "lucide-react";
+import { CircleCheck, CircleSlash, LockKeyhole, ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -141,33 +135,14 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
               })}
             </TableBody>
           </Table>
-          <nav
-            aria-label="Pagination"
-            className="flex items-center justify-between text-sm text-muted-foreground"
-          >
-            <span>
-              {total} account{total === 1 ? "" : "s"}
-              {filtered ? " match" : ""} · page {page} of {pageCount}
-            </span>
-            <div className="flex gap-2">
-              {page > 1 && (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page - 1)}>
-                    <ChevronLeft aria-hidden />
-                    Previous
-                  </Link>
-                </Button>
-              )}
-              {page < pageCount && (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page + 1)}>
-                    Next
-                    <ChevronRight aria-hidden />
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </nav>
+          <TablePager
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            noun={["account", "accounts"]}
+            suffix={filtered ? MATCHING : ""}
+            href={pageHref}
+          />
         </div>
       )}
     </>

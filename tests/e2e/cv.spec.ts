@@ -243,7 +243,9 @@ test("an admin creates a device token, sees it once, and revokes it", async ({
   const row = page.getByRole("row", { name: new RegExp(name) });
   await row.getByRole("button", { name: "Revoke…" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Revoke token" }).click();
-  await expect(row.getByText("Revoked")).toBeVisible();
+  // Revoked tokens sort after the active ones, so with more than 15 tokens this row moves past
+  // page 1 (D-047): the toast confirms it, and the camera API refusing it is the real check.
+  await expect(page.getByText(`“${name}” revoked.`)).toBeVisible();
   expect((await postScan(request, token, batch.id, [])).status()).toBe(401);
 });
 

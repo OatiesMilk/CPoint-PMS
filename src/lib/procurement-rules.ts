@@ -414,9 +414,9 @@ export function transition(status: PurchaseRequestStatus, action: PurchaseAction
 
 export const ACTION_VERB = VERB;
 
-/** "PR-2026-0007" from the year and the running number. */
+/** "MR-2026-0007" from the year and the running number. */
 export function formatRequestCode(year: number, n: number): string {
-  return `PR-${year}-${String(n).padStart(4, "0")}`;
+  return `MR-${year}-${String(n).padStart(4, "0")}`;
 }
 
 /** One line for tables: "Contact cement, Nylon thread +2 more". */

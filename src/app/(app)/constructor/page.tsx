@@ -47,7 +47,7 @@ export default async function ConstructorHome() {
           </Button>
         }
       />
-      <Card className="max-w-3xl">
+      <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>

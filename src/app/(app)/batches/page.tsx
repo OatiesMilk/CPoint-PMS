@@ -5,9 +5,10 @@
  * Worst: a stuck batch goes unnoticed. Time in stage sits next to the stage.
  */
 import type { Metadata } from "next";
+import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { BatchStatusBadge } from "@/components/features/batches/batch-status-badge";
 import { InRepairBadge } from "@/components/features/batches/in-repair-badge";
 import { PageHeader } from "@/components/features/page-header";
@@ -150,33 +151,13 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
             </TableBody>
           </Table>
 
-          <nav
-            aria-label="Pagination"
-            className="flex items-center justify-between text-sm text-muted-foreground"
-          >
-            <span>
-              {total.toLocaleString("en-PH")} batch{total === 1 ? "" : "es"} · page {page} of{" "}
-              {pageCount}
-            </span>
-            <div className="flex gap-2">
-              {page > 1 ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page - 1)}>
-                    <ChevronLeft aria-hidden />
-                    Previous
-                  </Link>
-                </Button>
-              ) : null}
-              {page < pageCount ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page + 1)}>
-                    Next
-                    <ChevronRight aria-hidden />
-                  </Link>
-                </Button>
-              ) : null}
-            </div>
-          </nav>
+          <TablePager
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            noun={["batch", "batches"]}
+            href={pageHref}
+          />
         </div>
       )}
     </>

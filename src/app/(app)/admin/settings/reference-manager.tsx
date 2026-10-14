@@ -2,7 +2,7 @@
 
 import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import { useState, useTransition } from "react";
-import { LoaderCircle, Pencil, Plus } from "lucide-react";
+import { LoaderCircle, Pencil, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { MATCHING, TablePager } from "@/components/features/table-pager";
+import { usePagedRows } from "@/lib/use-paged-rows";
 import { cn } from "@/lib/utils";
 import { createReferenceAction, setReferenceActiveAction, updateReferenceAction } from "./actions";
 
@@ -62,6 +64,11 @@ type Props = {
   initialCreate?: Record<string, string>;
 };
 
+/** Everything a row shows, for the find box. */
+function rowText(row: Row): string {
+  return Object.values(row.cells).join(" ");
+}
+
 export function ReferenceManager({
   kind,
   noun,
@@ -78,6 +85,7 @@ export function ReferenceManager({
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const Noun = noun[0].toUpperCase() + noun.slice(1);
+  const list = usePagedRows(rows, rowText);
 
   function open(row: Row | "new") {
     setValues(row === "new" ? blank : { ...blank, ...row.values });
@@ -118,7 +126,28 @@ export function ReferenceManager({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        {rows.length > 0 ? (
+          <div className="flex w-72 flex-col gap-1.5">
+            <Label htmlFor={`find-${kind}`}>Find {noun}</Label>
+            <div className="relative">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                id={`find-${kind}`}
+                type="search"
+                className="pl-9"
+                placeholder={`Type a ${noun} name`}
+                value={list.query}
+                onChange={(e) => list.setQuery(e.target.value)}
+              />
+            </div>
+          </div>
+        ) : (
+          <span />
+        )}
         <Button variant="secondary" onClick={() => open("new")}>
           <Plus aria-hidden />
           Add {noun}
@@ -129,58 +158,76 @@ export function ReferenceManager({
         <p className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
           {emptyText}
         </p>
+      ) : list.total === 0 ? (
+        <p className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
+          No {noun} matches “{list.query.trim()}”. Check the spelling, or clear the search.
+        </p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              {columns.map((c) => (
-                <TableHead key={c.key} numeric={c.numeric}>
-                  {c.label}
-                </TableHead>
-              ))}
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">
-                <span className="sr-only">Actions</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow
-                key={row.id}
-                aria-label={row.cells[columns[0].key]}
-                className={cn(!row.isActive && "text-muted-foreground")}
-              >
+        <div className="flex flex-col gap-3">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
                 {columns.map((c) => (
-                  <TableCell key={c.key} numeric={c.numeric} className={cn(c.mono && "font-mono")}>
-                    {row.cells[c.key] || "—"}
-                  </TableCell>
+                  <TableHead key={c.key} numeric={c.numeric}>
+                    {c.label}
+                  </TableHead>
                 ))}
-                <TableCell>
-                  <Badge tone={row.isActive ? "success" : "neutral"}>
-                    {row.isActive ? "Active" : "Inactive"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => open(row)}>
-                      <Pencil aria-hidden />
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={pending}
-                      onClick={() => toggle(row, !row.isActive)}
-                    >
-                      {row.isActive ? "Deactivate" : "Reactivate"}
-                    </Button>
-                  </div>
-                </TableCell>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {list.shown.map((row) => (
+                <TableRow
+                  key={row.id}
+                  aria-label={row.cells[columns[0].key]}
+                  className={cn(!row.isActive && "text-muted-foreground")}
+                >
+                  {columns.map((c) => (
+                    <TableCell
+                      key={c.key}
+                      numeric={c.numeric}
+                      className={cn(c.mono && "font-mono")}
+                    >
+                      {row.cells[c.key] || "—"}
+                    </TableCell>
+                  ))}
+                  <TableCell>
+                    <Badge tone={row.isActive ? "success" : "neutral"}>
+                      {row.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => open(row)}>
+                        <Pencil aria-hidden />
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={pending}
+                        onClick={() => toggle(row, !row.isActive)}
+                      >
+                        {row.isActive ? "Deactivate" : "Reactivate"}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <TablePager
+            page={list.page}
+            pageCount={list.pageCount}
+            total={list.total}
+            noun={[noun, `${noun}s`]}
+            suffix={list.query.trim() ? MATCHING : ""}
+            onPage={list.setPage}
+          />
+        </div>
       )}
 
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>

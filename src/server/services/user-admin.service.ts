@@ -1,4 +1,5 @@
 import type { Role } from "@/lib/domain";
+import { PAGE_SIZE } from "@/lib/pagination";
 import { checkAccountChange, generateTemporaryPassword } from "@/lib/admin-rules";
 import { Errors } from "@/server/lib/errors";
 import { hashPassword } from "@/server/lib/password";
@@ -18,7 +19,7 @@ import {
 import type { UserFormValues, UserListQuery } from "@/server/validators/user.validator";
 import { recordAudit } from "./audit.service";
 
-export const USER_PAGE_SIZE = 25;
+export const USER_PAGE_SIZE = PAGE_SIZE;
 
 type Actor = { id: string };
 type Tx = Parameters<Parameters<typeof runInTransaction>[0]>[0];

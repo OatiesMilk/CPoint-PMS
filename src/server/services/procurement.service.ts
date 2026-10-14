@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { PAGE_SIZE } from "@/lib/pagination";
 import type { PurchaseLineDecision, PurchaseRequestStatus, Role } from "@/lib/domain";
 import { formatCalendarDate, manilaToday, manilaYear } from "@/lib/format";
 import { formatQuantity } from "@/lib/inventory-rules";
@@ -93,7 +94,7 @@ import { postMovement } from "./inventory.service";
 
 export type Viewer = { id: string; role: Role; canRequestLeatherRolls: boolean };
 
-export const REQUEST_PAGE_SIZE = 25;
+export const REQUEST_PAGE_SIZE = PAGE_SIZE;
 
 const STALE = "Someone else already changed this request. Refresh to see where it stands.";
 const LEATHER_ROLLS_NOT_ALLOWED = () =>
@@ -118,7 +119,7 @@ export type RequestableItem = {
   low: boolean;
   /** False for leather rolls when this person isn't allowed to request them (D-031). */
   allowed: boolean;
-  /** An open request already asking for it ("PR-2026-0007 already asks for this"). */
+  /** An open request already asking for it ("MR-2026-0007 already asks for this"). */
   openRequestCode: string | null;
 };
 

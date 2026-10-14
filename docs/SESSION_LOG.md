@@ -14,6 +14,69 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-14 — Follow-up: two e2e fixes after Codex's run 2
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Run 2 passed all eight browser scenarios; the 16 sign-in failures did not recur. Two e2e tests failed: one is a real test/pagination mismatch, the other an intermittent hydration race. Both fixed in the tests; no app change.
+**Changed:**
+
+- `tests/e2e/cv.spec.ts`: after revoking, the token test checks the "revoked" toast and the 401, not the row. Revoked tokens sort after active ones, so with more than 15 tokens the row moves past page 1 (failed in both runs).
+- `tests/e2e/inventory.spec.ts`: choosing Thread is retried until the unit follows. Once in two runs, the choice was made before the form hydrated and the unit stayed "roll".
+
+**Gates:** lint ✅ · typecheck ✅ · unit 500 ✅ · build ✅ · e2e by Codex run 3 ✅ (seven specs three times 57/57, full suite 75/75; `qa/reports/2026-10-14-followups-run3.md`).
+**Decisions:** none
+**Follow-ups:** Codex: `qa/handoffs/2026-10-14-followups-run3.md`.
+
+## 2026-10-14 — Follow-up: fixes from Codex's full-width/MR and pagination runs
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Fixed both app faults and the four observations from the two QA reports, and gave e2e assertions more time on a cold server.
+**Changed:**
+
+- Procurement list: Items, Requested by, Sent, Expected and Status may wrap (Items to two lines), and "1 of 2 items approved" sits on its own line, so the table fits beside the sidebar at 1440 px (Codex: 1212 px wide in 1120 px).
+- Migration `20261014120000_material_request_codes_legacy`: "Received for PR-…" (Phase 9 wording) becomes "Delivery for MR-…", and any other PR- number in ledger reasons or timeline notes becomes MR-. Tested on a scratch Postgres.
+- Pager: "1 supplier that matches" / "3 suppliers that match" (`MATCHING` in `table-pager.tsx`).
+- Copy to a new request: ticking a rejected item fills the untouched starter row instead of adding a second row under it.
+- `playwright.config.ts`: `expect` timeout 10 s. 16 tests in the first wave failed at the home-page URL check with the page still on `/login`, then `/`; later tests passed. Not proven to be the cause; Codex's rerun checks it.
+
+**Gates:** lint ✅ · typecheck ✅ · unit 500 ✅ · build ✅ · e2e: Codex rerun (`qa/handoffs/2026-10-14-followups-run2.md`).
+**Decisions:** D-046 amended (legacy reasons)
+**Follow-ups:** Codex: run the rerun handoff.
+
+## 2026-10-14 — Follow-up: one pagination for every list (15 per page)
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Every list that can grow now pages at 15 rows with one shared pager. Salvage, the Review queue, API tokens, the Settings lists and the leather-roll requesters gained pagination; the Settings lists and requesters also gained a Find box.
+**Changed:**
+
+- `src/lib/pagination.ts` (`PAGE_SIZE = 15` and helpers), `src/lib/use-paged-rows.ts` (find + pages for in-browser lists), `src/components/features/table-pager.tsx`.
+- Services use `PAGE_SIZE`: batch, scan-query, inventory, procurement, user-admin, audit-query. `getItemDetail` also returns `total`.
+- Salvage: `listSalvageItems` takes a page and returns `{ rows, total }`; `?page=` on the page and the API. Review queue: `page` and `autoPage`, the old "Showing the 50 oldest" note is replaced by the pager.
+- Pages: the seven existing pagers replaced by `TablePager`; tokens, Settings (`reference-manager.tsx`) and `requesters-panel.tsx` paged.
+- E2E: the Settings and requesters tests type into the Find box before looking for their row. New unit test `tests/unit/pagination.test.ts`.
+
+**Gates:** see `qa/handoffs/2026-10-14-pagination.md` (lint, typecheck, unit tests, build run by Claude; e2e left to Codex).
+**Decisions:** D-047
+**Follow-ups:**
+
+- Codex: run the handoff. Dylan: branch, commit and open the PR with the full-width/MR change (D-032).
+
+## 2026-10-14 — Follow-up: full-width pages and MR request numbers
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Pages now use the whole width beside the sidebar, and request numbers read MR-… (material request) instead of PR-… for every role, with a data migration for existing ones.
+**Changed:**
+
+- `src/app/(app)/layout.tsx`: removed the `max-w-6xl` cap on the page wrapper. `page-header.tsx`: the description stops at `max-w-3xl`. Constructor home: "My material requests" card is full width. Forms keep their own widths.
+- `formatRequestCode` returns `MR-YYYY-NNNN`. Migration `20261014090000_material_request_codes` renames stored codes, "Delivery for …" ledger reasons and "Copied from …" notes; the audit log is untouched.
+- Unit tests, the e2e row pattern, README, DESIGN.md, API.md and the schema comment use `MR-`.
+
+**Gates:** see the QA handoff `qa/handoffs/2026-10-14-full-width-mr-codes.md` (lint, typecheck, unit tests, build run by Claude; e2e left to Codex).
+**Decisions:** D-046
+**Follow-ups:**
+
+- Codex: run the handoff. Dylan: branch, commit and open the PR when happy (D-032).
+
 ## 2026-10-14 — Phase 13: QA closed and the Docker demo-week check
 
 **Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)

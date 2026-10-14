@@ -57,7 +57,7 @@ describe("proof-of-delivery file types (D-042)", () => {
 
 describe("sample proof files for the demo week", () => {
   const receipt = {
-    code: "PR-2026-0006",
+    code: "MR-2026-0006",
     supplier: "Marikina Leather (sample)",
     date: "Oct 9, 2026",
     lines: ["2 rolls of Black cowhide (school shoes)", "5 boxes of Shoe tacks, 12 mm"],
@@ -71,7 +71,7 @@ describe("sample proof files for the demo week", () => {
     // Small enough to seed quickly, and a complete file: header, cross-reference table, end marker.
     expect(image.length).toBeLessThan(200_000);
     const text = pdf.toString("latin1");
-    expect(text).toContain("(For PR-2026-0006   Delivered Oct 9, 2026) Tj");
+    expect(text).toContain("(For MR-2026-0006   Delivered Oct 9, 2026) Tj");
     expect(text).toContain("\\(school shoes\\)");
     expect(text).toMatch(/xref\n0 6\n/);
     expect(text.trimEnd().endsWith("%%EOF")).toBe(true);

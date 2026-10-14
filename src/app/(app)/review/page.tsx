@@ -13,6 +13,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { CircleCheck } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
+import { TablePager } from "@/components/features/table-pager";
 import { VerdictFlow } from "@/components/features/scans/verdict-flow";
 import {
   Table,
@@ -35,10 +36,31 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
   // Flagged scans are the Quality Inspector's to decide (D-028); the Floor Manager sees them only.
   const canReview = can(user.role, "scan:review");
   await connection();
-  const raw = (await searchParams).batch;
+  const params = await searchParams;
+  const raw = params.batch;
   const batch =
     typeof raw === "string" && /^[A-Za-z0-9-]{1,30}$/.test(raw.trim()) ? raw.trim() : undefined;
-  const { pending, todayAuto } = await reviewQueue(new Date(), batch);
+  const pageParam = (value: unknown) => {
+    const n = Number(value);
+    return Number.isInteger(n) && n > 1 && n <= 10_000 ? n : 1;
+  };
+  const { pending, todayAuto } = await reviewQueue(
+    new Date(),
+    batch,
+    pageParam(params.page),
+    pageParam(params.autoPage),
+  );
+  // Each list keeps the other's page, so paging one never jumps the other back to the start.
+  const pageHref = (next: { page?: number; autoPage?: number }) => {
+    const q = new URLSearchParams();
+    if (batch) q.set("batch", batch);
+    const p = next.page ?? pending.page;
+    const a = next.autoPage ?? todayAuto.page;
+    if (p > 1) q.set("page", String(p));
+    if (a > 1) q.set("autoPage", String(a));
+    const s = q.toString();
+    return s ? `/review?${s}` : "/review";
+  };
 
   return (
     <>
@@ -76,12 +98,6 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
           Needs a decision{" "}
           <span className="text-muted-foreground tabular-nums">({pending.total})</span>
         </h2>
-        {pending.total > pending.rows.length && (
-          <p className="text-sm text-muted-foreground" role="note">
-            Showing the {pending.rows.length} oldest of {pending.total}. Decide these first, or
-            filter by batch to find a specific section.
-          </p>
-        )}
         {pending.total === 0 ? (
           <p className="flex items-center gap-2 rounded-lg border border-dashed px-5 py-8 text-muted-foreground">
             <CircleCheck aria-hidden className="size-5 text-pass" />
@@ -89,42 +105,53 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
             appear here.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Waiting since</TableHead>
-                <TableHead>Batch · section</TableHead>
-                <TableHead>Camera saw</TableHead>
-                <TableHead numeric>Confidence</TableHead>
-                <TableHead className="text-right">{canReview ? "Decide" : "Status"}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pending.rows.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>{formatManilaDateTime(s.createdAt)}</TableCell>
-                  <TableCell>
-                    <Link href={`/scans/${s.id}`} className="underline-offset-4 hover:underline">
-                      <span className="font-mono">{s.batchCode}</span> · #{s.sequence}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-review">
-                    {s.topDefect ? `${s.topDefect.label} (unknown class)` : "—"}
-                  </TableCell>
-                  <TableCell numeric>{formatPercent(s.topDefect?.confidence)}</TableCell>
-                  <TableCell className="text-right">
-                    {canReview ? (
-                      <ReviewRowActions scanId={s.id} label={`${s.batchCode} · #${s.sequence}`} />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">
-                        Waiting for a Quality Inspector
-                      </span>
-                    )}
-                  </TableCell>
+          <div className="flex flex-col gap-3">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Waiting since</TableHead>
+                  <TableHead>Batch · section</TableHead>
+                  <TableHead>Camera saw</TableHead>
+                  <TableHead numeric>Confidence</TableHead>
+                  <TableHead className="text-right">{canReview ? "Decide" : "Status"}</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {pending.rows.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>{formatManilaDateTime(s.createdAt)}</TableCell>
+                    <TableCell>
+                      <Link href={`/scans/${s.id}`} className="underline-offset-4 hover:underline">
+                        <span className="font-mono">{s.batchCode}</span> · #{s.sequence}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-review">
+                      {s.topDefect ? `${s.topDefect.label} (unknown class)` : "—"}
+                    </TableCell>
+                    <TableCell numeric>{formatPercent(s.topDefect?.confidence)}</TableCell>
+                    <TableCell className="text-right">
+                      {canReview ? (
+                        <ReviewRowActions scanId={s.id} label={`${s.batchCode} · #${s.sequence}`} />
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          Waiting for a Quality Inspector
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <TablePager
+              label="Pages of scans needing a decision"
+              page={pending.page}
+              pageCount={pending.pageCount}
+              total={pending.total}
+              noun={["scan", "scans"]}
+              suffix=" waiting, oldest first"
+              href={(p) => pageHref({ page: p })}
+            />
+          </div>
         )}
       </section>
 
@@ -143,40 +170,51 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
             No Rework or Reject calls today yet.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Captured</TableHead>
-                <TableHead>Batch · section</TableHead>
-                <TableHead>Verdict</TableHead>
-                <TableHead>Top defect</TableHead>
-                <TableHead numeric>Confidence</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {todayAuto.rows.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    <Link href={`/scans/${s.id}`} className="underline-offset-4 hover:underline">
-                      {formatManilaDateTime(s.createdAt)}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono">{s.batchCode}</span> · #{s.sequence}
-                  </TableCell>
-                  <TableCell>
-                    <VerdictFlow
-                      aiVerdict={s.aiVerdict}
-                      finalVerdict={s.finalVerdict}
-                      isOverride={s.isOverride}
-                    />
-                  </TableCell>
-                  <TableCell>{s.topDefect?.label ?? "—"}</TableCell>
-                  <TableCell numeric>{formatPercent(s.topDefect?.confidence)}</TableCell>
+          <div className="flex flex-col gap-3">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Captured</TableHead>
+                  <TableHead>Batch · section</TableHead>
+                  <TableHead>Verdict</TableHead>
+                  <TableHead>Top defect</TableHead>
+                  <TableHead numeric>Confidence</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {todayAuto.rows.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <Link href={`/scans/${s.id}`} className="underline-offset-4 hover:underline">
+                        {formatManilaDateTime(s.createdAt)}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono">{s.batchCode}</span> · #{s.sequence}
+                    </TableCell>
+                    <TableCell>
+                      <VerdictFlow
+                        aiVerdict={s.aiVerdict}
+                        finalVerdict={s.finalVerdict}
+                        isOverride={s.isOverride}
+                      />
+                    </TableCell>
+                    <TableCell>{s.topDefect?.label ?? "—"}</TableCell>
+                    <TableCell numeric>{formatPercent(s.topDefect?.confidence)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <TablePager
+              label="Pages of today’s automatic calls"
+              page={todayAuto.page}
+              pageCount={todayAuto.pageCount}
+              total={todayAuto.total}
+              noun={["call", "calls"]}
+              suffix=" today"
+              href={(p) => pageHref({ autoPage: p })}
+            />
+          </div>
         )}
       </section>
     </>

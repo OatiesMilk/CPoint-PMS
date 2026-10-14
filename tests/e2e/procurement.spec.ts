@@ -278,7 +278,7 @@ test("the pending list puts the soonest needed-by date first (D-037)", async ({ 
 
   const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
   await fm.goto(`/procurement?status=PENDING&item=${item.id}`);
-  const rows = fm.getByRole("row").filter({ hasText: /PR-\d{4}-\d+/ });
+  const rows = fm.getByRole("row").filter({ hasText: /MR-\d{4}-\d+/ });
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText(high.code);
   await expect(rows.nth(0)).toContainText("High");
@@ -606,6 +606,8 @@ test("every constructor requests supplies; leather rolls need the Floor Manager'
   // The Floor Manager allows leather rolls: the next request goes through, still signed in.
   const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
   await fm.goto("/procurement?tab=requesters");
+  // Found, not browsed: every run adds constructors, which can push this one past page 1 (D-047).
+  await fm.getByLabel("Find a Shoe Constructor").fill(sc.email);
   const row = fm.getByRole("row", { name: new RegExp(sc.email.slice(3, 11)) });
   await row.getByRole("button", { name: "Allow leather rolls" }).click();
   await expect(row.getByText("Can request")).toBeVisible();

@@ -7,13 +7,13 @@
  *        change is an entry with who and why, and counts state the difference.
  */
 import type { Metadata } from "next";
+import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -52,7 +52,7 @@ export default async function InventoryItemPage({
   const page = Number.isInteger(pageParam) && pageParam > 1 ? pageParam : 1;
   const detail = await getItemDetail(id, page);
   if (!detail) notFound();
-  const { item, movements, pageCount } = detail;
+  const { item, movements, total, pageCount } = detail;
   const canManage = can(user.role, "inventory:manage");
   const openBatches = canManage ? await usageBatchOptions() : [];
 
@@ -155,34 +155,16 @@ export default async function InventoryItemPage({
                   ))}
                 </TableBody>
               </Table>
-              {pageCount > 1 && (
-                <nav
-                  aria-label="History pages"
-                  className="flex items-center justify-between text-sm text-muted-foreground"
-                >
-                  <span>
-                    Page {page} of {pageCount}
-                  </span>
-                  <div className="flex gap-2">
-                    {page > 1 && (
-                      <Button asChild variant="secondary" size="sm">
-                        <Link href={`/inventory/${id}${page > 2 ? `?page=${page - 1}` : ""}`}>
-                          <ChevronLeft aria-hidden />
-                          Newer
-                        </Link>
-                      </Button>
-                    )}
-                    {page < pageCount && (
-                      <Button asChild variant="secondary" size="sm">
-                        <Link href={`/inventory/${id}?page=${page + 1}`}>
-                          Older
-                          <ChevronRight aria-hidden />
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
-                </nav>
-              )}
+              <TablePager
+                page={page}
+                pageCount={pageCount}
+                total={total}
+                noun={["movement", "movements"]}
+                label="History pages"
+                previousLabel="Newer"
+                nextLabel="Older"
+                href={(p) => `/inventory/${id}${p > 1 ? `?page=${p}` : ""}`}
+              />
             </div>
           )}
         </CardContent>

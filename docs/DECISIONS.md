@@ -879,3 +879,47 @@ constructor asking.
   from the requester's role; nothing is counted per person (D-008).
 
 **Consequences:** the master spec's roles table gains the Floor Manager under "create requests".
+
+### D-046 · 2026-10-14 · Accepted — Request numbers read MR-…, and pages use the full width (supersedes part of D-035)
+
+**Context:** Dylan, 2026-10-14: the constructors' records are material requests, not
+procurement, so "PR-2026-0001" reads wrong; and every page sat in a 1152 px column with empty
+space on both sides, which cut off the Procurement table's status column.
+**Decision:**
+
+- Request numbers are `MR-YYYY-NNNN` for **every role**. It is one record that the constructor
+  and the Floor Manager both refer to, so it has one number; only the screen titles differ by
+  role (D-035). The running number per year is kept (`MR-2026-0007` follows `PR-2026-0006`).
+- Migration `material_request_codes` renames stored numbers, the "Delivery for …" ledger reasons
+  and the "Copied from …" timeline notes; `material_request_codes_legacy` also renames the
+  pre-Phase 13 "Received for PR-…" reasons (to "Delivery for MR-…") and any other system text
+  with a PR- number. The audit log keeps the old numbers, because it is
+  history. Uploaded file names are the user's own and are left alone.
+- URLs, permission keys and table names still say procurement/purchase (D-035 unchanged there).
+- The app layout no longer caps the content width: tables, dashboards and reports fill the space
+  beside the sidebar. Forms keep their own widths, and a page description stops at `max-w-3xl`
+  so lines stay readable. The 1280 px rule (DESIGN.md) still holds.
+
+**Consequences:** anything that matches request numbers (tests, docs) uses `MR-`.
+
+### D-047 · 2026-10-14 · Accepted — Every list that can grow pages at 15 rows, with one pager
+
+**Context:** Dylan, 2026-10-14: some tables had no pagination, and the ones that did used 20, 25
+or 50 rows, each with its own copy of the controls.
+**Decision:**
+
+- One page size, `PAGE_SIZE = 15` in `src/lib/pagination.ts` (Dylan chose 15 over 10: about one
+  screen at 1440 × 900 on the full-width pages, D-046). Batches, Scans, Inventory, an item's stock
+  ledger, Procurement, Users and the Audit log use it.
+- One pager, `TablePager` (`src/components/features/table-pager.tsx`): "Showing 16–30 of 42
+  batches · page 2 of 3", Previous / Next (Newer / Older on the ledger and the audit log). A list
+  that fits on one page shows only its count.
+- Newly paged: Salvage (was cut at 200) and the Review queue (was cut at 50; each of its two lists
+  pages on its own, `page` and `autoPage`) page on the server. API tokens, the Settings lists and
+  the leather-roll requesters page in the browser; the Settings lists and the requesters also get
+  a **Find** box, because new rows sort by name and can land past page 1.
+- Not paged, being short by nature: a request's items (at most 10), a batch's stages, a scan's
+  detections, report summaries and the Rework board.
+
+**Consequences:** a new list uses `PAGE_SIZE` and `TablePager`. E2E tests find their own rows by
+search or filter, never by browsing.

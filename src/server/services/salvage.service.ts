@@ -1,5 +1,6 @@
 import type { SalvageStatus } from "@/lib/domain";
 import { planSalvageMove } from "@/lib/outcome-rules";
+import { pageCountFor, pageWindow } from "@/lib/pagination";
 import { Errors } from "@/server/lib/errors";
 import { findBatchById, listOpenBatches } from "@/server/models/batch.model";
 import { runInTransaction } from "@/server/models/db";
@@ -16,9 +17,9 @@ const STALE = "Someone else already changed this salvage record. Refresh the lis
 
 export type SalvageListStatus = Extract<SalvageStatus, "AVAILABLE" | "ASSIGNED" | "DISCARDED">;
 
-export async function salvageList(status: SalvageListStatus, batchCode?: string) {
-  const [rows, groups] = await Promise.all([
-    listSalvageItems({ status, batchCode }),
+export async function salvageList(status: SalvageListStatus, batchCode?: string, page = 1) {
+  const [{ rows, total }, groups] = await Promise.all([
+    listSalvageItems({ status, batchCode }, pageWindow(page)),
     countSalvageByStatus(),
   ]);
   const count = (s: SalvageStatus) => groups.find((g) => g.status === s)?._count._all ?? 0;
@@ -32,6 +33,9 @@ export async function salvageList(status: SalvageListStatus, batchCode?: string)
           }
         : null,
     })),
+    total,
+    page,
+    pageCount: pageCountFor(total),
     counts: {
       AVAILABLE: count("AVAILABLE"),
       ASSIGNED: count("ASSIGNED"),

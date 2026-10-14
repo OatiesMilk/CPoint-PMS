@@ -9,9 +9,10 @@
  *        (D-037), with each one's age; an overdue order says "Delivery late" (D-041).
  */
 import type { Metadata } from "next";
+import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ChevronLeft, ChevronRight, Info, Plus } from "lucide-react";
+import { Info, Plus } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import {
   ClosedShortBadge,
@@ -232,24 +233,28 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                           {r.code}
                         </Link>
                       </TableCell>
-                      <TableCell className="max-w-80 truncate">{summarizeItems(r.lines)}</TableCell>
+                      <TableCell className="max-w-80 min-w-48 whitespace-normal">
+                        <span className="line-clamp-2" title={summarizeItems(r.lines)}>
+                          {summarizeItems(r.lines)}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         <UrgencyBadge urgency={r.urgency} daysLeft={r.daysLeft} />
                       </TableCell>
                       {!isConstructor && (
-                        <TableCell>
+                        <TableCell className="whitespace-normal">
                           <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
                             {r.requestedBy.name}
                             {r.raisedByFloorManager && <RaisedByFloorManagerBadge />}
                           </span>
                         </TableCell>
                       )}
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                      <TableCell className="min-w-28 whitespace-normal text-muted-foreground">
                         {r.status === "PENDING"
                           ? `${formatDuration(now.getTime() - r.createdAt.getTime())} ago`
                           : formatManilaDateTime(r.createdAt)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                      <TableCell className="min-w-28 whitespace-normal text-muted-foreground">
                         {r.expectedDeliveryOn ? (
                           <span className="flex flex-col">
                             {formatCalendarDate(r.expectedDeliveryOn)}
@@ -262,13 +267,13 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                           </>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="min-w-36 whitespace-normal">
                         <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <RequestStatusBadge status={r.status} />
                           {r.closedShortAt && <ClosedShortBadge />}
                           {r.late && <LateBadge />}
                           {r.partlyApproved && (
-                            <span className="text-sm text-muted-foreground">
+                            <span className="basis-full text-sm text-muted-foreground">
                               {r.partlyApproved}
                             </span>
                           )}
@@ -278,33 +283,13 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                   ))}
                 </TableBody>
               </Table>
-              <nav
-                aria-label="Pagination"
-                className="flex items-center justify-between text-sm text-muted-foreground"
-              >
-                <span>
-                  {list.total} request{list.total === 1 ? "" : "s"} · page {list.page} of{" "}
-                  {list.pageCount}
-                </span>
-                <div className="flex gap-2">
-                  {list.page > 1 && (
-                    <Button asChild variant="secondary" size="sm">
-                      <Link href={href({ page: String(list.page - 1) })}>
-                        <ChevronLeft aria-hidden />
-                        Previous
-                      </Link>
-                    </Button>
-                  )}
-                  {list.page < list.pageCount && (
-                    <Button asChild variant="secondary" size="sm">
-                      <Link href={href({ page: String(list.page + 1) })}>
-                        Next
-                        <ChevronRight aria-hidden />
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              </nav>
+              <TablePager
+                page={list.page}
+                pageCount={list.pageCount}
+                total={list.total}
+                noun={["request", "requests"]}
+                href={(p) => href({ page: String(p) })}
+              />
             </div>
           )}
         </>
