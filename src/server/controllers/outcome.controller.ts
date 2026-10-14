@@ -48,7 +48,7 @@ export const outcomeController = {
   salvageIndex: handle(async (request: Request) => {
     await requireApiPermission("salvage:read");
     const q = salvageListQuerySchema.parse(query(request));
-    return json({ data: await salvageList(q.status, q.batch) });
+    return json({ data: await salvageList(q.status, q.batch, q.page) });
   }),
 
   /** POST /api/v1/salvage/{id}/assign  { batchId, expectedStatus, note? } */

@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { PAGE_SIZE } from "@/lib/pagination";
 import type { InventoryCategory, MovementType } from "@/lib/domain";
 import {
   CATEGORY_PREFIX,
@@ -39,8 +40,8 @@ import type {
 } from "@/server/validators/inventory.validator";
 import { recordAudit } from "./audit.service";
 
-export const INVENTORY_PAGE_SIZE = 25;
-export const MOVEMENT_PAGE_SIZE = 25;
+export const INVENTORY_PAGE_SIZE = PAGE_SIZE;
+export const MOVEMENT_PAGE_SIZE = PAGE_SIZE;
 /** The Undo toast lasts 6 s; allow a generous window, then corrections go through a stock count. */
 const UNDO_WINDOW_MS = 10 * 60_000;
 
@@ -112,6 +113,7 @@ export async function getItemDetail(id: string, page = 1) {
     item,
     movements,
     page,
+    total,
     pageCount: Math.max(1, Math.ceil(total / MOVEMENT_PAGE_SIZE)),
   };
 }

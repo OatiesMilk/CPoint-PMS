@@ -11,6 +11,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
+  // 10 s, not 5: in the first wave of a cold server, six workers signing in at once (password
+  // hashing, then two redirects) took more than 5 s and 16 tests failed at the home-page check
+  // (QA report 2026-10-14 pagination).
+  expect: { timeout: 10_000 },
   use: {
     baseURL,
     trace: "on-first-retry",

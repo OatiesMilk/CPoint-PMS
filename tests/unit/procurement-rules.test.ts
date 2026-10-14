@@ -381,8 +381,8 @@ describe("deliveries (D-042)", () => {
 
 describe("helpers", () => {
   it("formats codes like batch codes", () => {
-    expect(formatRequestCode(2026, 7)).toBe("PR-2026-0007");
-    expect(formatRequestCode(2026, 12345)).toBe("PR-2026-12345");
+    expect(formatRequestCode(2026, 7)).toBe("MR-2026-0007");
+    expect(formatRequestCode(2026, 12345)).toBe("MR-2026-12345");
   });
 
   it("summarizes items for a table cell", () => {

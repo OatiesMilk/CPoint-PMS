@@ -7,9 +7,10 @@
  *        say "Requested", so nobody orders twice; a low item without one offers "Request" (D-045).
  */
 import type { Metadata } from "next";
+import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ChevronLeft, ChevronRight, Plus, ShoppingCart } from "lucide-react";
+import { Plus, ShoppingCart } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { PageHeader } from "@/components/features/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -164,33 +165,13 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
             </TableBody>
           </Table>
 
-          <nav
-            aria-label="Pagination"
-            className="flex items-center justify-between text-sm text-muted-foreground"
-          >
-            <span>
-              {total.toLocaleString("en-PH")} item{total === 1 ? "" : "s"} · page {page} of{" "}
-              {pageCount}
-            </span>
-            <div className="flex gap-2">
-              {page > 1 ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page - 1)}>
-                    <ChevronLeft aria-hidden />
-                    Previous
-                  </Link>
-                </Button>
-              ) : null}
-              {page < pageCount ? (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page + 1)}>
-                    Next
-                    <ChevronRight aria-hidden />
-                  </Link>
-                </Button>
-              ) : null}
-            </div>
-          </nav>
+          <TablePager
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            noun={["item", "items"]}
+            href={pageHref}
+          />
         </div>
       )}
     </>

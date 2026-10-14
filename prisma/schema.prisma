@@ -506,7 +506,7 @@ model PurchaseRequestSequence {
 /// (D-044). Why it's needed goes in the first remark (D-036).
 model PurchaseRequest {
   id                 String                @id @default(uuid(7)) @db.Uuid
-  code               String                @unique // PR-2026-0001
+  code               String                @unique // MR-2026-0001
   requestedById      String                @db.Uuid
   status             PurchaseRequestStatus @default(PENDING)
   /// Required. Urgency is worked out from it at read time and never stored (D-037).

@@ -4,11 +4,11 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-14
-**Branch:** `main`. Phase 12 is merged (squash commit `c044511`, PR #5). Phase 13 is done on the
-`main` checkout, uncommitted (Dylan decides when to branch and commit; the team opens and merges
-the PR, D-032).
-**Current phase:** Phase 13 — Ordering, delivery with proof, and the remaining gaps (built, checked
-by hand and by e2e through Codex, Docker demo week passed; not committed)
+**Branch:** `main` @ `e88e7de` (Phase 13 merged, PR #6). Two follow-ups (full-width pages and MR request
+numbers, D-046; pagination at 15 rows, D-047) are on the `main` checkout, uncommitted (Dylan decides when to branch and commit;
+the team opens and merges the PR, D-032).
+**Current phase:** Follow-ups to Phase 13 — full-width pages, MR numbers, pagination (done; Codex run 3
+passed: three seven-spec e2e runs 57/57 and the full suite 75/75)
 **Overall:** 14 / 14 phases built
 
 ## Phase progress
@@ -30,7 +30,7 @@ by hand and by e2e through Codex, Docker demo week passed; not committed)
 
 ## What works right now
 
-- **Database:** 9 migrations (the latest is `purchase_ordering_deliveries`). UUIDv7 ids (D-018).
+- **Database:** 11 migrations (the latest is `material_request_codes_legacy`, data only: PR- numbers become MR-, D-046). UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017):
   - reference data and the first System Admin;
   - demo users and inventory when `SEED_DEMO_USERS=true`. The demo constructor is a designated
@@ -84,10 +84,12 @@ by hand and by e2e through Codex, Docker demo week passed; not committed)
     requests" on the constructor home;
   - who may request leather rolls is chosen by the FM (Procurement tab) or the Admin (Users).
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
+- **Pagination** (D-047): every list that can grow pages at 15 rows with one pager; Settings
+  and the leather-roll requesters have a Find box.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 494 unit tests pass. 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
+  - 500 unit tests pass. 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
     role and on the new procurement screens;
   - Phase 13 in a browser (Codex, 2026-10-14): run 1 passed 47 of 54 manual checks, with one
     app fault (a chosen proof file could disappear) and six blocked. Run 2, after the fix, passed
@@ -103,10 +105,8 @@ by hand and by e2e through Codex, Docker demo week passed; not committed)
 
 ## Next step (exact)
 
-1. Dylan: create the branch, commit and push Phase 13, and open the PR (D-032). Watch CI's e2e and
-   Docker jobs.
-2. After the merge, delete the untracked `phase-13-plan.md` in the project root, and set
-   `docs/STATUS.md`'s branch line to the merge commit.
+1. Dylan: create a branch, commit and push the follow-ups (D-046, D-047), and open the PR (D-032).
+   Delete the untracked `phase-13-plan.md` in the root and the `qa/_to_delete/` folder.
 
 Later:
 

@@ -1,4 +1,5 @@
 import { auditDiff, type DiffRow } from "@/lib/admin-rules";
+import { PAGE_SIZE } from "@/lib/pagination";
 import {
   auditFacets,
   countAuditSince,
@@ -7,7 +8,7 @@ import {
 } from "@/server/models/audit-log.model";
 import type { AuditQuery } from "@/server/validators/audit.validator";
 
-export const AUDIT_PAGE_SIZE = 50;
+export const AUDIT_PAGE_SIZE = PAGE_SIZE;
 
 /** Manila calendar day → UTC instant at its start (Manila is UTC+8, no DST). */
 const manilaDayStart = (day: string) => new Date(`${day}T00:00:00+08:00`);

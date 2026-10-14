@@ -6,9 +6,10 @@
  *        the changed fields side by side. Read-only: nothing here can alter the trail.
  */
 import type { Metadata } from "next";
+import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -207,33 +208,15 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
               </li>
             ))}
           </ul>
-          <nav
-            aria-label="Pagination"
-            className="flex items-center justify-between text-sm text-muted-foreground"
-          >
-            <span>
-              {total.toLocaleString("en-PH")} entr{total === 1 ? "y" : "ies"} · page {page} of{" "}
-              {pageCount}
-            </span>
-            <div className="flex gap-2">
-              {page > 1 && (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page - 1)}>
-                    <ChevronLeft aria-hidden />
-                    Newer
-                  </Link>
-                </Button>
-              )}
-              {page < pageCount && (
-                <Button asChild variant="secondary" size="sm">
-                  <Link href={pageHref(page + 1)}>
-                    Older
-                    <ChevronRight aria-hidden />
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </nav>
+          <TablePager
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            noun={["entry", "entries"]}
+            previousLabel="Newer"
+            nextLabel="Older"
+            href={pageHref}
+          />
         </div>
       )}
     </>

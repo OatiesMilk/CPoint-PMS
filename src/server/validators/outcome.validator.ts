@@ -30,6 +30,7 @@ export const salvageDiscardSchema = z.object({
 export const salvageListQuerySchema = z.object({
   status: z.enum(["AVAILABLE", "ASSIGNED", "DISCARDED"]).catch("AVAILABLE").default("AVAILABLE"),
   batch: z.string().trim().max(30).optional().catch(undefined),
+  page: z.coerce.number().int().min(1).max(10_000).optional().catch(undefined),
 });
 
 export const reworkListQuerySchema = z.object({

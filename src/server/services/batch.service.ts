@@ -1,4 +1,5 @@
 import { STAGE_ORDER, type Stage } from "@/lib/domain";
+import { PAGE_SIZE } from "@/lib/pagination";
 import { manilaYear } from "@/lib/format";
 import {
   availableActions,
@@ -40,8 +41,6 @@ import { findInventoryItem, listRollMovementsForBatch } from "@/server/models/in
 import type { BatchFormValues } from "@/server/validators/batch.validator";
 import { recordAudit } from "./audit.service";
 import { postMovement, rollItemOptions } from "./inventory.service";
-
-export const PAGE_SIZE = 20;
 
 type Actor = { id: string };
 

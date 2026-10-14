@@ -66,7 +66,7 @@ System Admin). Writes need `batch:manage` (Floor Manager). All writes are audite
 
 | Method & path                      | Body                                                | Returns                                                                          |
 | ---------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `GET /api/v1/batches`              | query: `status`, `stage`, `shoeTypeId`, `q`, `page` | `{ data: Batch[], meta: { total, page, pageCount } }`, 20 per page, newest first |
+| `GET /api/v1/batches`              | query: `status`, `stage`, `shoeTypeId`, `q`, `page` | `{ data: Batch[], meta: { total, page, pageCount } }`, 15 per page, newest first |
 | `POST /api/v1/batches`             | `BatchForm`                                         | `201 { data: Batch }`, status `PLANNED`                                          |
 | `GET /api/v1/batches/{id}`         | —                                                   | `{ data: { batch, actions, durations } }`                                        |
 | `PATCH /api/v1/batches/{id}`       | `BatchForm`                                         | `{ data: Batch }`                                                                |
@@ -158,14 +158,14 @@ Every REWORK verdict opens a **repair ticket**; every REJECT keeps the section a
 (D-007). These endpoints move them along. Each takes `expectedStatus` (what the caller last saw)
 and answers `409 STALE` if it changed. All moves are audited.
 
-| Method & path                        | Permission       | Body / query                                                               |
-| ------------------------------------ | ---------------- | -------------------------------------------------------------------------- |
-| `GET /api/v1/rework`                 | `rework:manage`  | `?batch=` → `{ waiting, inProgress, done }` (done = last 7 days)           |
-| `POST /api/v1/rework/{id}/status`    | `rework:manage`  | `{ move: start\|done\|reopen\|unstart, expectedStatus, note? }`            |
-| `GET /api/v1/salvage`                | `salvage:read`   | `?status=AVAILABLE\|ASSIGNED\|DISCARDED&batch=` → `{ rows, counts }`       |
-| `POST /api/v1/salvage/{id}/assign`   | `salvage:manage` | `{ batchId, expectedStatus, note? }`, another planned or in-progress batch |
-| `POST /api/v1/salvage/{id}/unassign` | `salvage:manage` | `{ expectedStatus }`, only while the receiving batch is open               |
-| `POST /api/v1/salvage/{id}/discard`  | `salvage:manage` | `{ reason, expectedStatus }`; final                                        |
+| Method & path                        | Permission       | Body / query                                                                                       |
+| ------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/rework`                 | `rework:manage`  | `?batch=` → `{ waiting, inProgress, done }` (done = last 7 days)                                   |
+| `POST /api/v1/rework/{id}/status`    | `rework:manage`  | `{ move: start\|done\|reopen\|unstart, expectedStatus, note? }`                                    |
+| `GET /api/v1/salvage`                | `salvage:read`   | `?status=AVAILABLE\|ASSIGNED\|DISCARDED&batch=&page=` → `{ rows, total, page, pageCount, counts }` |
+| `POST /api/v1/salvage/{id}/assign`   | `salvage:manage` | `{ batchId, expectedStatus, note? }`, another planned or in-progress batch                         |
+| `POST /api/v1/salvage/{id}/unassign` | `salvage:manage` | `{ expectedStatus }`, only while the receiving batch is open                                       |
+| `POST /api/v1/salvage/{id}/discard`  | `salvage:manage` | `{ reason, expectedStatus }`; final                                                                |
 
 **Repairs:**
 
@@ -181,15 +181,15 @@ and answers `409 STALE` if it changed. All moves are audited.
 Stock is a ledger (D-023): `quantityOnHand` changes **only** through a movement, and movements are
 never edited or deleted. Quantities are numbers with at most 2 decimals.
 
-| Method & path                                | Permission         | Body / query                                                                         |
-| -------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------ |
-| `GET /api/v1/inventory`                      | `inventory:read`   | `?category=&stock=low\|out&q=&inactive=1&page=` → `{ rows, total, page, pageCount }` |
-| `POST /api/v1/inventory`                     | `inventory:manage` | `ItemForm` → `201`                                                                   |
-| `GET /api/v1/inventory/{id}`                 | `inventory:read`   | `?page=` → `{ item, movements, page, pageCount }` (newest first, `balanceAfter`)     |
-| `PATCH /api/v1/inventory/{id}`               | `inventory:manage` | `ItemForm` (quantity is never editable), or `{ isActive }`                           |
-| `GET /api/v1/inventory/{id}/movements`       | `inventory:read`   | `?page=`                                                                             |
-| `POST /api/v1/inventory/{id}/movements`      | `inventory:manage` | `Movement` → `201 { movementId, onHandAfter, message }`                              |
-| `POST /api/v1/inventory/movements/{id}/undo` | `inventory:manage` | records the opposite of a recent IN/OUT (within 10 minutes, once)                    |
+| Method & path                                | Permission         | Body / query                                                                            |
+| -------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------- |
+| `GET /api/v1/inventory`                      | `inventory:read`   | `?category=&stock=low\|out&q=&inactive=1&page=` → `{ rows, total, page, pageCount }`    |
+| `POST /api/v1/inventory`                     | `inventory:manage` | `ItemForm` → `201`                                                                      |
+| `GET /api/v1/inventory/{id}`                 | `inventory:read`   | `?page=` → `{ item, movements, total, page, pageCount }` (newest first, `balanceAfter`) |
+| `PATCH /api/v1/inventory/{id}`               | `inventory:manage` | `ItemForm` (quantity is never editable), or `{ isActive }`                              |
+| `GET /api/v1/inventory/{id}/movements`       | `inventory:read`   | `?page=`                                                                                |
+| `POST /api/v1/inventory/{id}/movements`      | `inventory:manage` | `Movement` → `201 { movementId, onHandAfter, message }`                                 |
+| `POST /api/v1/inventory/movements/{id}/undo` | `inventory:manage` | records the opposite of a recent IN/OUT (within 10 minutes, once)                       |
 
 **`ItemForm`**: `sku` (2–20, letters/numbers/dashes, unique; stored upper-case), `name` (2–80),
 `category` (`LEATHER_ROLL|NAILS|ADHESIVE|THREAD|EQUIPMENT|OTHER`), `unit` (1–20, e.g. `roll`),
@@ -258,7 +258,7 @@ and a move the status doesn't allow answers `409 CONFLICT` with one sentence say
 | `POST /api/v1/procurement/requests/{id}/reject`        | `procurement:decide` (FM)                                                          | `{ reason }` (3–300). Rejects every line with the one reason                                                                                                                                                                                                                                                                                                                                                                                      |
 | `GET /api/v1/procurement/suppliers`                    | `procurement:decide` (FM)                                                          | active suppliers `{ id, name }`, for the order form                                                                                                                                                                                                                                                                                                                                                                                               |
 | `POST /api/v1/procurement/requests/{id}/order`         | `procurement:decide` (FM)                                                          | `{ supplierId, reference?, expectedDeliveryOn, note? }`. APPROVED → ORDERED. `expectedDeliveryOn` is `YYYY-MM-DD`, today or later, at most 365 days ahead; the supplier must be active                                                                                                                                                                                                                                                            |
-| `POST /api/v1/procurement/requests/{id}/deliveries`    | `procurement:decide` (FM)                                                          | **multipart/form-data**: `data` = JSON `{ deliveredOn, note?, lines: [{ lineId, quantity }] }`, `files` = 1–5 proof files. → `201 { id, code, status, deliveryId, message }`. One quantity per approved line (0 allowed, never more than outstanding, not all 0); `deliveredOn` not in the future and not before the order. Posts an inventory **IN** ("Delivery for PR-…") per inventory line. Status becomes `PARTIALLY_RECEIVED` or `RECEIVED` |
+| `POST /api/v1/procurement/requests/{id}/deliveries`    | `procurement:decide` (FM)                                                          | **multipart/form-data**: `data` = JSON `{ deliveredOn, note?, lines: [{ lineId, quantity }] }`, `files` = 1–5 proof files. → `201 { id, code, status, deliveryId, message }`. One quantity per approved line (0 allowed, never more than outstanding, not all 0); `deliveredOn` not in the future and not before the order. Posts an inventory **IN** ("Delivery for MR-…") per inventory line. Status becomes `PARTIALLY_RECEIVED` or `RECEIVED` |
 | `POST /api/v1/procurement/deliveries/{id}/attachments` | `procurement:decide` (FM)                                                          | **multipart/form-data**: `files` = 1–5 proof files, up to 10 per delivery in all → `201`. Proof is only ever added                                                                                                                                                                                                                                                                                                                                |
 | `GET /api/v1/procurement/attachments/{id}`             | `procurement:read` (constructors: own request)                                     | the file, with `Cache-Control: private`, `X-Content-Type-Options: nosniff` and `Content-Disposition: inline`. `404` for anyone who can't see the request                                                                                                                                                                                                                                                                                          |
 | `POST /api/v1/procurement/requests/{id}/close-short`   | `procurement:decide` (FM)                                                          | `{ reason }` (3–300). PARTIALLY_RECEIVED → RECEIVED with `closedShortAt` and `closedShortReason`                                                                                                                                                                                                                                                                                                                                                  |
@@ -334,7 +334,7 @@ duplicate email is `422` on `email`.
 New thresholds apply to new scans only; each scan keeps its `thresholdsSnapshot`.
 
 **Audit log**: `GET /api/v1/audit-logs?actor=&action=&entity=&entityId=&from=&to=&page=`
-(`from`/`to` are Manila calendar days) → `{ entries, total, page, pageCount }`, newest first, 50
+(`from`/`to` are Manila calendar days) → `{ entries, total, page, pageCount }`, newest first, 15
 per page. Each entry carries the changed fields as `diff: [{ key, before, after }]`.
 
 ## Reports (session)

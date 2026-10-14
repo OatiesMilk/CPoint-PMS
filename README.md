@@ -154,7 +154,7 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 1. **Constructor home** (`constructor@cpoint.local`): **My material requests**. The constructor's
    side is called **Material requests** everywhere; the Floor Manager and Admin see the same
    module as **Procurement**. **New material request**: pick **Contact cement** (the picker shows
-   it's low, and that PR-… already asks for it), 2 cans, set **Needed by** to tomorrow (the form
+   it's low, and that MR-… already asks for it), 2 cans, set **Needed by** to tomorrow (the form
    says the Floor Manager will see it as **High**), add a remark if it helps, and send it. Try
    sending it empty first: each field says exactly what is missing. Requests can't be edited
    afterwards: cancel and resend. Every constructor can request supplies; **leather rolls** only
@@ -180,7 +180,7 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 5. **Record a delivery.** Open the **Partly received** request: two of four rolls came, with a
    photo and a PDF of the receipt under Deliveries. **Record delivery…** for the rest: each
    quantity starts at what is still to come, a proof file is required, and saving adds exactly
-   that to stock (Inventory shows "Delivery for PR-…"). If the rest won't come, **Close short…**
+   that to stock (Inventory shows "Delivery for MR-…"). If the rest won't come, **Close short…**
    with a reason instead.
 6. **When it goes wrong.** An ordered request can be cancelled with a reason until something
    arrives (see the cancelled soles order). On a rejected or cancelled request the requester
@@ -317,7 +317,7 @@ erDiagram
     decimal reorderLevel
   }
   PurchaseRequest {
-    string code "PR-2026-0001"
+    string code "MR-2026-0001"
     enum status "PENDING, APPROVED, REJECTED, CANCELLED, RECEIVED"
     date neededBy "required; urgency is worked out from it"
     string rejectionReason

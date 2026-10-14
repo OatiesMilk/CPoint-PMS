@@ -10,6 +10,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { Info } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
+import { TablePager } from "@/components/features/table-pager";
 import {
   Table,
   TableBody,
@@ -39,12 +40,12 @@ export default async function SalvagePage({ searchParams }: PageProps<"/salvage"
   await connection();
   const query = salvageListQuerySchema.parse(await searchParams);
   const canManage = can(user.role, "salvage:manage");
-  const [{ rows, counts }, batches] = await Promise.all([
-    salvageList(query.status, query.batch),
+  const [{ rows, counts, total, page, pageCount }, batches] = await Promise.all([
+    salvageList(query.status, query.batch, query.page),
     canManage ? assignableBatches() : Promise.resolve([]),
   ]);
-  const href = (status: string) =>
-    `/salvage?status=${status}${query.batch ? `&batch=${encodeURIComponent(query.batch)}` : ""}`;
+  const href = (status: string, p = 1) =>
+    `/salvage?status=${status}${query.batch ? `&batch=${encodeURIComponent(query.batch)}` : ""}${p > 1 ? `&page=${p}` : ""}`;
 
   return (
     <>
@@ -94,75 +95,88 @@ export default async function SalvagePage({ searchParams }: PageProps<"/salvage"
               : "Nothing has been discarded."}
         </p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Section</TableHead>
-              <TableHead>Defect</TableHead>
-              <TableHead>Rejected</TableHead>
-              {query.status === "ASSIGNED" && <TableHead>Used in</TableHead>}
-              {query.status !== "AVAILABLE" && <TableHead>Note</TableHead>}
-              {canManage && (
-                <TableHead className="text-right">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r) => {
-              const label = `${r.originBatch.code} · #${r.scan.sequence}`;
-              return (
-                <TableRow key={r.id} aria-label={label}>
-                  <TableCell>
-                    <Link
-                      href={`/scans/${r.scan.id}`}
-                      className="underline-offset-4 hover:underline"
-                    >
-                      <span className="font-mono">{r.originBatch.code}</span> · #{r.scan.sequence}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    {r.defect ? `${r.defect.label} ${Math.round(r.defect.confidence * 100)}%` : "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatManilaDateTime(r.createdAt)}
-                  </TableCell>
-                  {query.status === "ASSIGNED" && (
+        <div className="flex flex-col gap-3">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Section</TableHead>
+                <TableHead>Defect</TableHead>
+                <TableHead>Rejected</TableHead>
+                {query.status === "ASSIGNED" && <TableHead>Used in</TableHead>}
+                {query.status !== "AVAILABLE" && <TableHead>Note</TableHead>}
+                {canManage && (
+                  <TableHead className="text-right">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                )}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r) => {
+                const label = `${r.originBatch.code} · #${r.scan.sequence}`;
+                return (
+                  <TableRow key={r.id} aria-label={label}>
                     <TableCell>
-                      {r.assignedBatch && (
-                        <Link
-                          href={`/batches/${r.assignedBatch.id}`}
-                          className="font-mono underline-offset-4 hover:underline"
-                        >
-                          {r.assignedBatch.code}
-                        </Link>
-                      )}
+                      <Link
+                        href={`/scans/${r.scan.id}`}
+                        className="underline-offset-4 hover:underline"
+                      >
+                        <span className="font-mono">{r.originBatch.code}</span> · #{r.scan.sequence}
+                      </Link>
                     </TableCell>
-                  )}
-                  {query.status !== "AVAILABLE" && (
-                    <TableCell className="max-w-72 whitespace-normal text-muted-foreground">
-                      {r.notes ?? "—"}
-                      {r.handledBy && <span className="block text-xs">by {r.handledBy.name}</span>}
+                    <TableCell>
+                      {r.defect
+                        ? `${r.defect.label} ${Math.round(r.defect.confidence * 100)}%`
+                        : "—"}
                     </TableCell>
-                  )}
-                  {canManage && (
-                    <TableCell className="text-right">
-                      <SalvageActions
-                        id={r.id}
-                        label={label}
-                        status={r.status}
-                        originBatchId={r.originBatchId}
-                        assignedBatchId={r.assignedBatch?.id ?? null}
-                        batches={batches}
-                      />
+                    <TableCell className="text-muted-foreground">
+                      {formatManilaDateTime(r.createdAt)}
                     </TableCell>
-                  )}
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                    {query.status === "ASSIGNED" && (
+                      <TableCell>
+                        {r.assignedBatch && (
+                          <Link
+                            href={`/batches/${r.assignedBatch.id}`}
+                            className="font-mono underline-offset-4 hover:underline"
+                          >
+                            {r.assignedBatch.code}
+                          </Link>
+                        )}
+                      </TableCell>
+                    )}
+                    {query.status !== "AVAILABLE" && (
+                      <TableCell className="max-w-72 whitespace-normal text-muted-foreground">
+                        {r.notes ?? "—"}
+                        {r.handledBy && (
+                          <span className="block text-xs">by {r.handledBy.name}</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {canManage && (
+                      <TableCell className="text-right">
+                        <SalvageActions
+                          id={r.id}
+                          label={label}
+                          status={r.status}
+                          originBatchId={r.originBatchId}
+                          assignedBatchId={r.assignedBatch?.id ?? null}
+                          batches={batches}
+                        />
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          <TablePager
+            page={page}
+            pageCount={pageCount}
+            total={total}
+            noun={["section", "sections"]}
+            href={(p) => href(query.status, p)}
+          />
+        </div>
       )}
     </>
   );

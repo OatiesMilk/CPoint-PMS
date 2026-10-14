@@ -178,6 +178,8 @@ test.describe("camera settings", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByLabel("Class key")).toHaveValue(key);
     await dialog.getByRole("button", { name: "Add defect type" }).click();
+    // Found, not browsed: other runs add defect types that can push this one past page 1 (D-047).
+    await page.getByLabel("Find defect type").fill(key.replace("-", " "));
     await expect(
       page.getByRole("row", { name: new RegExp(key.replace("-", " "), "i") }),
     ).toBeVisible();
@@ -208,6 +210,8 @@ test("a deactivated shoe type or supplier disappears from the batch form", async
     .getByLabel("Code")
     .fill(`E${suffix().slice(0, 5)}`.toUpperCase());
   await admin.getByRole("dialog").getByRole("button", { name: "Add shoe type" }).click();
+  // Found, not browsed: other runs add shoe types and suppliers past page 1 (D-047).
+  await admin.getByLabel("Find shoe type").fill(shoe);
   await expect(admin.getByRole("row", { name: shoe })).toContainText("Active");
 
   await admin.goto("/admin/settings?tab=suppliers");
@@ -215,6 +219,7 @@ test("a deactivated shoe type or supplier disappears from the batch form", async
   await admin.getByRole("dialog").getByLabel("Name").fill(supplier);
   await admin.getByRole("dialog").getByLabel("Phone (optional)").fill("0917 123 4567");
   await admin.getByRole("dialog").getByRole("button", { name: "Add supplier" }).click();
+  await admin.getByLabel("Find supplier").fill(supplier);
   await expect(admin.getByRole("row", { name: supplier })).toContainText("0917 123 4567");
 
   await signInAs(page, ACCOUNTS.manager);
@@ -230,6 +235,7 @@ test("a deactivated shoe type or supplier disappears from the batch form", async
     .click();
   await expect(admin.getByRole("row", { name: supplier })).toContainText("Inactive");
   await admin.goto("/admin/settings?tab=shoes");
+  await admin.getByLabel("Find shoe type").fill(shoe);
   await admin.getByRole("row", { name: shoe }).getByRole("button", { name: "Deactivate" }).click();
   await expect(admin.getByRole("row", { name: shoe })).toContainText("Inactive");
 

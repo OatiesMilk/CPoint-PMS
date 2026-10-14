@@ -1,4 +1,5 @@
 import type { Verdict } from "@/lib/domain";
+import { PAGE_SIZE, pageCountFor, pageWindow } from "@/lib/pagination";
 import { computeBatchYield, type BatchYield } from "@/lib/outcome-rules";
 import { countReworkByStatus, countSalvageAssignedTo } from "@/server/models/outcome.model";
 import { manilaToday } from "@/lib/format";
@@ -13,7 +14,7 @@ import {
 } from "@/server/models/scan.model";
 import type { ScanListQuery } from "@/server/validators/scan.validator";
 
-export const SCAN_PAGE_SIZE = 20;
+export const SCAN_PAGE_SIZE = PAGE_SIZE;
 
 export type ScanListItem = {
   id: string;
@@ -91,24 +92,36 @@ export function startOfManilaDay(now: Date = new Date()): Date {
   return new Date(Date.UTC(y, m - 1, d) - 8 * 3_600_000);
 }
 
-export const REVIEW_QUEUE_LIMIT = 50;
-
-/** Oldest pending first (fair to the waiting sections); `batchCode` narrows both lists. */
-export async function reviewQueue(now: Date = new Date(), batchCode?: string) {
+/**
+ * Oldest pending first (fair to the waiting sections); `batchCode` narrows both lists. Each list
+ * pages on its own (D-047): `pendingPage` for the flagged scans, `autoPage` for today's calls.
+ */
+export async function reviewQueue(
+  now: Date = new Date(),
+  batchCode?: string,
+  pendingPage = 1,
+  autoPage = 1,
+) {
   const [pending, todayAuto] = await Promise.all([
-    listScanRows(
-      { status: "PENDING_REVIEW", batchCode },
-      { skip: 0, take: REVIEW_QUEUE_LIMIT },
-      "oldest",
-    ),
+    listScanRows({ status: "PENDING_REVIEW", batchCode }, pageWindow(pendingPage), "oldest"),
     listScanRows(
       { aiVerdictIn: ["REWORK", "REJECT"], since: startOfManilaDay(now), batchCode },
-      { skip: 0, take: REVIEW_QUEUE_LIMIT },
+      pageWindow(autoPage),
     ),
   ]);
   return {
-    pending: { rows: pending.rows.map(toItem), total: pending.total },
-    todayAuto: { rows: todayAuto.rows.map(toItem), total: todayAuto.total },
+    pending: {
+      rows: pending.rows.map(toItem),
+      total: pending.total,
+      page: pendingPage,
+      pageCount: pageCountFor(pending.total),
+    },
+    todayAuto: {
+      rows: todayAuto.rows.map(toItem),
+      total: todayAuto.total,
+      page: autoPage,
+      pageCount: pageCountFor(todayAuto.total),
+    },
   };
 }
 

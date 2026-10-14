@@ -72,7 +72,7 @@ const nails = {
 function request(overrides: Record<string, unknown> = {}, decisions: string[] = []) {
   return {
     id: "pr1",
-    code: "PR-2026-0007",
+    code: "MR-2026-0007",
     status: "PENDING",
     requestedById: "sc1",
     requestedBy: { id: "sc1", name: "Sam", role: "SHOE_CONSTRUCTOR" },
@@ -140,7 +140,7 @@ describe("createRequest", () => {
   it("lets any Shoe Constructor request materials other than leather rolls (D-031)", async () => {
     await expect(
       svc.createRequest(values, { ...sc, canRequestLeatherRolls: false }, now),
-    ).resolves.toMatchObject({ code: "PR-2026-0007" });
+    ).resolves.toMatchObject({ code: "MR-2026-0007" });
   });
 
   it("refuses leather rolls without the Floor Manager's OK, picked or typed (D-031)", async () => {
@@ -207,15 +207,15 @@ describe("createRequest", () => {
   it("copies only the requester's own rejected or cancelled request (D-044)", async () => {
     const source = "0199c0de-0000-7000-8000-0000000000aa";
     proc.findRequestDetail.mockResolvedValue(
-      request({ id: source, code: "PR-2026-0003", status: "REJECTED" }),
+      request({ id: source, code: "MR-2026-0003", status: "REJECTED" }),
     );
     await expect(
       svc.createRequest({ ...values, copiedFromId: source }, sc, now),
     ).resolves.toMatchObject({ id: "pr1" });
     expect(proc.insertRequest.mock.calls[0][0]).toMatchObject({ copiedFromId: source });
-    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({ note: "Copied from PR-2026-0003." });
+    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({ note: "Copied from MR-2026-0003." });
     expect(recordAudit.mock.calls[0][1]).toMatchObject({
-      after: { copiedFrom: "PR-2026-0003" },
+      after: { copiedFrom: "MR-2026-0003" },
     });
 
     proc.insertRequest.mockClear();
@@ -245,7 +245,7 @@ describe("createRequest", () => {
     row.lines[0].rejectionReason = "Still 3 boxes" as never;
     proc.findRequestDetail.mockResolvedValue(row);
     expect(await svc.getCopySource("pr1", sc)).toMatchObject({
-      code: "PR-2026-0007",
+      code: "MR-2026-0007",
       lines: [
         {
           inventoryItemId: "i1",
@@ -275,7 +275,7 @@ describe("createRequest", () => {
       sc,
       now,
     );
-    expect(result).toMatchObject({ id: "pr1", code: "PR-2026-0007", alreadyRequested: [] });
+    expect(result).toMatchObject({ id: "pr1", code: "MR-2026-0007", alreadyRequested: [] });
     expect(proc.nextRequestNumber).toHaveBeenCalledWith(2026, "tx");
     expect(proc.insertRequest.mock.calls[0][0]).toMatchObject({
       requestedById: "sc1",
@@ -328,10 +328,10 @@ describe("createRequest", () => {
 
   it("warns, without blocking, when an open request already asks for the item", async () => {
     proc.openRequestsForItems.mockResolvedValueOnce([
-      { inventoryItemId: "i1", request: { id: "pr0", code: "PR-2026-0003", status: "PENDING" } },
+      { inventoryItemId: "i1", request: { id: "pr0", code: "MR-2026-0003", status: "PENDING" } },
     ]);
     const result = await svc.createRequest(values, sc, now);
-    expect(result.alreadyRequested).toEqual([{ itemName: "Shoe nails", code: "PR-2026-0003" }]);
+    expect(result.alreadyRequested).toEqual([{ itemName: "Shoe nails", code: "MR-2026-0003" }]);
     expect(proc.insertRequest).toHaveBeenCalled();
   });
 
@@ -366,7 +366,7 @@ describe("decisions", () => {
       fm,
       now,
     );
-    expect(result).toMatchObject({ status: "APPROVED", message: "PR-2026-0007 approved." });
+    expect(result).toMatchObject({ status: "APPROVED", message: "MR-2026-0007 approved." });
     expect(proc.transitionStatus).toHaveBeenCalledWith(
       "pr1",
       "PENDING",
@@ -400,7 +400,7 @@ describe("decisions", () => {
       fm,
       now,
     );
-    expect(result).toMatchObject({ status: "REJECTED", message: "PR-2026-0007 rejected." });
+    expect(result).toMatchObject({ status: "REJECTED", message: "MR-2026-0007 rejected." });
     expect(proc.transitionStatus.mock.calls[0][2]).toMatchObject({
       status: "REJECTED",
       rejectionReason: "We have 3 boxes in the back",
@@ -514,7 +514,7 @@ describe("ordering (D-041)", () => {
     const result = await svc.orderRequest("pr1", { ...order, note: "Half paid" }, fm, now);
     expect(result).toMatchObject({
       status: "ORDERED",
-      message: "PR-2026-0007 marked as ordered from Marikina Leather.",
+      message: "MR-2026-0007 marked as ordered from Marikina Leather.",
     });
     expect(proc.transitionStatus).toHaveBeenCalledWith(
       "pr1",
@@ -603,7 +603,7 @@ describe("deliveries and proof (D-042)", () => {
     const result = await svc.recordDelivery("pr1", input(4, 1), [jpeg(), pdf()], fm, now, storage);
     expect(result).toMatchObject({
       status: "RECEIVED",
-      message: "PR-2026-0007 received in full. Stock updated.",
+      message: "MR-2026-0007 received in full. Stock updated.",
     });
     expect(proc.transitionStatus).toHaveBeenCalledWith(
       "pr1",
@@ -616,7 +616,7 @@ describe("deliveries and proof (D-042)", () => {
     expect(postMovement).toHaveBeenCalledWith(
       "tx",
       expect.objectContaining({ id: "i1", quantityOnHand: 2 }),
-      { type: "IN", delta: 4, reason: "Delivery for PR-2026-0007" },
+      { type: "IN", delta: 4, reason: "Delivery for MR-2026-0007" },
       fm,
       now,
     );
@@ -663,7 +663,7 @@ describe("deliveries and proof (D-042)", () => {
     expect(first).toMatchObject({
       status: "PARTIALLY_RECEIVED",
       message:
-        "Delivery recorded for PR-2026-0007. Still to come: 2.5 boxes of Shoe nails, 1 pack of Brass eyelets.",
+        "Delivery recorded for MR-2026-0007. Still to come: 2.5 boxes of Shoe nails, 1 pack of Brass eyelets.",
     });
     expect(proc.transitionStatus).toHaveBeenCalledWith(
       "pr1",
@@ -854,7 +854,7 @@ describe("deliveries and proof (D-042)", () => {
       ordered(["1.5", "1"], { status: "PARTIALLY_RECEIVED" }),
     );
     const result = await svc.closeShort("pr1", "Supplier is out of stock", fm, now);
-    expect(result).toMatchObject({ status: "RECEIVED", message: "PR-2026-0007 closed short." });
+    expect(result).toMatchObject({ status: "RECEIVED", message: "MR-2026-0007 closed short." });
     expect(proc.transitionStatus).toHaveBeenCalledWith(
       "pr1",
       "PARTIALLY_RECEIVED",
@@ -886,11 +886,11 @@ describe("deliveries and proof (D-042)", () => {
     const delivery = (attachments: number) => ({
       id: "d1",
       _count: { attachments },
-      request: { id: "pr1", code: "PR-2026-0007", requestedById: "sc1", status: "RECEIVED" },
+      request: { id: "pr1", code: "MR-2026-0007", requestedById: "sc1", status: "RECEIVED" },
     });
     proc.findDelivery.mockResolvedValue(delivery(1));
     const result = await svc.addDeliveryProof("d1", [pdf()], fm, now, storage);
-    expect(result).toMatchObject({ added: 1, message: "1 proof file added to PR-2026-0007." });
+    expect(result).toMatchObject({ added: 1, message: "1 proof file added to MR-2026-0007." });
     expect(proc.insertAttachments).toHaveBeenCalledWith(
       "d1",
       "fm1",
@@ -951,7 +951,7 @@ describe("item decisions (D-039)", () => {
     const result = await svc.decideRequest("pr1", mixed, fm, now);
     expect(result).toMatchObject({
       status: "APPROVED",
-      message: "PR-2026-0007 decided: 1 of 2 items approved.",
+      message: "MR-2026-0007 decided: 1 of 2 items approved.",
     });
     expect(proc.transitionStatus).toHaveBeenCalledWith(
       "pr1",
@@ -1016,7 +1016,7 @@ describe("item decisions (D-039)", () => {
       fm,
       now,
     );
-    expect(result).toMatchObject({ status: "REJECTED", message: "PR-2026-0007 rejected." });
+    expect(result).toMatchObject({ status: "REJECTED", message: "MR-2026-0007 rejected." });
     // Two different reasons: none of them is the request's reason.
     expect(proc.transitionStatus.mock.calls[0][2]).toMatchObject({
       status: "REJECTED",

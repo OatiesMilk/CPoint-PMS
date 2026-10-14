@@ -49,8 +49,12 @@ test("the Floor Manager adds an item, receives, uses (and undoes), and counts st
   const name = `E2E thread ${sku}`;
   await signInAs(page, ACCOUNTS.manager);
   await page.goto("/inventory/new");
-  await page.getByLabel("Category").selectOption("THREAD");
-  await expect(page.getByLabel("Unit")).toHaveValue("spool");
+  // A choice made before React hydrates the form is lost; choose again until the unit follows
+  // (QA report 2026-10-14 follow-ups run 2: once, the unit stayed "roll" under six workers).
+  await expect(async () => {
+    await page.getByLabel("Category").selectOption("THREAD");
+    await expect(page.getByLabel("Unit")).toHaveValue("spool", { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
   await page.getByLabel("Code").fill(sku);
   await page.getByLabel("Name").fill(name);
   await page.getByLabel("Reorder at").fill("4");

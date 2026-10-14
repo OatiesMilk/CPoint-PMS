@@ -170,26 +170,32 @@ const salvageSelect = {
 
 export type SalvageRow = Prisma.SalvageItemGetPayload<{ select: typeof salvageSelect }>;
 
-export function listSalvageItems(
+export async function listSalvageItems(
   filter: { status: SalvageStatus; batchCode?: string },
+  page: { skip: number; take: number },
   db: Db = defaultDb(),
-): Promise<SalvageRow[]> {
-  return db.salvageItem.findMany({
-    where: {
-      status: filter.status,
-      ...(filter.batchCode
-        ? {
-            OR: [
-              { originBatch: { code: { contains: filter.batchCode, mode: "insensitive" } } },
-              { assignedBatch: { code: { contains: filter.batchCode, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-    },
-    select: salvageSelect,
-    orderBy: filter.status === "AVAILABLE" ? { createdAt: "asc" } : { createdAt: "desc" },
-    take: 200,
-  });
+): Promise<{ rows: SalvageRow[]; total: number }> {
+  const where: Prisma.SalvageItemWhereInput = {
+    status: filter.status,
+    ...(filter.batchCode
+      ? {
+          OR: [
+            { originBatch: { code: { contains: filter.batchCode, mode: "insensitive" } } },
+            { assignedBatch: { code: { contains: filter.batchCode, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
+  };
+  const [rows, total] = await Promise.all([
+    db.salvageItem.findMany({
+      where,
+      select: salvageSelect,
+      orderBy: filter.status === "AVAILABLE" ? { createdAt: "asc" } : { createdAt: "desc" },
+      ...page,
+    }),
+    db.salvageItem.count({ where }),
+  ]);
+  return { rows, total };
 }
 
 export function countSalvageByStatus(db: Db = defaultDb()) {

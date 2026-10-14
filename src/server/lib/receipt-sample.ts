@@ -6,7 +6,7 @@ import sharp from "sharp";
  */
 
 export type SampleReceipt = {
-  /** e.g. "PR-2026-0003" */
+  /** e.g. "MR-2026-0003" */
   code: string;
   supplier: string;
   /** e.g. "Oct 9, 2026" */

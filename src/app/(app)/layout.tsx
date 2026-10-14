@@ -6,7 +6,8 @@ import { requireUser } from "@/server/policies/guard";
 import { navigationFor } from "@/server/policies/navigation";
 import { signOutAction } from "./actions";
 
-// Everything inside (app) requires a signed-in, active user. Desktop first; the layout adapts to narrower windows (D-034).
+// Everything inside (app) requires a signed-in, active user. Desktop first; the layout adapts to narrower windows (D-034)
+// and pages use the full width beside the sidebar (D-046). Forms and running text keep their own widths.
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
 
@@ -19,7 +20,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       />
       <main className="min-w-0 flex-1 px-4 py-6 lg:px-10 lg:py-8">
         <QueryProvider>
-          <div className="mx-auto flex max-w-6xl flex-col gap-8">{children}</div>
+          <div className="flex flex-col gap-8">{children}</div>
         </QueryProvider>
       </main>
       <Toaster />
