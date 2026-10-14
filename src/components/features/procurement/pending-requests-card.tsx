@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CircleCheck, Siren } from "lucide-react";
+import { ArrowRight, CalendarX, CircleCheck, Siren, Truck } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDuration } from "@/lib/format";
 
@@ -8,11 +8,40 @@ type Props = {
   /** Pending requests that are High urgency: needed within 3 working days, or overdue (D-037). */
   high: number;
   oldest: { id: string; code: string; createdAt: Date } | null;
+  /** Approved requests the Floor Manager hasn't ordered yet (D-041). */
+  toOrder: number;
+  /** Ordered requests past their expected delivery date that haven't fully arrived. */
+  late: number;
   now: Date;
 };
 
-/** Purchase requests waiting on the Floor Manager (FM home, D-029). A late roll stops the line. */
-export function PendingRequestsCard({ count, high, oldest, now }: Props) {
+/**
+ * Purchase requests waiting on the Floor Manager (FM home, D-029, D-041): to decide, to order,
+ * and deliveries that are late. A late roll stops the line.
+ */
+export function PendingRequestsCard({ count, high, oldest, toOrder, late, now }: Props) {
+  const followUps = (
+    <>
+      {toOrder > 0 && (
+        <Link
+          href="/procurement?status=APPROVED"
+          className="flex w-fit items-center gap-1.5 text-sm underline-offset-4 hover:underline"
+        >
+          <Truck aria-hidden className="size-4 text-muted-foreground" />
+          {toOrder} approved, waiting to be ordered
+        </Link>
+      )}
+      {late > 0 && (
+        <Link
+          href="/procurement?status=all&late=1"
+          className="flex w-fit items-center gap-1.5 text-sm text-reject underline-offset-4 hover:underline"
+        >
+          <CalendarX aria-hidden className="size-4" />
+          {late} deliver{late === 1 ? "y is" : "ies are"} late
+        </Link>
+      )}
+    </>
+  );
   return (
     <Card data-testid="pending-requests-card">
       <CardHeader>
@@ -36,10 +65,13 @@ export function PendingRequestsCard({ count, high, oldest, now }: Props) {
       </CardHeader>
       <CardContent>
         {count === 0 || !oldest ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CircleCheck aria-hidden className="size-4 text-pass" />
-            Constructors’ requests appear here when they send one.
-          </p>
+          <div className="flex flex-col gap-3">
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CircleCheck aria-hidden className="size-4 text-pass" />
+              Constructors’ requests appear here when they send one.
+            </p>
+            {followUps}
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -72,6 +104,7 @@ export function PendingRequestsCard({ count, high, oldest, now }: Props) {
                 {high} high urgency, needed within 3 working days
               </Link>
             )}
+            {followUps}
           </div>
         )}
       </CardContent>

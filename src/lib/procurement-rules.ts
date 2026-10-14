@@ -2,31 +2,52 @@ import type { PurchaseLineDecision, PurchaseRequestStatus, Role } from "./domain
 import { formatQuantity } from "./inventory-rules";
 
 /**
- * Purchase request lifecycle (D-029, D-039), pure and client-safe. Services enforce it, and the
- * database update is conditional on the status the caller saw, so two people can't both decide a
- * request.
+ * Purchase request lifecycle (D-029, D-039, D-041 to D-043), pure and client-safe. Services
+ * enforce it, and the database update is conditional on the status the caller saw, so two people
+ * can't both move a request.
  *
- *   PENDING ─decide every item─▶ APPROVED (at least one item approved) ─receive─▶ RECEIVED
- *      │                       └▶ REJECTED (every item rejected)
- *      └────cancel──▶ CANCELLED (the requester only)
+ *   PENDING ─decide every item─▶ APPROVED (at least one approved) ─order─▶ ORDERED
+ *      │                       └▶ REJECTED (every item rejected)            │
+ *      └─cancel (requester)─▶ CANCELLED ◀─cancel with a reason (FM)─ APPROVED or ORDERED
+ *
+ *   ORDERED ─delivery (some short)─▶ PARTIALLY_RECEIVED ─the rest─▶ RECEIVED
+ *                                     └─close short (FM, reason)─▶ RECEIVED ("closed short")
  *
  * The Floor Manager decides each item; the request's status follows from them
- * (`deriveRequestStatus`). "Approve" and "reject" are the same decision applied to every item.
- * A request is never edited after it's submitted: cancel it and send a new one.
+ * (`deriveRequestStatus`), and later from what has arrived (`deriveReceiptStatus`). A request is
+ * never edited after it's submitted: cancel it, or copy it to a new one (D-044).
  */
 
-export type PurchaseAction = "approve" | "reject" | "cancel" | "receive";
+export type PurchaseAction = "approve" | "reject" | "cancel" | "order" | "receive" | "close_short";
 
 export const STATUS_LABELS: Record<PurchaseRequestStatus, string> = {
   PENDING: "Pending",
   APPROVED: "Approved",
+  ORDERED: "Ordered",
+  PARTIALLY_RECEIVED: "Partly received",
   REJECTED: "Rejected",
   CANCELLED: "Cancelled",
   RECEIVED: "Received",
 };
 
+/** The order the status tabs and filters use: the request's path, then the two ways it ends early. */
+export const STATUS_ORDER: readonly PurchaseRequestStatus[] = [
+  "PENDING",
+  "APPROVED",
+  "ORDERED",
+  "PARTIALLY_RECEIVED",
+  "RECEIVED",
+  "REJECTED",
+  "CANCELLED",
+];
+
 /** Requests still waiting on someone: shown as "open" on homes and inventory. */
-export const OPEN_STATUSES: readonly PurchaseRequestStatus[] = ["PENDING", "APPROVED"];
+export const OPEN_STATUSES: readonly PurchaseRequestStatus[] = [
+  "PENDING",
+  "APPROVED",
+  "ORDERED",
+  "PARTIALLY_RECEIVED",
+];
 
 export const MAX_LINES = 10;
 
@@ -275,32 +296,119 @@ export function stockGuidanceLine(
   return parts.join(" · ");
 }
 
-const MOVES: Record<PurchaseAction, { from: PurchaseRequestStatus; to: PurchaseRequestStatus }> = {
-  approve: { from: "PENDING", to: "APPROVED" },
-  reject: { from: "PENDING", to: "REJECTED" },
-  cancel: { from: "PENDING", to: "CANCELLED" },
-  receive: { from: "APPROVED", to: "RECEIVED" },
+// ───────────── ordering and deliveries (D-041, D-042) ─────────────
+
+/** Proof-of-delivery files: a photo or PDF of the supplier's receipt. */
+export const POD_MAX_FILES = 5;
+export const POD_MAX_BYTES = 10 * 1024 * 1024;
+export const POD_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
+/** How far ahead an expected delivery date may be. */
+export const EXPECTED_DELIVERY_MAX_DAYS = 365;
+
+/** What is still to come on one approved item, never below zero. Worked in hundredths (D-023). */
+export function outstandingQuantity(quantity: number, received: number): number {
+  return Math.max(0, hundredths(quantity) - hundredths(received)) / 100;
+}
+
+type ReceiptLine = { decision: PurchaseLineDecision; quantity: number; receivedQuantity: number };
+
+/**
+ * A request's status after a delivery, from its approved items: received once nothing is
+ * outstanding, partly received while something still is.
+ */
+export function deriveReceiptStatus(
+  lines: readonly ReceiptLine[],
+): "PARTIALLY_RECEIVED" | "RECEIVED" {
+  const waiting = lines.some(
+    (l) => l.decision === "APPROVED" && outstandingQuantity(l.quantity, l.receivedQuantity) > 0,
+  );
+  return waiting ? "PARTIALLY_RECEIVED" : "RECEIVED";
+}
+
+/** "6 rolls of Black cowhide": what never arrived on a request that was closed short. */
+export function shortfallNote(
+  lines: readonly (ReceiptLine & { itemName: string; unit: string })[],
+): string {
+  return lines
+    .filter((l) => l.decision === "APPROVED")
+    .map((l) => ({
+      name: l.itemName,
+      unit: l.unit,
+      left: outstandingQuantity(l.quantity, l.receivedQuantity),
+    }))
+    .filter((l) => l.left > 0)
+    .map((l) => `${formatQuantity(l.left, l.unit)} of ${l.name}`)
+    .join(", ");
+}
+
+const AWAITING_DELIVERY: readonly PurchaseRequestStatus[] = ["ORDERED", "PARTIALLY_RECEIVED"];
+
+/** Ordered, not all here, and the expected date has passed (Manila calendar dates, YYYY-MM-DD). */
+export function isDeliveryLate(
+  status: PurchaseRequestStatus,
+  expectedDeliveryOn: Date | string | null | undefined,
+  today: string,
+): boolean {
+  if (!expectedDeliveryOn || !AWAITING_DELIVERY.includes(status)) return false;
+  return calendarDay(expectedDeliveryOn) < today;
+}
+
+// ───────────── moves ─────────────
+
+const MOVES: Record<
+  PurchaseAction,
+  { from: readonly PurchaseRequestStatus[]; to: PurchaseRequestStatus }
+> = {
+  approve: { from: ["PENDING"], to: "APPROVED" },
+  reject: { from: ["PENDING"], to: "REJECTED" },
+  cancel: { from: ["PENDING", "APPROVED", "ORDERED"], to: "CANCELLED" },
+  order: { from: ["APPROVED"], to: "ORDERED" },
+  // Where a delivery leaves the request depends on what arrived: see deriveReceiptStatus.
+  receive: { from: ["ORDERED", "PARTIALLY_RECEIVED"], to: "RECEIVED" },
+  close_short: { from: ["PARTIALLY_RECEIVED"], to: "RECEIVED" },
 };
 
 const VERB: Record<PurchaseAction, string> = {
   approve: "approved",
   reject: "rejected",
   cancel: "cancelled",
-  receive: "marked received",
+  order: "marked as ordered",
+  receive: "received",
+  close_short: "closed short",
+};
+
+/** "Only pending, approved or ordered requests can be cancelled." */
+const ONLY: Record<PurchaseAction, string> = {
+  approve: "Only a pending request can be approved.",
+  reject: "Only a pending request can be rejected.",
+  cancel: "Only pending, approved or ordered requests can be cancelled.",
+  order: "Only an approved request can be marked as ordered.",
+  receive: "A delivery can be recorded only on an ordered or partly received request.",
+  close_short: "Only a partly received request can be closed short.",
 };
 
 export type Transition =
   | { ok: true; from: PurchaseRequestStatus; to: PurchaseRequestStatus }
   | { ok: false; reason: string };
 
-/** Where an action takes a request, or why it can't. */
+/** Where an action takes a request, or why it can't, in one sentence that says what to do. */
 export function transition(status: PurchaseRequestStatus, action: PurchaseAction): Transition {
   const move = MOVES[action];
-  if (status === move.from) return { ok: true, from: move.from, to: move.to };
-  const need = move.from === "PENDING" ? "a pending" : "an approved";
+  if (move.from.includes(status)) return { ok: true, from: status, to: move.to };
+  if (action === "cancel" && status === "PARTIALLY_RECEIVED")
+    return {
+      ok: false,
+      reason:
+        "Part of this request has already arrived, so it can't be cancelled. Use Close short for what won't come.",
+    };
+  if (action === "receive" && status === "APPROVED")
+    return {
+      ok: false,
+      reason: "Mark this request as ordered first, then record the delivery.",
+    };
   return {
     ok: false,
-    reason: `Only ${need} request can be ${VERB[action]}. This one is ${STATUS_LABELS[status].toLowerCase()}.`,
+    reason: `${ONLY[action]} This one is ${STATUS_LABELS[status].toLowerCase()}.`,
   };
 }
 

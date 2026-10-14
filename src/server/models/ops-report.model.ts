@@ -142,7 +142,8 @@ export async function stockPosition(range: Range, db: Db = defaultDb()): Promise
       m.used::text AS used, m.received::text AS received,
       EXISTS (
         SELECT 1 FROM purchase_request_lines pl JOIN purchase_requests pr ON pr.id = pl."requestId"
-        WHERE pl."inventoryItemId" = i.id AND pr.status IN ('PENDING', 'APPROVED')
+        WHERE pl."inventoryItemId" = i.id
+          AND pr.status IN ('PENDING', 'APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED')
           AND pl.decision <> 'REJECTED'
       ) AS requested
     FROM inventory_items i
@@ -180,6 +181,8 @@ export async function procurementFlow(
   now: Date,
   /** The last needed-by date (YYYY-MM-DD) that counts as High urgency today (D-037). */
   highThrough: string,
+  /** Today in Manila (YYYY-MM-DD): an order expected before it is late (D-041). */
+  today: string,
   db: Db = defaultDb(),
 ) {
   const [waiting, byStatus, timings] = await Promise.all([
@@ -196,9 +199,9 @@ export async function procurementFlow(
         count(*) FILTER (WHERE status = 'PENDING') AS pending,
         count(*) FILTER (WHERE status = 'PENDING' AND "neededBy" <= ${highThrough}::date) AS high,
         max(extract(epoch FROM (${iso(now)}::timestamptz AT TIME ZONE 'UTC') - "createdAt")) FILTER (WHERE status = 'PENDING') * 1000 AS "oldestPendingMs",
-        count(*) FILTER (WHERE status = 'APPROVED') AS awaiting,
-        count(*) FILTER (WHERE status = 'APPROVED'
-          AND "decidedAt" < (${iso(now)}::timestamptz AT TIME ZONE 'UTC') - interval '7 days') AS late
+        count(*) FILTER (WHERE status IN ('APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED')) AS awaiting,
+        count(*) FILTER (WHERE status IN ('ORDERED', 'PARTIALLY_RECEIVED')
+          AND "expectedDeliveryOn" < ${today}::date) AS late
       FROM purchase_requests`,
     db.$queryRaw<{ status: string; count: bigint }[]>`
       SELECT status::text AS status, count(*) AS count FROM purchase_requests

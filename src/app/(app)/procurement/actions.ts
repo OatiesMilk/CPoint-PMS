@@ -6,15 +6,20 @@ import { requirePermission } from "@/server/policies/guard";
 import {
   actOnRequest,
   addRemark,
+  closeShort,
   createRequest,
   decideRequest,
+  orderRequest,
   setRequester,
 } from "@/server/services/procurement.service";
 import {
   approveSchema,
+  cancelAfterApprovalSchema,
   cancelSchema,
+  closeShortSchema,
   decideSchema,
   isRequestId,
+  orderSchema,
   purchaseRequestSchema,
   rejectSchema,
   remarkSchema,
@@ -44,7 +49,10 @@ async function run<T extends object>(
   }
 }
 
-/** Submit a request. Any Shoe Constructor; leather rolls need the designation (D-031). */
+/**
+ * Submit a request. Any Shoe Constructor (leather rolls need the designation, D-031), or the Floor
+ * Manager raising a restock request (D-045).
+ */
 export async function createRequestAction(input: unknown) {
   const user = await requirePermission("procurement:request");
   try {
@@ -76,17 +84,41 @@ export async function rejectRequestAction(id: string, input: { reason: string })
   );
 }
 
-export async function receiveRequestAction(id: string) {
+/** Mark an approved request as ordered from a supplier (D-041). */
+export async function orderRequestAction(id: string, input: unknown) {
   const user = await requirePermission("procurement:decide");
-  return run(id, "Receive request", () => actOnRequest(id, { action: "receive" }, user));
+  return run(id, "Order", () => orderRequest(id, orderSchema.parse(input), user));
 }
 
-/** The requester's own cancel; the service checks it's theirs. */
+/** Close a partly received request: the rest won't come (D-042). */
+export async function closeShortAction(id: string, input: { reason: string }) {
+  const user = await requirePermission("procurement:decide");
+  return run(id, "Close short", () => closeShort(id, closeShortSchema.parse(input).reason, user));
+}
+
+/** The requester's own cancel of a pending request; the service checks it's theirs. */
 export async function cancelRequestAction(id: string, input: { note?: string }) {
   const user = await requirePermission("procurement:request");
   return run(id, "Cancel request", () =>
     actOnRequest(id, { action: "cancel", ...cancelSchema.parse(input) }, user),
   );
+}
+
+/** The Floor Manager's cancel of an approved or ordered request, with a reason (D-043). */
+export async function cancelAfterApprovalAction(id: string, input: { reason: string }) {
+  const user = await requirePermission("procurement:decide");
+  return run(id, "Cancel request", () =>
+    actOnRequest(id, { action: "cancel", ...cancelAfterApprovalSchema.parse(input) }, user),
+  );
+}
+
+/**
+ * Deliveries and proof files are uploaded to the API (they're too large for a server action); the
+ * form calls this afterwards so the lists, the home cards and inventory show the new stock.
+ */
+export async function refreshAfterDeliveryAction() {
+  await requirePermission("procurement:decide");
+  refresh();
 }
 
 export async function addRemarkAction(id: string, input: { body: string }) {

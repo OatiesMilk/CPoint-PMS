@@ -14,6 +14,126 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-14 — Phase 13: QA closed and the Docker demo-week check
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Codex's fifth run showed the connection reset gone. One long test ran out of time once under load and now has 60 seconds. The Docker demo-week check passed on a throwaway stack. Phase 13 is ready for Dylan to branch and commit.
+**Changed:**
+
+- Read `qa/reports/2026-10-14-phase-13-material-requests-run5.md`: build passed; `--keepAliveTimeout 70000` confirmed on the live e2e server; three parallel runs of 45: 44/1, 45/0, 45/0; no `ECONNRESET` in any. Run 1's failure was the full request-to-delivery journey test hitting its 30 s limit while a page loaded (21–23 s in the other runs).
+- `tests/e2e/procurement.spec.ts`: that one test has `test.setTimeout(60_000)`. Not re-run by Codex (Dylan, 2026-10-14: no sixth run; CI runs the e2e specs on the PR and retries a failure once).
+- **Docker demo-week check, passed** (Claude, throwaway stack `-p cpoint-demo13` on ports 3300/55432 with its own image tag, removed afterwards with its volumes; the dev database was not touched): the image built; health OK; "Demo week seeded" with 14 batches, 290 scans, 9 requests; requests by status: 1 pending, 1 approved, 2 ordered (1 late), 1 partly received, 1 received, 1 rejected, 2 cancelled; 1 raised by the Floor Manager; 2 deliveries with 2 JPEGs and 1 PDF, all three files present on the uploads volume; every delivery has proof; no line received above its quantity; every item's stock equals its ledger; 2 scans left for review; a restart did not seed again.
+- Not changed: the `next start` with `output: standalone` warning in the e2e server log (since Phase 9; the server starts fine).
+
+**Gates:** lint ✅ · typecheck ✅ (the last change is test-only; unit tests and build were green before it and no source changed since) · e2e by Codex: run 5 two of three parallel runs green, the remaining failure addressed but not re-run · docker demo-week ✅.
+**Decisions:** none
+**Follow-ups:**
+
+- Dylan: branch, commit, push, open the PR (D-032). Watch the e2e and Docker jobs in CI.
+- The untracked `phase-13-plan.md` in the root can be deleted once Phase 13 is merged.
+
+## 2026-10-14 — Phase 13: contrast finding closed, one flaky e2e call after Codex's fourth QA run
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Run 4 closed the contrast question: the short-delivery test passed three times out of three once it waited for the dialog to open, so run 3's finding was a measuring fault in the test and the app's colours are unchanged. One new intermittent failure appeared in an older test; the e2e server's keep-alive timeout was raised as the likely fix.
+**Changed:**
+
+- Read `qa/reports/2026-10-14-phase-13-material-requests-run4.md`: build passed; single test 3 of 3; parallel 44 passed, 1 failed of 45; serial procurement 15 of 15.
+- F1 (run 4): `apiRequestContext.post: read ECONNRESET` on `POST /api/v1/procurement/requests` in the D-031 leather-roll test, parallel run only; the test passed in runs 2 and 3 and in the serial run. Codex judged it an app or server fault. Claude's reading: the e2e server logged no error for the request (an exception in the app returns a logged 500, not a dropped connection), and the failing call follows a pause of several seconds, longer than Node's 5 s keep-alive, so Playwright's API client reused a connection the server had just closed. **Inferred from the log and the test's timing; not reproduced.**
+- `playwright.config.ts`: the e2e server starts with `--keepAliveTimeout 70000`. No application code or test changed.
+- `qa/handoffs/2026-10-14-phase-13-material-requests-run5.md` and `qa/CODEX_PROMPT_PHASE_13_RUN5.md`: the parallel set three times.
+
+**Gates:** lint ✅ · typecheck ✅ · unit tests and build not re-run (no source change since the last green run) · e2e not run by Claude · docker demo-week not run (Dylan: after the phase is complete).
+**Decisions:** none
+**Follow-ups:**
+
+- Run Codex on the run 5 handoff. If ECONNRESET recurs, the keep-alive reading is wrong: look at the request path under parallel load.
+- The Docker stack runs the standalone server, which this option does not reach; CI retries a failed e2e test once.
+- Docker demo-week check, as the last step before the PR.
+
+## 2026-10-14 — Phase 13: one open axe finding after Codex's third QA run
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Codex's third run (e2e only) passed 44 of 45; E1 to E3 are fixed. The one failure is a serious axe `color-contrast` finding on three grey texts in the Record delivery dialog. Its cause is not established, so no application code was changed; the test helper now gathers the evidence.
+**Changed:**
+
+- Read `qa/reports/2026-10-14-phase-13-material-requests-run3.md`: build passed; 44 passed, 1 failed of 45 (parallel); 14 passed, 1 failed of 15 (serial); the failure reproduced when run alone.
+- The flagged text uses `text-muted-foreground` on the dialog's white surface, about 6.8:1 by calculation against 4.5:1 required, and the same classes pass axe on every page and elsewhere in the same dialog. The test ran axe the moment the dialog opened, during its 0.2 s fade-in. Claude's judgement is that the finding is a measuring artefact; against that, the same three elements failed in all three runs. **Unproven either way.**
+- `tests/e2e/procurement.spec.ts`: `expectAccessible` now waits for finite animations to end before running axe, and prints, per element, the text colour, background colour, ratio, required ratio and font size axe measured. The short-delivery test also waits for the dialog's first field before the check.
+- `qa/handoffs/2026-10-14-phase-13-material-requests-run4.md` and `qa/CODEX_PROMPT_PHASE_13_RUN4.md`: run the one test three times, then the full specs.
+- Not done: Codex suggested raising the contrast of the muted token in `tokens.css`. It is used across the whole system and passes elsewhere, so it waits for the measurement.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (494) · build ✅ · e2e not run by Claude · docker demo-week not run.
+**Decisions:** none
+**Follow-ups:**
+
+- Run Codex on the run 4 handoff. If the finding recurs with the same low ratio on white, fix the colours in the dialog or the token and re-measure both themes (DESIGN.md).
+- Docker demo-week check before the PR.
+- The e2e server's "destination stream closed early" lines rose to 25 in the parallel run (15 in run 2); wording unchanged, no failing test.
+
+## 2026-10-14 — Phase 13: e2e test fixes after Codex's second QA run
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Codex's second run passed all 13 manual scenarios, so the proof-file fix and the six scenarios blocked in run 1 are verified in a browser. Three more faults in the e2e tests were corrected. No application code changed.
+**Changed:**
+
+- Read `qa/reports/2026-10-14-phase-13-material-requests-run2.md`: manual 13 of 13 passed; F1, F3, F4 and F5 from run 1 confirmed fixed; e2e 43 passed, 2 failed of 45 in parallel, 12 passed, 3 failed of 15 in a serial procurement run.
+- E1, E2, E3 (tests only), fixed in `tests/e2e/procurement.spec.ts`: an ambiguous "Note" label, a helper page axe couldn't scan (now opened from an explicit context), and a controlled checkbox driven with `check()`/`uncheck()` (now clicked, with the result asserted).
+- `qa/handoffs/2026-10-14-phase-13-material-requests-run3.md` and `qa/CODEX_PROMPT_PHASE_13_RUN3.md`: an e2e-only third run.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (494) · build ✅ · e2e not run by Claude; two procurement tests have still never run to their end · docker demo-week not run.
+**Decisions:** none
+**Follow-ups:**
+
+- Run Codex on the run 3 handoff (e2e only), then read its report.
+- Docker demo-week check before the PR.
+- Codex ran the dev server on port 3001 because another project's Vite server holds port 3000 on this PC.
+
+## 2026-10-14 — Phase 13: fixes after Codex's first QA run
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Codex's first Phase 13 run found one app fault and three faults in the e2e tests Claude had written without running. All four are fixed, and a second, shorter handoff covers the six scenarios Codex's runner blocked.
+**Changed:**
+
+- Read `qa/reports/2026-10-13-phase-13-material-requests.md`: 47 of 54 manual checks passed, 1 failed, 6 blocked; e2e 36 passed, 9 failed of 45.
+- F1 (app, Medium), fixed: in `delivery-dialog.tsx` the file picker was cleared before the chosen files were copied out of its live `FileList`, so a proof file picked after an error or after removing another was sometimes lost. The files are now copied first.
+- F3, F4, F5 (tests only), fixed in `tests/e2e/procurement.spec.ts`: a renamed error id, a note matched twice, and five tests that navigated before sign-in had finished. Added a step that picks a file, removes it and picks two more, so F1 stays covered.
+- S19 to S24 were blocked by the QA runner (it typed into a disabled box, then closed the request early), so a second delivery, adding proof later and close short after two deliveries have **not** been checked by hand. `qa/handoffs/2026-10-14-phase-13-material-requests-run2.md` covers them with a fresh request (13 scenarios), with `qa/CODEX_PROMPT_PHASE_13_RUN2.md` as the prompt.
+- Not changed: a React hydration warning about `caret-color` that Codex saw on two pages. Nothing in the project sets that style; run 2 asks Codex whether it recurs.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (494) · build ✅ · e2e not run by Claude; the corrected procurement tests have still never passed · docker demo-week not run.
+**Decisions:** none
+**Follow-ups:**
+
+- Run Codex on the run 2 handoff, then read its report.
+- Docker demo-week check before the PR.
+
+## 2026-10-13 — Phase 13: Ordering, delivery with proof, and the remaining gaps
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** A request now runs approved → ordered → partly received → received. The Floor Manager records the order (supplier, reference, expected date) and each delivery with proof files; short deliveries stay open or are closed short. The Floor Manager can also cancel after approval with a reason and raise restock requests, and a rejected or cancelled request can be copied to a new one.
+**Changed:**
+
+- Start of session: local `main` level with GitHub at `c044511` (Phase 12, PR #5). `docs/STATUS.md` corrected (it still said Phase 12 was uncommitted). Deleted the untracked `phase-12-plan.md`; added `qa/reports/artifacts/` to `.gitignore`. Plan in `phase-13-plan.md` (project root), approved by Dylan with all four recommended answers.
+- Schema: migration `20261013090000_purchase_ordering_deliveries`, written by hand from `prisma migrate diff` and applied to the dev DB with `db:deploy` (no drift afterwards). Statuses `ORDERED` and `PARTIALLY_RECEIVED`; order, cancel-reason, closed-short and `copiedFromId` fields on the request; `receivedQuantity` on the line; new `PurchaseDelivery`, `PurchaseDeliveryLine`, `PurchaseAttachment`; `deliveryId` on events. Requests already received each became one delivery without proof, and the line's `movementId` moved to the delivery line.
+- Rules: `procurement-rules.ts` gains the new moves and their one-sentence refusals, `STATUS_ORDER`, `outstandingQuantity`, `deriveReceiptStatus`, `shortfallNote`, `isDeliveryLate` and the proof-file limits.
+- Server: `orderRequest`, `recordDelivery`, `addDeliveryProof`, `closeShort`, `getProofFile`, `getCopySource` in the service; cancel now takes a reason after approval; new `attachment-type.ts` (JPEG, PNG, WebP, PDF from the bytes; safe file names) and `receipt-sample.ts` (generated sample proof). Routes: `order`, `deliveries`, `close-short`, `deliveries/{id}/attachments`, `attachments/{id}`, `suppliers`; the `receive` route is gone. `procurement:request` includes the Floor Manager.
+- UI: request page (Order card, Deliveries card with proof, "Arrived" column, timeline with proof and copy links); new `delivery-dialog.tsx` and `proof-files.tsx`; `request-actions.tsx` rewritten (order, cancel with a reason, close short); list with seven tabs, Expected column, late and "Raised by Floor Manager" badges and a Delivery filter; new-request form takes a copy and the Floor Manager; "Request" on low inventory rows; home card shows to-order and late counts.
+- Operations report: "requested" and "approved, not all received" use the new statuses; "late" is now past the expected delivery date.
+- Seed: nine requests replayed in time order through the services, with generated proof files.
+- Tests: rules, service, permissions, validator-message, seed and a new `attachment-type.test.ts`; `procurement.spec.ts` updated for the new flow and six scenarios added.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (494) · build ✅ · e2e not run by Claude (Codex runs it from `qa/handoffs/2026-10-13-phase-13-material-requests.md`) · docker demo-week not run · screens not checked in a browser by Claude.
+**QA:** read `qa/reports/2026-10-13-phase-12-material-requests.md` first. Nothing to fix in the app: its one failure (S17) was a wrong handoff expectation, already corrected, and two checks were blocked by missing test data. The Phase 13 handoff has a migration check on a request received before the change (S40), and lists the demo-week check on a throwaway stack as an optional step before the PR.
+**Decisions:** D-041, D-042, D-043, D-044, D-045
+**Follow-ups:**
+
+- One unit test caught a real fault during the build: a lost backslash meant Windows paths weren't stripped from proof file names. Fixed, and the test stays.
+- The migration's backfill ran on the dev DB (which had received requests) but its result was not inspected row by row; the handoff has a check for it.
+- Confirm with CPoint: who orders leather rolls (survey Q14), whether proof is always available at delivery, and the 365-day limit on expected dates.
+- Run the Docker demo-week check before the PR (the seed changed and now writes files to the uploads volume).
+- Not built, by scope: per-item orders, editing an order after it is marked, deleting proof files, CSV export of requests.
+
 ## 2026-10-13 — Phase 12: Item-level decisions guided by stock
 
 **Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)

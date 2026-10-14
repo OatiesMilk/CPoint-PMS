@@ -4,7 +4,7 @@
  * What:  see what's on the shelf and what needs reordering, then record what came in or went out.
  * Worst: a leather roll runs out unnoticed and stops the line. Low and out-of-stock items carry a
  *        labelled badge, and the Stock filter narrows to them. Items with an open purchase request
- *        say "Requested", so nobody orders twice.
+ *        say "Requested", so nobody orders twice; a low item without one offers "Request" (D-045).
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -41,6 +41,8 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
   // Items a Shoe Constructor already asked for (D-029), so nobody orders twice.
   const requested = await openRequestCodes(rows.map((r) => r.id));
   const canManage = can(user.role, "inventory:manage");
+  // The Floor Manager can raise a restock request straight from a low item (D-045).
+  const canRequest = can(user.role, "procurement:request");
 
   const pageHref = (p: number) => {
     const next = new URLSearchParams();
@@ -132,7 +134,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                   <TableCell>
                     <span className="flex flex-wrap items-center gap-1.5">
                       <StockBadge level={item.level} inactive={!item.isActive} />
-                      {requested.has(item.id) && (
+                      {requested.has(item.id) ? (
                         <Link
                           href={`/procurement/${requested.get(item.id)!.id}`}
                           aria-label={`Requested in ${requested.get(item.id)!.code}`}
@@ -142,6 +144,18 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                             Requested
                           </Badge>
                         </Link>
+                      ) : (
+                        canRequest &&
+                        item.isActive &&
+                        item.level !== "OK" && (
+                          <Link
+                            href={`/procurement/new?item=${item.id}`}
+                            aria-label={`Request ${item.name}`}
+                            className="text-sm font-medium underline underline-offset-4"
+                          >
+                            Request
+                          </Link>
+                        )
                       )}
                     </span>
                   </TableCell>

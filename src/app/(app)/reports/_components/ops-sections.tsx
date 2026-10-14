@@ -290,10 +290,12 @@ export function ProcurementFlowCard({ p }: { p: OperationsReport["procurement"] 
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Approved, not received</dt>
+            <dt className="text-muted-foreground">Approved, not all received</dt>
             <dd className="text-2xl font-semibold tabular-nums">{p.awaitingDelivery}</dd>
             <dd className="text-xs text-muted-foreground">
-              {p.lateAwaitingDelivery > 0 ? `${p.lateAwaitingDelivery} over a week` : "none late"}
+              {p.lateAwaitingDelivery > 0
+                ? `${p.lateAwaitingDelivery} past the expected date`
+                : "none late"}
             </dd>
           </div>
           <div>

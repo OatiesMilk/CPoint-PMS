@@ -19,6 +19,9 @@ next-env.d.ts
 # runtime data
 /storage
 
+# Codex QA screenshots and logs (the reports themselves are committed)
+/qa/reports/artifacts/
+
 # env files (.env.example is committed)
 .env
 .env.*

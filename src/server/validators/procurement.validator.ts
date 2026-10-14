@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { InventoryCategory, PurchaseRequestStatus } from "@/lib/domain";
 import { manilaToday } from "@/lib/format";
-import { MAX_LINES, NEEDED_BY_MAX_DAYS, URGENCIES } from "@/lib/procurement-rules";
+import {
+  EXPECTED_DELIVERY_MAX_DAYS,
+  MAX_LINES,
+  NEEDED_BY_MAX_DAYS,
+  URGENCIES,
+} from "@/lib/procurement-rules";
 import { addDays } from "@/lib/report-rules";
 import { quantity } from "./inventory.validator";
 import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
@@ -66,6 +71,8 @@ export const purchaseRequestSchema = z
     neededBy,
     /** Optional. Saved as the request's first remark (D-036). */
     remarks: optionalText(500, "remarks"),
+    /** Set by "Copy to a new request" (D-044): the rejected or cancelled request it came from. */
+    copiedFromId: z.preprocess(blankToUndefined, z.uuid(OUT_OF_DATE).optional()),
     lines: z
       .array(lineSchema, { error: "Add at least one item to the request." })
       .min(1, "Add at least one item to the request.")
@@ -126,7 +133,90 @@ export const decideSchema = z.object({
 
 export type DecideValues = z.output<typeof decideSchema>;
 
-export const cancelSchema = z.object({ note: optionalText(300, "note") });
+/**
+ * Cancel. The requester's own cancel of a pending request takes an optional note; the Floor
+ * Manager's cancel after approval needs a reason, which the service checks (D-043).
+ */
+export const cancelSchema = z.object({
+  note: optionalText(300, "note"),
+  reason: optionalText(300, "reason"),
+});
+
+const CANCEL_REASON =
+  "Enter a reason of at least 3 characters, so the requester knows why it's cancelled.";
+/** The Floor Manager's cancel of an approved or ordered request (D-043). */
+export const cancelAfterApprovalSchema = z.object({
+  reason: z
+    .string({ error: CANCEL_REASON })
+    .trim()
+    .min(3, CANCEL_REASON)
+    .max(300, "Keep the reason under 300 characters."),
+});
+
+/** Mark as ordered (D-041): one supplier and one expected date for the whole request. */
+export const orderSchema = z.object({
+  supplierId: z.preprocess(
+    blankToUndefined,
+    z.uuid({ error: "Choose the supplier you ordered from." }),
+  ),
+  reference: optionalText(60, "reference number"),
+  expectedDeliveryOn: z.preprocess(
+    blankToUndefined,
+    z
+      .string({ error: "Choose the date the supplier expects to deliver." })
+      .regex(ISO_DAY, "Enter Expected delivery as a date, like 2026-10-31.")
+      .refine(
+        (day) => day >= manilaToday(),
+        "Expected delivery can't be in the past. Pick today or a later date.",
+      )
+      .refine(
+        (day) => day <= addDays(manilaToday(), EXPECTED_DELIVERY_MAX_DAYS),
+        `Expected delivery can be at most ${EXPECTED_DELIVERY_MAX_DAYS} days ahead. Pick an earlier date.`,
+      ),
+  ),
+  note: optionalText(300, "note"),
+});
+export type OrderValues = z.output<typeof orderSchema>;
+
+/**
+ * Record delivery (D-042): what arrived of each approved item this time (0 if none of it did), and
+ * the day it arrived. The proof files travel beside these fields and are checked from their bytes.
+ */
+export const deliverySchema = z.object({
+  deliveredOn: z.preprocess(
+    blankToUndefined,
+    z
+      .string({ error: "Choose the date the delivery arrived." })
+      .regex(ISO_DAY, "Enter Delivered on as a date, like 2026-10-31.")
+      .refine(
+        (day) => day <= manilaToday(),
+        "Delivered on can't be in the future. Pick today or the day it arrived.",
+      ),
+  ),
+  note: optionalText(300, "note"),
+  lines: z
+    .array(
+      z.object({
+        lineId: z.uuid(OUT_OF_DATE),
+        quantity: quantity({ min: 0, label: "received quantity" }),
+      }),
+      { error: "Enter what arrived for each item, then save." },
+    )
+    .min(1, "Enter what arrived for each item, then save.")
+    .max(MAX_LINES, OUT_OF_DATE),
+});
+export type DeliveryValues = z.output<typeof deliverySchema>;
+
+const SHORT_REASON =
+  "Enter a reason of at least 3 characters for closing short, e.g. “The supplier is out of stock.”";
+/** Close a partly received request: the rest won't come (D-042). */
+export const closeShortSchema = z.object({
+  reason: z
+    .string({ error: SHORT_REASON })
+    .trim()
+    .min(3, SHORT_REASON)
+    .max(300, "Keep the reason under 300 characters."),
+});
 export const remarkSchema = z.object({
   body: z
     .string({ error: "Write a remark before you add it." })
@@ -143,6 +233,8 @@ export const requestListQuerySchema = z.object({
   status: z.enum(PurchaseRequestStatus).optional().catch(undefined),
   category: z.enum(InventoryCategory).optional().catch(undefined),
   urgency: z.enum(URGENCIES).optional().catch(undefined),
+  /** "1": ordered or partly received requests whose expected delivery date has passed. */
+  late: z.literal("1").optional().catch(undefined),
   item: z.uuid().optional().catch(undefined),
   from: isoDay.optional().catch(undefined),
   to: isoDay.optional().catch(undefined),

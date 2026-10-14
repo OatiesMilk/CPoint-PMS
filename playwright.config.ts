@@ -29,7 +29,10 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: `npm run start -- -p ${PORT}`,
+        // Idle connections stay open for 70 s instead of Node's 5 s. A test that pauses between
+        // two API calls otherwise reuses a connection the server has just closed, and the call
+        // fails with ECONNRESET (QA report 2026-10-14 run 4).
+        command: `npm run start -- -p ${PORT} --keepAliveTimeout 70000`,
         url: `${baseURL}/api/health`,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

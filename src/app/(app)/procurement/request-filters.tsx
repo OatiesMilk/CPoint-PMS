@@ -58,6 +58,17 @@ export function RequestFilters({ items }: { items: { id: string; name: string }[
           ))}
         </Select>
       </div>
+      <div className="flex w-44 flex-col gap-1.5">
+        <Label htmlFor="filter-late">Delivery</Label>
+        <Select
+          id="filter-late"
+          value={params.get("late") ?? ""}
+          onChange={(e) => update("late", e.target.value)}
+        >
+          <option value="">Any delivery</option>
+          <option value="1">Delivery late</option>
+        </Select>
+      </div>
       {items.length > 0 && (
         <div className="flex w-64 flex-col gap-1.5">
           <Label htmlFor="filter-item">Item</Label>

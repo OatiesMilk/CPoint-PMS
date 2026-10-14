@@ -3,13 +3,13 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-13
-**Branch:** `main`. Phase 11 is merged (squash commit `8adab3a`, PR #4). Phase 12 is being built
-on the `main` checkout, uncommitted (Dylan decides when to branch and commit; the team opens and
-merges the PR, D-032).
-**Current phase:** Phase 12 — Item-level decisions guided by stock (built and tested by Codex;
-not committed)
-**Overall:** 13 / 14 phases built (Phase 13 is in `material-requests.md`)
+**Last updated:** 2026-10-14
+**Branch:** `main`. Phase 12 is merged (squash commit `c044511`, PR #5). Phase 13 is done on the
+`main` checkout, uncommitted (Dylan decides when to branch and commit; the team opens and merges
+the PR, D-032).
+**Current phase:** Phase 13 — Ordering, delivery with proof, and the remaining gaps (built, checked
+by hand and by e2e through Codex, Docker demo week passed; not committed)
+**Overall:** 14 / 14 phases built
 
 ## Phase progress
 
@@ -26,19 +26,21 @@ not committed)
 - [x] 10. Operations reports
 - [x] 11. Material requests: naming, remarks, urgency, specific messages
 - [x] 12. Item-level decisions guided by stock
-- [ ] 13. Ordering, delivery with proof, and the remaining gaps
+- [x] 13. Ordering, delivery with proof, and the remaining gaps
 
 ## What works right now
 
-- **Database:** 8 migrations (the latest is `purchase_line_decisions`). UUIDv7 ids (D-018).
+- **Database:** 9 migrations (the latest is `purchase_ordering_deliveries`). UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017):
   - reference data and the first System Admin;
   - demo users and inventory when `SEED_DEMO_USERS=true`. The demo constructor is a designated
     leather-roll requester.
 - **Demo week** (D-026): `SEED_DEMO_WEEK=true` or `npm run demo:seed`.
   - 14 batches and about 290 scans, two left for review;
-  - five purchase requests, one in each state; the approved one was decided item by item (one
-    item rejected).
+  - nine purchase requests covering every state: received with proof, partly received (a photo
+    and a PDF), ordered and late, ordered by the Floor Manager, approved in part and waiting to
+    be ordered, pending (High), rejected, cancelled by the requester, and cancelled after
+    ordering. Proof files are generated samples.
 - **Sign-in & access** (D-016, D-024, D-025, D-031):
   - 12-hour sessions, lockout, a role × permission matrix, and server-side sign-out;
   - the leather-roll flag is read fresh on every request.
@@ -47,7 +49,7 @@ not committed)
   - **flagged scans are decided by the Quality Inspector only** (D-028, team-confirmed). The FM
     sees them read-only;
   - rework & salvage (D-021, D-022), the inventory ledger (D-023), admin (D-024), reports (D-025).
-- **Material requests / Procurement** (D-029, D-031, D-035 to D-040):
+- **Material requests / Procurement** (D-029, D-031, D-035 to D-045):
   - constructors see "Material requests", the FM and Admin "Procurement" (one label map);
   - every Shoe Constructor sends requests (1–10 items, with the stock snapshot, a required
     needed-by date and an optional first remark); **leather rolls** only by constructors the FM
@@ -60,31 +62,51 @@ not committed)
     flagged "Still in stock" and starts on Reject, a low one on Approve; the FM confirms every
     item (D-040);
   - the requester sees "1 of 2 items approved" and the reason on each rejected item;
-  - "Mark received" posts stock IN through the ledger for the approved items only;
+  - the FM marks an approved request **as ordered**: a supplier from Settings, an optional
+    reference, a required expected date; one order per request; nothing is sent to the supplier
+    (D-041);
+  - an ordered or partly received request past its expected date shows **Delivery late** (badge,
+    filter, home card);
+  - **Record delivery** takes a quantity per approved item (never more than outstanding), the
+    delivery date and at least one **proof file** (JPEG, PNG, WebP or PDF, checked by its bytes,
+    10 MB each); what arrived is posted as stock IN through the ledger; a short delivery leaves
+    the request **Partly received** (D-042);
+  - **Close short** ends a partly received request with a reason and keeps what never arrived;
+  - proof files are private (FM, Admin, the requester on their own request) and never deleted;
+  - the FM cancels an approved or ordered request **with a reason** until something arrives
+    (D-043);
+  - **Copy to a new request** on your own rejected or cancelled request; rejected items start
+    unticked with their reasons (D-044);
+  - the FM raises a request themselves (Procurement → New, or **Request** on a low inventory
+    item), marked "Raised by Floor Manager", and approves it (D-045);
   - every request has a timeline and remarks;
-  - the FM home card, an Inventory "Requested" badge and "My requests" on the constructor home;
+  - the FM home card (to decide, to order, late), an Inventory "Requested" badge and "My
+    requests" on the constructor home;
   - who may request leather rolls is chosen by the FM (Procurement tab) or the Admin (Users).
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 454 unit tests pass. 69 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
-    role. Codex ran Phase 12's on 2026-10-13: 39 of 39 in five specs passed, and 28 of 31 manual
-    checks. The one failure was a wrong expectation in the handoff (corrected); two migration
-    checks were blocked for lack of older approved and rejected requests in the dev DB;
+  - 494 unit tests pass. 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
+    role and on the new procurement screens;
+  - Phase 13 in a browser (Codex, 2026-10-14): run 1 passed 47 of 54 manual checks, with one
+    app fault (a chosen proof file could disappear) and six blocked. Run 2, after the fix, passed
+    13 of 13, covering the fix and the six blocked scenarios. No known app fault remains;
+  - Phase 13 e2e (Codex run 5, 2026-10-14): three parallel runs of 45: 44/1, 45/0, 45/0. The
+    one failure was the full request-to-delivery test running past 30 s under load; it now has
+    60 s (not re-run; CI runs it on the PR). The earlier colour-contrast and connection-reset
+    findings were test and test-server issues and are fixed;
+  - Docker demo-week check passed on 2026-10-14 (throwaway stack): 9 requests across every
+    state, proof files on the uploads volume, stock equals the ledger, no second seed on restart;
   - ui-craft audit in `docs/UI_AUDIT.md`, now with a Phase 9 section;
   - CI checks the Docker stack with the demo week.
 
 ## Next step (exact)
 
-1. Codex tested Phase 12 (`qa/reports/2026-10-13-phase-12-material-requests.md`). No app fault
-   was found; the handoff's S17 was corrected.
-2. Dylan decides on the branch and commit. Run the Docker demo-week check before the PR, because
-   the seed changed.
-3. Then Phase 13. Paste into Claude Code:
-
-> Read `material-requests.md` and run Phase 13. Check `qa/reports/` first. Start in plan mode and
-> stop for my approval before writing code.
+1. Dylan: create the branch, commit and push Phase 13, and open the PR (D-032). Watch CI's e2e and
+   Docker jobs.
+2. After the merge, delete the untracked `phase-13-plan.md` in the project root, and set
+   `docs/STATUS.md`'s branch line to the merge commit.
 
 Later:
 
@@ -113,8 +135,13 @@ Later:
   shifts. Confirm the shift length.
 - Decided (D-021/D-022, team-confirmed): salvage reused in a batch is shown separately, and a
   batch can be completed with repairs open ("In repair"). Still to confirm with CPoint.
-- ASSUMPTION (D-029): a request is received as a whole (no partial deliveries), and requests
-  aren't edited after they're sent (cancel and resend). Phase 13 adds partial deliveries.
+- Decided (D-041, D-042, D-045; Dylan 2026-10-13): one order per request; a proof file is
+  required for every delivery; the Floor Manager may approve their own request. Tell CPoint, and
+  confirm a receipt or delivery note is always on hand when goods arrive.
+- ASSUMPTION (D-029, D-044): requests aren't edited after they're sent (cancel, then copy to a new
+  one); an order isn't edited after it's marked.
+- ASSUMPTION (D-041): an expected delivery date can be up to 365 days ahead, and "late" starts the
+  day after it, counting calendar days (not working days).
 - ASSUMPTION (D-037, team 2026-10-10): urgency bands are High 0–3 working days or overdue,
   Medium 4–7, Low 8 or more; working days are Monday to Friday; holidays aren't skipped. Confirm
   all three with CPoint (does the factory work Saturdays?).
@@ -122,7 +149,8 @@ Later:
   level, and an item with no reorder level gets no stock guidance. Confirm the factor with CPoint.
 - Decided (D-039, team 2026-10-13): the FM decides every item of a request in one save; a request
   can't be left half decided.
-- Open (survey Q14): who orders leather rolls. Matters for Phase 13's ordering step.
+- Open (survey Q14): who orders leather rolls. Today only the Floor Manager can mark a request
+  as ordered and record deliveries.
 - ASSUMPTION (D-026): the demo week's stage times match the survey.
 - Unknown: components per shoe type. Blocks component tracking only.
 - Pending: the new YOLO training photos will change the defect classes. They arrive as
@@ -138,6 +166,10 @@ Later:
 ## Environment notes
 
 - Timezone: `Asia/Manila` for display; UTC for storage.
+- On Dylan's PC another project's Vite server often holds port 3000. Start this app with
+  `PORT=3001` then (`npm run dev -- --port` doesn't work here).
+- Proof-of-delivery files are stored under `UPLOADS_DIR` (`./storage/uploads/pod/` locally, the
+  `uploads` volume in Docker), beside the scan images. Back them up with the database.
 - Local `.env` needs `AUTH_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD` and `DEMO_USER_PASSWORD`. With demo
   users on, `admin@cpoint.local` uses `DEMO_USER_PASSWORD`.
 - `npm audit`: 4 unreachable highs in the Prisma CLI's dependencies (D-027).

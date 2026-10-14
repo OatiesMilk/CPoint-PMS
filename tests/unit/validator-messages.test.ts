@@ -19,8 +19,12 @@ import {
 } from "@/server/validators/outcome.validator";
 import {
   approveSchema,
+  cancelAfterApprovalSchema,
   cancelSchema,
+  closeShortSchema,
   decideSchema,
+  deliverySchema,
+  orderSchema,
   purchaseRequestSchema,
   rejectSchema,
   remarkSchema,
@@ -230,7 +234,51 @@ const CASES: [string, ZodType, unknown[]][] = [
       },
     ],
   ],
-  ["request cancel", cancelSchema, [{ note: long(301) }]],
+  ["request cancel", cancelSchema, [{ note: long(301) }, { reason: long(301) }]],
+  [
+    "request cancel after approval",
+    cancelAfterApprovalSchema,
+    [{}, { reason: "" }, { reason: "x" }, { reason: long(301) }],
+  ],
+  [
+    "request order",
+    orderSchema,
+    [
+      {},
+      { supplierId: "", expectedDeliveryOn: "" },
+      { supplierId: "nope", expectedDeliveryOn: "soon" },
+      {
+        supplierId: "0199c0de-0000-7000-8000-000000000001",
+        reference: long(61),
+        expectedDeliveryOn: "2000-01-01",
+        note: long(301),
+      },
+      { supplierId: "0199c0de-0000-7000-8000-000000000001", expectedDeliveryOn: "2999-01-01" },
+    ],
+  ],
+  [
+    "request delivery",
+    deliverySchema,
+    [
+      {},
+      { deliveredOn: "", lines: [] },
+      { deliveredOn: "yesterday", lines: "none" },
+      { deliveredOn: "2999-01-01", lines: [{ lineId: "nope", quantity: "abc" }] },
+      {
+        deliveredOn: "2026-01-01",
+        note: long(301),
+        lines: [
+          { lineId: "0199c0de-0000-7000-8000-000000000001", quantity: -1 },
+          { lineId: "0199c0de-0000-7000-8000-000000000002", quantity: "1.234" },
+        ],
+      },
+    ],
+  ],
+  [
+    "request close short",
+    closeShortSchema,
+    [{}, { reason: "" }, { reason: "x" }, { reason: long(301) }],
+  ],
   ["request remark", remarkSchema, [{}, { body: "" }, { body: "   " }, { body: long(501) }]],
   ["leather roll requester", requesterSchema, [{}, { canRequestLeatherRolls: "yes" }]],
   [
@@ -359,6 +407,35 @@ describe("validator messages are specific (D-038)", () => {
     expect(parsed).not.toHaveProperty("priority");
     expect(parsed).not.toHaveProperty("justification");
     expect(parsed.remarks).toBeUndefined();
+  });
+});
+
+describe("ordering and delivery messages name the field and the fix (D-041, D-042)", () => {
+  it("says which order field is missing or wrong", () => {
+    expect(messages(orderSchema, {})).toEqual([
+      "Choose the supplier you ordered from.",
+      "Choose the date the supplier expects to deliver.",
+    ]);
+    expect(
+      messages(orderSchema, {
+        supplierId: "0199c0de-0000-7000-8000-000000000001",
+        expectedDeliveryOn: "2000-01-01",
+      }),
+    ).toEqual(["Expected delivery can't be in the past. Pick today or a later date."]);
+  });
+
+  it("accepts 0 for an item that didn't come, and says what's wrong with a quantity", () => {
+    const lineId = "0199c0de-0000-7000-8000-000000000001";
+    expect(
+      deliverySchema.safeParse({ deliveredOn: "2026-01-01", lines: [{ lineId, quantity: "0" }] })
+        .success,
+    ).toBe(true);
+    expect(
+      messages(deliverySchema, { deliveredOn: "2026-01-01", lines: [{ lineId, quantity: -1 }] }),
+    ).toEqual(["Received quantity can't be below 0. Enter 0 or more."]);
+    expect(
+      messages(deliverySchema, { deliveredOn: "2999-01-01", lines: [{ lineId, quantity: 1 }] }),
+    ).toEqual(["Delivered on can't be in the future. Pick today or the day it arrived."]);
   });
 });
 

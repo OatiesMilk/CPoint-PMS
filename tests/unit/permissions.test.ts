@@ -6,6 +6,7 @@ import {
   can,
   canRequestLeatherRollsFor,
   mayActOnRequest,
+  mayCopyRequest,
   mayRemarkOnRequest,
   requiredDecisionPermission,
   type Permission,
@@ -38,7 +39,7 @@ const EXPECTED: Record<Permission, Role[]> = {
   "audit:read": [AD],
   "system:health": [AD],
   "procurement:read": [FM, AD, SC],
-  "procurement:request": [SC],
+  "procurement:request": [SC, FM],
   "procurement:decide": [FM],
   "procurement:remark": [FM, SC],
   "procurement:designate": [FM, AD],
@@ -124,26 +125,61 @@ describe("procurement access (D-031)", () => {
   const sc = { id: "sc1", role: SC, canRequestLeatherRolls: true };
   const scNoLeather = { ...sc, canRequestLeatherRolls: false };
   const fm = { id: "fm1", role: FM, canRequestLeatherRolls: false };
-  const own = { requestedById: "sc1" };
-  const other = { requestedById: "sc2" };
+  const own = { requestedById: "sc1", status: "PENDING" };
+  const other = { requestedById: "sc2", status: "PENDING" };
 
   it("lets every Shoe Constructor request; leather rolls need the flag too", () => {
     expect(can(SC, "procurement:request")).toBe(true);
     expect(canRequestLeatherRollsFor(sc)).toBe(true);
     expect(canRequestLeatherRollsFor(scNoLeather)).toBe(false);
-    // The flag alone does nothing for another role.
-    expect(canRequestLeatherRollsFor({ role: FM, canRequestLeatherRolls: true })).toBe(false);
+    // The flag alone does nothing for a role that can't request at all.
+    expect(canRequestLeatherRollsFor({ role: AD, canRequestLeatherRolls: true })).toBe(false);
+    expect(canRequestLeatherRollsFor({ role: QI, canRequestLeatherRolls: true })).toBe(false);
   });
 
-  it("lets a constructor cancel only their own request, flag or not", () => {
+  it("lets the Floor Manager raise a request, leather rolls included, with no flag (D-045)", () => {
+    expect(can(FM, "procurement:request")).toBe(true);
+    expect(canRequestLeatherRollsFor(fm)).toBe(true);
+  });
+
+  it("lets whoever sent a pending request cancel it, and nobody else", () => {
     expect(mayActOnRequest(sc, own, "cancel")).toBe(true);
     expect(mayActOnRequest(scNoLeather, own, "cancel")).toBe(true);
     expect(mayActOnRequest(sc, other, "cancel")).toBe(false);
     expect(mayActOnRequest(fm, own, "cancel")).toBe(false);
+    // The Floor Manager's own pending request is theirs to cancel.
+    expect(mayActOnRequest(fm, { requestedById: "fm1", status: "PENDING" }, "cancel")).toBe(true);
   });
 
-  it("lets only the Floor Manager approve, reject and receive", () => {
-    for (const action of ["approve", "reject", "receive"] as const) {
+  it("lets only the Floor Manager cancel once a request is approved or ordered (D-043)", () => {
+    for (const status of ["APPROVED", "ORDERED", "PARTIALLY_RECEIVED"]) {
+      expect(mayActOnRequest(fm, { ...own, status }, "cancel")).toBe(true);
+      expect(mayActOnRequest(sc, { ...own, status }, "cancel")).toBe(false);
+    }
+  });
+
+  it("lets a requester copy their own rejected or cancelled request only (D-044)", () => {
+    for (const status of ["REJECTED", "CANCELLED"]) {
+      expect(mayCopyRequest(sc, { ...own, status })).toBe(true);
+      expect(mayCopyRequest(sc, { ...other, status })).toBe(false);
+      expect(mayCopyRequest(fm, { ...own, status })).toBe(false);
+      expect(mayCopyRequest(fm, { requestedById: "fm1", status })).toBe(true);
+    }
+    for (const status of ["PENDING", "APPROVED", "ORDERED", "PARTIALLY_RECEIVED", "RECEIVED"])
+      expect(mayCopyRequest(sc, { ...own, status })).toBe(false);
+    expect(
+      mayCopyRequest(
+        { id: "sc1", role: AD, canRequestLeatherRolls: false },
+        {
+          ...own,
+          status: "REJECTED",
+        },
+      ),
+    ).toBe(false);
+  });
+
+  it("lets only the Floor Manager decide, order, record deliveries and close short", () => {
+    for (const action of ["approve", "reject", "order", "receive", "close_short"] as const) {
       expect(mayActOnRequest(fm, own, action)).toBe(true);
       expect(mayActOnRequest(sc, own, action)).toBe(false);
       expect(

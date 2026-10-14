@@ -14,8 +14,9 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
   alerts.
 - **Procurement:** Shoe Constructors request materials when they run low. Leather rolls only by
   the constructor the Floor Manager or Admin allows (usually the one who orders leather). The
-  Floor Manager approves or rejects each item of a request, guided by the stock on hand, then
-  marks it received, which adds the approved items to inventory.
+  Floor Manager approves or rejects each item of a request, guided by the stock on hand, records
+  the order with a supplier and an expected date, then records each delivery with a photo or PDF
+  of the receipt. Only what actually arrived is added to inventory, and a late order is flagged.
 - **Reports:** daily totals, defects by type, how often people kept the camera's call, and time
   per stage (the bottleneck), with CSV for Excel. Nothing is ranked per person.
 
@@ -171,10 +172,22 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
    level) shows **Still in stock** and starts on Reject with the reason filled in; a low one
    starts on Approve. These are suggestions: change any of them, then **Save decisions**.
    **Reject whole request…** turns everything down with one reason. The constructor sees
-   "1 of 2 items approved" and the reason on each rejected item. Open the approved request from
-   earlier in the week and **Mark received…**: the dialog lists what goes into stock (approved
-   items only), and Inventory shows the delivery in the ledger ("Received for PR-…").
-4. The **timeline** and **remarks** on the request show who did what and when. The **Leather roll
+   "1 of 2 items approved" and the reason on each rejected item.
+4. **Order it.** On the approved request, **Mark as ordered…**: pick the supplier, type the
+   reference number and the date they expect to deliver. Nothing is sent to the supplier; this is
+   the record. The **Ordered** tab lists it with the expected date, and the contact cement order
+   from Tuesday shows **Delivery late**, also on the home card.
+5. **Record a delivery.** Open the **Partly received** request: two of four rolls came, with a
+   photo and a PDF of the receipt under Deliveries. **Record delivery…** for the rest: each
+   quantity starts at what is still to come, a proof file is required, and saving adds exactly
+   that to stock (Inventory shows "Delivery for PR-…"). If the rest won't come, **Close short…**
+   with a reason instead.
+6. **When it goes wrong.** An ordered request can be cancelled with a reason until something
+   arrives (see the cancelled soles order). On a rejected or cancelled request the requester
+   gets **Copy to a new request**: the form opens prefilled, rejected items unticked with their
+   reasons. The Floor Manager can also raise a request themselves, from **New purchase request**
+   or **Request** on a low item in Inventory.
+7. The **timeline** and **remarks** on the request show who did what and when. The **Leather roll
    requesters** tab chooses who may also request leather rolls. Stop it for the demo
    constructor: on their next try, leather rolls are greyed out in the form, without signing
    them out.

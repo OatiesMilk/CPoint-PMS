@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useFieldArray, useForm, useWatch, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Info, LoaderCircle, Plus, Trash2, TriangleAlert } from "lucide-react";
+import { CircleX, Info, LoaderCircle, Plus, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { UrgencyBadge } from "@/components/features/procurement/request-badges";
@@ -47,6 +47,20 @@ export type PickerItem = {
   openRequestCode: string | null;
 };
 
+/** One item of the request being copied (D-044). */
+export type CopyLine = {
+  /** Null for a typed item, or one that has since been deactivated. */
+  inventoryItemId: string | null;
+  itemName: string;
+  category: string;
+  unit: string;
+  quantity: number;
+  note: string | null;
+  /** Why it was rejected last time; null for an item that wasn't. */
+  rejectionReason: string | null;
+};
+export type CopyFrom = { id: string; code: string; lines: CopyLine[] };
+
 /** The picker value for "something that isn't in inventory yet". */
 const OTHER = "other";
 
@@ -57,6 +71,8 @@ type LineValues = {
   unit: string;
   quantity: string;
   note: string;
+  /** Which rejected item of the copied request this line brings back; "" for any other line. */
+  copyKey: string;
 };
 type FormValues = {
   neededBy: string;
@@ -84,12 +100,15 @@ const emptyLine = (inventoryItemId = ""): LineValues => ({
   unit: "",
   quantity: "",
   note: "",
+  copyKey: "",
 });
 
 /** The form keeps "other" as a picker choice; the shared schema wants a typed name instead. */
-function toInput(values: FormValues): PurchaseRequestInput {
+function toInput(values: FormValues, copiedFromId?: string): PurchaseRequestInput {
   return {
-    ...values,
+    neededBy: values.neededBy,
+    remarks: values.remarks,
+    copiedFromId,
     lines: values.lines.map((l) => {
       const other = l.inventoryItemId === OTHER;
       return {
@@ -135,6 +154,8 @@ export function RequestForm({
   prefillItemId,
   canRequestLeatherRolls,
   today,
+  copy,
+  byFloorManager = false,
 }: {
   items: PickerItem[];
   prefillItemId?: string;
@@ -142,12 +163,40 @@ export function RequestForm({
   canRequestLeatherRolls: boolean;
   /** Today in Manila (YYYY-MM-DD), from the server, so the urgency preview matches the list. */
   today: string;
+  /** The rejected or cancelled request this one starts from (D-044). */
+  copy?: CopyFrom;
+  /** The Floor Manager raising a restock request themselves (D-045). */
+  byFloorManager?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
   const byId = new Map(items.map((i) => [i.id, i]));
   const categories = [...new Set(items.map((i) => i.category))] as InventoryCategory[];
+
+  /** A copied item as a form line. An item that can't be picked any more becomes a typed one. */
+  const fromCopy = (line: CopyLine, copyKey = ""): LineValues => {
+    const picked = line.inventoryItemId ? byId.get(line.inventoryItemId) : undefined;
+    const base = { quantity: String(line.quantity), note: line.note ?? "", copyKey };
+    if (picked?.allowed)
+      return { ...base, inventoryItemId: picked.id, itemName: "", category: "", unit: "" };
+    // Leather rolls this person may no longer request are left for them to choose again.
+    const blocked = line.category === "LEATHER_ROLL" && !canRequestLeatherRolls;
+    return {
+      ...base,
+      inventoryItemId: blocked ? "" : OTHER,
+      itemName: blocked ? "" : line.itemName,
+      category: blocked ? "" : line.category,
+      unit: blocked ? "" : line.unit,
+    };
+  };
+  // Rejected items start left out, each with its reason; ticking one brings it back (D-044).
+  const rejected = (copy?.lines ?? []).flatMap((line, i) =>
+    line.rejectionReason === null ? [] : [{ key: `copy-${i}`, line }],
+  );
+  const carried = (copy?.lines ?? [])
+    .filter((l) => l.rejectionReason === null)
+    .map((l) => fromCopy(l));
 
   const form = useForm<FormValues>({
     resolver,
@@ -156,7 +205,9 @@ export function RequestForm({
     defaultValues: {
       neededBy: "",
       remarks: "",
-      lines: [emptyLine(prefillItemId && byId.get(prefillItemId)?.allowed ? prefillItemId : "")],
+      lines: carried.length
+        ? carried
+        : [emptyLine(prefillItemId && byId.get(prefillItemId)?.allowed ? prefillItemId : "")],
     },
   });
   const { errors } = form.formState;
@@ -188,9 +239,13 @@ export function RequestForm({
   const onSubmit = form.handleSubmit((values) => {
     setFormError(null);
     startTransition(async () => {
-      const result = await createRequestAction(toInput(values));
+      const result = await createRequestAction(toInput(values, copy?.id));
       if (result.ok) {
-        toast.success(`${result.code} sent to the Floor Manager.`);
+        toast.success(
+          byFloorManager
+            ? `${result.code} raised. Decide its items next.`
+            : `${result.code} sent to the Floor Manager.`,
+        );
         for (const dup of result.alreadyRequested)
           toast.info(`${dup.code} already asks for ${dup.itemName}.`, { duration: 8000 });
         router.push(`/procurement/${result.id}`);
@@ -218,6 +273,68 @@ export function RequestForm({
     <form onSubmit={onSubmit} noValidate className="flex max-w-3xl flex-col gap-6">
       {formError && <Alert tone="danger">{formError}</Alert>}
       {form.formState.submitCount > 0 && <FormErrorSummary errors={summary} />}
+      {copy && (
+        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Copied from{" "}
+            <Link
+              href={`/procurement/${copy.id}`}
+              className="font-mono text-foreground underline underline-offset-4"
+            >
+              {copy.code}
+            </Link>
+            . Change anything you need, pick a new date, then send it as a new request.
+          </span>
+        </p>
+      )}
+
+      {rejected.length > 0 && (
+        <fieldset className="flex flex-col gap-2 rounded-lg border bg-card p-4">
+          <legend className="px-1 text-lg font-semibold">Rejected last time</legend>
+          <p className="text-sm text-muted-foreground">
+            These are left out. Tick one to ask for it again, if the reason no longer applies.
+          </p>
+          <ul className="flex flex-col divide-y">
+            {rejected.map(({ key, line }) => {
+              const at = (lines ?? []).findIndex((l) => l.copyKey === key);
+              const checked = at >= 0;
+              const full = !checked && fields.length >= MAX_LINES;
+              return (
+                <li key={key} className="flex flex-col gap-1 py-2">
+                  <label className="inline-flex items-center gap-2 font-medium">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-primary"
+                      checked={checked}
+                      disabled={pending || full}
+                      aria-describedby={`${key}-reason`}
+                      onChange={(e) => {
+                        if (e.target.checked) append(fromCopy(line, key));
+                        else if (at >= 0 && fields.length > 1) remove(at);
+                        else if (at >= 0) form.setValue(`lines.${at}`, emptyLine());
+                      }}
+                    />
+                    {line.itemName} · {formatQuantity(line.quantity, line.unit)}
+                  </label>
+                  <p
+                    id={`${key}-reason`}
+                    className="flex items-start gap-1.5 pl-6 text-sm text-muted-foreground"
+                  >
+                    <CircleX aria-hidden className="mt-0.5 size-4 shrink-0 text-reject" />
+                    <span>
+                      Rejected: {line.rejectionReason || "no reason was recorded"}
+                      {full
+                        ? ` This request already has ${MAX_LINES} items, the most it can hold.`
+                        : ""}
+                    </span>
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </fieldset>
+      )}
 
       <fieldset className="flex flex-col gap-4">
         <legend className="mb-3 text-lg font-semibold">What you need</legend>
@@ -434,7 +551,7 @@ export function RequestForm({
               id="neededBy-hint"
               className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
             >
-              The Floor Manager will see this as
+              {byFloorManager ? "This request will show as" : "The Floor Manager will see this as"}
               <UrgencyBadge
                 urgency={urgencyFor(neededBy, today)}
                 daysLeft={daysLeftLabel(neededBy, today)}
@@ -462,8 +579,9 @@ export function RequestForm({
             <FieldError id="remarks-error" message={errors.remarks.message} />
           ) : (
             <p id="remarks-hint" className="text-sm text-muted-foreground">
-              Anything that helps the Floor Manager decide. It shows as the first remark on the
-              request.
+              {byFloorManager
+                ? "Why it’s needed, for the record. It shows as the first remark on the request."
+                : "Anything that helps the Floor Manager decide. It shows as the first remark on the request."}
             </p>
           )}
         </div>
@@ -471,13 +589,14 @@ export function RequestForm({
 
       <p className="flex items-start gap-2 text-sm text-muted-foreground">
         <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
-        Requests can’t be edited after you send them. To change one, cancel it and send a new one.
+        Requests can’t be edited after you send them. To change one, cancel it and copy it to a new
+        one.
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending}>
           {pending && <LoaderCircle aria-hidden className="animate-spin" />}
-          {pending ? "Sending…" : "Send request"}
+          {pending ? "Sending…" : byFloorManager ? "Raise request" : "Send request"}
         </Button>
         <Button asChild variant="ghost">
           <Link href="/procurement">Cancel</Link>

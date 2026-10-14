@@ -258,9 +258,9 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
     out.push({
       id: "requests-late",
       severity: "warning",
-      title: `${plural(i.requests.lateAwaitingDelivery, "approved request")} not received after a week`,
-      detail: "Check with the supplier, then mark received when it arrives.",
-      href: "/procurement?status=APPROVED",
+      title: `${plural(i.requests.lateAwaitingDelivery, "ordered request")} past the expected delivery date`,
+      detail: "Check with the supplier, then record the delivery when it arrives.",
+      href: "/procurement?status=all&late=1",
     });
 
   if (i.lineProblemShare !== null) {
