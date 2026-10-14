@@ -244,8 +244,12 @@ Seed one demo account per role (password from `.env`, documented in README).
 | CV device API tokens (create / revoke, shown once)           | —              | —                 | ✅                 | —                                |
 | Audit log (filterable)                                       | —              | —                 | ✅                 | —                                |
 | Procurement: see requests (D-029)                            | ✅ all         | —                 | view all           | own                              |
-| Procurement: send / cancel own pending request               | —              | —                 | —                  | ✅ (leather rolls: allowed ones) |
-| Procurement: approve / reject / mark received                | ✅             | —                 | —                  | —                                |
+| Procurement: send / cancel own pending request (D-045)       | ✅             | —                 | —                  | ✅ (leather rolls: allowed ones) |
+| Procurement: copy own rejected or cancelled request (D-044)  | ✅             | —                 | —                  | ✅                               |
+| Procurement: approve / reject each item                      | ✅             | —                 | —                  | —                                |
+| Procurement: order, record deliveries, close short (D-041/2) | ✅             | —                 | —                  | —                                |
+| Procurement: cancel after approval, with a reason (D-043)    | ✅             | —                 | —                  | —                                |
+| Procurement: see proof-of-delivery files                     | ✅             | —                 | view               | own requests                     |
 | Procurement: remarks                                         | ✅             | —                 | —                  | own                              |
 | Procurement: choose who can request leather rolls (D-031)    | ✅             | —                 | ✅                 | —                                |
 | Constructor home: my open requests (or how to get access)    | —              | —                 | —                  | ✅                               |

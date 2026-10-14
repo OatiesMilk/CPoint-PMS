@@ -81,9 +81,12 @@ enum MovementType {
   ADJUST
 }
 
+/// PENDING → APPROVED → ORDERED → PARTIALLY_RECEIVED → RECEIVED, or REJECTED / CANCELLED (D-041).
 enum PurchaseRequestStatus {
   PENDING
   APPROVED
+  ORDERED
+  PARTIALLY_RECEIVED
   REJECTED
   CANCELLED
   RECEIVED
@@ -122,22 +125,25 @@ model User {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  batchesCreated    Batch[]                 @relation("BatchCreatedBy")
-  stageLogsStarted  BatchStageLog[]         @relation("StageStartedBy")
-  stageLogsEnded    BatchStageLog[]         @relation("StageEndedBy")
-  scanDecisions     Scan[]                  @relation("ScanDecidedBy")
-  reworkCompleted   ReworkTicket[]          @relation("ReworkCompletedBy")
-  salvageHandled    SalvageItem[]           @relation("SalvageHandledBy")
-  movements         InventoryMovement[]
-  apiTokensCreated  ApiToken[]
-  cvSettingsUpdates CvSettings[]
-  auditLogs         AuditLog[]
-  revokedSessions   SessionRevocation[]
-  purchaseRequests  PurchaseRequest[]       @relation("PurchaseRequestedBy")
-  purchaseDecisions PurchaseRequest[]       @relation("PurchaseDecidedBy")
-  purchaseLineCalls PurchaseRequestLine[]   @relation("PurchaseLineDecidedBy")
-  purchaseEvents    PurchaseRequestEvent[]
-  purchaseRemarks   PurchaseRequestRemark[]
+  batchesCreated      Batch[]                 @relation("BatchCreatedBy")
+  stageLogsStarted    BatchStageLog[]         @relation("StageStartedBy")
+  stageLogsEnded      BatchStageLog[]         @relation("StageEndedBy")
+  scanDecisions       Scan[]                  @relation("ScanDecidedBy")
+  reworkCompleted     ReworkTicket[]          @relation("ReworkCompletedBy")
+  salvageHandled      SalvageItem[]           @relation("SalvageHandledBy")
+  movements           InventoryMovement[]
+  apiTokensCreated    ApiToken[]
+  cvSettingsUpdates   CvSettings[]
+  auditLogs           AuditLog[]
+  revokedSessions     SessionRevocation[]
+  purchaseRequests    PurchaseRequest[]       @relation("PurchaseRequestedBy")
+  purchaseDecisions   PurchaseRequest[]       @relation("PurchaseDecidedBy")
+  purchaseLineCalls   PurchaseRequestLine[]   @relation("PurchaseLineDecidedBy")
+  purchaseOrders      PurchaseRequest[]       @relation("PurchaseOrderedBy")
+  purchaseEvents      PurchaseRequestEvent[]
+  purchaseRemarks     PurchaseRequestRemark[]
+  purchaseDeliveries  PurchaseDelivery[]
+  purchaseAttachments PurchaseAttachment[]
 
   @@index([role, isActive])
   @@map("users")
@@ -226,7 +232,8 @@ model Supplier {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
-  batches Batch[]
+  batches          Batch[]
+  purchaseRequests PurchaseRequest[]
 
   @@map("suppliers")
 }
@@ -474,10 +481,10 @@ model InventoryMovement {
   createdById   String       @db.Uuid
   createdAt     DateTime     @default(now())
 
-  item         InventoryItem         @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  batch        Batch?                @relation(fields: [batchId], references: [id])
-  createdBy    User                  @relation(fields: [createdById], references: [id])
-  requestLines PurchaseRequestLine[]
+  item          InventoryItem          @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  batch         Batch?                 @relation(fields: [batchId], references: [id])
+  createdBy     User                   @relation(fields: [createdById], references: [id])
+  deliveryLines PurchaseDeliveryLine[]
 
   @@index([itemId, createdAt])
   @@index([batchId])
@@ -493,32 +500,56 @@ model PurchaseRequestSequence {
   @@map("purchase_request_sequences")
 }
 
-/// A Shoe Constructor asks for materials; the Floor Manager decides each item (D-039). Never edited
-/// after it's submitted: cancel and send a new one. Why it's needed goes in the first remark (D-036).
+/// A Shoe Constructor (or the Floor Manager, D-045) asks for materials; the Floor Manager decides
+/// each item (D-039), orders the approved ones from one supplier (D-041) and records each delivery
+/// with its proof (D-042). Never edited after it's submitted: cancel it, or copy it to a new one
+/// (D-044). Why it's needed goes in the first remark (D-036).
 model PurchaseRequest {
-  id              String                @id @default(uuid(7)) @db.Uuid
-  code            String                @unique // PR-2026-0001
-  requestedById   String                @db.Uuid
-  status          PurchaseRequestStatus @default(PENDING)
+  id                 String                @id @default(uuid(7)) @db.Uuid
+  code               String                @unique // PR-2026-0001
+  requestedById      String                @db.Uuid
+  status             PurchaseRequestStatus @default(PENDING)
   /// Required. Urgency is worked out from it at read time and never stored (D-037).
-  neededBy        DateTime              @db.Date
-  decidedById     String?               @db.Uuid
-  decidedAt       DateTime?
-  rejectionReason String?
-  approvalNote    String?
-  receivedAt      DateTime?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  neededBy           DateTime              @db.Date
+  decidedById        String?               @db.Uuid
+  decidedAt          DateTime?
+  rejectionReason    String?
+  approvalNote       String?
+  /// The order: one supplier and one expected date for the whole request (D-041).
+  supplierId         String?               @db.Uuid
+  orderReference     String?
+  expectedDeliveryOn DateTime?             @db.Date
+  orderNote          String?
+  orderedById        String?               @db.Uuid
+  orderedAt          DateTime?
+  /// Why it was cancelled. Required when the Floor Manager cancels after approval (D-043).
+  cancelReason       String?
+  /// Set when a partly received request is closed because the rest won't come (D-042).
+  closedShortAt      DateTime?
+  closedShortReason  String?
+  /// The rejected or cancelled request this one was copied from (D-044).
+  copiedFromId       String?               @db.Uuid
+  receivedAt         DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   requestedBy User                    @relation("PurchaseRequestedBy", fields: [requestedById], references: [id])
   decidedBy   User?                   @relation("PurchaseDecidedBy", fields: [decidedById], references: [id])
+  orderedBy   User?                   @relation("PurchaseOrderedBy", fields: [orderedById], references: [id])
+  supplier    Supplier?               @relation(fields: [supplierId], references: [id])
+  copiedFrom  PurchaseRequest?        @relation("PurchaseRequestCopies", fields: [copiedFromId], references: [id])
+  copies      PurchaseRequest[]       @relation("PurchaseRequestCopies")
   lines       PurchaseRequestLine[]
   events      PurchaseRequestEvent[]
   remarks     PurchaseRequestRemark[]
+  deliveries  PurchaseDelivery[]
 
   @@index([status, createdAt])
   @@index([requestedById])
   @@index([decidedById])
+  @@index([orderedById])
+  @@index([supplierId])
+  @@index([copiedFromId])
   @@map("purchase_requests")
 }
 
@@ -535,7 +566,8 @@ model PurchaseRequestLine {
   /// Stock when the request was made, so the Floor Manager sees why it was asked for.
   onHandAtRequest       Decimal?             @db.Decimal(12, 2)
   reorderLevelAtRequest Decimal?             @db.Decimal(12, 2)
-  movementId            String?              @db.Uuid // the IN movement posted on receipt
+  /// Adds up over deliveries; never more than the quantity (D-042).
+  receivedQuantity      Decimal              @default(0) @db.Decimal(12, 2)
   position              Int
   /// Each item is approved or rejected on its own; the request's status follows from them (D-039).
   decision              PurchaseLineDecision @default(PENDING)
@@ -543,14 +575,13 @@ model PurchaseRequestLine {
   decidedById           String?              @db.Uuid
   decidedAt             DateTime?
 
-  request   PurchaseRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  item      InventoryItem?     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
-  movement  InventoryMovement? @relation(fields: [movementId], references: [id], onDelete: Restrict)
-  decidedBy User?              @relation("PurchaseLineDecidedBy", fields: [decidedById], references: [id])
+  request       PurchaseRequest        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  item          InventoryItem?         @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  decidedBy     User?                  @relation("PurchaseLineDecidedBy", fields: [decidedById], references: [id])
+  deliveryLines PurchaseDeliveryLine[]
 
   @@index([requestId])
   @@index([inventoryItemId])
-  @@index([movementId])
   @@index([decidedById])
   @@map("purchase_request_lines")
 }
@@ -563,14 +594,77 @@ model PurchaseRequestEvent {
   toStatus   PurchaseRequestStatus
   actorId    String                 @db.Uuid
   note       String?
+  /// The delivery this event recorded, so the timeline can show its proof files.
+  deliveryId String?                @db.Uuid
   createdAt  DateTime               @default(now())
 
-  request PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  actor   User            @relation(fields: [actorId], references: [id])
+  request  PurchaseRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor    User              @relation(fields: [actorId], references: [id])
+  delivery PurchaseDelivery? @relation(fields: [deliveryId], references: [id], onDelete: Restrict)
 
   @@index([requestId, createdAt])
   @@index([actorId])
+  @@index([deliveryId])
   @@map("purchase_request_events")
+}
+
+/// One delivery against an ordered request (D-042). A request can have several: what arrives short
+/// stays outstanding until the next one, or until the request is closed short.
+model PurchaseDelivery {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  requestId    String   @db.Uuid
+  deliveredOn  DateTime @db.Date
+  note         String?
+  recordedById String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  request     PurchaseRequest        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  recordedBy  User                   @relation(fields: [recordedById], references: [id])
+  lines       PurchaseDeliveryLine[]
+  attachments PurchaseAttachment[]
+  events      PurchaseRequestEvent[]
+
+  @@index([requestId, createdAt])
+  @@index([recordedById])
+  @@map("purchase_deliveries")
+}
+
+/// How much of one request item arrived in one delivery, and the stock IN it posted (D-023).
+model PurchaseDeliveryLine {
+  id         String  @id @default(uuid(7)) @db.Uuid
+  deliveryId String  @db.Uuid
+  lineId     String  @db.Uuid
+  quantity   Decimal @db.Decimal(12, 2)
+  movementId String? @db.Uuid // null for an item that isn't in inventory
+
+  delivery PurchaseDelivery    @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  line     PurchaseRequestLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  movement InventoryMovement?  @relation(fields: [movementId], references: [id], onDelete: Restrict)
+
+  @@unique([deliveryId, lineId])
+  @@index([lineId])
+  @@index([movementId])
+  @@map("purchase_delivery_lines")
+}
+
+/// A proof-of-delivery file: a photo or PDF of the supplier's receipt (D-042). Never deleted; a
+/// wrong file is corrected by adding the right one. The key is generated by the server (D-020).
+model PurchaseAttachment {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  deliveryId   String   @db.Uuid
+  storageKey   String   @unique
+  mime         String
+  size         Int
+  originalName String
+  uploadedById String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  delivery   PurchaseDelivery @relation(fields: [deliveryId], references: [id], onDelete: Restrict)
+  uploadedBy User             @relation(fields: [uploadedById], references: [id])
+
+  @@index([deliveryId, createdAt])
+  @@index([uploadedById])
+  @@map("purchase_attachments")
 }
 
 /// Remarks are only ever added, never edited or deleted.

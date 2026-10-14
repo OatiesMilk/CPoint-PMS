@@ -1,3 +1,3 @@
 import { procurementController } from "@/server/controllers/procurement.controller";
 
-export const POST = procurementController.receive;
+export const POST = procurementController.order;

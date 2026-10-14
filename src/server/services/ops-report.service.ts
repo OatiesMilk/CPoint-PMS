@@ -97,7 +97,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     stageDurations(baseline),
     repairStation(range, now),
     stockPosition(range),
-    procurementFlow(range, now, urgencyCutoffs(manilaToday(now)).highThrough),
+    procurementFlow(range, now, urgencyCutoffs(manilaToday(now)).highThrough, manilaToday(now)),
     supplierQuality(range),
   ]);
 

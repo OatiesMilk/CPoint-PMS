@@ -1,12 +1,17 @@
 import {
   Ban,
   CalendarClock,
+  CalendarX,
   Check,
   CircleX,
+  ClipboardList,
   Clock,
   Hourglass,
   PackageCheck,
+  PackageOpen,
+  Scissors,
   Siren,
+  Truck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { PurchaseRequestStatus } from "@/lib/domain";
@@ -15,6 +20,8 @@ import { STATUS_LABELS, URGENCY_LABELS, type Urgency } from "@/lib/procurement-r
 const STATUS = {
   PENDING: { tone: "warning", Icon: Hourglass },
   APPROVED: { tone: "info", Icon: Check },
+  ORDERED: { tone: "info", Icon: Truck },
+  PARTIALLY_RECEIVED: { tone: "warning", Icon: PackageOpen },
   RECEIVED: { tone: "success", Icon: PackageCheck },
   REJECTED: { tone: "danger", Icon: CircleX },
   CANCELLED: { tone: "neutral", Icon: Ban },
@@ -27,6 +34,36 @@ export function RequestStatusBadge({ status }: { status: PurchaseRequestStatus }
     <Badge tone={tone}>
       <Icon aria-hidden />
       {STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+/** Ordered or partly received, and past the date the supplier gave (D-041). */
+export function LateBadge() {
+  return (
+    <Badge tone="danger">
+      <CalendarX aria-hidden />
+      Delivery late
+    </Badge>
+  );
+}
+
+/** A received request whose remaining items were given up on (D-042). */
+export function ClosedShortBadge() {
+  return (
+    <Badge tone="warning">
+      <Scissors aria-hidden />
+      Closed short
+    </Badge>
+  );
+}
+
+/** A restock request the Floor Manager raised, not a constructor (D-045). */
+export function RaisedByFloorManagerBadge() {
+  return (
+    <Badge>
+      <ClipboardList aria-hidden />
+      Raised by Floor Manager
     </Badge>
   );
 }

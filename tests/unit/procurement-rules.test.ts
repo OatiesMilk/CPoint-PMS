@@ -23,6 +23,13 @@ import {
   wellStockedReason,
   WORKING_WEEKDAYS,
   workingDaysUntil,
+  deriveReceiptStatus,
+  isDeliveryLate,
+  OPEN_STATUSES,
+  outstandingQuantity,
+  shortfallNote,
+  STATUS_LABELS,
+  STATUS_ORDER,
   type PurchaseAction,
   type Urgency,
 } from "@/lib/procurement-rules";
@@ -30,31 +37,76 @@ import {
 const STATUSES: PurchaseRequestStatus[] = [
   "PENDING",
   "APPROVED",
+  "ORDERED",
+  "PARTIALLY_RECEIVED",
   "REJECTED",
   "CANCELLED",
   "RECEIVED",
 ];
-const ALLOWED: Record<PurchaseAction, [PurchaseRequestStatus, PurchaseRequestStatus]> = {
-  approve: ["PENDING", "APPROVED"],
-  reject: ["PENDING", "REJECTED"],
-  cancel: ["PENDING", "CANCELLED"],
-  receive: ["APPROVED", "RECEIVED"],
+const ALLOWED: Record<
+  PurchaseAction,
+  { from: PurchaseRequestStatus[]; to: PurchaseRequestStatus }
+> = {
+  approve: { from: ["PENDING"], to: "APPROVED" },
+  reject: { from: ["PENDING"], to: "REJECTED" },
+  cancel: { from: ["PENDING", "APPROVED", "ORDERED"], to: "CANCELLED" },
+  order: { from: ["APPROVED"], to: "ORDERED" },
+  receive: { from: ["ORDERED", "PARTIALLY_RECEIVED"], to: "RECEIVED" },
+  close_short: { from: ["PARTIALLY_RECEIVED"], to: "RECEIVED" },
 };
 
-describe("purchase request lifecycle (D-029)", () => {
-  for (const [action, [from, to]] of Object.entries(ALLOWED) as [
+describe("purchase request lifecycle (D-029, D-041 to D-043)", () => {
+  for (const [action, { from, to }] of Object.entries(ALLOWED) as [
     PurchaseAction,
-    [PurchaseRequestStatus, PurchaseRequestStatus],
+    { from: PurchaseRequestStatus[]; to: PurchaseRequestStatus },
   ][]) {
-    it(`${action}: ${from} → ${to}, refused from every other status`, () => {
-      expect(transition(from, action)).toEqual({ ok: true, from, to });
-      for (const status of STATUSES.filter((s) => s !== from)) {
+    it(`${action}: from ${from.join(" or ")} only, with a one-sentence refusal elsewhere`, () => {
+      for (const status of from)
+        expect(transition(status, action)).toEqual({ ok: true, from: status, to });
+      for (const status of STATUSES.filter((s) => !from.includes(s))) {
         const result = transition(status, action);
         expect(result.ok).toBe(false);
-        if (!result.ok) expect(result.reason).toMatch(/^Only (a pending|an approved) request/);
+        // Every refusal says what the rule is, or what to do instead.
+        if (!result.ok)
+          expect(result.reason).toMatch(
+            /\.( This one is [a-z ]+\.| Use Close short[^.]+\.)?$|^Mark this request/,
+          );
       }
     });
   }
+
+  it("covers every status and every action", () => {
+    expect([...STATUS_ORDER].sort()).toEqual([...STATUSES].sort());
+    expect(Object.keys(STATUS_LABELS).sort()).toEqual([...STATUSES].sort());
+    expect(OPEN_STATUSES).toEqual(["PENDING", "APPROVED", "ORDERED", "PARTIALLY_RECEIVED"]);
+  });
+
+  it("says why a request can't be cancelled, and what to do instead (D-043)", () => {
+    expect(transition("RECEIVED", "cancel")).toEqual({
+      ok: false,
+      reason: "Only pending, approved or ordered requests can be cancelled. This one is received.",
+    });
+    expect(transition("PARTIALLY_RECEIVED", "cancel")).toEqual({
+      ok: false,
+      reason:
+        "Part of this request has already arrived, so it can't be cancelled. Use Close short for what won't come.",
+    });
+  });
+
+  it("asks for the order before a delivery", () => {
+    expect(transition("APPROVED", "receive")).toEqual({
+      ok: false,
+      reason: "Mark this request as ordered first, then record the delivery.",
+    });
+    expect(transition("PENDING", "order")).toEqual({
+      ok: false,
+      reason: "Only an approved request can be marked as ordered. This one is pending.",
+    });
+    expect(transition("ORDERED", "close_short")).toEqual({
+      ok: false,
+      reason: "Only a partly received request can be closed short. This one is ordered.",
+    });
+  });
 
   it("closed requests take no action at all", () => {
     for (const status of ["REJECTED", "CANCELLED", "RECEIVED"] as const)
@@ -265,6 +317,65 @@ describe("names by role (D-035)", () => {
         nav: "Procurement",
         create: "New purchase request",
       });
+  });
+});
+
+describe("deliveries (D-042)", () => {
+  const line = (quantity: number, receivedQuantity: number, decision = "APPROVED") => ({
+    itemName: "Black cowhide",
+    unit: "roll",
+    decision: decision as "APPROVED" | "REJECTED",
+    quantity,
+    receivedQuantity,
+  });
+
+  it("works out what is still to come in hundredths, never below zero", () => {
+    expect(outstandingQuantity(6, 0)).toBe(6);
+    expect(outstandingQuantity(6, 2.5)).toBe(3.5);
+    expect(outstandingQuantity(6, 6)).toBe(0);
+    // 0.1 + 0.2 is not 0.3 in floating point; in hundredths it is.
+    expect(outstandingQuantity(0.3, 0.1 + 0.2)).toBe(0);
+    expect(outstandingQuantity(1.1, 0.4)).toBe(0.7);
+    expect(outstandingQuantity(2, 2.01)).toBe(0);
+  });
+
+  it("is partly received while an approved item is outstanding, received once none is", () => {
+    expect(deriveReceiptStatus([line(4, 0), line(2, 2)])).toBe("PARTIALLY_RECEIVED");
+    expect(deriveReceiptStatus([line(4, 3.99)])).toBe("PARTIALLY_RECEIVED");
+    expect(deriveReceiptStatus([line(4, 4), line(2, 2)])).toBe("RECEIVED");
+    // A rejected item isn't coming, so it never keeps a request open.
+    expect(deriveReceiptStatus([line(4, 4), line(9, 0, "REJECTED")])).toBe("RECEIVED");
+  });
+
+  it("lists what never arrived, per item, skipping what did", () => {
+    expect(
+      shortfallNote([
+        line(4, 2),
+        { ...line(5, 5), itemName: "Shoe tacks", unit: "box" },
+        { ...line(1, 0), itemName: "Brass eyelets", unit: "pack" },
+        { ...line(3, 0, "REJECTED"), itemName: "Thread", unit: "spool" },
+      ]),
+    ).toBe("2 rolls of Black cowhide, 1 pack of Brass eyelets");
+    expect(shortfallNote([line(4, 4)])).toBe("");
+  });
+
+  it("is late only while a delivery is awaited and the expected date has passed (D-041)", () => {
+    const today = "2026-10-09";
+    for (const status of ["ORDERED", "PARTIALLY_RECEIVED"] as const) {
+      expect(isDeliveryLate(status, "2026-10-08", today)).toBe(true);
+      expect(isDeliveryLate(status, new Date("2026-10-08T00:00:00.000Z"), today)).toBe(true);
+      // Due today is not late yet.
+      expect(isDeliveryLate(status, "2026-10-09", today)).toBe(false);
+      expect(isDeliveryLate(status, "2026-10-10", today)).toBe(false);
+      expect(isDeliveryLate(status, null, today)).toBe(false);
+    }
+    for (const status of ["PENDING", "APPROVED", "RECEIVED", "REJECTED", "CANCELLED"] as const)
+      expect(isDeliveryLate(status, "2026-10-01", today)).toBe(false);
+  });
+
+  it("keeps urgency counting until the request is closed", () => {
+    for (const status of OPEN_STATUSES)
+      expect(urgencyOf(status, "2026-10-08", "2026-10-05")).toBe("HIGH");
   });
 });
 

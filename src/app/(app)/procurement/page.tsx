@@ -1,19 +1,25 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Floor Manager (decides), Shoe Constructors (ask for materials; leather rolls only if
- *        allowed, D-031), the
- *        System Admin (reads). A few times a day.
- * What:  see which requests wait for a decision, the soonest needed first, and open one.
- *        Constructors see and send their own, as "Material requests" (D-035).
- * Worst: a request for leather or nails sits unnoticed until the line stops (survey Q13). Pending
- *        is the Floor Manager's default tab, High urgency on top (D-037), with each one's age.
+ * Who:   the Floor Manager (decides, orders, receives), Shoe Constructors (ask for materials;
+ *        leather rolls only if allowed, D-031), the System Admin (reads). A few times a day.
+ * What:  see which requests wait for a decision, an order or a delivery, the soonest needed
+ *        first, and open one. Constructors see and send their own, as "Material requests" (D-035).
+ * Worst: a request for leather or nails sits unnoticed until the line stops (survey Q13), or an
+ *        order nobody chased. Pending is the Floor Manager's default tab, High urgency on top
+ *        (D-037), with each one's age; an overdue order says "Delivery late" (D-041).
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { ChevronLeft, ChevronRight, Info, Plus } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
-import { RequestStatusBadge, UrgencyBadge } from "@/components/features/procurement/request-badges";
+import {
+  ClosedShortBadge,
+  LateBadge,
+  RaisedByFloorManagerBadge,
+  RequestStatusBadge,
+  UrgencyBadge,
+} from "@/components/features/procurement/request-badges";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -23,9 +29,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { PurchaseRequestStatus } from "@/lib/domain";
-import { formatDuration, formatManilaDateTime } from "@/lib/format";
-import { requestLabelsFor, STATUS_LABELS, summarizeItems } from "@/lib/procurement-rules";
+import { formatCalendarDate, formatDuration, formatManilaDateTime } from "@/lib/format";
+import {
+  requestLabelsFor,
+  STATUS_LABELS,
+  STATUS_ORDER,
+  summarizeItems,
+} from "@/lib/procurement-rules";
 import { cn } from "@/lib/utils";
 import { getCurrentUser, requirePermission } from "@/server/policies/guard";
 import { can, canRequestLeatherRollsFor } from "@/server/policies/permissions";
@@ -45,8 +55,6 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: user ? requestLabelsFor(user.role).nav : "Procurement" };
 }
 
-const TABS: PurchaseRequestStatus[] = ["PENDING", "APPROVED", "RECEIVED", "REJECTED", "CANCELLED"];
-
 export default async function ProcurementPage({ searchParams }: PageProps<"/procurement">) {
   const user = await requirePermission("procurement:read");
   await connection();
@@ -60,7 +68,9 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
   const all = raw.status === "all";
   const status = all ? undefined : (parsed.status ?? OPEN_TAB_DEFAULT[user.role]);
   const query = { ...parsed, status };
-  const filtered = Boolean(query.category || query.urgency || query.item || query.from || query.to);
+  const filtered = Boolean(
+    query.category || query.urgency || query.late || query.item || query.from || query.to,
+  );
   const labels = requestLabelsFor(user.role);
 
   const [list, items, requesters] = await Promise.all([
@@ -77,6 +87,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
       status: all ? "all" : raw.status === undefined ? undefined : String(raw.status),
       category: query.category,
       urgency: query.urgency,
+      late: query.late,
       item: query.item,
       from: query.from,
       to: query.to,
@@ -95,7 +106,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
         description={
           isConstructor
             ? "Ask for materials when stock runs low. The Floor Manager approves each request."
-            : "Materials the Shoe Constructors asked for, the most urgent first. Approve or reject, then mark them received."
+            : "Materials asked for, the most urgent first. Decide each item, record the order, then record what arrives."
         }
         actions={
           canRequest && (
@@ -124,8 +135,8 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
         </p>
       )}
 
-      <nav aria-label="Request status" className="flex gap-1 border-b">
-        {TABS.map((s) => (
+      <nav aria-label="Request status" className="flex flex-wrap gap-x-1 border-b">
+        {STATUS_ORDER.map((s) => (
           <TabLink
             key={s}
             href={href({ status: s, page: undefined })}
@@ -159,7 +170,9 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
           <p className="max-w-md text-muted-foreground">
             {isConstructor
               ? "When nails, thread or leather run low, send a material request. The Floor Manager sees it right away."
-              : "Shoe Constructors send requests when materials run low. Leather rolls only from those you allow under Leather roll requesters."}
+              : canRequest
+                ? "Shoe Constructors send requests when materials run low, and you can raise one yourself. Leather rolls only from the constructors you allow under Leather roll requesters."
+                : "Shoe Constructors send requests when materials run low. The Floor Manager decides, orders and receives them."}
           </p>
           {canRequest && (
             <Button asChild className="mt-2">
@@ -183,6 +196,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                     href={href({
                       category: undefined,
                       urgency: undefined,
+                      late: undefined,
                       item: undefined,
                       from: undefined,
                       to: undefined,
@@ -203,6 +217,7 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                     <TableHead>Urgency</TableHead>
                     {!isConstructor && <TableHead>Requested by</TableHead>}
                     <TableHead>Sent</TableHead>
+                    <TableHead>Expected</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -221,15 +236,37 @@ export default async function ProcurementPage({ searchParams }: PageProps<"/proc
                       <TableCell>
                         <UrgencyBadge urgency={r.urgency} daysLeft={r.daysLeft} />
                       </TableCell>
-                      {!isConstructor && <TableCell>{r.requestedBy.name}</TableCell>}
+                      {!isConstructor && (
+                        <TableCell>
+                          <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            {r.requestedBy.name}
+                            {r.raisedByFloorManager && <RaisedByFloorManagerBadge />}
+                          </span>
+                        </TableCell>
+                      )}
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {r.status === "PENDING"
                           ? `${formatDuration(now.getTime() - r.createdAt.getTime())} ago`
                           : formatManilaDateTime(r.createdAt)}
                       </TableCell>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {r.expectedDeliveryOn ? (
+                          <span className="flex flex-col">
+                            {formatCalendarDate(r.expectedDeliveryOn)}
+                            {r.supplier && <span className="text-sm">{r.supplier.name}</span>}
+                          </span>
+                        ) : (
+                          <>
+                            <span aria-hidden>—</span>
+                            <span className="sr-only">Not ordered yet</span>
+                          </>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <RequestStatusBadge status={r.status} />
+                          {r.closedShortAt && <ClosedShortBadge />}
+                          {r.late && <LateBadge />}
                           {r.partlyApproved && (
                             <span className="text-sm text-muted-foreground">
                               {r.partlyApproved}

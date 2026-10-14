@@ -168,3 +168,48 @@ Brief: `material-requests.md` (project root), Phase 12.
       session)
 - [ ] Docker demo-week check not run in this session (the seed changed: one request is now
       decided item by item)
+
+## Phase 13 — Ordering, delivery with proof, and the remaining gaps
+
+Brief: `material-requests.md` (project root), Phase 13.
+
+- [x] Ordering (D-041): "Mark as ordered" on an approved request with a supplier from Settings, an
+      optional reference number, a required expected delivery date (today or later) and an optional
+      note; one order per request; the request moves to ORDERED
+- [x] "Delivery late" (D-041): ordered or partly received past the expected date; a badge in the
+      list and on the request, a Delivery filter, and a line on the Floor Manager's home card
+- [x] Deliveries (D-042): "Record delivery" takes a quantity per approved item (prefilled with
+      what is outstanding, 0 allowed), the delivery date, proof files and a note; each quantity of
+      an inventory item posts stock IN through the ledger in the same transaction; anything
+      outstanding leaves the request PARTIALLY_RECEIVED; over-delivery is refused under the item
+- [x] Close short (D-042): a partly received request is closed with a reason; it ends as received,
+      marked "Closed short", and the history keeps what never arrived
+- [x] Proof of delivery (D-042): required; JPEG, PNG, WebP or PDF by their bytes, 10 MB each, 5 per
+      upload; stored under server-generated keys; served from a guarded route (FM, Admin, the
+      requester on their own request) as private, `nosniff`, with a safe file name; never deleted,
+      corrected by adding another file
+- [x] Cancel after approval (D-043): the Floor Manager, with a reason, while nothing has arrived;
+      after a delivery the page says to use Close short
+- [x] Copy to a new request (D-044): on the requester's own rejected or cancelled request; the form
+      opens prefilled, rejected items unticked with their reasons; both requests link to each other
+- [x] Floor Manager restock (D-045): from Procurement → New or "Request" on a low inventory item;
+      decided through the same item-by-item step; marked "Raised by Floor Manager"; no leather-roll
+      OK needed
+- [x] Views: seven status tabs with counts; the request page shows the order, each delivery with
+      proof thumbnails or a PDF link, and what is still to come; the home card shows pending (with
+      High), waiting to be ordered and late deliveries; the Operations report counts by the new
+      statuses
+- [x] Migration `20261013090000_purchase_ordering_deliveries`: two new statuses, order and
+      closing fields, `PurchaseDelivery`, `PurchaseDeliveryLine`, `PurchaseAttachment`; each
+      request received before the change becomes one delivery without proof; the stock movement
+      moves from the request line to the delivery line
+- [x] Demo week: nine requests, including one partly received with a photo and a PDF, one late
+      delivery, one cancelled after ordering and one raised by the Floor Manager
+- [x] Tests: unit (every move and refusal, receipt arithmetic in hundredths, late flag, file
+      sniffing for all four types and a renamed program, service, validator-message and seed
+      cases); e2e scenarios written (order → short delivery with proof → close short; a refused
+      file; cancel an ordered request and copy it; copy with rejected items; FM-raised and late)
+- [x] Browser checks by Codex through `qa/handoffs/`: run 1 (47 of 54 manual, one app fault
+      fixed), run 2 (13 of 13 manual), runs 3–5 (e2e and axe; the last failures were test and
+      test-server issues, fixed)
+- [x] Docker demo-week check passed (2026-10-14, throwaway stack)

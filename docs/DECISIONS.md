@@ -775,3 +775,107 @@ shelf, without the system deciding for them.
 
 **Consequences:** ASSUMPTION to confirm with CPoint: the 2× factor. The guidance uses current
 stock, so it can differ from the snapshot taken when the request was sent; both are shown.
+
+### D-041 · 2026-10-13 · Accepted — An approved request is ordered before it is received; one order per request
+
+**Context:** Phase 9 went from approved straight to received, so nothing said who the materials
+were ordered from, when they were due, or that a delivery was overdue.
+**Decision:**
+
+- A new step and status, **ORDERED**, between APPROVED and RECEIVED. "Mark as ordered" records the
+  supplier (an active one from Settings → Suppliers), an optional order or reference number, the
+  expected delivery date (required, today or later, at most 365 days ahead) and an optional note.
+- **One order per request** (Dylan, 2026-10-13): one supplier and one expected date. Items from
+  two suppliers go in two requests. The order is stored on the request, not on its lines.
+- The system only **records** the order. Nothing is sent to the supplier, and a supplier never
+  has an account.
+- **"Delivery late"**: a request that is ordered or partly received and whose expected date has
+  passed (Manila date; due today is not late). Worked out on every read, never stored. Shown as a
+  badge, a list filter and a line on the Floor Manager's home card.
+- A delivery can only be recorded on an ordered request: "Mark this request as ordered first, then
+  record the delivery."
+
+**Consequences:** the Operations report's "not received after a week" becomes "past the expected
+delivery date". Open (survey Q14): who places leather-roll orders at CPoint.
+
+### D-042 · 2026-10-13 · Accepted — Deliveries can be partial, and each needs proof (supersedes "received as a whole" in D-029)
+
+**Context:** suppliers deliver short, and the team asked for a proof of delivery on every receipt.
+**Decision:**
+
+- "Record delivery" replaces "Mark received". The Floor Manager enters what arrived of each
+  approved item (0 allowed, never more than what is outstanding), the day it came (not in the
+  future, not before the order) and a note. A delivery where nothing arrived is refused.
+- Each line keeps a running `receivedQuantity`. What arrived of an inventory item is posted as
+  stock IN through the ledger (D-023) in the same transaction, with the movement kept on the
+  delivery line. A typed item can be recorded as arrived but is not added to stock.
+- The status follows from the lines: anything outstanding → **PARTIALLY_RECEIVED**; nothing
+  outstanding → RECEIVED. Arithmetic is in hundredths, as D-023.
+- **Close short:** the Floor Manager closes a partly received request with a reason when the rest
+  won't come. It ends as RECEIVED, marked "Closed short", and the timeline lists what never
+  arrived.
+- **Proof of delivery is required** (Dylan, 2026-10-13): at least one file per delivery. JPEG,
+  PNG, WebP or PDF, recognised from the file's bytes and never its name; 10 MB each, 5 per upload,
+  10 per delivery with corrections. Stored through `StorageService` under server-generated keys
+  (`pod/yyyy/mm/<uuid>.<ext>`), as scan images are (D-020).
+- Proof is served from `GET /api/v1/procurement/attachments/{id}` to the Floor Manager, the System
+  Admin and the requester on their own request, with `Cache-Control: private`, `nosniff`, a
+  sandboxing CSP and a cleaned file name.
+- **A proof file is never deleted.** A wrong one is corrected by adding the right one and saying so
+  in a remark.
+- Uploads go to an API route as multipart, not through a server action, because of their size.
+  Files are written first and removed again if the transaction fails.
+- Requests received before this change each became one delivery with no proof file; the page says
+  "Recorded before proof of delivery was added".
+
+**Consequences:** two deliveries recorded at once can't both count: every approved line is updated
+only if its received quantity is still what the caller saw (409 STALE).
+
+### D-043 · 2026-10-13 · Accepted — The Floor Manager can cancel after approval, with a reason, until something arrives
+
+**Context:** a supplier sometimes can't deliver, and an approved request had no way out.
+**Decision:**
+
+- A **pending** request is cancelled by whoever sent it, with an optional note (unchanged).
+- An **approved or ordered** request is cancelled by the Floor Manager only, and a reason is
+  required. It is stored on the request and shown to the requester.
+- Once any part has arrived the request can't be cancelled: "Part of this request has already
+  arrived, so it can't be cancelled. Use Close short for what won't come." The page shows this
+  where the Cancel button would be.
+
+**Consequences:** stock is never reversed by a cancellation, because nothing has been received
+when one is allowed.
+
+### D-044 · 2026-10-13 · Accepted — "Copy to a new request" instead of editing a rejected or cancelled one
+
+**Context:** requests are never edited after they're sent (D-029), so a rejected or cancelled one
+had to be typed again.
+**Decision:**
+
+- On their **own** rejected or cancelled request, the requester (a constructor, or the Floor
+  Manager for one they raised) gets "Copy to a new request".
+- The new-request form opens prefilled. Items that were rejected are left out, listed with their
+  reasons and a checkbox to ask for them again. The needed-by date is never copied.
+- An item that has since been deactivated is copied as a typed item; a leather roll the person
+  may no longer request is left for them to choose again.
+- The new request stores `copiedFromId`. Each request's page links to the other.
+
+**Consequences:** copying changes nothing on the old request, so it writes no event there.
+
+### D-045 · 2026-10-13 · Accepted — The Floor Manager can raise a restock request and approve it (extends D-031)
+
+**Context:** survey Q14: the production manager orders equipment and some materials without a
+constructor asking.
+**Decision:**
+
+- `procurement:request` now includes the Floor Manager. They start a request from Procurement →
+  New, or from "Request" on a low or out-of-stock inventory item that has no open request.
+- It enters as PENDING and goes through the same item-by-item decision. **The Floor Manager may
+  approve their own request** (Dylan, 2026-10-13); the audit log records them as both requester
+  and decider.
+- Leather rolls need no extra OK for the Floor Manager. The per-constructor flag (D-031) is
+  unchanged.
+- Such a request is marked "Raised by Floor Manager" in the list and on its page. The mark comes
+  from the requester's role; nothing is counted per person (D-008).
+
+**Consequences:** the master spec's roles table gains the Floor Manager under "create requests".

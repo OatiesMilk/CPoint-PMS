@@ -15,19 +15,34 @@ const proc = {
   setLineDecision: vi.fn(
     async (_requestId: string, _lineId: string, _data: Record<string, unknown>, _tx?: unknown) => 1,
   ),
-  setLineMovement: vi.fn(),
   transitionStatus: vi.fn(
     async (_id: string, _from: string, _data: Record<string, unknown>, _tx?: unknown) => 1,
   ),
+  addReceivedQuantity: vi.fn(
+    async (_requestId: string, _lineId: string, _seen: number, _delta: number, _tx?: unknown) => 1,
+  ),
+  insertDelivery: vi.fn(async (_data: Record<string, unknown>, _tx?: unknown) => ({ id: "d1" })),
+  insertAttachments: vi.fn(),
+  findDelivery: vi.fn(),
+  findAttachment: vi.fn(),
 };
 const inventory = { findInventoryItem: vi.fn(), listRequestableItems: vi.fn() };
+const reference = { findSupplier: vi.fn(), listActiveSuppliers: vi.fn() };
 const users = { findUserById: vi.fn() };
+const storage = {
+  put: vi.fn(async (_key: string, _data: Uint8Array) => undefined),
+  read: vi.fn(),
+  remove: vi.fn(async (_key: string) => undefined),
+};
 const postMovement = vi.fn(async () => ({ movementId: "m1", onHandAfter: 0 }));
 const recordAudit = vi.fn();
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/procurement.model", () => proc);
 vi.mock("@/server/models/inventory.model", () => inventory);
+vi.mock("@/server/models/reference-data.model", () => reference);
+vi.mock("@/server/lib/storage", () => ({ getStorage: () => storage }));
+vi.mock("@/server/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 vi.mock("@/server/models/user.model", () => users);
 vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn("tx"),
@@ -60,13 +75,21 @@ function request(overrides: Record<string, unknown> = {}, decisions: string[] = 
     code: "PR-2026-0007",
     status: "PENDING",
     requestedById: "sc1",
+    requestedBy: { id: "sc1", name: "Sam", role: "SHOE_CONSTRUCTOR" },
     neededBy: new Date("2026-10-08T00:00:00.000Z"),
+    expectedDeliveryOn: null,
+    orderedAt: null,
+    rejectionReason: null,
+    deliveries: [],
     lines: [
       {
         id: "l1",
         itemName: "Shoe nails",
+        category: "NAILS",
         unit: "box",
         quantity: "4",
+        receivedQuantity: "0",
+        note: null,
         decision: decisions[0] ?? "PENDING",
         rejectionReason: null,
         item: { ...nails },
@@ -74,8 +97,11 @@ function request(overrides: Record<string, unknown> = {}, decisions: string[] = 
       {
         id: "l2",
         itemName: "Brass eyelets",
+        category: "OTHER",
         unit: "pack",
         quantity: "1",
+        receivedQuantity: "0",
+        note: null,
         decision: decisions[1] ?? "PENDING",
         rejectionReason: null,
         item: null,
@@ -84,6 +110,10 @@ function request(overrides: Record<string, unknown> = {}, decisions: string[] = 
     ...overrides,
   };
 }
+
+const SUPPLIER = "0199c0de-0000-7000-8000-000000000001";
+const jpeg = () => ({ name: "receipt.jpg", bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2]) });
+const pdf = () => ({ name: "note.pdf", bytes: new TextEncoder().encode("%PDF-1.4 sample") });
 
 const values = {
   neededBy: "2026-10-08", // a Thursday: 3 working days after `now`
@@ -95,7 +125,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   proc.transitionStatus.mockResolvedValue(1);
   proc.setLineDecision.mockResolvedValue(1);
+  proc.addReceivedQuantity.mockResolvedValue(1);
+  proc.insertDelivery.mockResolvedValue({ id: "d1" });
+  storage.put.mockResolvedValue(undefined);
   inventory.findInventoryItem.mockResolvedValue(nails);
+  reference.findSupplier.mockResolvedValue({
+    id: SUPPLIER,
+    name: "Marikina Leather",
+    isActive: true,
+  });
 });
 
 describe("createRequest", () => {
@@ -146,10 +184,83 @@ describe("createRequest", () => {
     expect(on.every((i) => i.allowed)).toBe(true);
   });
 
-  it("refuses everyone but a Shoe Constructor, even with the flag", async () => {
+  it("refuses roles that can't request, even with the flag", async () => {
     await expect(
-      svc.createRequest(values, { ...fm, canRequestLeatherRolls: true }, now),
-    ).rejects.toMatchObject({ status: 403 });
+      svc.createRequest(values, { ...admin, canRequestLeatherRolls: true }, now),
+    ).rejects.toMatchObject({
+      status: 403,
+      message: expect.stringContaining("Shoe Constructors and the Floor Manager"),
+    });
+  });
+
+  it("lets the Floor Manager raise a request, leather rolls included, with no flag (D-045)", async () => {
+    const typed = {
+      ...values,
+      lines: [
+        { itemName: "Tan cowhide", category: "LEATHER_ROLL" as const, unit: "roll", quantity: 1 },
+      ],
+    };
+    await expect(svc.createRequest(typed, fm, now)).resolves.toMatchObject({ id: "pr1" });
+    expect(proc.insertRequest.mock.calls[0][0]).toMatchObject({ requestedById: "fm1" });
+  });
+
+  it("copies only the requester's own rejected or cancelled request (D-044)", async () => {
+    const source = "0199c0de-0000-7000-8000-0000000000aa";
+    proc.findRequestDetail.mockResolvedValue(
+      request({ id: source, code: "PR-2026-0003", status: "REJECTED" }),
+    );
+    await expect(
+      svc.createRequest({ ...values, copiedFromId: source }, sc, now),
+    ).resolves.toMatchObject({ id: "pr1" });
+    expect(proc.insertRequest.mock.calls[0][0]).toMatchObject({ copiedFromId: source });
+    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({ note: "Copied from PR-2026-0003." });
+    expect(recordAudit.mock.calls[0][1]).toMatchObject({
+      after: { copiedFrom: "PR-2026-0003" },
+    });
+
+    proc.insertRequest.mockClear();
+    // Someone else's, or one that's still open: refused, and nothing is created.
+    for (const [actor, status] of [
+      [{ ...sc, id: "sc2" }, "REJECTED"],
+      [sc, "APPROVED"],
+      [fm, "CANCELLED"],
+    ] as const) {
+      proc.findRequestDetail.mockResolvedValue(request({ id: source, status }));
+      await expect(
+        svc.createRequest({ ...values, copiedFromId: source }, actor, now),
+      ).rejects.toMatchObject({ status: 409 });
+    }
+    expect(proc.insertRequest).not.toHaveBeenCalled();
+  });
+
+  it("offers a copy's items with the reasons for the rejected ones", async () => {
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "APPROVED" }, ["REJECTED", "APPROVED"]),
+    );
+    expect(await svc.getCopySource("pr1", sc)).toBeNull(); // not rejected or cancelled
+    const row = request({ status: "REJECTED", rejectionReason: "Enough on the shelf" }, [
+      "REJECTED",
+      "REJECTED",
+    ]);
+    row.lines[0].rejectionReason = "Still 3 boxes" as never;
+    proc.findRequestDetail.mockResolvedValue(row);
+    expect(await svc.getCopySource("pr1", sc)).toMatchObject({
+      code: "PR-2026-0007",
+      lines: [
+        {
+          inventoryItemId: "i1",
+          itemName: "Shoe nails",
+          quantity: 4,
+          rejectionReason: "Still 3 boxes",
+        },
+        {
+          inventoryItemId: null,
+          itemName: "Brass eyelets",
+          rejectionReason: "Enough on the shelf",
+        },
+      ],
+    });
+    expect(await svc.getCopySource("pr1", { ...sc, id: "sc2" })).toBeNull();
   });
 
   it("numbers the request, snapshots the stock, and records the first timeline event", async () => {
@@ -353,39 +464,476 @@ describe("decisions", () => {
     ).resolves.toMatchObject({ status: "CANCELLED" });
   });
 
-  it("receiving adds nothing to stock for an item that was rejected (D-039)", async () => {
+  it("needs a reason from the Floor Manager to cancel after approval, while nothing has arrived (D-043)", async () => {
+    for (const status of ["APPROVED", "ORDERED"]) {
+      proc.findRequestDetail.mockResolvedValue(request({ status }, ["APPROVED", "APPROVED"]));
+      // The requester can no longer cancel it.
+      await expect(svc.actOnRequest("pr1", { action: "cancel" }, sc, now)).rejects.toMatchObject({
+        status: 403,
+        message: expect.stringContaining("after it's approved"),
+      });
+      await expect(svc.actOnRequest("pr1", { action: "cancel" }, fm, now)).rejects.toMatchObject({
+        status: 422,
+        details: [{ path: ["reason"], message: expect.stringContaining("at least 3 characters") }],
+      });
+      expect(proc.transitionStatus).not.toHaveBeenCalled();
+      await expect(
+        svc.actOnRequest("pr1", { action: "cancel", reason: "Supplier can't deliver" }, fm, now),
+      ).resolves.toMatchObject({ status: "CANCELLED" });
+      expect(proc.transitionStatus).toHaveBeenLastCalledWith(
+        "pr1",
+        status,
+        { status: "CANCELLED", cancelReason: "Supplier can't deliver" },
+        "tx",
+      );
+      expect(proc.insertEvent.mock.calls.at(-1)?.[0]).toMatchObject({
+        fromStatus: status,
+        toStatus: "CANCELLED",
+        note: "Supplier can't deliver",
+      });
+      vi.clearAllMocks();
+      proc.transitionStatus.mockResolvedValue(1);
+    }
+    // Once part of it is here, the only way out is closing short, and the refusal says so.
     proc.findRequestDetail.mockResolvedValue(
-      request({ status: "APPROVED" }, ["REJECTED", "APPROVED"]),
+      request({ status: "PARTIALLY_RECEIVED" }, ["APPROVED", "APPROVED"]),
     );
-    const result = await svc.actOnRequest("pr1", { action: "receive" }, fm, now);
-    expect(result.status).toBe("RECEIVED");
-    expect(postMovement).not.toHaveBeenCalled();
-    expect(proc.setLineMovement).not.toHaveBeenCalled();
+    await expect(
+      svc.actOnRequest("pr1", { action: "cancel", reason: "No longer needed" }, fm, now),
+    ).rejects.toMatchObject({ status: 409, message: expect.stringContaining("Use Close short") });
+  });
+});
+
+describe("ordering (D-041)", () => {
+  const order = { supplierId: SUPPLIER, reference: "PO-1042", expectedDeliveryOn: "2026-10-09" };
+
+  it("marks an approved request as ordered, with the supplier, reference and expected date", async () => {
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "APPROVED" }, ["APPROVED", "REJECTED"]),
+    );
+    const result = await svc.orderRequest("pr1", { ...order, note: "Half paid" }, fm, now);
+    expect(result).toMatchObject({
+      status: "ORDERED",
+      message: "PR-2026-0007 marked as ordered from Marikina Leather.",
+    });
+    expect(proc.transitionStatus).toHaveBeenCalledWith(
+      "pr1",
+      "APPROVED",
+      {
+        status: "ORDERED",
+        supplierId: SUPPLIER,
+        orderReference: "PO-1042",
+        expectedDeliveryOn: new Date("2026-10-09T00:00:00.000Z"),
+        orderNote: "Half paid",
+        orderedById: "fm1",
+        orderedAt: now,
+      },
+      "tx",
+    );
     expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
-      toStatus: "RECEIVED",
-      note: "No inventory items on this request; nothing added to stock.",
+      fromStatus: "APPROVED",
+      toStatus: "ORDERED",
+      note: "Ordered from Marikina Leather, reference PO-1042. Expected Oct 9, 2026.\nHalf paid",
+    });
+    expect(recordAudit.mock.calls[0][1]).toMatchObject({
+      action: "procurement.request.order",
+      after: { supplier: "Marikina Leather", expectedDeliveryOn: "2026-10-09" },
     });
   });
 
-  it("receiving posts stock IN for inventory lines only, in the same transaction", async () => {
+  it("refuses a past date, a date too far ahead and an inactive supplier, each on its field", async () => {
     proc.findRequestDetail.mockResolvedValue(
       request({ status: "APPROVED" }, ["APPROVED", "APPROVED"]),
     );
-    const result = await svc.actOnRequest("pr1", { action: "receive" }, fm, now);
-    expect(result.status).toBe("RECEIVED");
+    await expect(
+      svc.orderRequest("pr1", { ...order, expectedDeliveryOn: "2026-10-04" }, fm, now),
+    ).rejects.toMatchObject({
+      details: [{ path: ["expectedDeliveryOn"], message: expect.stringContaining("in the past") }],
+    });
+    await expect(
+      svc.orderRequest("pr1", { ...order, expectedDeliveryOn: "2027-10-06" }, fm, now),
+    ).rejects.toMatchObject({
+      details: [{ path: ["expectedDeliveryOn"], message: expect.stringContaining("365 days") }],
+    });
+    reference.findSupplier.mockResolvedValue({ id: SUPPLIER, name: "Old", isActive: false });
+    await expect(svc.orderRequest("pr1", order, fm, now)).rejects.toMatchObject({
+      details: [
+        { path: ["supplierId"], message: expect.stringContaining("no longer in the list") },
+      ],
+    });
+    expect(proc.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it("only orders an approved request, only for the Floor Manager, and answers STALE", async () => {
+    proc.findRequestDetail.mockResolvedValue(request());
+    await expect(svc.orderRequest("pr1", order, fm, now)).rejects.toMatchObject({
+      status: 409,
+      message: "Only an approved request can be marked as ordered. This one is pending.",
+    });
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "APPROVED" }, ["APPROVED", "APPROVED"]),
+    );
+    await expect(svc.orderRequest("pr1", order, sc, now)).rejects.toMatchObject({ status: 403 });
+    proc.transitionStatus.mockResolvedValue(0);
+    await expect(svc.orderRequest("pr1", order, fm, now)).rejects.toMatchObject({ code: "STALE" });
+    expect(proc.insertEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("deliveries and proof (D-042)", () => {
+  const ordered = (received = ["0", "0"], overrides: Record<string, unknown> = {}) => {
+    const row = request(
+      { status: "ORDERED", orderedAt: new Date("2026-10-02T02:00:00.000Z"), ...overrides },
+      ["APPROVED", "APPROVED"],
+    );
+    row.lines.forEach((line, i) => (line.receivedQuantity = received[i]));
+    return row;
+  };
+  const input = (first: number, second: number, extra: Record<string, unknown> = {}) => ({
+    deliveredOn: "2026-10-05",
+    lines: [
+      { lineId: "l1", quantity: first },
+      { lineId: "l2", quantity: second },
+    ],
+    ...extra,
+  });
+
+  it("a full delivery posts stock IN for inventory items, stores the proof and ends as received", async () => {
+    proc.findRequestDetail.mockResolvedValue(ordered());
+    const result = await svc.recordDelivery("pr1", input(4, 1), [jpeg(), pdf()], fm, now, storage);
+    expect(result).toMatchObject({
+      status: "RECEIVED",
+      message: "PR-2026-0007 received in full. Stock updated.",
+    });
+    expect(proc.transitionStatus).toHaveBeenCalledWith(
+      "pr1",
+      "ORDERED",
+      { status: "RECEIVED", receivedAt: now },
+      "tx",
+    );
+    // Only the inventory item goes into stock; the typed one is recorded without a movement.
     expect(postMovement).toHaveBeenCalledTimes(1);
     expect(postMovement).toHaveBeenCalledWith(
       "tx",
       expect.objectContaining({ id: "i1", quantityOnHand: 2 }),
-      { type: "IN", delta: 4, reason: "Received for PR-2026-0007" },
+      { type: "IN", delta: 4, reason: "Delivery for PR-2026-0007" },
       fm,
       now,
     );
-    expect(proc.setLineMovement).toHaveBeenCalledWith("l1", "m1", "tx");
-    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
-      toStatus: "RECEIVED",
-      note: "Added to stock: Shoe nails.",
+    const delivery = proc.insertDelivery.mock.calls[0][0] as {
+      lines: unknown[];
+      attachments: { storageKey: string; mime: string; originalName: string; size: number }[];
+    };
+    expect(delivery).toMatchObject({
+      requestId: "pr1",
+      deliveredOn: new Date("2026-10-05T00:00:00.000Z"),
+      recordedById: "fm1",
+      lines: [
+        { lineId: "l1", quantity: 4, movementId: "m1" },
+        { lineId: "l2", quantity: 1, movementId: null },
+      ],
     });
+    // Keys are generated by the server; the type comes from the bytes.
+    expect(delivery.attachments.map((a) => a.mime)).toEqual(["image/jpeg", "application/pdf"]);
+    expect(delivery.attachments[0].storageKey).toMatch(/^pod\/2026\/10\/[0-9a-f-]{36}\.jpg$/);
+    expect(delivery.attachments[1].storageKey).toMatch(/\.pdf$/);
+    expect(storage.put).toHaveBeenCalledTimes(2);
+    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
+      fromStatus: "ORDERED",
+      toStatus: "RECEIVED",
+      deliveryId: "d1",
+      note: "Arrived: 4 boxes of Shoe nails, 1 pack of Brass eyelets.\nNot in inventory, so not added to stock: Brass eyelets.",
+    });
+    expect(recordAudit.mock.calls.at(-1)?.[1]).toMatchObject({
+      action: "procurement.delivery.record",
+      after: { status: "RECEIVED", proofFiles: ["receipt.jpg", "note.pdf"] },
+    });
+  });
+
+  it("a short delivery leaves the request partly received, and the next one adds up", async () => {
+    proc.findRequestDetail.mockResolvedValue(ordered());
+    const first = await svc.recordDelivery(
+      "pr1",
+      input(1.5, 0, { note: "Rest on Friday" }),
+      [jpeg()],
+      fm,
+      now,
+      storage,
+    );
+    expect(first).toMatchObject({
+      status: "PARTIALLY_RECEIVED",
+      message:
+        "Delivery recorded for PR-2026-0007. Still to come: 2.5 boxes of Shoe nails, 1 pack of Brass eyelets.",
+    });
+    expect(proc.transitionStatus).toHaveBeenCalledWith(
+      "pr1",
+      "ORDERED",
+      { status: "PARTIALLY_RECEIVED" },
+      "tx",
+    );
+    // Every approved item is checked against what was seen, also the one nothing arrived of.
+    expect(proc.addReceivedQuantity.mock.calls.map((c) => c.slice(0, 4))).toEqual([
+      ["pr1", "l1", 0, 1.5],
+      ["pr1", "l2", 0, 0],
+    ]);
+    expect(proc.insertDelivery.mock.calls[0][0]).toMatchObject({
+      note: "Rest on Friday",
+      lines: [{ lineId: "l1", quantity: 1.5, movementId: "m1" }],
+    });
+
+    vi.clearAllMocks();
+    proc.transitionStatus.mockResolvedValue(1);
+    proc.addReceivedQuantity.mockResolvedValue(1);
+    proc.insertDelivery.mockResolvedValue({ id: "d2" });
+    proc.findRequestDetail.mockResolvedValue(
+      ordered(["1.5", "0"], { status: "PARTIALLY_RECEIVED" }),
+    );
+    const second = await svc.recordDelivery("pr1", input(2.5, 1), [jpeg()], fm, now, storage);
+    expect(second.status).toBe("RECEIVED");
+    expect(proc.addReceivedQuantity.mock.calls[0].slice(0, 4)).toEqual(["pr1", "l1", 1.5, 2.5]);
+  });
+
+  it("refuses more than what is outstanding, in the item's own words", async () => {
+    proc.findRequestDetail.mockResolvedValue(
+      ordered(["1.5", "1"], { status: "PARTIALLY_RECEIVED" }),
+    );
+    await expect(
+      svc.recordDelivery("pr1", input(2.51, 1), [jpeg()], fm, now, storage),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [
+        {
+          path: ["lines", 0, "quantity"],
+          message: "Received quantity can't be more than the 2.5 boxes still outstanding.",
+        },
+        {
+          path: ["lines", 1, "quantity"],
+          message: "All of Brass eyelets has already arrived. Enter 0 for it.",
+        },
+      ],
+    });
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(proc.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it("needs a quantity for every approved item, at least one above zero, and a sensible date", async () => {
+    proc.findRequestDetail.mockResolvedValue(ordered());
+    await expect(
+      svc.recordDelivery("pr1", input(0, 0), [jpeg()], fm, now, storage),
+    ).rejects.toMatchObject({
+      details: [{ path: ["lines"], message: expect.stringContaining("at least one item") }],
+    });
+    await expect(
+      svc.recordDelivery(
+        "pr1",
+        { deliveredOn: "2026-10-05", lines: [{ lineId: "l1", quantity: 1 }] },
+        [jpeg()],
+        fm,
+        now,
+        storage,
+      ),
+    ).rejects.toMatchObject({
+      details: [
+        { path: ["lines", 1, "quantity"], message: expect.stringContaining("Brass eyelets") },
+      ],
+    });
+    await expect(
+      svc.recordDelivery(
+        "pr1",
+        {
+          deliveredOn: "2026-10-05",
+          lines: [
+            { lineId: "l1", quantity: 1 },
+            { lineId: "0199c0de-0000-7000-8000-00000000ffff", quantity: 1 },
+          ],
+        },
+        [jpeg()],
+        fm,
+        now,
+        storage,
+      ),
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(
+      svc.recordDelivery(
+        "pr1",
+        input(1, 0, { deliveredOn: "2026-10-06" }),
+        [jpeg()],
+        fm,
+        now,
+        storage,
+      ),
+    ).rejects.toMatchObject({
+      details: [{ path: ["deliveredOn"], message: expect.stringContaining("in the future") }],
+    });
+    await expect(
+      svc.recordDelivery(
+        "pr1",
+        input(1, 0, { deliveredOn: "2026-10-01" }),
+        [jpeg()],
+        fm,
+        now,
+        storage,
+      ),
+    ).rejects.toMatchObject({
+      details: [
+        {
+          path: ["deliveredOn"],
+          message: expect.stringContaining("before the order was placed (Oct 2, 2026)"),
+        },
+      ],
+    });
+    expect(proc.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it("needs proof: at least one file, at most five, each a real photo or PDF within 10 MB", async () => {
+    proc.findRequestDetail.mockResolvedValue(ordered());
+    const attempt = (files: { name: string; bytes: Uint8Array }[]) =>
+      svc.recordDelivery("pr1", input(4, 1), files, fm, now, storage);
+    await expect(attempt([])).rejects.toMatchObject({
+      details: [
+        { path: ["files"], message: expect.stringContaining("can't be recorded without proof") },
+      ],
+    });
+    await expect(attempt(Array.from({ length: 6 }, jpeg))).rejects.toMatchObject({
+      details: [
+        { path: ["files"], message: "Attach at most 5 files here. Remove 1 and try again." },
+      ],
+    });
+    // A renamed program is refused by its bytes, whatever it is called.
+    const exe = { name: "receipt.pdf", bytes: new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03]) };
+    await expect(attempt([jpeg(), exe])).rejects.toMatchObject({
+      details: [
+        {
+          path: ["files"],
+          message: "“receipt.pdf” isn't a photo or a PDF. Attach a JPEG, PNG, WebP or PDF file.",
+        },
+      ],
+    });
+    const huge = new Uint8Array(10 * 1024 * 1024 + 1);
+    huge.set([0xff, 0xd8, 0xff]);
+    await expect(attempt([{ name: "big.jpg", bytes: huge }])).rejects.toMatchObject({
+      details: [
+        { path: ["files"], message: expect.stringContaining("“big.jpg” is larger than 10 MB") },
+      ],
+    });
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(proc.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  it("removes the stored files again when the delivery can't be saved", async () => {
+    proc.findRequestDetail.mockResolvedValue(ordered());
+    proc.addReceivedQuantity.mockResolvedValueOnce(0); // someone else recorded a delivery first
+    await expect(
+      svc.recordDelivery("pr1", input(4, 1), [jpeg(), pdf()], fm, now, storage),
+    ).rejects.toMatchObject({ code: "STALE" });
+    expect(storage.put).toHaveBeenCalledTimes(2);
+    expect(storage.remove.mock.calls.map((c) => c[0])).toEqual(
+      storage.put.mock.calls.map((c) => c[0]),
+    );
+    expect(proc.insertDelivery).not.toHaveBeenCalled();
+  });
+
+  it("is the Floor Manager's only, and needs the order first", async () => {
+    proc.findRequestDetail.mockResolvedValue(ordered());
+    await expect(
+      svc.recordDelivery("pr1", input(4, 1), [jpeg()], sc, now, storage),
+    ).rejects.toMatchObject({ status: 403 });
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "APPROVED" }, ["APPROVED", "APPROVED"]),
+    );
+    await expect(
+      svc.recordDelivery("pr1", input(4, 1), [jpeg()], fm, now, storage),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Mark this request as ordered first, then record the delivery.",
+    });
+  });
+
+  it("closes a partly received request short, with a reason and what never arrived", async () => {
+    proc.findRequestDetail.mockResolvedValue(
+      ordered(["1.5", "1"], { status: "PARTIALLY_RECEIVED" }),
+    );
+    const result = await svc.closeShort("pr1", "Supplier is out of stock", fm, now);
+    expect(result).toMatchObject({ status: "RECEIVED", message: "PR-2026-0007 closed short." });
+    expect(proc.transitionStatus).toHaveBeenCalledWith(
+      "pr1",
+      "PARTIALLY_RECEIVED",
+      {
+        status: "RECEIVED",
+        receivedAt: now,
+        closedShortAt: now,
+        closedShortReason: "Supplier is out of stock",
+      },
+      "tx",
+    );
+    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
+      note: "Closed short: Supplier is out of stock\nNever arrived: 2.5 boxes of Shoe nails.",
+    });
+    expect(postMovement).not.toHaveBeenCalled();
+
+    proc.findRequestDetail.mockResolvedValue(ordered());
+    await expect(svc.closeShort("pr1", "No longer coming", fm, now)).rejects.toMatchObject({
+      status: 409,
+      message: "Only a partly received request can be closed short. This one is ordered.",
+    });
+    proc.findRequestDetail.mockResolvedValue(ordered(["1", "0"], { status: "PARTIALLY_RECEIVED" }));
+    await expect(svc.closeShort("pr1", "No longer coming", sc, now)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it("adds proof to a recorded delivery, never past its limit, and only for the Floor Manager", async () => {
+    const delivery = (attachments: number) => ({
+      id: "d1",
+      _count: { attachments },
+      request: { id: "pr1", code: "PR-2026-0007", requestedById: "sc1", status: "RECEIVED" },
+    });
+    proc.findDelivery.mockResolvedValue(delivery(1));
+    const result = await svc.addDeliveryProof("d1", [pdf()], fm, now, storage);
+    expect(result).toMatchObject({ added: 1, message: "1 proof file added to PR-2026-0007." });
+    expect(proc.insertAttachments).toHaveBeenCalledWith(
+      "d1",
+      "fm1",
+      [expect.objectContaining({ mime: "application/pdf", originalName: "note.pdf" })],
+      now,
+      "tx",
+    );
+    expect(proc.insertEvent.mock.calls[0][0]).toMatchObject({
+      fromStatus: "RECEIVED",
+      toStatus: "RECEIVED",
+      deliveryId: "d1",
+      note: "Added proof of delivery: note.pdf.",
+    });
+    await expect(svc.addDeliveryProof("d1", [pdf()], sc, now, storage)).rejects.toMatchObject({
+      status: 403,
+    });
+    proc.findDelivery.mockResolvedValue(delivery(10));
+    await expect(svc.addDeliveryProof("d1", [pdf()], fm, now, storage)).rejects.toMatchObject({
+      status: 409,
+    });
+    proc.findDelivery.mockResolvedValue(null);
+    await expect(svc.addDeliveryProof("d1", [pdf()], fm, now, storage)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("serves a proof file to the Floor Manager, the Admin and the requester only", async () => {
+    proc.findAttachment.mockResolvedValue({
+      id: "a1",
+      storageKey: "pod/2026/10/x.jpg",
+      mime: "image/jpeg",
+      originalName: "receipt.jpg",
+      delivery: { request: { id: "pr1", requestedById: "sc1" } },
+    });
+    for (const viewer of [fm, admin, sc])
+      expect(await svc.getProofFile("a1", viewer)).toEqual({
+        storageKey: "pod/2026/10/x.jpg",
+        mime: "image/jpeg",
+        originalName: "receipt.jpg",
+      });
+    expect(await svc.getProofFile("a1", { ...sc, id: "sc2" })).toBeNull();
+    proc.findAttachment.mockResolvedValue(null);
+    expect(await svc.getProofFile("a1", fm)).toBeNull();
   });
 });
 
@@ -660,7 +1208,15 @@ describe("urgency on reads (D-037)", () => {
       },
     });
     await svc.pendingRequestsCard(now);
-    expect(proc.pendingSummary).toHaveBeenCalledWith(new Date("2026-10-08T00:00:00.000Z"));
+    // High through Thursday; "late" means expected before today, Monday 5 Oct.
+    expect(proc.pendingSummary).toHaveBeenCalledWith(
+      new Date("2026-10-08T00:00:00.000Z"),
+      new Date("2026-10-05T00:00:00.000Z"),
+    );
+    await svc.listRequests({ late: "1" }, fm, now);
+    expect(proc.listRequests.mock.calls[1][0]).toMatchObject({
+      lateBefore: new Date("2026-10-05T00:00:00.000Z"),
+    });
   });
 });
 
@@ -671,6 +1227,53 @@ describe("getRequest", () => {
     expect((await svc.getRequest("pr1", sc))?.actions).toEqual(["cancel"]);
     expect((await svc.getRequest("pr1", admin))?.actions).toEqual([]);
     expect(await svc.getRequest("pr1", { ...sc, id: "sc2" })).toBeNull();
+  });
+
+  it("offers the next step for each status, and says why a cancel is blocked", async () => {
+    const at = async (status: string, viewer: typeof fm | typeof sc = fm) => {
+      proc.findRequestDetail.mockResolvedValue(request({ status }, ["APPROVED", "APPROVED"]));
+      return svc.getRequest("pr1", viewer, now);
+    };
+    expect((await at("APPROVED"))?.actions).toEqual(["order", "cancel"]);
+    expect((await at("ORDERED"))?.actions).toEqual(["receive", "cancel"]);
+    expect((await at("PARTIALLY_RECEIVED"))?.actions).toEqual(["receive", "close_short"]);
+    expect((await at("PARTIALLY_RECEIVED"))?.cancelBlocked).toMatch(/Use Close short/);
+    expect((await at("ORDERED"))?.cancelBlocked).toBeNull();
+    for (const status of ["RECEIVED", "REJECTED", "CANCELLED"])
+      expect((await at(status))?.actions).toEqual([]);
+    // The requester can't act after approval, but can copy a rejected or cancelled request.
+    expect((await at("ORDERED", sc))?.actions).toEqual([]);
+    expect((await at("PARTIALLY_RECEIVED", sc))?.cancelBlocked).toBeNull();
+    expect(await at("REJECTED", sc)).toMatchObject({ canCopy: true, canAddProof: false });
+    expect(await at("REJECTED", fm)).toMatchObject({ canCopy: false, canAddProof: true });
+  });
+
+  it("flags a late delivery, a Floor Manager's request and what is still to come", async () => {
+    const row = request(
+      {
+        status: "PARTIALLY_RECEIVED",
+        expectedDeliveryOn: new Date("2026-10-02T00:00:00.000Z"),
+        requestedBy: { id: "fm1", name: "Maria", role: "FLOOR_MANAGER" },
+      },
+      ["APPROVED", "REJECTED"],
+    );
+    row.lines[0].receivedQuantity = "1.5";
+    proc.findRequestDetail.mockResolvedValue(row);
+    const detail = await svc.getRequest("pr1", fm, now);
+    expect(detail).toMatchObject({ late: true, raisedByFloorManager: true });
+    expect(detail?.lines.map((l) => [l.receivedQuantity, l.outstanding])).toEqual([
+      [1.5, 2.5],
+      [0, 0], // a rejected item is never outstanding
+    ]);
+    // Not late on the expected day itself, nor once everything is here.
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "ORDERED", expectedDeliveryOn: new Date("2026-10-05T00:00:00.000Z") }),
+    );
+    expect((await svc.getRequest("pr1", fm, now))?.late).toBe(false);
+    proc.findRequestDetail.mockResolvedValue(
+      request({ status: "RECEIVED", expectedDeliveryOn: new Date("2026-10-02T00:00:00.000Z") }),
+    );
+    expect((await svc.getRequest("pr1", fm, now))?.late).toBe(false);
   });
 });
 
