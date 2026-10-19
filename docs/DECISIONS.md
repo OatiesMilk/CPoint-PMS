@@ -923,3 +923,43 @@ or 50 rows, each with its own copy of the controls.
 
 **Consequences:** a new list uses `PAGE_SIZE` and `TablePager`. E2E tests find their own rows by
 search or filter, never by browsing.
+
+### D-048 · 2026-10-19 · Accepted — The camera station is a Python process outside Docker, built as ports and adapters
+
+**Context:** The first YOLO model (`yolo-v1.pt`, Ultralytics, segment task) is ready. D-003 keeps
+compose at two services, and the master spec requires plugging in a model with zero app changes.
+**Decision:**
+
+- Inference runs in a **camera station**, the `cpoint_cv` package in `cv/`, on the camera machine
+  (for the demo, Dylan's laptop, Python 3.13, GPU through `device = "cuda:0"` in its config). It
+  isn't a compose service and isn't in the app image. It talks to the app only through the
+  existing contract (D-020) with a device token, as the simulator does.
+- The station **reports, the app decides** (D-011). It never sends or applies a verdict. `predict`
+  shows a _preview_ through a Python port of `decide()`, labelled as such, whose tests mirror the
+  TypeScript ones.
+- Small ports: `Detector` (`YoloDetector`, the only module importing ultralytics/torch, and
+  `FakeDetector`); `FrameSource` and `ScanClient` follow in Phase 15. Unit tests, lint and types run
+  without torch, locally and in CI (`station` job).
+- Class keys come from the model's own `names`, with an optional rename map in config. A class
+  index the model doesn't name is sent as `class_<n>`, so the app flags it instead of losing it.
+- Boxes only, from Ultralytics' box per mask. Mask polygons are used for overlays only; storing them
+  is not worth it yet (mask mAP50-95 0.32, and it would need a schema change).
+- A **confidence floor** (0.25, config) drops noise before sending; it is not a PASS threshold.
+- Everything that can change with a new model (path, name, `imgsz`, device, floor, renames, the
+  preview's thresholds and defect types) is configuration, never a constant in code.
+
+**Consequences:** a new model is a file swap plus config and Settings changes. The shared fixture
+`tests/fixtures/cv-payload.json` breaks a test on either side if the station's output or the
+contract changes.
+
+### D-049 · 2026-10-19 · Accepted — Model files live in `cv/models/`, out of git and Docker; a checksum names them
+
+**Context:** `yolo-v1.pt` is 23.6 MB and would have entered the Docker build context. Dylan chose a
+git-ignored folder over Git LFS.
+**Decision:** Model files go in `cv/models/` (only `.gitkeep` is committed). `.gitignore` ignores
+`*.pt`, `*.onnx`, `cv/models/*`, `cv/config.toml` and `cv/out/`; `.dockerignore` excludes `cv`,
+`*.pt` and `*.onnx`. The SHA-256 is recorded in `cv/MODEL_CARD.md` and `[model] sha256`; `predict`
+warns on a mismatch. Each scan's `modelVersion` is the config name plus the first 8 hex digits of
+the SHA-256 (`yolo-v1-1d729fb0`), at most 60 characters.
+**Consequences:** the model file is shared outside git (the team's drive), and anyone can check
+they have the right one. Every scan says exactly which weights judged it.

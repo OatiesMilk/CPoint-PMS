@@ -20,3 +20,7 @@ tests
 !.env.example
 Dockerfile
 docker-compose.yml
+# the camera station runs outside Docker (D-003, D-048); model files never enter the image
+cv
+*.pt
+*.onnx

@@ -515,6 +515,11 @@ token there under **Admin → API tokens**.
 Scans go to the batch chosen on the **Camera** page, or to the batch that has been at Preparation
 the longest. They show up live on the Floor Manager and Quality Inspector homes.
 
+The real model runs in the **camera station**, a Python process in [`cv/`](cv/README.md) on the
+camera machine (outside Docker, D-048). Today it runs the YOLO model on photos and previews the
+verdicts (`python -m cpoint_cv predict <folder>`); sending scans comes in Phase 15. The model file
+lives in `cv/models/` and is never committed (D-049); see [`cv/MODEL_CARD.md`](cv/MODEL_CARD.md).
+
 ## Scripts
 
 | Command                     | What it does                                                             |

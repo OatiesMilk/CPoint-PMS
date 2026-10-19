@@ -26,6 +26,26 @@ jobs:
       - run: npm run test
       - run: npm run build
 
+  station:
+    # The camera station (cv/, D-048): lint, types and unit tests. No torch is installed here.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: cv/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      - run: pytest
+
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
