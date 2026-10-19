@@ -130,6 +130,42 @@ nothing new is stored or audited, even if the batch has since left Preparation.
 when another device already used the `captureId` (`message` says which). `413` over 10 MB. `422`
 for invalid fields (`details` names each one).
 
+### `POST /api/v1/scans/capture` (the website's Capture page, Phase 18)
+
+The Capture page (`/camera/capture`) sends the frame on screen here. It uses the **signed-in
+session**, not a device token, and needs `camera:capture` (Floor Manager and Quality Inspector,
+D-066). The app runs the model itself (ONNX Runtime, D-064) and then decides exactly as for
+`POST /api/v1/scans`: the same `ingestScan`, decision engine and outcome rows.
+
+`multipart/form-data`:
+
+| Field        | Required | Notes                                                                                                        |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `image`      | yes      | JPEG, PNG or WebP (checked by content), ≤ 10 MB. The page sends the camera frame as a JPEG                   |
+| `captureId`  | yes      | A UUID the page makes for each press. A retry with the same one returns the first scan without running again |
+| `batchId`    | no       | The batch the page showed. Kept while it is at Preparation, like the station (D-050)                         |
+| `source`     | no       | `WEBCAM` (default) or `PHONE`                                                                                |
+| `capturedAt` | no       | ISO 8601 with offset: when Capture was pressed                                                               |
+
+There is no `detections` or `modelVersion` field: the server produces both.
+
+**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "status", "duplicate": false, "detections": [...], "modelVersion", "inferenceMs" } }`.
+**`200`** the same with `"duplicate": true` (and `detections: []`) for a repeated `captureId`.
+
+| Status | `code`                    | When                                                                                       |
+| ------ | ------------------------- | ------------------------------------------------------------------------------------------ |
+| `401`  | `UNAUTHENTICATED`         | Not signed in                                                                              |
+| `403`  | `FORBIDDEN`               | The role hasn't `camera:capture` (System Admin, Shoe Constructor)                          |
+| `409`  | `NO_BATCH_AT_PREPARATION` | No batch is at Preparation                                                                 |
+| `409`  | `BATCH_MOVED`             | The batch shown has left Preparation. `details.current` is the batch the next scan goes to |
+| `409`  | `CONFLICT`                | The `captureId` was already used by a camera station                                       |
+| `413`  | `PAYLOAD_TOO_LARGE`       | Over 10 MB                                                                                 |
+| `422`  | `VALIDATION_FAILED`       | A field is wrong; `message` names it                                                       |
+| `503`  | `MODEL_UNAVAILABLE`       | The model files aren't on the server (the message says where to put them)                  |
+
+The scan stores no person (D-008): `deviceTokenId` is null for a website scan, and the audit row
+`scan.create` names the signed-in user as the actor with `origin: "website"`.
+
 ### Which batch: `GET /api/v1/batches/current`
 
 The single Preparation camera feeds **the batch picked on the Camera page**. If none is picked, or

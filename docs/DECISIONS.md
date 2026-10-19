@@ -1152,3 +1152,80 @@ desktop shortcut to it, minimized, through Windows' own shortcut maker (PowerShe
 dependency. `.gitattributes` keeps `*.cmd` at CRLF. A failure inside the window at start is written
 to `cv/out/logs/window-error.log` and shown in a message box. The Camera page's "Connect the camera
 station" steps now point at the shortcut and the window.
+
+### D-064 · 2026-10-19 · Accepted — The app runs the camera model itself, as ONNX, for the Capture page (amends D-048, D-049)
+
+**Context:** Dylan asked for capture from the QI's dashboard with no second application (Phase 18,
+`camera-capture-page.md`). The model ran only in Python on the camera PC (D-048), and a Python
+service in Docker would be a third container (D-003).
+**Decision (Dylan, 2026-10-19, the plan's recommendation):**
+
+- **Server inference** inside the `app` container with `onnxruntime-node` 1.30.0 on the CPU. The
+  browser sends only the photo, so no one signed in can post a made-up detection list, and the
+  same code serves every PC and phone. Browser inference (`onnxruntime-web`) was rejected: a
+  42 MB download per browser and detections the app would have to trust.
+- `python -m cpoint_cv export-onnx` writes `yolo-v1.onnx` (dynamic input, FP32, opset 19) and
+  `yolo-v1.json` (names, `imgsz`, stride, ONNX SHA-256, the mapper's floor, overlap and renames,
+  and the `.pt` weights' `modelVersion`, so station and website scans read as one model). Both stay
+  in `cv/models/`, out of git and the image (D-049 holds); Docker mounts the folder read-only at
+  `/app/models`; `CV_MODEL_PATH` names the file. A missing model is `503 MODEL_UNAVAILABLE` and a
+  plain message on the page.
+- The TypeScript path copies the station exactly: "rect" letterbox (pad only to the stride, 32),
+  OpenCV's bilinear resize done in code, the end-to-end head's `output0` (boxes only; masks
+  ignored), and `mapper.ts`, a line-for-line port of `mapper.py`. A square-padded export and
+  sharp's resize both made 16:9 frames differ from the station, so they were dropped. A shared
+  fixture (`tests/fixtures/cv-mapper-parity.json`) holds the mappers equal in CI, and
+  `npm run cv:parity` compares the real model with `predict --json` (7 of 7 photos agree).
+- The runtime image moves from `node:24-alpine` to `node:24-bookworm-slim`, because ONNX Runtime
+  ships glibc builds only (+162 MB: 692 → 854 MB). `ONNXRUNTIME_NODE_INSTALL=skip` stops its CUDA
+  download in Docker and CI; `next.config.ts` traces only the Linux x64 runtime into the bundle.
+- One capture runs at a time on the server. About 0.65 s for a 1920 × 1080 frame and 1.2 s for a
+  1536 square photo on Dylan's laptop CPU, the same in Docker.
+
+**Consequences:** the station and the Capture page give the same detections for the same photo.
+A new model needs `export-onnx` and an app restart as well as the station's config.
+
+### D-065 · 2026-10-19 · Accepted — HTTPS on the LAN: an mkcert certificate served by a small listener inside the `app` container
+
+**Context:** browsers open the camera only on `localhost` or a trusted HTTPS address, and the
+iPhone's Safari must use the page.
+**Decision (Dylan, 2026-10-19):** `docker/https.mjs` (Node's own `https`, no dependency) listens on
+3443 and passes every request to the app on 127.0.0.1:3000 with `X-Forwarded-Proto/Host/Port/For`.
+The entrypoint starts it only when `certs/cert.pem` and `certs/key.pem` are mounted; `certs/` is
+git-ignored and not in the build context. The certificate comes from mkcert for the server's LAN
+IP; each phone or PC trusts mkcert's root once (README, "Capture from the website"). Still two
+containers (D-003); Caddy or nginx would be a third. `npm run dev:https` uses
+`next dev --experimental-https` with the same files, and `DEV_ORIGINS` allows the phone's address.
+The page itself names the HTTPS address when it is opened without one.
+
+### D-066 · 2026-10-19 · Accepted — The QI and the FM may capture from the website; the scan names no person
+
+**Decision (Dylan, 2026-10-19):** a new permission `camera:capture` for the Quality Inspector and
+the Floor Manager (the same roles as `camera:manage`): capturing judges nothing, and the FM can
+cover Preparation; flagged scans still wait for the QI (D-028). The System Admin and constructors
+can't. `ingestScan` takes an origin: a device token, or the website. A website scan has no
+`deviceTokenId` and no person column (D-008); its audit row `scan.create` has the user as the
+actor and `origin: "website"`. A repeated `captureId` returns the first scan when both came from
+the website; a station's id sent from the website is the existing 409. `source` is `PHONE` on a
+phone or tablet, otherwise `WEBCAM`. No migration.
+
+### D-067 · 2026-10-19 · Accepted — The Capture page: live video without boxes, the station's batch rule, its own nav item
+
+**Decision (Dylan, 2026-10-19):**
+
+- `/camera/capture`, a **Capture** item under Quality right after Camera; the Camera page and the
+  QI home link to it. The sidebar marks only the longest matching item.
+- The page shows the plain live camera (up to 1920 × 1080; a phone's back camera by default; a
+  camera picker remembered per browser). No live boxes: running the model continuously would be
+  slow on the server or a download in the browser, and a preview can't be mistaken for a verdict
+  (D-060 holds by design). After Capture, **Last scan** shows the app's verdict, section, defects
+  and the frame with its boxes, and links to the scan.
+- One press, one scan: the frame on screen at the press, a `captureId` made in the browser,
+  `capturedAt` the press time. A dropped connection or a server error is retried 3 times with the
+  same `captureId`, then **Send again** keeps it (D-051). Space captures unless a control has focus.
+- The batch: the page shows where the next scan goes and refreshes it every 20 s and when the tab
+  returns. Capture sends the batch shown, like the station (D-050); if it has left Preparation the
+  app refuses before running the model (`409 BATCH_MOVED`) and the page shows the new batch. This
+  replaces the brief's "send to the current batch" on purpose. No batch keeps Capture off.
+- Every camera state has its own message and fix: not a secure address, permission refused (iPhone
+  and desktop steps), no camera, camera busy, model missing.

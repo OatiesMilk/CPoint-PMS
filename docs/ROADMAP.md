@@ -313,3 +313,27 @@ failures block Start, a `.cmd` launcher plus a `shortcut` command, the Camera pa
 - [ ] Codex: the window by hand with the laptop webcam and the iPhone through DroidCam (by number
       and by address), every state and check, and the negatives
       (`qa/handoffs/2026-10-19-phase-17-camera-window.md`)
+
+## Phase 18 — Capture from the website
+
+Brief: `camera-capture-page.md` (project root). Plan: `phase-18-plan.md`; Dylan took every
+recommended option (server inference, bookworm-slim, mkcert with a listener in `app`, live video
+without boxes, QI and FM, its own nav item, the station's batch rule).
+
+- [x] A signed-in QI (or FM) opens Capture, picks a camera, sees the live picture, presses Capture
+      or Space, and gets the app's verdict and section number, with no other application (D-067)
+- [x] The model runs in the `app` container (ONNX Runtime, D-064); compose still has two
+      services; the model file is never in git or the image (mounted at `/app/models`)
+- [x] The detections match `cpoint_cv` within the tolerance: `npm run cv:parity` 7 of 7 photos
+      (five samples and two 16:9 crops); the mapper fixture is exact in CI
+- [x] No batch keeps Capture off; a retry never makes a second scan; one press makes one scan; a
+      batch that left Preparation is refused before the model runs (`BATCH_MOVED`)
+- [x] Camera permission refused, no camera, camera busy, model missing and a non-HTTPS address
+      each show their own message and fix
+- [x] HTTPS on the LAN: `docker/https.mjs` on 3443 with an mkcert certificate (D-065);
+      `npm run dev:https` for development
+- [x] The station (`POST /api/v1/scans` with a token) and the Phase 17 window are unchanged; no
+      person on scans (D-066); the Camera page shows "Capture page active" and "Ways to capture"
+- [x] Tests: 590 app unit tests (53 new), 231 station tests; Docker image builds and runs the model
+- [ ] Codex: the page on the server PC (localhost) and the iPhone in Safari over HTTPS, every
+      state, `cv:parity`, and the negatives (`qa/handoffs/2026-10-19-phase-18-capture-page.md`)

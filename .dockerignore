@@ -24,3 +24,6 @@ docker-compose.yml
 cv
 *.pt
 *.onnx
+# the HTTPS certificate and key are mounted at run time, never built in (D-065)
+certs
+*.pem

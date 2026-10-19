@@ -14,6 +14,23 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-19 — Phase 18: capture from the website
+
+**Who:** Dylan (local `main` checkout at `95d80a8`, not committed)
+**Summary:** Built the Capture page from `camera-capture-page.md`: the QI or FM captures from the browser and the app runs the model itself (ONNX Runtime on the CPU), then decides through the same `ingestScan`. Dylan took every recommended option in `phase-18-plan.md`. The first export padded photos to a full square and 16:9 frames disagreed with the station; a dynamic export with the station's "rect" letterbox and OpenCV-style resize made 7 of 7 photos agree.
+**Changed:**
+
+- Model: `src/server/lib/cv/` (`mapper.ts` ported from `mapper.py`, `yolo-output.ts` letterbox, resize and decode, `model-info.ts` sidecar, `model-runner.ts` the ONNX port, lazy load, one run at a time); `onnxruntime-node` 1.30.0; `CV_MODEL_PATH`.
+- API: `POST /api/v1/scans/capture` (`scanController.capture`, shared image reading), `capture.service.ts` (repeat first, model check, batch check with `BATCH_MOVED`), `ingestScan` takes an origin (device token or website), `captureFieldsSchema`, `camera:capture` (QI, FM).
+- Pages: `/camera/capture` (`capture-client.tsx`, `last-scan.tsx`), `src/lib/capture-rules.ts`; nav item Capture (the sidebar marks only the longest match); Camera page ("Capture page active", "Ways to capture", a button); QI home **Capture sections**.
+- Station: `python -m cpoint_cv export-onnx` (`onnx_export.py`), `requirements-export.txt`, the mapper parity fixture writer.
+- Docker and CI: `node:24-bookworm-slim` with OpenSSL, `ONNXRUNTIME_NODE_INSTALL=skip`, `docker/https.mjs` on 3443, entrypoint starts it when `certs/` has a certificate, `cv/models` and `certs` mounts, Node health check, `.dockerignore`/`.gitignore` (`certs`); `next.config.ts` traces the Linux ONNX runtime and reads `DEV_ORIGINS`; `npm run dev:https`, `npm run cv:parity`.
+- Tests: 53 new unit tests (mapper parity, geometry, sidecar, rules, service, route, website origin); 6 station tests; `tests/e2e/capture.spec.ts` (not run). Docs: API, README (Capture from the website, mkcert, iPhone), `cv/README.md`, `MODEL_CARD.md`, DESIGN, the master spec's role table, ROADMAP, DECISIONS, QA handoff.
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · unit 590 ✅ · build ✅ · station: ruff ✅ · ruff format ✅ · mypy ✅ · pytest 231 ✅ · `cv:parity` 7 of 7 ✅ · Docker image build ✅ (854 MB; the model loads and runs in it, 0.65 s per frame; the HTTPS listener proxied a request with a throwaway certificate) · e2e and browser tests not run (Codex) · `docker compose up` not run
+**Decisions:** D-064, D-065, D-066, D-067
+**Follow-ups:** Done the same day: Dylan installed mkcert, trusted its root on the iPhone and captured from Safari over `npm run dev:https` (working, his check). Codex runs `qa/handoffs/2026-10-19-phase-18-capture-page.md`. ONNX Runtime prints a harmless telemetry warning at start in Docker (the `nextjs` user has no home folder).
+
 ## 2026-10-19 — Phase 17: the camera station window
 
 **Who:** Dylan (local `main` checkout at `dac8599`, not committed)

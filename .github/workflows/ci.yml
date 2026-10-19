@@ -9,6 +9,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # onnxruntime-node downloads its CUDA build on Linux by default; CI never runs the model.
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 jobs:
   check:
     runs-on: ubuntu-latest

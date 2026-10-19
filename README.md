@@ -32,7 +32,8 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
 - [Demo script](#demo-script) (10 minutes, per role)
 - [Architecture](#architecture) and [data model](#data-model)
 - [Quick start: development](#quick-start-development)
-- [Environment](#environment), [Camera and simulator](#camera-and-simulator), [Scripts](#scripts)
+- [Environment](#environment), [Camera and simulator](#camera-and-simulator),
+  [Capture from the website](#capture-from-the-website), [Scripts](#scripts)
 
 ## Tech stack
 
@@ -79,6 +80,9 @@ Compose v2) and this folder. No Node.js needed.
    With `SEED_DEMO_WEEK=true`, the demo week is written in the background during the first
    minute. Refresh the home page after about 30 seconds. It runs only while the database has no
    batches, so restarts never add a second week.
+
+The Capture page (scanning from the browser) also needs the model files in `cv/models/` and,
+for phones, a certificate in `certs/`: see [Capture from the website](#capture-from-the-website).
 
 `docker compose ps` shows both services as `healthy` once ready, and
 `docker compose logs -f app` shows the logs. Stop with `docker compose down`. Add `-v` only to
@@ -438,6 +442,13 @@ With `SEED_DEMO_WEEK=true`, sample production data loads in the background on fi
 Refresh after about a minute. It only seeds when there are no batches. Alternatively, run
 `npm run demo:seed` in a second terminal after startup.
 
+### 6. The camera (optional)
+
+To scan leather from the browser, follow [Capture from the website](#capture-from-the-website):
+the model files, the defect types, and (to use a phone) an HTTPS certificate. Without them the
+rest of the system works, and `npm run cv:simulate` sends test scans ([Camera and
+simulator](#camera-and-simulator)).
+
 ### Troubleshooting and stopping
 
 - **`Invalid environment variables ... AUTH_SECRET`:** `.env` must contain a real secret of at
@@ -524,25 +535,149 @@ the `crease` and `scratch` defect types in Settings first (D-052, [`cv/README.md
 The model file lives in `cv/models/` and is never committed (D-049); see
 [`cv/MODEL_CARD.md`](cv/MODEL_CARD.md).
 
+## Capture from the website
+
+The **Capture** page (Quality → Capture, for the Quality Inspector and the Floor Manager) does the
+camera station's job in the browser: it shows the live camera, **Capture** (or Space) sends the
+frame on screen, and the app runs the model itself and shows its verdict. No second application
+(Phase 18, D-064 to D-067). The Python station stays as the option for a dedicated camera.
+
+Every teammate does steps 1–2 once on their own machine. Steps 3–5 are only for opening the page
+from **another device** (a phone or a second PC); the machine that runs the app can skip them and
+use `http://localhost:3000/camera/capture`.
+
+### 1. Get the model files
+
+The model is never in Git (D-049). The app needs two files in `cv/models/`:
+`yolo-v1.onnx` and `yolo-v1.json`. Either:
+
+- **ask Dylan for both files** (shared privately, not through GitHub) and copy them into
+  `cv/models/`; or
+- **make them yourself** from `yolo-v1.pt`, once the station is set up ([`cv/README.md`](cv/README.md),
+  "Set up"):
+
+  ```bash
+  cd cv
+  .venv/Scripts/python -m pip install -r requirements-export.txt
+  .venv/Scripts/python -m cpoint_cv export-onnx
+  ```
+
+Restart the app after the files change. Without them the Capture page says "The camera model
+isn't installed on the server" and Capture stays off; everything else works.
+
+### 2. Set the defect types for the model
+
+The model reports `crease`, `cut`, `hole` and `scratch`. A fresh database knows `cut`, `hole`,
+`abrasion` and `dirt`, so `crease` and `scratch` would go to the review queue as unknown. Either
+run `npm run demo:reset -- --yes` (**it deletes test data**: batches, scans and requests; the
+accounts stay) or add the two types by hand under Admin → Settings → Defect types
+([`cv/README.md`](cv/README.md), "Defect types for yolo-v1").
+
+Now the page works on this machine: start a batch (Batches → New batch → Start production), sign
+in as `inspector@cpoint.local` and open `http://localhost:3000/camera/capture`.
+
+### 3. Make an HTTPS certificate for your machine (other devices only)
+
+Browsers only open the camera on `localhost` or a **trusted HTTPS** address.
+[mkcert](https://github.com/FiloSottile/mkcert) makes a small certificate authority on your
+machine and a certificate for its address. Each teammate makes their own; never share them.
+
+1. Install mkcert, then **open a new terminal** so it's found:
+   - Windows: `winget install FiloSottile.mkcert`
+   - macOS: `brew install mkcert`
+   - Linux: see the mkcert page (`libnss3-tools` first)
+2. Create the authority and trust it on this machine (Windows asks once; click **Yes**):
+
+   ```bash
+   mkcert -install
+   ```
+
+3. Find this machine's LAN address: `ipconfig` on Windows (the Wi-Fi adapter's IPv4 address,
+   e.g. `192.168.254.104`), `ipconfig getifaddr en0` on macOS. On an iPhone's hotspot it's a
+   `172.20.10.x` address.
+4. In the repository folder, make the certificate for that address:
+
+   ```bash
+   mkcert -cert-file certs/cert.pem -key-file certs/key.pem localhost 127.0.0.1 <your IP>
+   ```
+
+`certs/` is git-ignored and never enters the Docker image. If your address changes (another
+network), run step 4 again with the new address and restart the app.
+
+### 4. Trust it on the phone (once per phone)
+
+`mkcert -CAROOT` prints the folder with **`rootCA.pem`**. Send only that file to the phone. Never
+send `rootCA-key.pem`.
+
+**iPhone:**
+
+1. AirDrop or email `rootCA.pem` to the iPhone. If it lands in the Files app, long-press it →
+   **Rename** to `rootCA.crt` (Files only previews a `.pem`), then tap it. iOS says
+   "Profile Downloaded".
+2. Settings → General → **VPN & Device Management** → the mkcert profile → **Install** (passcode).
+3. Settings → General → About → **Certificate Trust Settings** → turn on the mkcert root. This
+   step is easy to miss, and Safari still refuses without it.
+
+**Android:** copy `rootCA.pem` to the phone, rename it `rootCA.crt`, then Settings → Security →
+Encryption & credentials → Install a certificate → **CA certificate**. Menu names vary by maker.
+
+**Another PC:** double-click `rootCA.pem` (rename to `.crt` if Windows won't open it) → Install
+Certificate → Local Machine → **Trusted Root Certification Authorities**.
+
+### 5. Start the app with HTTPS and open the page
+
+The phone must be on the **same Wi-Fi** as the machine. If Windows Firewall asks about Node.js or
+Docker, allow **Private networks**.
+
+- **Development:** stop `npm run dev` first (Ctrl+C), add `DEV_ORIGINS=<your IP>` to `.env`, then:
+
+  ```bash
+  npm run dev:https
+  ```
+
+  Open `https://<your IP>:3000/camera/capture` on the phone (HTTPS on the same port 3000).
+
+- **Docker:** `docker compose up --build -d`, then `https://<your IP>:3443/camera/capture`.
+  `http://...:3000` keeps working for everything except the camera.
+
+Sign in as `inspector@cpoint.local` (or the Floor Manager) and tap **Allow** for the camera. On a
+phone the page uses the back camera; pick another under **Camera**. Scans from the page are
+recorded as `PHONE` or `WEBCAM` and name no person (D-008); the audit log records who captured.
+
+### If it doesn't work
+
+| What you see                                              | What to do                                                                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| "The camera only works on a secure address."              | You opened `http://` on another device. Use the `https://` address from step 5                                |
+| Safari says the connection isn't private                  | Step 4.3 (Certificate Trust Settings) isn't on, or your IP changed since step 3.4: make the certificate again |
+| The page loads on the phone but nothing reacts (dev only) | `DEV_ORIGINS` in `.env` is missing or isn't your current IP. Fix it and restart `npm run dev:https`           |
+| "The camera model isn't installed on the server."         | Step 1: both files in `cv/models/`, then restart the app                                                      |
+| "This browser isn't allowed to use the camera."           | Follow the steps on the page (iPhone: Settings → Apps → Safari → Camera → Allow), then Try again              |
+| "Another app is using this camera."                       | Close DroidCam, the camera station window or a video call, then Try again                                     |
+| The phone can't reach the address at all                  | Same Wi-Fi? Firewall allowed? Try `http://<your IP>:3000` first to check the network                          |
+| Capture is off: "until a batch is at Preparation"         | Start a batch as the Floor Manager                                                                            |
+
 ## Scripts
 
-| Command                     | What it does                                                             |
-| --------------------------- | ------------------------------------------------------------------------ |
-| `npm run dev`               | Dev server with hot reload                                               |
-| `npm run check`             | lint + typecheck + unit tests + build (run before pushing)               |
-| `npm run lint`              | ESLint, including the MVC layer import rules                             |
-| `npm run typecheck`         | Generate route types, then `tsc --noEmit`                                |
-| `npm run test`              | Unit tests (Vitest)                                                      |
-| `npm run test:e2e`          | Browser tests (Playwright + axe). Needs `npm run build` and the database |
-| `npm run format`            | Prettier                                                                 |
-| `npm run db:up` / `db:down` | Start/stop PostgreSQL in Docker                                          |
-| `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`          |
-| `npm run db:deploy`         | Apply pending migrations                                                 |
-| `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)     |
-| `npm run demo:seed`         | Seed a past week of production (only when there are no batches)          |
-| `npm run cv:token`          | Create a camera device token (printed once)                              |
-| `npm run cv:simulate`       | Send simulated camera scans (`--count`, `--interval`, `--batch`)         |
-| `npm run db:studio`         | Browse the database in Prisma Studio                                     |
+| Command                     | What it does                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| `npm run dev`               | Dev server with hot reload                                                      |
+| `npm run check`             | lint + typecheck + unit tests + build (run before pushing)                      |
+| `npm run lint`              | ESLint, including the MVC layer import rules                                    |
+| `npm run typecheck`         | Generate route types, then `tsc --noEmit`                                       |
+| `npm run test`              | Unit tests (Vitest)                                                             |
+| `npm run test:e2e`          | Browser tests (Playwright + axe). Needs `npm run build` and the database        |
+| `npm run format`            | Prettier                                                                        |
+| `npm run db:up` / `db:down` | Start/stop PostgreSQL in Docker                                                 |
+| `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`                 |
+| `npm run db:deploy`         | Apply pending migrations                                                        |
+| `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)            |
+| `npm run demo:seed`         | Seed a past week of production (only when there are no batches)                 |
+| `npm run cv:token`          | Create a camera device token (printed once)                                     |
+| `npm run cv:simulate`       | Send simulated camera scans (`--count`, `--interval`, `--batch`)                |
+| `npm run cv:parity`         | Run the app's ONNX model on photos; `--compare` checks it against the station   |
+| `npm run dev:https`         | Dev server over HTTPS on the LAN (needs `certs/`, see Capture from the website) |
+| `npm run db:studio`         | Browse the database in Prisma Studio                                            |
 
 First time running e2e: `npx playwright install chromium`. If Chromium is already installed
 elsewhere, set `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome` instead. To test the Docker stack, set

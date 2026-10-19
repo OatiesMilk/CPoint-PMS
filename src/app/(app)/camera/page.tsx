@@ -9,10 +9,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { Camera, CircleDot, Cpu, PlugZap, Radio } from "lucide-react";
+import { Aperture, Camera, CircleDot, Cpu, PlugZap, Radio } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { modelName } from "@/lib/camera-rules";
 import { readSnapshot } from "@/lib/decision-engine";
@@ -38,10 +39,17 @@ const ago = (now: Date, at: Date) => formatDuration(now.getTime() - at.getTime()
 /** One sentence on what the camera is doing right now, specific to each state. */
 function stateText(status: CameraStatus, now: Date): string {
   const last = status.lastScan;
-  const from = last?.device ? ` from “${last.device}”` : "";
+  // A scan with no device token came from this website's Capture page (Phase 18).
+  const from = last?.device
+    ? ` from “${last.device}”`
+    : last && last.source !== "SIMULATOR"
+      ? " from the Capture page"
+      : "";
   switch (status.state) {
     case "camera":
-      return `The camera station is sending scans. Last scan ${ago(now, last!.at)} ago${from}.`;
+      return last?.device
+        ? `The camera station is sending scans. Last scan ${ago(now, last.at)} ago${from}.`
+        : `Sections are being captured on the Capture page. Last scan ${ago(now, last!.at)} ago.`;
     case "simulator":
       return `Scans are coming from the simulator, not a camera. Last scan ${ago(now, last!.at)} ago.`;
     case "waiting":
@@ -49,7 +57,7 @@ function stateText(status: CameraStatus, now: Date): string {
     case "not_connected":
       return last
         ? `No camera station has checked in for 2 minutes. The last scan came ${ago(now, last.at)} ago${from}.`
-        : "No camera station has checked in yet. Connect it with the steps below.";
+        : "Nothing has captured yet. Use the Capture page, or connect the camera station with the steps below.";
   }
 }
 
@@ -59,8 +67,13 @@ export default async function CameraPage() {
   const now = new Date();
   const status = await cameraStatus(now);
   const last = status.lastScan ? await getScanDetail(status.lastScan.id) : null;
-  const state = STATE[status.state];
+  // A recent scan with no device token was captured on the Capture page, not by the station.
+  const state =
+    status.state === "camera" && !status.lastScan?.device
+      ? { ...STATE.camera, label: "Capture page active" }
+      : STATE[status.state];
   const canManage = can(user.role, "camera:manage");
+  const canCapture = can(user.role, "camera:capture");
   const lastModel = modelName(status.lastScan?.modelVersion);
   const fromSimulator = status.lastScan?.source === "SIMULATOR";
   const snapshot = last ? readSnapshot(last.thresholdsSnapshot) : null;
@@ -71,10 +84,20 @@ export default async function CameraPage() {
         title="Camera"
         description="The Preparation camera station checks each leather section before cutting."
         actions={
-          <Badge tone={state.tone}>
-            <state.Icon aria-hidden />
-            {state.label}
-          </Badge>
+          <>
+            <Badge tone={state.tone}>
+              <state.Icon aria-hidden />
+              {state.label}
+            </Badge>
+            {canCapture && (
+              <Button asChild variant="secondary">
+                <Link href="/camera/capture">
+                  <Aperture aria-hidden />
+                  Capture from this browser
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -110,7 +133,7 @@ export default async function CameraPage() {
               <p className="max-w-sm text-muted-foreground">
                 {status.state === "waiting"
                   ? "The station is connected. Press Space at the station to capture the first section."
-                  : "The last section the camera captures shows here, with every defect it found marked on it."}
+                  : "The last section captured, on the Capture page or at the station, shows here with every defect marked on it."}
               </p>
             </div>
           )}
@@ -189,9 +212,26 @@ export default async function CameraPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Connect the camera station</CardTitle>
+              <CardTitle>Ways to capture</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1 text-sm">
+                <p className="font-medium">From this website (no other app)</p>
+                <p>
+                  Open{" "}
+                  {canCapture ? (
+                    <Link href="/camera/capture" className="underline underline-offset-4">
+                      Capture
+                    </Link>
+                  ) : (
+                    <strong>Capture</strong>
+                  )}{" "}
+                  on the PC at Preparation, or on a phone. On another computer or a phone it needs
+                  the secure address (https, port 3443; see “Capture from the website” in the
+                  README).
+                </p>
+              </div>
+              <p className="text-sm font-medium">With the camera station (a dedicated camera)</p>
               <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
                 <li>
                   A System Admin creates a device token under <strong>API tokens</strong>.

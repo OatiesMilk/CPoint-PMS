@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Aperture,
   Boxes,
   Camera,
   ChartColumn,
@@ -41,6 +42,7 @@ type NavIcon =
   | "overview"
   | "batches"
   | "camera"
+  | "capture"
   | "scans"
   | "review"
   | "rework"
@@ -59,6 +61,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   overview: LayoutDashboard,
   batches: Boxes,
   camera: Camera,
+  capture: Aperture,
   scans: ScanLine,
   review: ClipboardCheck,
   rework: Wrench,
@@ -83,8 +86,19 @@ function isActive(pathname: string, href: string, exact = false) {
   return pathname === href || (!exact && pathname.startsWith(`${href}/`));
 }
 
+/** The one item to mark: the longest match, so /camera/capture marks Capture, not Camera too. */
+function activeHref(pathname: string, sections: SidebarSection[]): string | null {
+  let best: string | null = null;
+  for (const item of sections.flatMap((s) => s.items)) {
+    if (item.phase || !isActive(pathname, item.href, item.icon === "overview")) continue;
+    if (!best || item.href.length > best.length) best = item.href;
+  }
+  return best;
+}
+
 export function Sidebar({ sections, user, signOutAction }: Props) {
   const pathname = usePathname();
+  const current = activeHref(pathname, sections);
 
   return (
     <aside className="sticky top-0 flex h-screen w-14 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:w-60">
@@ -126,7 +140,7 @@ export function Sidebar({ sections, user, signOutAction }: Props) {
                     </li>
                   );
                 }
-                const active = isActive(pathname, item.href, item.icon === "overview");
+                const active = item.href === current;
                 return (
                   <li key={item.href}>
                     <Link

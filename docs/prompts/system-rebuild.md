@@ -231,6 +231,7 @@ Seed one demo account per role (password from `.env`, documented in README).
 | Overview dashboard (role-specific)                           | ✅             | ✅                | ✅ (system health) | my requests                      |
 | Batches: list / create / edit / advance stage                | ✅ full        | view              | view               | —                                |
 | Camera (CV placeholder page)                                 | ✅             | ✅                | ✅                 | —                                |
+| Capture page: scan from the browser (Phase 18, D-066)        | ✅             | ✅                | —                  | —                                |
 | "Latest scans" widget (polls every 5s)                       | ✅ on overview | ✅ on overview    | —                  | —                                |
 | Recent decisions + override                                  | ✅             | ✅                | —                  | —                                |
 | Review queue: decide flagged scans (D-028)                   | view           | ✅                | —                  | —                                |

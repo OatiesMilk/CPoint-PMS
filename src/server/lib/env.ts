@@ -19,6 +19,9 @@ const envSchema = z.object({
   APP_TIMEZONE: z.string().default("Asia/Manila"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   UPLOADS_DIR: z.string().default("./storage/uploads"),
+  // The ONNX camera model for captures from the website (Phase 18). Its `.json` sits beside it.
+  // Never in git or the image (D-049, D-064): a mounted folder in Docker.
+  CV_MODEL_PATH: z.string().default("./cv/models/yolo-v1.onnx"),
   // First System Admin, created on startup only when no active admin exists.
   BOOTSTRAP_ADMIN_EMAIL: optionalString.pipe(z.string().email().optional()),
   BOOTSTRAP_ADMIN_PASSWORD: optionalString.pipe(z.string().min(12).optional()),
