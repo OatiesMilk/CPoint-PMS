@@ -21,7 +21,7 @@ test.describe("camera ingestion API", () => {
       { dets: [{ classKey: "abrasion", confidence: 0.3 }], verdict: "PASS", status: "DECIDED" },
       { dets: [], verdict: "PASS", status: "DECIDED" },
       {
-        dets: [{ classKey: "scratch", confidence: 0.8 }],
+        dets: [{ classKey: "sim-unknown", confidence: 0.8 }],
         verdict: "NEEDS_REVIEW",
         status: "PENDING_REVIEW",
       },

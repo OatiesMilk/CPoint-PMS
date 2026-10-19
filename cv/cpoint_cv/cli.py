@@ -1,5 +1,11 @@
-"""``python -m cpoint_cv predict <image-or-folder>``: run the model, print what it saw, the
-``modelVersion``, the time taken and a *preview* of the app's verdict. Posts nothing."""
+"""The camera station's commands.
+
+- ``predict <image-or-folder>``: run the model, print what it saw, the ``modelVersion``, the time
+  taken and a *preview* of the app's verdict. Posts nothing.
+- ``run webcam | folder <dir> | file <image>``: the station. Captures one section at a time, runs
+  the model and sends each scan to the app, which decides the verdict.
+- ``doctor``: checks the model, packages, camera, app, token and clock, and says what to fix.
+"""
 
 from __future__ import annotations
 
@@ -9,26 +15,21 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from .client import ScanClient
 from .config import Config, ConfigError, load_config
+from .doctor import check_app, check_camera, check_model, check_python
+from .env import BASE_URL_VAR, TOKEN_VAR, station_env
+from .logs import StationLog
 from .mapper import map_with_sources
 from .model_info import model_version, sha256_file
 from .preview import preview_verdict
+from .retry import Backoff
+from .sources import collect_images
+from .spool import Spool
+from .station import Station
 from .summary import ImageResult, summarize, to_markdown
 
-IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-
-
-def collect_images(paths: Sequence[Path]) -> list[Path]:
-    """Images named directly, plus every image in a named folder (not its subfolders), sorted."""
-    images: list[Path] = []
-    for path in paths:
-        if path.is_dir():
-            images += sorted(p for p in path.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
-        elif path.is_file():
-            images.append(path)
-        else:
-            raise FileNotFoundError(f"{path} isn't a file or folder.")
-    return images
+__all__ = ["build_parser", "collect_images", "main"]
 
 
 def settings_line(config: Config) -> str:
@@ -41,6 +42,28 @@ def settings_line(config: Config) -> str:
         f"Confidence floor {config.mapper.confidence_floor:.2f}, imgsz {config.model.imgsz}, "
         f"device {config.model.device}."
     )
+
+
+def _model_version(config: Config) -> str | None:
+    """The model's ``modelVersion``, warning when the file isn't the one in the config. None (after
+    printing what to fix) when the file is missing."""
+    if not config.model.path.is_file():
+        where = config.source_file or Path("the config file")
+        print(
+            f"error: the model file {config.model.path} wasn't found. Check [model] path in "
+            f"{where}: a relative path is read from that file's folder ({where.parent}).",
+            file=sys.stderr,
+        )
+        return None
+    sha = sha256_file(config.model.path)
+    if config.model.sha256 and config.model.sha256 != sha:
+        print(
+            f"warning: {config.model.path.name} doesn't match [model] sha256 in the config.\n"
+            f"  expected {config.model.sha256}\n  found    {sha}\n"
+            "  Check you have the right file, then update sha256 and cv/MODEL_CARD.md.",
+            file=sys.stderr,
+        )
+    return model_version(config.model.name, sha)
 
 
 def _predict(args: argparse.Namespace) -> int:
@@ -56,23 +79,9 @@ def _predict(args: argparse.Namespace) -> int:
 
     from .yolo_detector import ModelError, YoloDetector, runtime_versions
 
-    if not config.model.path.is_file():
-        where = config.source_file or Path("the config file")
-        print(
-            f"error: the model file {config.model.path} wasn't found. Check [model] path in "
-            f"{where}: a relative path is read from that file's folder ({where.parent}).",
-            file=sys.stderr,
-        )
+    version = _model_version(config)
+    if version is None:
         return 2
-    sha = sha256_file(config.model.path)
-    version = model_version(config.model.name, sha)
-    if config.model.sha256 and config.model.sha256 != sha:
-        print(
-            f"warning: {config.model.path.name} doesn't match [model] sha256 in the config.\n"
-            f"  expected {config.model.sha256}\n  found    {sha}\n"
-            "  Check you have the right file, then update sha256 and cv/MODEL_CARD.md.",
-            file=sys.stderr,
-        )
     try:
         detector = YoloDetector(config.model, config.mapper.confidence_floor)
     except ModelError as error:
@@ -157,6 +166,132 @@ def _predict(args: argparse.Namespace) -> int:
     return 0
 
 
+def _client(config: Config, env: dict[str, str]) -> ScanClient | None:
+    token = env.get(TOKEN_VAR, "").strip()
+    if not token:
+        return None
+    from .transport import UrllibTransport
+
+    return ScanClient(
+        config.server.base_url,
+        token,
+        UrllibTransport(),
+        timeout=config.server.timeout_seconds,
+        backoff=Backoff(
+            config.server.attempts,
+            config.server.backoff_seconds,
+            config.server.max_backoff_seconds,
+        ),
+    )
+
+
+def _run(args: argparse.Namespace) -> int:
+    env = station_env()
+    try:
+        config = load_config(args.config, env)
+    except ConfigError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    client = _client(config, env)
+    if client is None:
+        print(
+            f"error: {TOKEN_VAR} isn't set. As the System Admin, create a device token under API "
+            f"tokens (or run npm run cv:token), then put {TOKEN_VAR}=... in cv/.env.",
+            file=sys.stderr,
+        )
+        return 2
+    version = _model_version(config)
+    if version is None:
+        return 2
+
+    from .sources import FileSource, FolderSource, FrameSource, SourceError, WebcamSource
+    from .triggers import IntervalTrigger, KeyTrigger, Trigger
+
+    source: FrameSource
+    trigger: Trigger
+    try:
+        if args.source == "webcam":
+            source = WebcamSource(
+                config.camera.index,
+                config.camera.width,
+                config.camera.height,
+                warmup_frames=config.camera.warmup_frames,
+                jpeg_quality=config.station.jpeg_quality,
+            )
+            trigger = KeyTrigger()
+        elif args.path is None:
+            print(
+                f"error: give the {args.source} to send, e.g. run {args.source} <path>.",
+                file=sys.stderr,
+            )
+            return 2
+        elif args.source == "folder":
+            source = FolderSource(args.path)
+            interval = (
+                args.interval if args.interval is not None else config.station.interval_seconds
+            )
+            trigger = IntervalTrigger(interval)
+        else:
+            source = FileSource(args.path)
+            trigger = IntervalTrigger(0)
+    except SourceError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    from .yolo_detector import ModelError, YoloDetector
+
+    try:
+        detector = YoloDetector(config.model, config.mapper.confidence_floor)
+    except ModelError as error:
+        source.close()
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    station = Station(
+        config=config,
+        source=source,
+        trigger=trigger,
+        detector=detector,
+        client=client,
+        spool=Spool(config.station.spool_dir, config.station.failed_dir),
+        log=StationLog(config.station.log_dir),
+        model_version=version,
+    )
+    try:
+        return station.run()
+    except KeyboardInterrupt:
+        print("Stopped.")
+        return 130
+
+
+def _doctor(args: argparse.Namespace) -> int:
+    env = station_env()
+    try:
+        config = load_config(args.config, env)
+    except ConfigError as error:
+        print(f"FAIL  Config: {error}")
+        return 1
+    print(
+        f"Config: {config.source_file}. App: {config.server.base_url} "
+        f"(from [server] base_url or {BASE_URL_VAR})."
+    )
+    checks = [check_model(config), *check_python()]
+    if not args.no_camera:
+        from .sources import probe_camera
+
+        checks.append(check_camera(config.camera.index, probe_camera))
+    checks += check_app(_client(config, env))
+    for check in checks:
+        print(check.line())
+    failed = [c for c in checks if not c.ok]
+    print(
+        "\nEverything the station needs is in place."
+        if not failed
+        else f"\n{len(failed)} check(s) failed. Fix them from the top, then run doctor again."
+    )
+    return 1 if failed else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m cpoint_cv", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -173,6 +308,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     predict.add_argument("--json", action="store_true", help="One JSON line per image")
     predict.set_defaults(handler=_predict)
+
+    run = commands.add_parser(
+        "run", help="Capture sections, run the model and send each scan to the app."
+    )
+    run.add_argument(
+        "source",
+        choices=("webcam", "folder", "file"),
+        help="webcam: Space captures one section; folder: every image in order; file: one image",
+    )
+    run.add_argument("path", nargs="?", type=Path, help="The folder or image (folder and file)")
+    run.add_argument(
+        "--interval",
+        type=float,
+        metavar="SECONDS",
+        help="Seconds between images in folder replay (default: [station] interval_seconds)",
+    )
+    run.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
+    run.set_defaults(handler=_run)
+
+    doctor = commands.add_parser("doctor", help="Check the station can run and say what to fix.")
+    doctor.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
+    doctor.add_argument(
+        "--no-camera", action="store_true", help="Skip the camera check (folder replay only)"
+    )
+    doctor.set_defaults(handler=_doctor)
     return parser
 
 

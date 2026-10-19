@@ -963,3 +963,64 @@ warns on a mismatch. Each scan's `modelVersion` is the config name plus the firs
 the SHA-256 (`yolo-v1-1d729fb0`), at most 60 characters.
 **Consequences:** the model file is shared outside git (the team's drive), and anyone can check
 they have the right one. Every scan says exactly which weights judged it.
+
+### D-050 · 2026-10-19 · Accepted — The station captures one section per trigger, pins the batch it showed, and saves every capture before sending
+
+**Context:** Phase 15 turns the inference core (D-048) into a station that behaves like the finished
+camera: it must know the target batch, capture one section at a time and survive network and
+server failures without losing or doubling a scan.
+**Decision:**
+
+- `python -m cpoint_cv run webcam | folder <dir> | file <image>`. The webcam captures **one frame
+  per Space press** (Dylan, 2026-10-19), never a stream; Q stops. An interval mode for the webcam is
+  not built. Folder replay sends every image in name order every `--interval` seconds; it uses the
+  same configured `source` as the webcam (`WEBCAM` by default, Dylan: "default"), so no new
+  `ScanSource` value or migration.
+- Before each capture the station calls `GET /api/v1/batches/current`, prints the batch, and sends
+  that `batchId` with the scan (the existing optional field). A section therefore lands in the
+  roll it was cut from even if it's sent later; if that batch has left Preparation by then, the
+  app's 409 moves the capture to `failed/`. With no batch at Preparation it waits and captures
+  nothing. The batch is asked again right after the trigger, and a change is announced.
+- Every capture is written to `cv/out/spool/` **before** the model runs and is removed only once
+  the app has answered. The spool is sent oldest first at start-up and before each capture, and
+  stops at the first capture that must wait, so order is kept.
+- Answers: 401/403 stop the station with the fix; 413, 422 and a 409 for the pinned batch move the
+  capture to `cv/out/failed/` with the app's message; network errors and 5xx are retried with
+  bounded exponential backoff and jitter (4 tries, 1 s doubling to 15 s), then wait in the spool.
+- HTTP uses the standard library only (no new dependency). Logs are JSON lines per event; the token
+  is read from `CV_DEVICE_TOKEN` (environment or git-ignored `cv/.env`) and never printed or logged.
+- `python -m cpoint_cv doctor` checks the model and checksum, Python and pinned package versions,
+  the camera, `/api/health`, the token and the clock against the server's `Date` header.
+- No overlap filter for duplicate boxes yet; Phase 14's observation stays open.
+
+**Consequences:** the demo can run on a folder of real photos with no camera, and a dropped network
+only delays scans. A capture whose batch closed before it could be sent needs a person to look at
+`failed/`.
+
+### D-051 · 2026-10-19 · Accepted — An optional `captureId` makes a camera's retry return the first scan
+
+**Context:** `POST /api/v1/scans` had no idempotency key. A retry after a timeout whose request
+actually arrived made a second scan, a second repair ticket or salvage item, and a wrong count.
+**Decision (Dylan, 2026-10-19):** an additive, optional `captureId` (a UUID the camera makes per
+capture) on the ingest form, stored as `Scan.captureId` (nullable, unique; migration
+`scan_capture_id`). When the same device sends a known `captureId`, the app answers `200` with the
+first scan's result and `duplicate: true`, writes nothing (no image, no outcome, no audit) and
+doesn't check the batch again. Another device's `captureId` gets `409`. Two copies racing on the
+unique index answer as the first. A new scan's `201` body now carries `duplicate: false`. The
+simulator doesn't send it and is unaffected; old scans keep `null`.
+**Consequences:** the station retries network errors and 5xx safely. Any future camera client
+should send a `captureId`.
+
+### D-052 · 2026-10-19 · Accepted — Defect types follow the model's classes: add `crease` and `scratch` in Settings, turn off `abrasion` and `dirt`
+
+**Context:** yolo-v1 reports `crease`, `cut`, `hole` and `scratch`; the bootstrap created `cut`,
+`hole`, `abrasion` and `dirt` (D-011 keeps defect types as data).
+**Decision (Dylan, 2026-10-19):** keep the model's own class names. The System Admin adds `crease`
+and `scratch` under Admin → Settings → Defect types and turns off `abrasion` and `dirt`, the
+classes the model doesn't have (steps in `cv/README.md`). The bootstrap's reference data is not
+changed, so a new database starts with the old four until the steps are done. The simulator's
+"unknown class" becomes `sim-unknown`, a key no model emits, since `scratch` is now real; the demo
+week's flagged scans use it too. The simulator and demo week still draw `cut`, `hole`, `abrasion`
+and `dirt`; with the last two off, those detections no longer decide a verdict.
+**Consequences:** with the steps done, yolo-v1's detections are judged by D-011 instead of all
+going to review. Doing the steps is a per-database task for the demo and for CPoint.

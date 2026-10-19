@@ -94,7 +94,9 @@ the open stage up to now.
 A camera machine (the YOLO service, a phone/webcam client, or `npm run cv:simulate`) sends each
 capture to the system. It authenticates with a **device token** created by a System Admin under
 **API tokens**: `Authorization: Bearer cpt_…`. The token is shown once and stored only as a hash.
-A revoked, expired or unknown token gets `401`.
+A revoked, expired or unknown token gets `401`; a token without the `scans:create` scope gets `403`.
+The camera station in `cv/` (`python -m cpoint_cv run`, D-050) is the real client; see
+`cv/README.md`.
 
 ### `POST /api/v1/scans`
 
@@ -108,17 +110,25 @@ A revoked, expired or unknown token gets `401`.
 | `modelVersion` | no       | e.g. `yolov8n-cpoint-2026-10`, shown on the scan                                                                                                                                                                                                                   |
 | `capturedAt`   | no       | ISO 8601 with offset; defaults to the time received                                                                                                                                                                                                                |
 | `batchId`      | no       | Only for multi-camera setups. Normally omitted (see "Which batch")                                                                                                                                                                                                 |
+| `captureId`    | no       | A UUID the camera makes for each capture. Send the same one on every retry: a repeat returns the first scan instead of making a second one (D-051). `cpoint_cv` always sends it                                                                                    |
 
 **Decision (D-011):** the highest confidence among _active_ defect types decides, using the
 thresholds set by the admin (default ≥ 0.90 → `REJECT`, ≥ 0.60 → `REWORK`, otherwise `PASS`).
 Any `classKey` the system doesn't know → `NEEDS_REVIEW` (the scan waits in the review queue, and the
-class is stored and flagged). Class keys are matched exactly (`cut`, `hole`, `abrasion`, `dirt`).
-Add new ones under Admin → Settings when the model is retrained.
+class is stored and flagged). Class keys are matched exactly. The bootstrap creates `cut`, `hole`,
+`abrasion` and `dirt`; for yolo-v1, add `crease` and `scratch` and turn `abrasion` and `dirt` off
+under Admin → Settings (D-052, `cv/README.md`). Add new ones there when the model is retrained.
 
 **Outcome rows:** `REWORK` opens a repair ticket; `REJECT` creates a salvage item (D-007).
 
-**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "status" } }`.
-`409` when no batch is at Preparation (`message` says what to do). `413` over 10 MB. `422` for invalid fields.
+**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "status", "duplicate": false } }`.
+
+**`200`** the same body with `"duplicate": true` when this device already sent the `captureId`:
+nothing new is stored or audited, even if the batch has since left Preparation.
+
+`409` when no batch is at Preparation, when the `batchId` sent isn't in progress at Preparation, or
+when another device already used the `captureId` (`message` says which). `413` over 10 MB. `422`
+for invalid fields (`details` names each one).
 
 ### Which batch: `GET /api/v1/batches/current`
 

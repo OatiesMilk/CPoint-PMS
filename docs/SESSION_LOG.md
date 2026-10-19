@@ -14,6 +14,27 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-19 — Phase 15: the camera station (capture, send, recover)
+
+**Who:** Dylan (local `main` checkout, not committed)
+**Summary:** The camera station now sends scans: `python -m cpoint_cv run webcam | folder | file` knows the batch, captures one section per Space press (or every image in a folder), runs yolo-v1 and posts the scan, and survives network and server failures through a spool on disk. An optional `captureId` on the scan upload makes retries safe. `doctor` checks the setup. Dylan's answers: keep the model's class names, add them in Settings, turn off `abrasion`/`dirt`, `captureId` yes, folder replay uses the default source, Space to capture.
+**Changed:**
+
+- `cv/`: `station.py` (the loop), `client.py`, `transport.py` (stdlib HTTP), `retry.py`, `spool.py`, `sources.py`, `triggers.py`, `encode.py`, `doctor.py`, `env.py`, `logs.py`; `run` and `doctor` commands; `[server]`, `[station]`, `[camera]` settings; `.env.example`; README (run, failures, the Settings steps).
+- App: `Scan.captureId` (migration `20261019090000_scan_capture_id`, written with `prisma migrate diff` because `migrate dev` is interactive-only here); validator, model, ingest service (a repeat returns the first scan, 200) and controller.
+- Simulator and demo week: unknown class `sim-unknown` (was `scratch`).
+- Tests: 6 new Vitest (captureId), fixture with `captureId` and `batchId`, 77 new pytest; `tests/e2e/cv.spec.ts` uses `sim-unknown` (not run).
+- Docs: D-050, D-051, D-052, API.md, ROADMAP Phase 15, STATUS, the QA handoff.
+
+**Gates:** lint ✅ · typecheck ✅ · unit 508 ✅ · build ✅ (`npm run check`) · prettier ✅ (touched docs) · station: ruff ✅ · ruff format ✅ · mypy ✅ · pytest 133 ✅ · `doctor` and `run` smoke-checked by hand without a token · e2e not run (Codex) · docker not run (no Docker file changed)
+**Decisions:** D-050, D-051, D-052
+**Follow-ups:**
+
+- Dylan: do the Settings steps on each database (`cv/README.md`), and update `[preview]` in his own `cv/config.toml`.
+- Codex: `qa/handoffs/2026-10-19-phase-15-camera-station.md` (includes the Phase 14 S5/S6 re-run).
+- The simulator and demo week still draw `abrasion`/`dirt`; switch them to the model's classes when the demo is prepared (Phase 16).
+- Overlap filter for duplicate boxes: still open.
+
 ## 2026-10-19 — Phase 14 follow-up: Codex runs 1 and 2
 
 **Who:** Dylan (local `main` checkout, not committed)

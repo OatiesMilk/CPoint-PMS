@@ -4,6 +4,8 @@
     "detections": "[{\"classKey\":\"hole\",\"confidence\":0.9149,\"box\":{\"x\":0.0,\"y\":0.0,\"width\":0.05,\"height\":0.07}},{\"classKey\":\"cut\",\"confidence\":0.7123,\"box\":{\"x\":0.36,\"y\":0.355,\"width\":0.12,\"height\":0.05}},{\"classKey\":\"crease\",\"confidence\":0.4876,\"box\":{\"x\":0.85,\"y\":0.56,\"width\":0.15,\"height\":0.08}},{\"classKey\":\"scratch\",\"confidence\":0.3333,\"box\":{\"x\":0.1,\"y\":0.74,\"width\":0.3,\"height\":0.02}}]",
     "modelVersion": "yolo-v1-1d729fb0",
     "source": "WEBCAM",
-    "capturedAt": "2026-10-01T09:30:00+08:00"
+    "capturedAt": "2026-10-01T09:30:00+08:00",
+    "captureId": "0199f0a1-7c2e-4a51-9d3f-2b8c4e6a1f00",
+    "batchId": "0199e2b4-1f00-7c3a-8d21-5e6f7a8b9c0d"
   }
 }

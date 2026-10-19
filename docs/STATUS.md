@@ -4,12 +4,11 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-19
-**Branch:** `main` @ `63138dc` (the follow-ups D-046 and D-047 merged as PR #7). Phase 14 is on the
-`main` checkout, uncommitted (Dylan decides when to branch and commit; the team opens and merges
-the PR, D-032).
-**Current phase:** Phase 14, camera YOLO model intake and inference core (done; baseline on five
-sample photos in `cv/MODEL_CARD.md`). Next: Phase 15, the camera station.
-**Overall:** 15 / 17 phases built (Phases 15 and 16 of `camera-yolo-integration.md` remain)
+**Branch:** `main` @ `f40e6fe` (Phase 14 merged as PR #8). Phase 15 is on the `main` checkout,
+uncommitted (Dylan decides when to branch and commit; the team opens and merges the PR, D-032).
+**Current phase:** Phase 15, the camera station: capture, send, recover (done, waiting for Codex).
+Next: Phase 16, the Camera page, evaluation and the demo.
+**Overall:** 16 / 17 phases built (Phase 16 of `camera-yolo-integration.md` remains)
 
 ## Phase progress
 
@@ -28,12 +27,12 @@ sample photos in `cv/MODEL_CARD.md`). Next: Phase 15, the camera station.
 - [x] 12. Item-level decisions guided by stock
 - [x] 13. Ordering, delivery with proof, and the remaining gaps
 - [x] 14. Camera YOLO model: intake and the inference core
-- [ ] 15. Camera station: capture, send, recover
+- [x] 15. Camera station: capture, send, recover
 - [ ] 16. Camera page, evaluation and the demo
 
 ## What works right now
 
-- **Database:** 11 migrations (the latest is `material_request_codes_legacy`, data only: PR- numbers become MR-, D-046). UUIDv7 ids (D-018).
+- **Database:** 12 migrations (the latest is `scan_capture_id`: one nullable, unique column, D-051). UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017):
   - reference data and the first System Admin;
   - demo users and inventory when `SEED_DEMO_USERS=true`. The demo constructor is a designated
@@ -86,18 +85,27 @@ sample photos in `cv/MODEL_CARD.md`). Next: Phase 15, the camera station.
   - the FM home card (to decide, to order, late), an Inventory "Requested" badge and "My
     requests" on the constructor home;
   - who may request leather rolls is chosen by the FM (Procurement tab) or the Admin (Users).
-- **Camera station (Phase 14, D-048, D-049):** the `cpoint_cv` Python package in `cv/` runs
-  `yolo-v1.pt` (`cv/models/`, git-ignored, SHA-256 in `cv/MODEL_CARD.md`) and prints detections,
-  `modelVersion` (`yolo-v1-1d729fb0`), time and a preview verdict: `python -m cpoint_cv predict
-<folder>`. About 255 ms per image on Dylan's RTX 3060 and 780 ms on the CPU at `imgsz` 1536. It
-  posts nothing yet; the app is unchanged.
+- **Camera station (Phases 14–15, D-048 to D-052):** the `cpoint_cv` Python package in `cv/` runs
+  `yolo-v1.pt` (`cv/models/`, git-ignored, SHA-256 in `cv/MODEL_CARD.md`), about 255 ms per image
+  on Dylan's RTX 3060 and 780 ms on the CPU at `imgsz` 1536.
+  - `predict <folder>`: detections, `modelVersion` (`yolo-v1-1d729fb0`), time and a preview verdict;
+  - `run webcam | folder <dir> | file <image>`: asks which batch is at Preparation, captures one
+    section per Space press (or every image in a folder), runs the model and posts the scan with
+    that `batchId`, a `captureId` and `capturedAt`; prints the app's verdict. Captures wait in
+    `cv/out/spool/` until the app has them; network errors and 5xx are retried, then sent later
+    in order; refused scans go to `cv/out/failed/`; a refused token stops it (D-050);
+  - `doctor`: model and checksum, versions, camera, app, token and clock;
+  - the app answers a repeated `captureId` with the first scan (200, `duplicate: true`), so
+    retries never double a scan (D-051);
+  - defect types: add `crease` and `scratch`, turn off `abrasion` and `dirt` in Settings, per
+    database (`cv/README.md`, D-052). The simulator's unknown class is `sim-unknown`.
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
 - **Pagination** (D-047): every list that can grow pages at 15 rows with one pager; Settings
   and the leather-roll requesters have a Find box.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 502 unit tests pass (Vitest), plus 56 station tests (pytest, no torch needed). 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
+  - 508 unit tests pass (Vitest), plus 133 station tests (pytest, no torch, OpenCV or network). 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
     role and on the new procurement screens;
   - Phase 14 (Codex, 2026-10-19, runs 1–2): 9 of 10 scenarios passed, including the camera e2e
     spec 8/8 and the contract test. The one failure (S6) was a wrong step in the handoff, now fixed;
@@ -116,12 +124,15 @@ sample photos in `cv/MODEL_CARD.md`). Next: Phase 15, the camera station.
 
 ## Next step (exact)
 
-1. Dylan: confirm whether the five photos in `Sample Photos (CAP2)` were left out of training, and
-   collect a larger held-out set (with the expected verdict per photo) for Phase 16's evaluation.
-2. Dylan: create a branch, commit and push Phase 14 and open the PR (D-032). Delete the untracked
-   `phase-14-plan.md` in the root when done with it.
-3. Codex: optional re-run of S5 and S6 only (`qa/handoffs/2026-10-19-phase-14-cv-core.md`).
-4. Next session: Phase 15 of `camera-yolo-integration.md` (the camera station).
+1. Dylan: do the defect-type steps in Settings on the dev database (`cv/README.md`, "Defect types
+   for yolo-v1") and copy the new `[preview]` lists into his own `cv/config.toml`.
+2. Codex: `qa/handoffs/2026-10-19-phase-15-camera-station.md` (it includes the Phase 14 S5/S6
+   re-run). Fix its failures first next session.
+3. Dylan: create a branch, commit and push Phase 15 and open the PR (D-032). The migration
+   `scan_capture_id` ships with it. Delete the untracked `phase-15-plan.md` in the root when done.
+4. Dylan: collect a larger held-out photo set (with the expected verdict per photo) for Phase 16's
+   evaluation, and confirm whether the five sample photos were left out of training.
+5. Next session: Phase 16 of `camera-yolo-integration.md` (the Camera page, evaluation, the demo).
 
 Later:
 
@@ -167,14 +178,16 @@ Later:
   as ordered and record deliveries.
 - ASSUMPTION (D-026): the demo week's stage times match the survey.
 - Unknown: components per shoe type. Blocks component tracking only.
-- Open (Phase 15): the model emits `crease`, `cut`, `hole`, `scratch`; the app knows `cut`, `hole`,
-  `abrasion`, `dirt`. Until `crease` and `scratch` are added under Settings → Defect types, any scan
-  with one goes to review. Decide `abrasion` and `dirt` (keep or deactivate).
+- Decided (D-052, Dylan 2026-10-19): defect types follow the model's own classes. `crease` and
+  `scratch` are added and `abrasion` and `dirt` turned off in Settings, by hand per database; the
+  bootstrap is unchanged. The simulator and demo week still draw `abrasion`/`dirt` (Phase 16).
+- Decided (D-050, D-051, Dylan 2026-10-19): Space captures one section; folder replay sends the
+  default source (`WEBCAM`); scans carry an optional `captureId` so retries are safe.
 - Open (Phase 16): confidence is not severity. D-011 reads the model's confidence as how bad a
   defect is; for yolo-v1 it means how sure it is a defect exists. In the five-photo baseline a
   clear cut scored 0.51 (it would pass alone). Choose the approach in Phase 16, on a larger set.
 - Observed (Phase 14): the model sometimes reports one scratch twice with nearly the same box. It
-  doesn't change verdicts but inflates per-class counts; consider an overlap filter in Phase 15.
+  doesn't change verdicts but inflates per-class counts; an overlap filter was not built in Phase 15 and is still open.
 - Decided (D-049, Dylan 2026-10-19): model files stay out of git (`cv/models/`), not Git LFS.
 - Pending: the new YOLO training photos will change the defect classes. They arrive as
   "unknown", go to the QI's review queue, and are added under Settings → Defect types.

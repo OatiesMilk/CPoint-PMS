@@ -21,6 +21,7 @@ const scans = {
     }),
   ),
   findLatestScan: vi.fn(),
+  findScanByCaptureId: vi.fn(async (_captureId: string): Promise<unknown> => null),
 };
 const outcomes = { insertReworkTicket: vi.fn(), insertSalvageItem: vi.fn() };
 const recordAudit = vi.fn();
@@ -108,6 +109,14 @@ describe("ingest fields", () => {
   ])("rejects %s", (_label, detections) => {
     expect(ingestFieldsSchema.safeParse({ detections }).success).toBe(false);
   });
+  it("accepts an optional captureId and names the field when it isn't a UUID", () => {
+    const id = "0199f0a1-7c2e-7a51-9d3f-2b8c4e6a1f00";
+    expect(ingestFieldsSchema.parse({ captureId: id }).captureId).toBe(id);
+    expect(ingestFieldsSchema.parse({}).captureId).toBeUndefined();
+    const bad = ingestFieldsSchema.safeParse({ captureId: "capture-7" });
+    expect(bad.success).toBe(false);
+    expect(bad.error?.issues[0].message).toMatch(/^captureId must be a UUID/);
+  });
 });
 
 describe("local storage", () => {
@@ -172,6 +181,7 @@ describe("ingestScan", () => {
       sequence: 4,
       verdict: "PASS",
       status: "DECIDED",
+      duplicate: false,
     });
     expect(batchModel.lockBatchRow).toHaveBeenCalledWith("0001", "tx");
     const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
@@ -237,5 +247,77 @@ describe("ingestScan", () => {
         action: "scan.create",
       }),
     );
+  });
+});
+
+describe("ingestScan with a captureId (D-051)", () => {
+  const CAPTURE = "0199f0a1-7c2e-7a51-9d3f-2b8c4e6a1f00";
+  const ingest = (storage = memoryStorage(), device = { id: "tok1" }) =>
+    ingestScan(
+      {
+        image: { bytes: JPEG, type: { mime: "image/jpeg", ext: "jpg" } },
+        detections: [det("hole", 0.7)],
+        source: "WEBCAM",
+        captureId: CAPTURE,
+      },
+      device,
+      now,
+      storage,
+    );
+  const earlier = {
+    id: "scan-first",
+    sequence: 2,
+    aiVerdict: "REWORK",
+    status: "DECIDED",
+    deviceTokenId: "tok1",
+    batch: { id: "0001", code: "B-2026-0001" },
+  };
+
+  it("stores the captureId on a new scan", async () => {
+    const result = await ingest();
+    expect(result.duplicate).toBe(false);
+    expect(scans.insertScanWithDetections.mock.calls[0][0]).toMatchObject({ captureId: CAPTURE });
+  });
+
+  it("returns the first scan for a repeat and writes nothing", async () => {
+    scans.findScanByCaptureId.mockResolvedValueOnce(earlier);
+    const storage = memoryStorage();
+    expect(await ingest(storage)).toEqual({
+      scanId: "scan-first",
+      batchId: "0001",
+      batchCode: "B-2026-0001",
+      sequence: 2,
+      verdict: "REWORK",
+      status: "DECIDED",
+      duplicate: true,
+    });
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(scans.insertScanWithDetections).not.toHaveBeenCalled();
+    expect(outcomes.insertReworkTicket).not.toHaveBeenCalled();
+    expect(recordAudit).not.toHaveBeenCalled();
+  });
+
+  it("returns the first scan even when its batch has since left Preparation", async () => {
+    scans.findScanByCaptureId.mockResolvedValueOnce(earlier);
+    batchModel.listBatchesAtPreparation.mockResolvedValue([]);
+    expect(await ingest()).toMatchObject({ scanId: "scan-first", duplicate: true });
+  });
+
+  it("refuses another camera's captureId with 409", async () => {
+    scans.findScanByCaptureId.mockResolvedValueOnce({ ...earlier, deviceTokenId: "tok2" });
+    await expect(ingest()).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringMatching(/Another camera already sent a scan with this captureId/),
+    });
+  });
+
+  it("answers as the first copy when two copies race on the unique index", async () => {
+    scans.findScanByCaptureId.mockResolvedValueOnce(null).mockResolvedValueOnce(earlier);
+    scans.insertScanWithDetections.mockRejectedValueOnce(
+      Object.assign(new Error("Unique constraint failed"), { code: "P2002" }),
+    );
+    const storage = memoryStorage();
+    expect(await ingest(storage)).toMatchObject({ scanId: "scan-first", duplicate: true });
+    expect(storage.files.size).toBe(0);
   });
 });
