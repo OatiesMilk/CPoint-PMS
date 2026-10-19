@@ -5,7 +5,7 @@
  *   npm run cv:simulate -- --count 20 --interval 3 [--batch <batchId>]
  *
  * Needs CV_DEVICE_TOKEN (create one: `npm run cv:token`) and optionally CV_BASE_URL in .env.
- * Mix: ~60% pass, ~22% rework, ~13% reject, ~5% an unknown class ("scratch") that needs review.
+ * Mix: ~60% pass, ~22% rework, ~13% reject, ~5% an unknown class ("sim-unknown") that needs review.
  */
 import "dotenv/config";
 import { renderLeatherImage, scenario } from "../src/server/lib/leather-scan";

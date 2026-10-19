@@ -27,7 +27,7 @@ const svc = {
         classKeys: input.detections.map((d) => d.classKey),
       });
       // The unknown class is flagged, as the real decision engine does (D-011).
-      const flagged = input.detections.some((d) => d.classKey === "scratch");
+      const flagged = input.detections.some((d) => d.classKey === "sim-unknown");
       return {
         scanId: `s${calls.length}`,
         batchId: input.batchId,
@@ -221,7 +221,7 @@ describe("seedDemoWeek", () => {
     // ingestScan's mock names each scan s<n>, where n counts every recorded call so far.
     const flaggedIds = new Set(
       calls.flatMap((c, i) =>
-        c.fn === "scan" && c.classKeys?.includes("scratch") ? [`s${i + 1}`] : [],
+        c.fn === "scan" && c.classKeys?.includes("sim-unknown") ? [`s${i + 1}`] : [],
       ),
     );
     const onFlagged = decideScan.mock.calls.filter(([scanId]) => flaggedIds.has(scanId as string));

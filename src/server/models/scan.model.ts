@@ -14,6 +14,21 @@ export function insertScanWithDetections(
   return db.scan.create({ data: { ...data, detections: { createMany: { data: detections } } } });
 }
 
+/** The scan a camera already sent with this capture id (D-051), with what the result needs. */
+export function findScanByCaptureId(captureId: string, db: Db = defaultDb()) {
+  return db.scan.findUnique({
+    where: { captureId },
+    select: {
+      id: true,
+      sequence: true,
+      aiVerdict: true,
+      status: true,
+      deviceTokenId: true,
+      batch: { select: { id: true, code: true } },
+    },
+  });
+}
+
 export function findScanById(id: string, db: Db = defaultDb()) {
   return db.scan.findUnique({
     where: { id },

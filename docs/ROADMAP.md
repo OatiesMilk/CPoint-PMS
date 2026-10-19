@@ -236,3 +236,26 @@ Brief: `camera-yolo-integration.md` (project root), Phase 14. No app behaviour c
 - [x] Baseline on five sample photos (`cv/MODEL_CARD.md`): 4 of 5 go to review today only
       because `crease`/`scratch` are unknown; a clear cut scored 0.51. A smoke test, not an
       evaluation; Phase 16's `evaluate` needs a larger held-out set
+
+## Phase 15 — Camera station: capture, send, recover
+
+Brief: `camera-yolo-integration.md` (project root), Phase 15. One additive contract field.
+
+- [x] Frame sources (D-050): `run webcam` (one frame per Space press, Q stops), `run folder <dir>`
+      (every image in order, `--interval`), `run file <image>`
+- [x] Batch awareness: asks `GET /api/v1/batches/current` before each capture, prints
+      "Next scan goes to B-…", pins that `batchId`; with no batch it waits and captures nothing
+- [x] Sending: JPEG/PNG/WebP under 10 MB (quality steps down), `source` from config (folder replay
+      too), `modelVersion`, `capturedAt` at capture; prints the app's verdict and section
+- [x] Errors: 401/403 stop with the fix; 413/422/409 to `out/failed/` with the app's message;
+      network and 5xx retried with backoff and jitter, then the spool, sent later in order
+- [x] No silent duplicates (D-051): optional `captureId`, migration `scan_capture_id`; a repeat
+      from the same device answers 200 with the first scan and writes nothing
+- [x] Classes (D-052): Settings steps to add `crease` and `scratch` and turn off `abrasion` and
+      `dirt` (`cv/README.md`); the simulator's unknown key is `sim-unknown`
+- [x] Logging: JSON lines per event, never the token
+- [x] `python -m cpoint_cv doctor`: model and checksum, versions, camera, app, token, clock
+- [x] Unit tests with mocked HTTP: client statuses, retries, spool, payload, station loop, doctor
+      (133 station tests, 508 app tests)
+- [ ] Codex: folder replay shows on the Camera page, Latest scans and the review queue
+      (`qa/handoffs/2026-10-19-phase-15-camera-station.md`)

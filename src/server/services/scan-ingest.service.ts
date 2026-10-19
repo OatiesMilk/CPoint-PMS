@@ -10,7 +10,11 @@ import { getCvSettings } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
 import { insertReworkTicket, insertSalvageItem } from "@/server/models/outcome.model";
 import { listDefectTypes } from "@/server/models/reference-data.model";
-import { insertScanWithDetections, nextScanSequence } from "@/server/models/scan.model";
+import {
+  findScanByCaptureId,
+  insertScanWithDetections,
+  nextScanSequence,
+} from "@/server/models/scan.model";
 import type { DetectionValues } from "@/server/validators/scan.validator";
 import { recordAudit } from "./audit.service";
 import { NO_BATCH_MESSAGE, resolveCameraBatch } from "./camera.service";
@@ -19,6 +23,7 @@ export type IngestInput = {
   image: { bytes: Uint8Array; type: ImageType };
   detections: DetectionValues[];
   batchId?: string;
+  captureId?: string;
   modelVersion?: string;
   source: ScanSource;
   capturedAt?: Date;
@@ -31,7 +36,32 @@ export type IngestResult = {
   sequence: number;
   verdict: string;
   status: string;
+  /** True when this captureId was already received: nothing new was written (D-051). */
+  duplicate: boolean;
 };
+
+/**
+ * The scan a device already sent with this capture id, as the first response described it.
+ * Another device's id is refused, so one camera can't read or claim another's scans.
+ */
+async function earlierCapture(captureId: string, device: { id: string }) {
+  const scan = await findScanByCaptureId(captureId);
+  if (!scan) return null;
+  if (scan.deviceTokenId !== device.id) {
+    throw Errors.conflict(
+      "Another camera already sent a scan with this captureId. Make a new captureId for each capture.",
+    );
+  }
+  return {
+    scanId: scan.id,
+    batchId: scan.batch.id,
+    batchCode: scan.batch.code,
+    sequence: scan.sequence,
+    verdict: scan.aiVerdict,
+    status: scan.status,
+    duplicate: true,
+  } satisfies IngestResult;
+}
 
 function storageKey(now: Date, ext: string): string {
   const yyyy = now.getUTCFullYear();
@@ -42,7 +72,8 @@ function storageKey(now: Date, ext: string): string {
 /**
  * One camera capture → one scan (D-005, D-011, D-020). The decision is made here, with the
  * thresholds in force right now (snapshotted on the scan). REWORK opens a repair ticket and REJECT
- * creates a salvage item in the same transaction (D-007).
+ * creates a salvage item in the same transaction (D-007). A captureId the same device already
+ * sent returns the first scan instead, so a camera's retry never makes a second one (D-051).
  */
 export async function ingestScan(
   input: IngestInput,
@@ -50,6 +81,11 @@ export async function ingestScan(
   now: Date = new Date(),
   storage: StorageService = getStorage(),
 ): Promise<IngestResult> {
+  if (input.captureId) {
+    const earlier = await earlierCapture(input.captureId, device);
+    if (earlier) return earlier;
+  }
+
   const batch = await resolveCameraBatch(input.batchId);
   if (!batch) throw Errors.conflict(NO_BATCH_MESSAGE);
 
@@ -80,6 +116,7 @@ export async function ingestScan(
           source: input.source,
           modelVersion: input.modelVersion ?? null,
           deviceTokenId: device.id,
+          captureId: input.captureId ?? null,
           aiVerdict: decision.verdict,
           maxConfidence: decision.maxConfidence,
           thresholdsSnapshot: thresholds,
@@ -129,6 +166,7 @@ export async function ingestScan(
         sequence,
         verdict: decision.verdict,
         status: scan.status,
+        duplicate: false,
       };
     });
   } catch (error) {
@@ -136,6 +174,11 @@ export async function ingestScan(
     await storage
       .remove(key)
       .catch((err) => logger.warn({ err, key }, "Could not remove orphaned scan image"));
+    // Two copies of one capture arrived together: the other one won, so answer as it did.
+    if (input.captureId && (error as { code?: string })?.code === "P2002") {
+      const earlier = await earlierCapture(input.captureId, device);
+      if (earlier) return earlier;
+    }
     throw error;
   }
 }

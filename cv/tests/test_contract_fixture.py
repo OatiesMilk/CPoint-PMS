@@ -34,12 +34,21 @@ DETECTOR = FakeDetector(
     ],
 )
 CAPTURED_AT = datetime(2026, 10, 1, 9, 30, tzinfo=timezone(timedelta(hours=8)))
+CAPTURE_ID = "0199f0a1-7c2e-4a51-9d3f-2b8c4e6a1f00"
+BATCH_ID = "0199e2b4-1f00-7c3a-8d21-5e6f7a8b9c0d"
 
 
 def build() -> dict[str, str]:
     output = DETECTOR.detect(CV_DIR / "section.jpg")
     detections = map_detections(output.detections, DETECTOR.names, MapperConfig(0.25))
-    return build_fields(detections, "yolo-v1-1d729fb0", "WEBCAM", CAPTURED_AT)
+    return build_fields(
+        detections,
+        "yolo-v1-1d729fb0",
+        "WEBCAM",
+        CAPTURED_AT,
+        capture_id=CAPTURE_ID,
+        batch_id=BATCH_ID,
+    )
 
 
 def test_the_mapper_and_payload_builder_produce_the_shared_fixture() -> None:
@@ -59,7 +68,14 @@ def test_the_mapper_and_payload_builder_produce_the_shared_fixture() -> None:
 
 def test_the_fixture_has_the_contract_shape() -> None:
     fields = json.loads(FIXTURE.read_text(encoding="utf-8"))["fields"]
-    assert set(fields) == {"detections", "modelVersion", "source", "capturedAt"}
+    assert set(fields) == {
+        "detections",
+        "modelVersion",
+        "source",
+        "capturedAt",
+        "captureId",
+        "batchId",
+    }
     detections = json.loads(fields["detections"])
     assert [d["classKey"] for d in detections] == ["hole", "cut", "crease", "scratch"]
     for d in detections:
@@ -77,6 +93,7 @@ def test_the_fixture_has_the_contract_shape() -> None:
     [
         ({"source": "CAMERA"}, "source must be one of"),
         ({"captured_at": datetime(2026, 10, 19, 9, 30)}, "needs a time zone"),
+        ({"capture_id": "capture-7"}, "capture_id must be a UUID"),
     ],
 )
 def test_payload_builder_refuses_what_the_app_would(

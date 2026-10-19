@@ -21,7 +21,11 @@ def test_the_example_config_loads_and_matches_todays_settings() -> None:
     c = load_config(CV_DIR / "config.example.toml", env={})
     assert c.model.path == (CV_DIR / "models" / "yolo-v1.pt").resolve()
     assert c.model.device == "cpu"
-    assert c.preview.active_keys == {"cut", "hole", "abrasion", "dirt"}
+    assert c.preview.active_keys == {"crease", "cut", "hole", "scratch"}
+    assert c.preview.inactive_keys == {"abrasion", "dirt"}
+    assert c.server.base_url == "http://localhost:3000"
+    assert c.station.spool_dir == (CV_DIR / "out" / "spool").resolve()
+    assert (c.station.scan_source, c.camera.index) == ("WEBCAM", 0)
     assert (c.preview.reject_at_or_above, c.preview.rework_at_or_above) == (0.9, 0.6)
 
 
@@ -79,3 +83,44 @@ def test_broken_toml_is_reported(tmp_path: Path) -> None:
     bad.write_text("[model\npath = 1", encoding="utf-8")
     with pytest.raises(ConfigError, match="isn't valid TOML"):
         load_config(bad, env={})
+
+
+def test_station_defaults_from_a_minimal_file() -> None:
+    c = parse_config(MINIMAL, base_dir=BASE)
+    assert c.server.base_url == "http://localhost:3000"
+    assert (c.server.timeout_seconds, c.server.attempts) == (30.0, 4)
+    assert (c.server.backoff_seconds, c.server.max_backoff_seconds) == (1.0, 15.0)
+    assert c.station.scan_source == "WEBCAM"
+    assert c.station.spool_dir == (BASE / "out/spool").resolve()
+    assert c.station.failed_dir == (BASE / "out/failed").resolve()
+    assert (c.station.jpeg_quality, c.station.interval_seconds) == (90, 3.0)
+    assert (c.camera.index, c.camera.width, c.camera.height) == (0, 1920, 1080)
+
+
+def test_cv_base_url_overrides_the_file_and_trailing_slashes_go() -> None:
+    data = {**MINIMAL, "server": {"base_url": "http://localhost:3000"}}
+    c = parse_config(data, base_dir=BASE, env={"CV_BASE_URL": "http://192.168.1.20:3001/"})
+    assert c.server.base_url == "http://192.168.1.20:3001"
+
+
+@pytest.mark.parametrize(
+    ("section", "values", "message"),
+    [
+        ("server", {"base_url": "localhost:3000"}, "must start with http:// or https://"),
+        ("server", {"attempts": 0}, r"\[server\] attempts must be from 1 to 10"),
+        (
+            "server",
+            {"backoff_seconds": 5, "max_backoff_seconds": 2},
+            "max_backoff_seconds can't be below backoff_seconds",
+        ),
+        ("station", {"scan_source": "SIMULATOR"}, "scan_source must be WEBCAM or DEDICATED_CAMERA"),
+        ("station", {"jpeg_quality": 30}, r"\[station\] jpeg_quality must be from 50 to 100"),
+        ("station", {"spool_dir": ""}, r"\[station\] spool_dir must be a folder path"),
+        ("camera", {"index": -1}, r"\[camera\] index must be from 0 to 99"),
+    ],
+)
+def test_station_settings_name_the_setting_and_the_fix(
+    section: str, values: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ConfigError, match=message):
+        parse_config({**MINIMAL, section: values}, base_dir=BASE)

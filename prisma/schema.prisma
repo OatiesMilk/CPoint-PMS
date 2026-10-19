@@ -358,6 +358,7 @@ model Scan {
   source             ScanSource
   modelVersion       String?
   deviceTokenId      String?    @db.Uuid
+  captureId          String?    @unique @db.Uuid // set by the camera; a retry returns the first scan (D-051)
   aiVerdict          Verdict
   maxConfidence      Float?
   thresholdsSnapshot Json // { rejectAtOrAbove, reworkAtOrAbove } used for this decision

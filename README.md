@@ -516,9 +516,13 @@ Scans go to the batch chosen on the **Camera** page, or to the batch that has be
 the longest. They show up live on the Floor Manager and Quality Inspector homes.
 
 The real model runs in the **camera station**, a Python process in [`cv/`](cv/README.md) on the
-camera machine (outside Docker, D-048). Today it runs the YOLO model on photos and previews the
-verdicts (`python -m cpoint_cv predict <folder>`); sending scans comes in Phase 15. The model file
-lives in `cv/models/` and is never committed (D-049); see [`cv/MODEL_CARD.md`](cv/MODEL_CARD.md).
+camera machine (outside Docker, D-048). With a device token in `cv/.env`, `python -m cpoint_cv
+run webcam` captures one section per Space press, runs the YOLO model and sends the scan;
+`run folder <dir>` replays photos for a demo without a camera, and `doctor` checks the setup.
+Scans that can't be sent wait on disk and go out later, in order (D-050, D-051). For yolo-v1, add
+the `crease` and `scratch` defect types in Settings first (D-052, [`cv/README.md`](cv/README.md)).
+The model file lives in `cv/models/` and is never committed (D-049); see
+[`cv/MODEL_CARD.md`](cv/MODEL_CARD.md).
 
 ## Scripts
 

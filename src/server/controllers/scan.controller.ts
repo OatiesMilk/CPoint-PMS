@@ -106,13 +106,15 @@ export const scanController = {
     const fields = ingestFieldsSchema.parse({
       detections: text(form.get("detections")),
       batchId: text(form.get("batchId")),
+      captureId: text(form.get("captureId")),
       modelVersion: text(form.get("modelVersion")),
       source: text(form.get("source")),
       capturedAt: text(form.get("capturedAt")),
     });
 
     const result = await ingestScan({ image: { bytes, type }, ...fields }, device);
-    return json({ data: result }, 201);
+    // A repeated captureId returns the first scan unchanged (D-051).
+    return json({ data: result }, result.duplicate ? 200 : 201);
   }),
 
   /** GET /api/v1/batches/current: where the next scan will go. Device token or a signed-in viewer. */

@@ -1,6 +1,7 @@
 # Camera station settings. Copy to cv/config.toml (git-ignored) and edit there.
 # Environment overrides: CPOINT_CV_MODEL_PATH, CPOINT_CV_MODEL_DEVICE, CPOINT_CV_MODEL_IMGSZ,
-# CPOINT_CV_CONFIDENCE_FLOOR. CPOINT_CV_CONFIG points at another config file.
+# CPOINT_CV_CONFIDENCE_FLOOR, CV_BASE_URL. CPOINT_CV_CONFIG points at another config file.
+# The device token is never in this file: set CV_DEVICE_TOKEN in cv/.env or the environment.
 
 [model]
 # Relative to this file's folder. Model files are never committed (D-049).
@@ -30,6 +31,44 @@ max_detections = 50
 # preview matches the app. The station never sends or applies a verdict.
 reject_at_or_above = 0.90
 rework_at_or_above = 0.60
-# Defect types as they are in Settings today (bootstrap defaults).
-active_keys = ["cut", "hole", "abrasion", "dirt"]
-inactive_keys = []
+# Defect types as they are in Settings once the yolo-v1 classes are set up (cv/README.md,
+# "Defect types for yolo-v1", D-052): the model's four classes active, the two it never sends off.
+active_keys = ["crease", "cut", "hole", "scratch"]
+inactive_keys = ["abrasion", "dirt"]
+
+[server]
+# The app's address. CV_BASE_URL in cv/.env or the environment wins over this.
+base_url = "http://localhost:3000"
+# Seconds to wait for each answer.
+timeout_seconds = 30
+# Tries per scan when the network or the app fails (5xx), waiting 1 s, 2 s, 4 s, ... between
+# them (up to max_backoff_seconds). Retrying is safe: each scan carries its captureId (D-051).
+# After the last try the scan stays in the spool and is sent later, in order.
+attempts = 4
+backoff_seconds = 1
+max_backoff_seconds = 15
+
+[station]
+# The source the app records: "WEBCAM" or "DEDICATED_CAMERA". Folder replay sends this too.
+scan_source = "WEBCAM"
+# JPEG quality for camera frames (50 to 100). Lowered automatically if a frame passes 10 MB.
+jpeg_quality = 90
+# Seconds between images in folder replay (run folder <dir> --interval overrides it).
+interval_seconds = 3
+# How often to ask again while no batch is at Preparation.
+no_batch_wait_seconds = 5
+# Folders, relative to this file's folder. Captures wait in spool_dir until the app has them;
+# failed_dir keeps captures the app refused, each with reason.txt; log_dir has one JSON line per
+# event, per day.
+spool_dir = "out/spool"
+failed_dir = "out/failed"
+log_dir = "out/logs"
+
+[camera]
+# OpenCV camera number: 0 is the first (often the laptop's built-in camera).
+index = 0
+# Requested resolution. The camera may pick the nearest it supports; doctor shows what it gives.
+width = 1920
+height = 1080
+# Frames read and dropped when the camera opens, so exposure settles before the first capture.
+warmup_frames = 5

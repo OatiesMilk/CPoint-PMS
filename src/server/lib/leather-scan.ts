@@ -9,8 +9,11 @@ export type Detection = { classKey: string; confidence: number; box: Box };
 export type Random = () => number;
 
 export const KNOWN_CLASSES = ["cut", "hole", "abrasion", "dirt"] as const;
-/** A class the default defect types don't know: its scans go to the review queue. */
-export const UNKNOWN_CLASS = "scratch";
+/**
+ * A class no defect type covers, so its scans go to the review queue. No camera model emits it:
+ * `scratch` was used before it became a real class of yolo-v1 (D-052).
+ */
+export const UNKNOWN_CLASS = "sim-unknown";
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
 

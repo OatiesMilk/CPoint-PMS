@@ -64,6 +64,10 @@ export const ingestFieldsSchema = z.object({
         ),
     ),
   batchId: z.uuid("batchId must be a batch id from this system, or left out.").optional(),
+  /** The camera's own id for this capture, so a retry never creates a second scan (D-051). */
+  captureId: z
+    .uuid("captureId must be a UUID the camera made for this capture, or left out.")
+    .optional(),
   modelVersion: z
     .string({ error: "modelVersion must be text, e.g. yolo-v8-2026-10." })
     .trim()
