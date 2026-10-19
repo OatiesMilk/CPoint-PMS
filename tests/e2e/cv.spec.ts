@@ -162,7 +162,9 @@ test("only a Quality Inspector decides a flagged scan; the Floor Manager only se
   const api = await managerApi(browser);
   const batch = await createBatch(api);
   const { token } = await createDeviceToken();
-  const res = await postScan(request, token, batch.id, [{ classKey: "crease", confidence: 0.8 }]);
+  const res = await postScan(request, token, batch.id, [
+    { classKey: "sim-unknown", confidence: 0.8 },
+  ]);
   const { scanId } = (await res.json()).data;
 
   // The Floor Manager: no controls on the scan or in the queue, and the API refuses.

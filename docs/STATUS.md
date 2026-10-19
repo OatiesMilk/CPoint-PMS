@@ -4,8 +4,8 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-19
-**Branch:** `main` @ `f40e6fe` (Phase 14 merged as PR #8). Phase 15 is on the `main` checkout,
-uncommitted (Dylan decides when to branch and commit; the team opens and merges the PR, D-032).
+**Branch:** `main` @ `94844bc` (Phase 15 merged as PR #9). The Codex run 1 fixes are on the `main`
+checkout, uncommitted (Dylan decides when to branch and commit; the team opens and merges the PR, D-032).
 **Current phase:** Phase 15, the camera station: capture, send, recover (done, waiting for Codex).
 Next: Phase 16, the Camera page, evaluation and the demo.
 **Overall:** 16 / 17 phases built (Phase 16 of `camera-yolo-integration.md` remains)
@@ -105,7 +105,13 @@ Next: Phase 16, the Camera page, evaluation and the demo.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 508 unit tests pass (Vitest), plus 133 station tests (pytest, no torch, OpenCV or network). 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
+  - 508 unit tests pass (Vitest), plus 134 station tests (pytest, no torch, OpenCV or network).
+  - Phase 15 (Codex, 2026-10-19, run 1): 18 of 19 scenarios passed, the model end to end on the
+    website. The two failures (an e2e test still using `crease` as unknown, and `attempts` missing
+    on refused log lines) and a duplicate `crease` row in Defects by type are fixed. Run 2: 5 of 6;
+    the fixes all passed (e2e cv.spec 8/8, no duplicate-key warning, one row per type). The one
+    failure was a wrong expectation in the handoff: the QI home card counts today only, and no
+    `scratch` scan was taken today. No app fault remains. 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
     role and on the new procurement screens;
   - Phase 14 (Codex, 2026-10-19, runs 1–2): 9 of 10 scenarios passed, including the camera e2e
     spec 8/8 and the contract test. The one failure (S6) was a wrong step in the handoff, now fixed;
@@ -124,15 +130,14 @@ Next: Phase 16, the Camera page, evaluation and the demo.
 
 ## Next step (exact)
 
-1. Dylan: do the defect-type steps in Settings on the dev database (`cv/README.md`, "Defect types
-   for yolo-v1") and copy the new `[preview]` lists into his own `cv/config.toml`.
-2. Codex: `qa/handoffs/2026-10-19-phase-15-camera-station.md` (it includes the Phase 14 S5/S6
-   re-run). Fix its failures first next session.
-3. Dylan: create a branch, commit and push Phase 15 and open the PR (D-032). The migration
-   `scan_capture_id` ships with it. Delete the untracked `phase-15-plan.md` in the root when done.
-4. Dylan: collect a larger held-out photo set (with the expected verdict per photo) for Phase 16's
-   evaluation, and confirm whether the five sample photos were left out of training.
-5. Next session: Phase 16 of `camera-yolo-integration.md` (the Camera page, evaluation, the demo).
+1. Dylan: copy the new `[preview]` lists from `cv/config.example.toml` into his own
+   `cv/config.toml`. The Settings steps are done on the dev database (Codex run 1 found them set);
+   repeat them on any other database (`cv/README.md`, "Defect types for yolo-v1").
+2. Dylan: branch, commit and push the QA fixes with both reports and the run 2 handoff, and open
+   the PR (D-032). Phase 15 itself is merged (PR #9). Delete the untracked `phase-15-plan.md`.
+3. Phase 16's evaluation runs on the five sample photos and is labelled a small check (Dylan,
+   2026-10-19: the goal is to show the integration, not to measure the model).
+4. Next session: Phase 16 of `camera-yolo-integration.md` (the Camera page, evaluation, the demo).
 
 Later:
 
