@@ -85,6 +85,8 @@ const eslintConfig = defineConfig([
     "test-results/**",
     // Codex's throwaway QA scripts, screenshots and logs (qa/README.md): not project code.
     "qa/reports/artifacts/**",
+    // The camera station is Python (D-048); its venv holds third-party JavaScript.
+    "cv/**",
   ]),
 ]);
 

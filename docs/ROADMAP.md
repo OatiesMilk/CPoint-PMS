@@ -213,3 +213,26 @@ Brief: `material-requests.md` (project root), Phase 13.
       fixed), run 2 (13 of 13 manual), runs 3–5 (e2e and axe; the last failures were test and
       test-server issues, fixed)
 - [x] Docker demo-week check passed (2026-10-14, throwaway stack)
+
+## Phase 14 — Camera YOLO model: intake and the inference core
+
+Brief: `camera-yolo-integration.md` (project root), Phase 14. No app behaviour changes.
+
+- [x] Model card (`cv/MODEL_CARD.md`): file, SHA-256, versions, task, classes, `imgsz`, metrics,
+      intended use, limits and the AGPL-3.0 note; the file matched the brief
+- [x] Layout (D-048, D-049): `cv/` with the `cpoint_cv` package, pinned `requirements.txt` and
+      `requirements-dev.txt`, `config.example.toml`, `README.md`, `tests/` and a git-ignored
+      `models/`; `*.pt`, `*.onnx` and `cv/models/*` ignored by git, `cv/` excluded from Docker
+- [x] Detector port: `YoloDetector` (loads and warms up once; `imgsz` and device from config) and
+      `FakeDetector`
+- [x] Mapper: class keys from the model's own names plus an optional rename map, centre boxes to
+      clipped top-left boxes, a confidence floor (0.25), sorted, at most 50, 4 decimals
+- [x] `python -m cpoint_cv predict <image-or-folder>`: detections, `modelVersion`, time, a
+      labelled preview of the app's verdict, a folder summary, overlays and a Markdown summary
+- [x] Contract test on both sides: `tests/fixtures/cv-payload.json` written by pytest from the
+      mapper, parsed by Vitest with `ingestFieldsSchema`
+- [x] Station checks (ruff, mypy strict, pytest) pass without torch, also in a new CI job
+- [x] Checks by Codex (runs 1–2): 9 of 10, camera e2e 8/8; the S6 failure was a handoff step, fixed
+- [x] Baseline on five sample photos (`cv/MODEL_CARD.md`): 4 of 5 go to review today only
+      because `crease`/`scratch` are unknown; a clear cut scored 0.51. A smoke test, not an
+      evaluation; Phase 16's `evaluate` needs a larger held-out set

@@ -1,0 +1,35 @@
+# Camera station settings. Copy to cv/config.toml (git-ignored) and edit there.
+# Environment overrides: CPOINT_CV_MODEL_PATH, CPOINT_CV_MODEL_DEVICE, CPOINT_CV_MODEL_IMGSZ,
+# CPOINT_CV_CONFIDENCE_FLOOR. CPOINT_CV_CONFIG points at another config file.
+
+[model]
+# Relative to this file's folder. Model files are never committed (D-049).
+path = "models/yolo-v1.pt"
+# modelVersion sent with each scan = name + the first 8 hex digits of the file's SHA-256.
+name = "yolo-v1"
+# The size the model was trained at.
+imgsz = 1536
+# "cpu", or "cuda:0" for the first NVIDIA GPU (needs the CUDA build of torch).
+device = "cpu"
+# SHA-256 of the file (cv/MODEL_CARD.md). predict warns when the file doesn't match.
+sha256 = "1d729fb0358d3140d5491d4124e2173ec228e42875e06a31a69f4530d83f157b"
+
+[mapper]
+# Detections below this confidence are dropped as noise before anything is sent.
+# This is not the app's PASS threshold: the app decides verdicts (D-011).
+confidence_floor = 0.25
+# At most 50, the app's limit per scan. The strongest are kept.
+max_detections = 50
+
+[mapper.rename]
+# Optional: send a model class under another key, e.g.
+# crease = "wrinkle"
+
+[preview]
+# Only for the verdict preview that predict prints. Copy these from Admin > Settings so the
+# preview matches the app. The station never sends or applies a verdict.
+reject_at_or_above = 0.90
+rework_at_or_above = 0.60
+# Defect types as they are in Settings today (bootstrap defaults).
+active_keys = ["cut", "hole", "abrasion", "dirt"]
+inactive_keys = []

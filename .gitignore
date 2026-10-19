@@ -40,3 +40,16 @@ Thumbs.db
 /.agents
 /.windsurf
 skills-lock.json
+
+# camera station (cv/): model files, local config, outputs and Python caches (D-049)
+*.pt
+*.onnx
+/cv/models/*
+!/cv/models/.gitkeep
+/cv/config.toml
+/cv/out/
+/cv/.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

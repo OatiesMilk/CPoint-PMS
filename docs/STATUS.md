@@ -3,13 +3,13 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-14
-**Branch:** `main` @ `e88e7de` (Phase 13 merged, PR #6). Two follow-ups (full-width pages and MR request
-numbers, D-046; pagination at 15 rows, D-047) are on the `main` checkout, uncommitted (Dylan decides when to branch and commit;
-the team opens and merges the PR, D-032).
-**Current phase:** Follow-ups to Phase 13 — full-width pages, MR numbers, pagination (done; Codex run 3
-passed: three seven-spec e2e runs 57/57 and the full suite 75/75)
-**Overall:** 14 / 14 phases built
+**Last updated:** 2026-10-19
+**Branch:** `main` @ `63138dc` (the follow-ups D-046 and D-047 merged as PR #7). Phase 14 is on the
+`main` checkout, uncommitted (Dylan decides when to branch and commit; the team opens and merges
+the PR, D-032).
+**Current phase:** Phase 14, camera YOLO model intake and inference core (done; baseline on five
+sample photos in `cv/MODEL_CARD.md`). Next: Phase 15, the camera station.
+**Overall:** 15 / 17 phases built (Phases 15 and 16 of `camera-yolo-integration.md` remain)
 
 ## Phase progress
 
@@ -27,6 +27,9 @@ passed: three seven-spec e2e runs 57/57 and the full suite 75/75)
 - [x] 11. Material requests: naming, remarks, urgency, specific messages
 - [x] 12. Item-level decisions guided by stock
 - [x] 13. Ordering, delivery with proof, and the remaining gaps
+- [x] 14. Camera YOLO model: intake and the inference core
+- [ ] 15. Camera station: capture, send, recover
+- [ ] 16. Camera page, evaluation and the demo
 
 ## What works right now
 
@@ -83,14 +86,22 @@ passed: three seven-spec e2e runs 57/57 and the full suite 75/75)
   - the FM home card (to decide, to order, late), an Inventory "Requested" badge and "My
     requests" on the constructor home;
   - who may request leather rolls is chosen by the FM (Procurement tab) or the Admin (Users).
+- **Camera station (Phase 14, D-048, D-049):** the `cpoint_cv` Python package in `cv/` runs
+  `yolo-v1.pt` (`cv/models/`, git-ignored, SHA-256 in `cv/MODEL_CARD.md`) and prints detections,
+  `modelVersion` (`yolo-v1-1d729fb0`), time and a preview verdict: `python -m cpoint_cv predict
+<folder>`. About 255 ms per image on Dylan's RTX 3060 and 780 ms on the CPU at `imgsz` 1536. It
+  posts nothing yet; the app is unchanged.
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
 - **Pagination** (D-047): every list that can grow pages at 15 rows with one pager; Settings
   and the leather-roll requesters have a Find box.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 500 unit tests pass. 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
+  - 502 unit tests pass (Vitest), plus 56 station tests (pytest, no torch needed). 75 e2e tests exist, with axe (WCAG 2.1 A/AA) on every page of every
     role and on the new procurement screens;
+  - Phase 14 (Codex, 2026-10-19, runs 1–2): 9 of 10 scenarios passed, including the camera e2e
+    spec 8/8 and the contract test. The one failure (S6) was a wrong step in the handoff, now fixed;
+    S6 itself is not re-run. The missing-model message now names the config file and its folder;
   - Phase 13 in a browser (Codex, 2026-10-14): run 1 passed 47 of 54 manual checks, with one
     app fault (a chosen proof file could disappear) and six blocked. Run 2, after the fix, passed
     13 of 13, covering the fix and the six blocked scenarios. No known app fault remains;
@@ -105,13 +116,16 @@ passed: three seven-spec e2e runs 57/57 and the full suite 75/75)
 
 ## Next step (exact)
 
-1. Dylan: create a branch, commit and push the follow-ups (D-046, D-047), and open the PR (D-032).
-   Delete the untracked `phase-13-plan.md` in the root and the `qa/_to_delete/` folder.
+1. Dylan: confirm whether the five photos in `Sample Photos (CAP2)` were left out of training, and
+   collect a larger held-out set (with the expected verdict per photo) for Phase 16's evaluation.
+2. Dylan: create a branch, commit and push Phase 14 and open the PR (D-032). Delete the untracked
+   `phase-14-plan.md` in the root when done with it.
+3. Codex: optional re-run of S5 and S6 only (`qa/handoffs/2026-10-19-phase-14-cv-core.md`).
+4. Next session: Phase 15 of `camera-yolo-integration.md` (the camera station).
 
 Later:
 
 - Apply CPoint's answers to the open questions below.
-- Plug in the real YOLO service. Its classes are data (Settings → Defect types).
 - Component tracking, once CPoint gives the component counts per shoe type.
 - Optional for procurement: CSV export and monthly counts by status and category (never per
   person).
@@ -153,6 +167,15 @@ Later:
   as ordered and record deliveries.
 - ASSUMPTION (D-026): the demo week's stage times match the survey.
 - Unknown: components per shoe type. Blocks component tracking only.
+- Open (Phase 15): the model emits `crease`, `cut`, `hole`, `scratch`; the app knows `cut`, `hole`,
+  `abrasion`, `dirt`. Until `crease` and `scratch` are added under Settings → Defect types, any scan
+  with one goes to review. Decide `abrasion` and `dirt` (keep or deactivate).
+- Open (Phase 16): confidence is not severity. D-011 reads the model's confidence as how bad a
+  defect is; for yolo-v1 it means how sure it is a defect exists. In the five-photo baseline a
+  clear cut scored 0.51 (it would pass alone). Choose the approach in Phase 16, on a larger set.
+- Observed (Phase 14): the model sometimes reports one scratch twice with nearly the same box. It
+  doesn't change verdicts but inflates per-class counts; consider an overlap filter in Phase 15.
+- Decided (D-049, Dylan 2026-10-19): model files stay out of git (`cv/models/`), not Git LFS.
 - Pending: the new YOLO training photos will change the defect classes. They arrive as
   "unknown", go to the QI's review queue, and are added under Settings → Defect types.
 

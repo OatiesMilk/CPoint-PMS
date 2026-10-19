@@ -14,6 +14,40 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-19 — Phase 14 follow-up: Codex runs 1 and 2
+
+**Who:** Dylan (local `main` checkout, not committed)
+**Summary:** Codex passed 9 of 10 scenarios (`qa/reports/2026-10-19-phase-14-cv-core-run2.md`), including the camera e2e spec 8/8 once Docker was running. The one failure, S6, was a wrong step in the handoff: the copied config sat in `cv/out/`, so its relative model path pointed there.
+**Changed:**
+
+- Handoff S6: the copied config sets `path = "../models/yolo-v1.pt"`; S5 expects the new message.
+- `cv/cpoint_cv/cli.py`: a missing model file now names the config file and says relative paths are read from its folder.
+
+**Gates:** station: ruff ✅ · ruff format ✅ · mypy ✅ · pytest 56 ✅ · S6 corrected steps checked by hand (warning, exit 0) · e2e by Codex (cv.spec 8/8)
+**Decisions:** none
+**Follow-ups:** optional Codex re-run of S5 and S6.
+
+## 2026-10-19 — Phase 14: camera YOLO model intake and the inference core
+
+**Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
+**Summary:** Added the camera station's inference core, the `cpoint_cv` Python package in `cv/`. It loads `yolo-v1.pt`, runs it on images and prints what the app would receive, with a labelled preview of the verdict. It posts nothing, and no app code changed. A baseline on Dylan's five sample photos is in `cv/MODEL_CARD.md`: 4 of 5 would go to review today only because `crease` and `scratch` are unknown, and a clear cut scored 0.51.
+**Changed:**
+
+- `cv/`: detector port (`YoloDetector`, `FakeDetector`), mapper, payload builder, the D-011 preview port, config (TOML plus env), model info, summary and overlays; `predict` CLI; pinned requirements; `pyproject.toml` (ruff, mypy strict, pytest); README and `MODEL_CARD.md`.
+- Model moved to `cv/models/yolo-v1.pt` (Dylan's OK); its SHA-256 is in the model card and `config.example.toml`. Dylan's `cv/config.toml` uses `cuda:0`.
+- Contract on both sides: `tests/fixtures/cv-payload.json` (written by `cv/tests/test_contract_fixture.py`) and `tests/unit/cv-contract.test.ts`.
+- `.gitignore`, `.dockerignore`, `eslint.config.mjs` (ignore `cv/**`, whose venv holds third-party JavaScript), and a `station` CI job.
+- Docs: ROADMAP Phase 14, STATUS, D-048, D-049, the README camera section.
+
+**Gates:** lint ✅ · typecheck ✅ · unit 502 ✅ · build ✅ · prettier ✅ · station: ruff ✅ · ruff format ✅ · mypy ✅ · pytest 56 ✅ (also in a fresh venv without torch) · e2e not run (Codex) · docker not run (no Docker file changed; `.dockerignore` only excludes more)
+**Decisions:** D-048, D-049
+**Follow-ups:**
+
+- A larger held-out photo set with expected verdicts, for Phase 16's evaluation (five photos is a smoke test).
+- Consider an overlap filter for duplicate boxes (Phase 15).
+- Codex: `qa/handoffs/2026-10-19-phase-14-cv-core.md`.
+- Phase 15: the station (capture, send, retries, spool), the class-key data step, the simulator's unknown key.
+
 ## 2026-10-14 — Follow-up: two e2e fixes after Codex's run 2
 
 **Who:** Dylan (local `main` checkout, not committed; no branch, by his instruction)
