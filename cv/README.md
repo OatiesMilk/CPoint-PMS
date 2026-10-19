@@ -256,6 +256,32 @@ the model working with the app's rules, not how accurate it is. It changes nothi
 The current report is `reports/2026-10-19-yolo-v1.md` (the five sample photos; their labels were
 drafted from the photos in Phase 16 and still need a person's check).
 
+## Capture from the website (ONNX, Phase 18)
+
+The app's **Capture** page runs the same model inside the app, as ONNX (D-064). Export it once,
+and again after every new model:
+
+```bash
+.venv/Scripts/python -m pip install -r requirements-export.txt
+.venv/Scripts/python -m cpoint_cv export-onnx
+```
+
+It writes `models/yolo-v1.onnx` (dynamic input size, FP32) and `models/yolo-v1.json`: the class
+names, `imgsz`, stride, the ONNX file's SHA-256, the `[mapper]` floor, overlap and renames from
+your config, and `modelVersion` of the `.pt` weights, so station and website scans read as one
+model. Both files are git-ignored. Restart the app to load them (Docker mounts `cv/models/`).
+
+The app pads a photo only to the next multiple of 32 and resizes it with OpenCV's bilinear rule,
+as Ultralytics does for the station. Check they agree on your photos:
+
+```bash
+.venv/Scripts/python -m cpoint_cv predict <folder> --json > ../storage/py.jsonl
+cd .. && npm run cv:parity -- <folder> --compare storage/py.jsonl
+```
+
+Each photo should say `agrees` (same classes in order, confidence ±0.02, box edges ±0.01). The
+five sample photos and two 16:9 crops agreed on 2026-10-19.
+
 ## Swap in a new model
 
 No app code changes. For example, for `yolo-v2.pt`:
@@ -274,6 +300,9 @@ reports/<date>-yolo-v2.md`) and compare the two reports.
 6. To switch, make `config-v2.toml` your `config.toml` and restart the station. Every scan records
    its `modelVersion`, so the Camera page and each scan show which model judged it. Switching back
    is the same steps with the old file.
+7. For the website's Capture page, run `export-onnx --config config-v2.toml`, set
+   `CV_MODEL_PATH` to `cv/models/yolo-v2.onnx` (Docker: `/app/models/yolo-v2.onnx`) and restart
+   the app.
 
 ## Demo script
 

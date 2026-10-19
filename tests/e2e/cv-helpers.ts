@@ -65,6 +65,10 @@ export function managerApi(browser: Browser): Promise<APIRequestContext> {
   return apiAs(browser, ACCOUNTS.manager);
 }
 
+export function adminApi(browser: Browser): Promise<APIRequestContext> {
+  return apiAs(browser, ACCOUNTS.admin);
+}
+
 /** Flagged scans are the Quality Inspector's to decide (D-028). */
 export function inspectorApi(browser: Browser): Promise<APIRequestContext> {
   return apiAs(browser, ACCOUNTS.inspector);

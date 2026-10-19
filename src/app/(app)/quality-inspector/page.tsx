@@ -7,7 +7,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowRight, CircleHelp, ListChecks, UserCheck } from "lucide-react";
+import { Aperture, ArrowRight, CircleHelp, ListChecks, UserCheck } from "lucide-react";
 import { AgreementCard, DefectsTodayCard } from "@/components/features/reports/home-cards";
 import { PageHeader } from "@/components/features/page-header";
 import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
@@ -58,14 +58,23 @@ export default async function QualityInspectorHome() {
         title={`Good day, ${user.name.split(" ")[0]}`}
         description="Today’s inspection work."
         actions={
-          summary.pending > 0 && (
-            <Button asChild>
-              <Link href="/review">
-                Review {summary.pending} scan{summary.pending === 1 ? "" : "s"}
-                <ArrowRight aria-hidden />
+          <>
+            {/* Capturing is the steady work; reviews waiting come first when there are any. */}
+            <Button asChild variant={summary.pending > 0 ? "secondary" : "primary"}>
+              <Link href="/camera/capture">
+                <Aperture aria-hidden />
+                Capture sections
               </Link>
             </Button>
-          )
+            {summary.pending > 0 && (
+              <Button asChild>
+                <Link href="/review">
+                  Review {summary.pending} scan{summary.pending === 1 ? "" : "s"}
+                  <ArrowRight aria-hidden />
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">

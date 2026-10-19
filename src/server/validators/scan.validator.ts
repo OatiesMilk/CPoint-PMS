@@ -131,3 +131,19 @@ export const scanListQuerySchema = z.object({
 export type ScanListQuery = z.infer<typeof scanListQuerySchema>;
 
 export const isScanId = (value: string) => z.uuid().safeParse(value).success;
+
+/**
+ * The non-file fields of POST /api/v1/scans/capture: a capture from the website's Capture page
+ * (Phase 18). The server runs the model, so there are no `detections` or `modelVersion` here.
+ * The page always makes a captureId, so a retry never makes a second scan (D-051).
+ */
+export const captureFieldsSchema = ingestFieldsSchema
+  .pick({ batchId: true, capturedAt: true })
+  .extend({
+    captureId: z.uuid("captureId must be the UUID this page made for the capture."),
+    source: z
+      .enum(["WEBCAM", "PHONE"], { error: "source must be WEBCAM or PHONE." })
+      .default("WEBCAM"),
+  });
+
+export type CaptureFields = z.infer<typeof captureFieldsSchema>;

@@ -41,13 +41,23 @@ export type IngestResult = {
 };
 
 /**
- * The scan a device already sent with this capture id, as the first response described it.
- * Another device's id is refused, so one camera can't read or claim another's scans.
+ * Where a scan came from: a camera device's token (the station, the simulator), or the website's
+ * Capture page, whose signed-in person is recorded in the audit log only, never on the scan
+ * (D-008, D-066).
  */
-async function earlierCapture(captureId: string, device: { id: string }) {
+export type ScanOrigin = { kind?: "device"; id: string } | { kind: "website"; userId: string };
+
+const tokenOf = (origin: ScanOrigin) => (origin.kind === "website" ? null : origin.id);
+
+/**
+ * The scan this origin already sent with this capture id, as the first response described it.
+ * Another device's id (or a device's id sent from the website) is refused, so one camera can't
+ * read or claim another's scans.
+ */
+export async function earlierCapture(captureId: string, origin: ScanOrigin) {
   const scan = await findScanByCaptureId(captureId);
   if (!scan) return null;
-  if (scan.deviceTokenId !== device.id) {
+  if (scan.deviceTokenId !== tokenOf(origin)) {
     throw Errors.conflict(
       "Another camera already sent a scan with this captureId. Make a new captureId for each capture.",
     );
@@ -72,17 +82,17 @@ function storageKey(now: Date, ext: string): string {
 /**
  * One camera capture → one scan (D-005, D-011, D-020). The decision is made here, with the
  * thresholds in force right now (snapshotted on the scan). REWORK opens a repair ticket and REJECT
- * creates a salvage item in the same transaction (D-007). A captureId the same device already
+ * creates a salvage item in the same transaction (D-007). A captureId the same origin already
  * sent returns the first scan instead, so a camera's retry never makes a second one (D-051).
  */
 export async function ingestScan(
   input: IngestInput,
-  device: { id: string },
+  origin: ScanOrigin,
   now: Date = new Date(),
   storage: StorageService = getStorage(),
 ): Promise<IngestResult> {
   if (input.captureId) {
-    const earlier = await earlierCapture(input.captureId, device);
+    const earlier = await earlierCapture(input.captureId, origin);
     if (earlier) return earlier;
   }
 
@@ -120,7 +130,7 @@ export async function ingestScan(
           imageMime: input.image.type.mime,
           source: input.source,
           modelVersion: input.modelVersion ?? null,
-          deviceTokenId: device.id,
+          deviceTokenId: tokenOf(origin),
           captureId: input.captureId ?? null,
           aiVerdict: decision.verdict,
           maxConfidence: decision.maxConfidence,
@@ -150,7 +160,10 @@ export async function ingestScan(
       if (decision.verdict === "REJECT")
         await insertSalvageItem({ scanId: scan.id, originBatchId: batch.id, createdAt: now }, tx);
       await recordAudit(tx, {
-        actor: { type: "DEVICE", tokenId: device.id },
+        actor:
+          origin.kind === "website"
+            ? { type: "USER", userId: origin.userId }
+            : { type: "DEVICE", tokenId: origin.id },
         action: "scan.create",
         entity: "Scan",
         entityId: scan.id,
@@ -162,6 +175,7 @@ export async function ingestScan(
           detections: input.detections.length,
           unknownKeys: decision.unknownKeys,
           batchSelection: batch.selection,
+          ...(origin.kind === "website" ? { origin: "website" } : {}),
         },
       });
       return {
@@ -181,7 +195,7 @@ export async function ingestScan(
       .catch((err) => logger.warn({ err, key }, "Could not remove orphaned scan image"));
     // Two copies of one capture arrived together: the other one won, so answer as it did.
     if (input.captureId && (error as { code?: string })?.code === "P2002") {
-      const earlier = await earlierCapture(input.captureId, device);
+      const earlier = await earlierCapture(input.captureId, origin);
       if (earlier) return earlier;
     }
     throw error;

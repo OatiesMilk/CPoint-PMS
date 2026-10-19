@@ -6,6 +6,7 @@ export type NavIcon =
   | "overview"
   | "batches"
   | "camera"
+  | "capture"
   | "scans"
   | "review"
   | "rework"
@@ -53,6 +54,12 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
     title: "Quality",
     items: [
       { label: "Camera", href: "/camera", icon: "camera", permission: "camera:view" },
+      {
+        label: "Capture",
+        href: "/camera/capture",
+        icon: "capture",
+        permission: "camera:capture",
+      },
       { label: "Scans", href: "/scans", icon: "scans", permission: "scan:read" },
       {
         label: "Review queue",

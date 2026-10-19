@@ -4,11 +4,11 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-19
-**Branch:** `main` @ `dac8599` (Phase 16 merged as PR #11). Phase 17 is on the `main` checkout,
+**Branch:** `main` @ `95d80a8` (Phase 17 merged as PR #12). Phase 18 is on the `main` checkout,
 uncommitted (Dylan decides when to branch and commit; the team opens and merges the PR, D-032).
-**Current phase:** Phase 17, the camera station window (built; waiting for Codex's hands-on run).
-Brief: `camera-station-window.md`; plan: `phase-17-plan.md`.
-**Overall:** 18 / 18 phases built
+**Current phase:** Phase 18, capture from the website (built; waiting for Codex's run).
+Brief: `camera-capture-page.md`; plan: `phase-18-plan.md`.
+**Overall:** 19 / 19 phases built
 
 ## Phase progress
 
@@ -30,6 +30,7 @@ Brief: `camera-station-window.md`; plan: `phase-17-plan.md`.
 - [x] 15. Camera station: capture, send, recover
 - [x] 16. Camera page, a small model check, clean data and the demo
 - [x] 17. The camera station window (Codex run pending)
+- [x] 18. Capture from the website (Codex run pending)
 
 ## What works right now
 
@@ -100,6 +101,25 @@ Brief: `camera-station-window.md`; plan: `phase-17-plan.md`.
   dry run on the dev database found 135 test accounts, 131 tokens, 248 batches, 541 scans, 167
   requests, 172 items and 3,680 audit rows; Dylan had it run with `--yes` on 2026-10-19 (no
   backup, his call): four demo accounts, a fresh demo week of 14 batches and 293 scans.
+- **Capture page (Phase 18, D-064 to D-067):** Quality → **Capture** (`/camera/capture`) for the
+  QI and the FM (`camera:capture`). Live camera (a phone's back camera by default, a picker
+  remembered per browser), "Next scan goes to …" refreshed every 20 s, **Capture** or Space sends
+  the frame on screen; the app runs the model itself and **Last scan** shows the verdict, section,
+  defects and the frame with boxes. No live boxes. A failed send retries 3 times with the same
+  `captureId`, then **Send again**; a batch that left Preparation is refused before the model
+  runs (`409 BATCH_MOVED`); every camera problem has its own message and fix.
+  - `POST /api/v1/scans/capture` (session, not a token) → model → the same `ingestScan`. Website
+    scans have no `deviceTokenId` and no person; the audit row names the user (`origin: "website"`).
+  - The model: `python -m cpoint_cv export-onnx` writes `cv/models/yolo-v1.onnx` + `.json`
+    (git-ignored); `onnxruntime-node` runs it on the CPU, about 0.65 s per 1920 × 1080 frame and
+    1.2 s per 1536 square photo (host and Docker). `npm run cv:parity` matched the station on 7 of
+    7 photos (the "rect" letterbox and OpenCV-style resize are needed for that). Missing files:
+    `503 MODEL_UNAVAILABLE` and a message on the page.
+  - Docker: `node:24-bookworm-slim` (ONNX Runtime has no Alpine build), 692 → 854 MB;
+    `cv/models` mounted read-only at `/app/models`; `docker/https.mjs` serves HTTPS on 3443 when
+    `certs/cert.pem` and `key.pem` (mkcert) are mounted. Still two containers.
+  - The Camera page shows "Capture page active" and "Ways to capture"; the QI home has
+    **Capture sections**.
 - **Camera station window (Phase 17, D-059 to D-063):** `python -m cpoint_cv window`, or the
   **CPoint Camera** desktop shortcut (`python -m cpoint_cv shortcut`, to `cv/CPoint Camera.cmd`,
   which names the missing setup step when `cv/.venv` or a package is missing). Tkinter; the window
@@ -144,8 +164,9 @@ Brief: `camera-station-window.md`; plan: `phase-17-plan.md`.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 537 unit tests pass (Vitest), plus 225 station tests (pytest; they also pass without OpenCV,
-    torch or Pillow, as in CI). Phase 17's window is tested by hand (Codex, pending).
+  - 590 unit tests pass (Vitest), plus 231 station tests (pytest; they also pass without OpenCV,
+    torch or Pillow, as in CI). Phase 17's window is tested by hand (Codex, pending). Phase 18's
+    `tests/e2e/capture.spec.ts` (6 tests, Chromium's fake camera) is written, not run (Codex).
   - Phase 16 (Codex, 2026-10-19, run 1): 19 of 21 passed, the app end to end with the real
     station. S14 failed because Dylan's local `cv/config.toml` lacked the "When found" preview
     settings (now added; `predict`/`evaluate` warn when they're missing); one e2e assertion was
@@ -177,21 +198,21 @@ Brief: `camera-station-window.md`; plan: `phase-17-plan.md`.
 
 ## Next step (exact)
 
-1. Dylan: branch, commit and push Phase 17 and open the PR (D-032). `phase-16-plan.md` is old and
-   can be deleted; `phase-17-plan.md` is this phase's plan.
-2. Codex: run `qa/handoffs/2026-10-19-phase-17-camera-window.md` (the window by hand with the
-   laptop webcam and the iPhone through DroidCam). Fix its failures before new work.
-3. Dylan: after the demo, revoke the "Simulator" token (it was pasted in chat) and make a new one.
+1. Dylan: branch, commit and push Phase 18 and open the PR (D-032). `phase-16-plan.md` and
+   `phase-17-plan.md` are old and can be deleted; `phase-18-plan.md` is this phase's plan.
+2. Done (Dylan, 2026-10-19): mkcert installed, `certs/` made for 192.168.254.104 (Wi-Fi), the
+   root trusted on the iPhone; the Capture page works on the iPhone in Safari through
+   `npm run dev:https` (Dylan's own check). Rerun the `mkcert -cert-file` line if the IP changes.
+3. Codex: run `qa/handoffs/2026-10-19-phase-17-camera-window.md` and
+   `qa/handoffs/2026-10-19-phase-18-capture-page.md`. Fix their failures before new work.
+4. Dylan: after the demo, revoke the "Simulator" token (it was pasted in chat) and make a new one.
    Before the panel, `npm run demo:reset -- --yes` gives a clean week again.
-4. `camera-station-window.md` is finished once Codex passes. Next work comes from the client
-   follow-ups below (or, later, controlling the station from the Camera page).
+5. `camera-capture-page.md` is finished once Codex passes.
+6. Next, Phase 19 (Dylan, 2026-10-19): project cleanup and optimization, prompt
+   `project-cleanup.md`. The folder is 8.5 GB, about 99% git-ignored tools and caches
+   (`cv/.venv` 5.2 GB, `.next` 2.2 GB, `node_modules` 1.3 GB), synced by OneDrive.
 
 Later:
-
-- Phase 18 idea (Dylan, 2026-10-19, parked): capture from the QI's dashboard instead of a second
-  app. A browser Capture page; the model as ONNX in the app container (`onnxruntime-node`, no
-  third container, D-003); HTTPS on the LAN so other PCs and the iPhone's Safari may use the camera;
-  decide who captures (QI only, or the FM too). Prompt written: `camera-capture-page.md` (Dylan to review, then run it as Phase 18).
 
 - Apply CPoint's answers to the open questions below.
 - Component tracking, once CPoint gives the component counts per shoe type.
@@ -250,6 +271,12 @@ Later:
   website); the preview at 960 and 4 a second, Capture sends the frame on screen at full size;
   failures block Start, warnings don't; the camera choice in a git-ignored file; a `.cmd` launcher
   and a `shortcut` command.
+- Decided (D-064 to D-067, Dylan 2026-10-19): server inference with ONNX Runtime on the CPU,
+  `node:24-bookworm-slim`, mkcert with a listener in `app` on 3443, live video without boxes,
+  QI and FM capture, a Capture nav item, and the station's batch rule (the brief's "current
+  batch" was replaced on purpose).
+- ASSUMPTION (D-067): a phone or tablet's captures are `PHONE`, a PC's `WEBCAM`, read from the
+  browser. Tell CPoint if they want another split.
 - ASSUMPTION (D-061): a clock 2 to 5 minutes off is only a warning, because the app accepts those
   scans; only more than 5 minutes ahead blocks Start.
 - ASSUMPTION (D-058): the five photos' expected verdicts in `labels.csv` were drafted by Claude
@@ -274,7 +301,11 @@ Later:
   `uploads` volume in Docker), beside the scan images. Back them up with the database.
 - Local `.env` needs `AUTH_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD` and `DEMO_USER_PASSWORD`. With demo
   users on, `admin@cpoint.local` uses `DEMO_USER_PASSWORD`.
-- `npm audit`: 4 unreachable highs in the Prisma CLI's dependencies (D-027).
+- `npm audit`: 9 highs, all in dev tooling (the Prisma CLI and eslint-config-next, D-027);
+  none from `onnxruntime-node`.
+- `onnxruntime-node` downloads a CUDA build on Linux unless `ONNXRUNTIME_NODE_INSTALL=skip`
+  (set in the Dockerfile and CI). mkcert is installed on Dylan's laptop; `certs/` covers
+  localhost, 127.0.0.1 and 192.168.254.104.
 - Cloud sandbox only:
   - Build Docker with `--build-arg NODE_IMAGE=<local base image>`, then `up -d`.
   - Use `-p <name>` (and other `DB_PORT`/`APP_PORT` values) for a throwaway stack beside the dev

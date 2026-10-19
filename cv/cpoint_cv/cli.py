@@ -5,6 +5,8 @@
 - ``run webcam | folder <dir> | file <image>``: the station. Captures one section at a time, runs
   the model and sends each scan to the app, which decides the verdict.
 - ``doctor``: checks the model, packages, GPU, camera, app, token and clock, and says what to fix.
+- ``export-onnx``: write the model as ONNX, with a JSON beside it, for the website's Capture page
+  (Phase 18, D-064).
 - ``window``: the station window: check this machine, pick the camera, live preview, Capture and
   Stop (D-059). ``shortcut`` puts it on the desktop (D-063).
 """
@@ -372,6 +374,23 @@ def _doctor(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def _export_onnx(args: argparse.Namespace) -> int:
+    from .onnx_export import ExportError, export_onnx
+
+    try:
+        config = load_config(args.config)
+        onnx_path, info = export_onnx(config)
+    except (ConfigError, ExportError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    print(f"Wrote {onnx_path} and {info.name}.")
+    print(
+        "Restart the app to load it. In Docker, cv/models/ is mounted into the app container "
+        '(cv/README.md, "Capture from the website").'
+    )
+    return 0
+
+
 def _window(args: argparse.Namespace) -> int:
     from .window.app import safe_main
 
@@ -444,6 +463,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-camera", action="store_true", help="Skip the camera check (folder replay only)"
     )
     doctor.set_defaults(handler=_doctor)
+
+    export = commands.add_parser(
+        "export-onnx",
+        help="Write the model as ONNX with a JSON beside it, for the website's Capture page.",
+    )
+    export.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
+    export.set_defaults(handler=_export_onnx)
 
     window = commands.add_parser(
         "window", help="Open the station window: check, camera, live preview, Capture and Stop."

@@ -5,10 +5,12 @@ import { requireApiPermission, requireDevice } from "@/server/policies/guard";
 import { NO_BATCH_MESSAGE, resolveCameraBatch } from "@/server/services/camera.service";
 import { getStorage } from "@/server/lib/storage";
 import { decideScan } from "@/server/services/scan-decision.service";
+import { captureScan } from "@/server/services/capture.service";
 import { ingestScan } from "@/server/services/scan-ingest.service";
 import { getScanDetail, latestScans, listScans } from "@/server/services/scan-query.service";
 import { readJsonBody } from "@/server/lib/http";
 import {
+  captureFieldsSchema,
   decisionSchema,
   ingestFieldsSchema,
   isScanId,
@@ -26,6 +28,35 @@ async function scanIdFrom(ctx: IdContext): Promise<string> {
 
 const text = (value: FormDataEntryValue | null) =>
   typeof value === "string" && value.trim() !== "" ? value : undefined;
+
+/** The multipart body of a scan: the form, and its 'image' checked by size and by its bytes. */
+async function readImageForm(request: Request) {
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_IMAGE_BYTES + 1024 * 1024) {
+    throw Errors.tooLarge("The upload is larger than 10 MB.");
+  }
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    throw Errors.badRequest(
+      "Send multipart/form-data with the captured image in the 'image' field.",
+    );
+  }
+  const file = form.get("image");
+  if (!(file instanceof File) || file.size === 0) {
+    throw Errors.validation([
+      { path: ["image"], message: "Attach the captured image as 'image'." },
+    ]);
+  }
+  if (file.size > MAX_IMAGE_BYTES) throw Errors.tooLarge("The image is larger than 10 MB.");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const type = sniffImageType(bytes);
+  if (!type)
+    throw Errors.validation([
+      { path: ["image"], message: "The image must be a JPEG, PNG or WebP file." },
+    ]);
+  return { form, image: { bytes, type } };
+}
 
 export const scanController = {
   /** GET /api/v1/scans?verdict=&status=&source=&batch=&override=1&page=  or  ?limit=8 (latest, for the live widget). */
@@ -76,33 +107,7 @@ export const scanController = {
   /** POST /api/v1/scans: camera ingestion (multipart/form-data, device token). */
   ingest: handle(async (request: Request) => {
     const device = await requireDevice(request, "scans:create");
-    if (Number(request.headers.get("content-length") ?? 0) > MAX_IMAGE_BYTES + 1024 * 1024) {
-      throw Errors.tooLarge("The upload is larger than 10 MB.");
-    }
-
-    let form: FormData;
-    try {
-      form = await request.formData();
-    } catch {
-      throw Errors.badRequest(
-        "Send multipart/form-data with the captured image in the 'image' field.",
-      );
-    }
-
-    const file = form.get("image");
-    if (!(file instanceof File) || file.size === 0) {
-      throw Errors.validation([
-        { path: ["image"], message: "Attach the captured image as 'image'." },
-      ]);
-    }
-    if (file.size > MAX_IMAGE_BYTES) throw Errors.tooLarge("The image is larger than 10 MB.");
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const type = sniffImageType(bytes);
-    if (!type)
-      throw Errors.validation([
-        { path: ["image"], message: "The image must be a JPEG, PNG or WebP file." },
-      ]);
-
+    const { form, image } = await readImageForm(request);
     const fields = ingestFieldsSchema.parse({
       detections: text(form.get("detections")),
       batchId: text(form.get("batchId")),
@@ -112,8 +117,25 @@ export const scanController = {
       capturedAt: text(form.get("capturedAt")),
     });
 
-    const result = await ingestScan({ image: { bytes, type }, ...fields }, device);
+    const result = await ingestScan({ image, ...fields }, device);
     // A repeated captureId returns the first scan unchanged (D-051).
+    return json({ data: result }, result.duplicate ? 200 : 201);
+  }),
+
+  /**
+   * POST /api/v1/scans/capture: a capture from the website's Capture page (multipart/form-data,
+   * signed-in session). The app runs the model, then decides as for any scan (Phase 18).
+   */
+  capture: handle(async (request: Request) => {
+    const user = await requireApiPermission("camera:capture");
+    const { form, image } = await readImageForm(request);
+    const fields = captureFieldsSchema.parse({
+      batchId: text(form.get("batchId")),
+      captureId: text(form.get("captureId")),
+      source: text(form.get("source")),
+      capturedAt: text(form.get("capturedAt")),
+    });
+    const result = await captureScan(image, fields, user);
     return json({ data: result }, result.duplicate ? 200 : 201);
   }),
 

@@ -1,0 +1,4 @@
+# The ONNX export for the website's Capture page (python -m cpoint_cv export-onnx, D-064).
+# Only on the PC that exports the model; the station itself doesn't need these.
+onnx==1.23.2
+onnxslim==0.1.98

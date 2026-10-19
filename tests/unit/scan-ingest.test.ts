@@ -321,3 +321,59 @@ describe("ingestScan with a captureId (D-051)", () => {
     expect(storage.files.size).toBe(0);
   });
 });
+
+describe("ingestScan from the website's Capture page (Phase 18)", () => {
+  const CAPTURE = "0199f0a1-7c2e-7a51-9d3f-2b8c4e6a1f01";
+  const website = { kind: "website", userId: "user-qi" } as const;
+  const ingest = () =>
+    ingestScan(
+      {
+        image: { bytes: JPEG, type: { mime: "image/jpeg", ext: "jpg" } },
+        detections: [det("cut", 0.95)],
+        source: "PHONE",
+        captureId: CAPTURE,
+        modelVersion: "yolo-v1-1d729fb0",
+      },
+      website,
+      now,
+      memoryStorage(),
+    );
+  const earlier = {
+    id: "scan-first",
+    sequence: 2,
+    aiVerdict: "REJECT",
+    status: "DECIDED",
+    deviceTokenId: null,
+    batch: { id: "0001", code: "B-2026-0001" },
+  };
+
+  it("stores no device token and no person on the scan (D-008)", async () => {
+    await ingest();
+    const row = scans.insertScanWithDetections.mock.calls[0][0];
+    expect(row).toMatchObject({ deviceTokenId: null, source: "PHONE", captureId: CAPTURE });
+    expect(Object.keys(row).some((k) => /user|person|capturedBy/i.test(k))).toBe(false);
+  });
+
+  it("records the signed-in person in the audit log only", async () => {
+    await ingest();
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        actor: { type: "USER", userId: "user-qi" },
+        action: "scan.create",
+        after: expect.objectContaining({ origin: "website", verdict: "REJECT" }),
+      }),
+    );
+  });
+
+  it("returns the first scan for a website repeat", async () => {
+    scans.findScanByCaptureId.mockResolvedValueOnce(earlier);
+    expect(await ingest()).toMatchObject({ scanId: "scan-first", duplicate: true });
+    expect(scans.insertScanWithDetections).not.toHaveBeenCalled();
+  });
+
+  it("refuses a station's captureId sent from the website", async () => {
+    scans.findScanByCaptureId.mockResolvedValueOnce({ ...earlier, deviceTokenId: "tok1" });
+    await expect(ingest()).rejects.toMatchObject({ status: 409 });
+  });
+});

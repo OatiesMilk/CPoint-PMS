@@ -10,6 +10,7 @@ export const PERMISSIONS = {
   "batch:manage": ["FLOOR_MANAGER"],
   "camera:view": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "camera:manage": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // choose the batch the camera feeds
+  "camera:capture": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // scan from the Capture page (D-066)
   "scan:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "scan:decide": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // override the camera's automatic calls
   "scan:review": ["QUALITY_INSPECTOR"], // decide scans the camera flagged (D-028)

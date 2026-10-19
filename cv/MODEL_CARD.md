@@ -20,6 +20,27 @@ the table in `camera-yolo-integration.md`; nothing in the file differed.
 | Training       | 300 epochs, batch 4, dataset `preparation-images` (hosted, not in repo)              |
 | Licence        | AGPL-3.0 (Ultralytics). Fine for the capstone demo; review before any commercial use |
 
+## ONNX export (Phase 18, for the website's Capture page)
+
+| Field          | Value                                                                            |
+| -------------- | -------------------------------------------------------------------------------- |
+| File           | `cv/models/yolo-v1.onnx` (42,196,946 bytes) + `yolo-v1.json`, never committed    |
+| Made with      | `python -m cpoint_cv export-onnx` (Ultralytics 8.4.103, onnx 1.23.2, onnxslim)   |
+| Opset          | 19                                                                               |
+| Input          | `images`, `[1, 3, height, width]`, dynamic; the app uses `imgsz` 1536, stride 32 |
+| Output used    | `output0`, `[1, 300, 38]`: x1, y1, x2, y2, score, class, 32 mask coefficients    |
+| Output ignored | `output1` (mask prototypes): the contract is boxes only                          |
+| `modelVersion` | `yolo-v1-1d729fb0`, the weights' version, as from the station                    |
+| Runtime        | onnxruntime-node 1.30.0, CPU                                                     |
+
+The ONNX file's SHA-256 is in `yolo-v1.json` (`onnxSha256`); it changes with every export even for
+the same weights, so `modelVersion` stays the `.pt` file's.
+
+Time per capture on Dylan's laptop (CPU, model loaded): about **0.65 s for a 1920 × 1080 frame**
+(1536 × 864 input) and **1.2 s for a 1536 × 1536 photo**, both on the host and in the Docker
+image. `npm run cv:parity` matched the station on the five sample photos and two 16:9 crops
+(2026-10-19).
+
 ## Validation (from the checkpoint)
 
 | Metric    | Box   | Mask  |
