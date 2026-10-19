@@ -19,6 +19,7 @@ from fakes import (
 from cpoint_cv.client import TOKEN_REFUSED, ScanClient
 from cpoint_cv.config import Config, StationConfig, parse_config
 from cpoint_cv.detector import FakeDetector
+from cpoint_cv.events import NoBatchNow, ScanSent, StationStopped
 from cpoint_cv.logs import StationLog
 from cpoint_cv.sources import Frame
 from cpoint_cv.spool import Spool
@@ -310,3 +311,45 @@ def test_a_refused_token_during_a_check_in_stops_the_station(tmp_path: Path) -> 
     assert station.run() == 3
     assert t.posts() == []
     assert any("device token was refused" in line for line in said)
+
+
+class TestWindowHooks:
+    """What the station window relies on (D-059): events beside the text, Stop, the press time."""
+
+    def test_events_follow_one_capture(self, tmp_path: Path) -> None:
+        transport = FakeTransport(current=[batch_ok()], scans=[created(sequence=4)])
+        station, _said, _ = make(tmp_path, transport)
+        seen: list[object] = []
+        station.events = seen.append
+        assert station.run() == 0
+        kinds = [type(e).__name__ for e in seen]
+        assert kinds[:4] == ["Pending", "BatchShown", "ReadyToCapture", "Captured"]
+        sent = next(e for e in seen if isinstance(e, ScanSent))
+        assert (sent.sequence, sent.verdict, sent.batch_code) == (4, "REWORK", "B-2026-0007")
+        assert seen[-1] == StationStopped(None)
+
+    def test_stop_ends_a_wait_for_a_batch(self, tmp_path: Path) -> None:
+        transport = FakeTransport(current=[no_batch()])
+        station, _said, sleeps = make(tmp_path, transport)
+        seen: list[object] = []
+        station.events = seen.append
+        station.should_stop = lambda: len(sleeps) >= 1
+        assert station.run() == 0
+        assert len(sleeps) == 1 and transport.posts() == []
+        assert NoBatchNow(NO_BATCH_MESSAGE) in seen
+
+    def test_a_frame_with_its_own_time_keeps_it(self, tmp_path: Path) -> None:
+        transport = FakeTransport(current=[batch_ok()], scans=[created()])
+        station, _, _ = make(tmp_path, transport)
+        pressed = datetime(2026, 10, 19, 9, 0, 0, tzinfo=MANILA)
+        station.source = FakeSource([Frame(JPEG, "camera 1 #1", pressed)])
+        station.run()
+        assert transport.posts()[0].form()["capturedAt"] == "2026-10-19T09:00:00+08:00"
+
+    def test_a_refused_token_reports_the_problem(self, tmp_path: Path) -> None:
+        transport = FakeTransport(current=[error(401, "UNAUTHENTICATED", "Invalid token.")])
+        station, _, _ = make(tmp_path, transport)
+        seen: list[object] = []
+        station.events = seen.append
+        assert station.run() == 3
+        assert seen[-1] == StationStopped(TOKEN_REFUSED)

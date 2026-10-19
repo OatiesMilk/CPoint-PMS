@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -28,6 +29,9 @@ class SourceError(RuntimeError):
 class Frame:
     data: bytes
     label: str  # shown in the console and the log: the file name, or "webcam 0 #12"
+    # When the picture was taken, if the source knows better than "now" (the window's Capture
+    # press). The scan's capturedAt.
+    taken_at: datetime | None = None
 
 
 class FrameSource(Protocol):
@@ -111,15 +115,28 @@ def _upper_first(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
-def _open_problem(device: int | str) -> str:
+def open_capture(cv2: Any, device: int | str, backend: str = "default") -> Any:
+    """``cv2.VideoCapture`` for a camera number or an address. ``backend = "dshow"`` opens a
+    numbered camera through DirectShow, which some virtual cameras (DroidCam, OBS) need; an
+    address always goes through OpenCV's default (FFmpeg) reader."""
+    if isinstance(device, int) and backend == "dshow":
+        return cv2.VideoCapture(device, cv2.CAP_DSHOW)
+    return cv2.VideoCapture(device)
+
+
+def _open_problem(device: int | str, backend: str = "default") -> str:
     if isinstance(device, int):
+        other = "DirectShow" if backend == "default" else "the default driver"
         return (
             f"Camera {device} couldn't be opened. Check it's plugged in and not in use by "
-            "another app (Camera, Teams, Zoom), or change [camera] index in cv/config.toml."
+            "another app (Camera, Teams, Zoom), or change [camera] index in cv/config.toml. "
+            f"A virtual camera such as DroidCam may need {other} ([camera] backend)."
         )
     return (
         f"{camera_name(device)} couldn't be opened. Check the PC can reach it on the network, "
-        "and the address, user name and password in [camera] url (or CPOINT_CV_CAMERA_URL)."
+        "and the address, user name and password in [camera] url (or CPOINT_CV_CAMERA_URL). "
+        "A phone app such as DroidCam serves one viewer at a time: close the DroidCam Windows "
+        "client and any browser tab showing the camera."
     )
 
 
@@ -135,6 +152,7 @@ class WebcamSource:
         *,
         warmup_frames: int,
         jpeg_quality: int,
+        backend: str = "default",
     ) -> None:
         try:
             import cv2
@@ -146,9 +164,9 @@ class WebcamSource:
         self._name = camera_name(device)
         self._quality = jpeg_quality
         self._count = 0
-        self._camera: Any = cv2.VideoCapture(device)
+        self._camera: Any = open_capture(cv2, device, backend)
         if not self._camera.isOpened():
-            raise SourceError(_open_problem(device))
+            raise SourceError(_open_problem(device, backend))
         self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         for _ in range(warmup_frames):  # let exposure and white balance settle
@@ -177,16 +195,16 @@ class WebcamSource:
         self._camera.release()
 
 
-def probe_camera(device: int | str) -> str | None:
+def probe_camera(device: int | str, backend: str = "default") -> str | None:
     """For ``doctor``: None when the camera opens and gives a frame, else what's wrong."""
     try:
         import cv2
     except ImportError:
         return "OpenCV isn't installed. Run: pip install -r cv/requirements.txt"
-    camera: Any = cv2.VideoCapture(device)
+    camera: Any = open_capture(cv2, device, backend)
     try:
         if not camera.isOpened():
-            return _open_problem(device)
+            return _open_problem(device, backend)
         ok, _ = camera.read()
         return None if ok else f"{_upper_first(camera_name(device))} opened but gave no picture."
     finally:

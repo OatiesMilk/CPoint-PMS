@@ -4,7 +4,9 @@
   taken and a *preview* of the app's verdict. Posts nothing.
 - ``run webcam | folder <dir> | file <image>``: the station. Captures one section at a time, runs
   the model and sends each scan to the app, which decides the verdict.
-- ``doctor``: checks the model, packages, camera, app, token and clock, and says what to fix.
+- ``doctor``: checks the model, packages, GPU, camera, app, token and clock, and says what to fix.
+- ``window``: the station window: check this machine, pick the camera, live preview, Capture and
+  Stop (D-059). ``shortcut`` puts it on the desktop (D-063).
 """
 
 from __future__ import annotations
@@ -12,12 +14,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from .client import ScanClient
 from .config import CV_DIR, Config, ConfigError, load_config
-from .doctor import check_app, check_camera, check_model, check_python
+from .doctor import check_app, check_camera, check_gpu, check_model, check_python
 from .env import BASE_URL_VAR, TOKEN_VAR, station_env
 from .logs import StationLog
 from .mapper import map_with_sources
@@ -29,7 +31,7 @@ from .spool import Spool
 from .station import Station
 from .summary import ImageResult, summarize, to_markdown
 
-__all__ = ["build_parser", "collect_images", "main"]
+__all__ = ["build_parser", "collect_images", "main", "make_client"]
 
 
 def settings_line(config: Config) -> str:
@@ -187,7 +189,8 @@ def _predict(args: argparse.Namespace) -> int:
     return 0
 
 
-def _client(config: Config, env: dict[str, str]) -> ScanClient | None:
+def make_client(config: Config, env: Mapping[str, str]) -> ScanClient | None:
+    """The app client with the device token, or None when CV_DEVICE_TOKEN isn't set."""
     token = env.get(TOKEN_VAR, "").strip()
     if not token:
         return None
@@ -213,7 +216,7 @@ def _run(args: argparse.Namespace) -> int:
     except ConfigError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
-    client = _client(config, env)
+    client = make_client(config, env)
     if client is None:
         print(
             f"error: {TOKEN_VAR} isn't set. As the System Admin, create a device token under API "
@@ -238,6 +241,7 @@ def _run(args: argparse.Namespace) -> int:
                 config.camera.height,
                 warmup_frames=config.camera.warmup_frames,
                 jpeg_quality=config.station.jpeg_quality,
+                backend=config.camera.backend,
             )
             trigger = KeyTrigger(idle_seconds=config.station.check_in_seconds)
         elif args.path is None:
@@ -342,21 +346,44 @@ def _doctor(args: argparse.Namespace) -> int:
         f"Config: {config.source_file}. App: {config.server.base_url} "
         f"(from [server] base_url or {BASE_URL_VAR})."
     )
-    checks = [check_model(config), *check_python()]
+    checks = [check_model(config), *check_python(), check_gpu(config.model.device)]
     if not args.no_camera:
         from .sources import probe_camera
 
-        checks.append(check_camera(config.camera.device, probe_camera))
-    checks += check_app(_client(config, env))
+        checks.append(
+            check_camera(
+                config.camera.device,
+                lambda device: probe_camera(device, config.camera.backend),
+            )
+        )
+    checks += check_app(make_client(config, env))
     for check in checks:
         print(check.line())
     failed = [c for c in checks if not c.ok]
+    warnings = sum(1 for c in checks if c.status == "warn")
+    also = (
+        f" Read the {warnings} warning(s): it works, but slower or with a risk." if warnings else ""
+    )
     print(
-        "\nEverything the station needs is in place."
+        f"\nEverything the station needs is in place.{also}"
         if not failed
         else f"\n{len(failed)} check(s) failed. Fix them from the top, then run doctor again."
     )
     return 1 if failed else 0
+
+
+def _window(args: argparse.Namespace) -> int:
+    from .window.app import safe_main
+
+    return safe_main(args.config)
+
+
+def _shortcut(_args: argparse.Namespace) -> int:
+    from .shortcut import create_shortcut
+
+    made, message = create_shortcut()
+    print(message if made else f"error: {message}", file=sys.stdout if made else sys.stderr)
+    return 0 if made else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -417,6 +444,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-camera", action="store_true", help="Skip the camera check (folder replay only)"
     )
     doctor.set_defaults(handler=_doctor)
+
+    window = commands.add_parser(
+        "window", help="Open the station window: check, camera, live preview, Capture and Stop."
+    )
+    window.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
+    window.set_defaults(handler=_window)
+
+    shortcut = commands.add_parser(
+        "shortcut", help="Put a CPoint Camera shortcut to the station window on the desktop."
+    )
+    shortcut.set_defaults(handler=_shortcut)
     return parser
 
 

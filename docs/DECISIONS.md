@@ -1095,3 +1095,60 @@ for one capture per key press.
 photo, and how verdicts shift with the found-at value and the thresholds. Up to 30 photos the
 report opens with "Small check"; the five sample photos show the integration, not the model's
 accuracy. It changes nothing in the app.
+
+### D-059 · 2026-10-19 · Accepted — The camera station gets a Tkinter window that drives the existing station loop
+
+**Decision (Dylan, 2026-10-19):** factory staff run the station from a desktop window
+(`python -m cpoint_cv window`), not a terminal and not the website's Camera page (that stays a
+possible later phase). Tkinter, from the standard library; camera frames reach it through Pillow,
+which ultralytics already installs, now pinned (`pillow==12.3.0`, MIT-CMU licence). No other new
+dependency. The window runs the same `Station` loop as `run webcam` on a worker thread, with the
+Capture and Stop buttons as its trigger (`ButtonTrigger`), so there is one send path (spool,
+retries, `captureId`). `Station` gained an optional `events` callback (what it prints, as data) and
+a `should_stop` check; `run webcam` passes neither. The window's state and words live in a
+presenter with no Tk import, unit-tested; only `view.py` and `app.py` import Tk, so CI needs no
+display. Camera, model and HTTP never run on the UI thread.
+
+### D-060 · 2026-10-19 · Accepted — The live preview is only a preview; Capture sends the frame on screen at full size
+
+**Decision (Dylan, 2026-10-19):** the window runs the model on the live feed at
+`[window] preview_imgsz` (960) at most `preview_max_fps` (4) times a second, skipping frames rather
+than queueing them. Its boxes use class colours, never the verdict colours, under a fixed banner
+("Preview. Nothing is sent until you press Capture. The app decides the result."), and it never
+shows a verdict. Capture sends the frame that was on screen at the press, with the press as
+`capturedAt`, and that capture runs at `[model] imgsz` (1536). One loaded model serves both behind
+a lock, so the GPU holds one model and runs one prediction at a time. Measured on the RTX 3060: about
+35 ms at 960 and 55 ms at 1536 for a frame in memory. Only the Last scan panel shows a verdict, and
+it is the app's (D-011).
+
+### D-061 · 2026-10-19 · Accepted — "Check this machine": failures block Start, warnings don't
+
+**Decision (Dylan, 2026-10-19):** the window runs `doctor`'s checks plus a new GPU check (torch sees
+CUDA, the GPU's name, the CUDA build) against the camera chosen in the window. A check now passes,
+warns or fails. Failures block Start: the config, the model file and checksum, Python, a missing
+package, the camera, the app, the device token, and a clock more than 5 minutes ahead of the app
+(the app refuses those scans). Warnings never block: no GPU (the window runs the model on the CPU
+instead), a package version other than the pin, no batch at Preparation yet, a clock 2 to 5
+minutes off. `doctor` prints warnings as `warn` and they don't change its exit code; for `run`
+and `predict`, a configured GPU that isn't there stays a failure. Choosing another camera means
+checking again.
+
+### D-062 · 2026-10-19 · Accepted — The window saves its camera choice in a git-ignored file; DirectShow is a setting
+
+**Decision (Dylan, 2026-10-19):** the window remembers the camera (a number, or an address) and the
+driver in `cv/station-window.json`, git-ignored; it never edits `config.toml`. An address holding a
+user name or password is used for that run but never saved: the window says to put it in `cv/.env`
+as `CPOINT_CV_CAMERA_URL`, and shows and logs it without the password (D-057). `[camera] backend`
+(`default` or `dshow`) opens numbered cameras through DirectShow for virtual cameras such as
+DroidCam and OBS, and `run webcam` and `doctor` use it too. The camera list shows numbers that give
+a picture, with their size; OpenCV can't read device names without another dependency.
+
+### D-063 · 2026-10-19 · Accepted — `CPoint Camera.cmd` launches the window; `shortcut` puts it on the desktop
+
+**Decision (Dylan, 2026-10-19):** `cv/CPoint Camera.cmd` checks `cv/.venv` and the packages, then
+starts the window with `pythonw` (no console). When the venv or a package is missing, it shows a
+Windows message box naming the setup step. `python -m cpoint_cv shortcut` makes a "CPoint Camera"
+desktop shortcut to it, minimized, through Windows' own shortcut maker (PowerShell), with no new
+dependency. `.gitattributes` keeps `*.cmd` at CRLF. A failure inside the window at start is written
+to `cv/out/logs/window-error.log` and shown in a message box. The Camera page's "Connect the camera
+station" steps now point at the shortcut and the window.

@@ -201,12 +201,12 @@ export default async function CameraPage() {
                   <code className="font-mono">CV_DEVICE_TOKEN</code>.
                 </li>
                 <li>
-                  Run <code className="font-mono">python -m cpoint_cv doctor</code> and fix anything
-                  it reports.
+                  Open <strong>CPoint Camera</strong> from the desktop (once, make the shortcut with{" "}
+                  <code className="font-mono">python -m cpoint_cv shortcut</code>).
                 </li>
                 <li>
-                  Start it with <code className="font-mono">python -m cpoint_cv run webcam</code>{" "}
-                  and press Space for each section (see{" "}
+                  Press <strong>Check this machine</strong>, fix anything it marks, then{" "}
+                  <strong>Start</strong> and press <strong>Capture</strong> for each section (see{" "}
                   <code className="font-mono">cv/README.md</code>
                   ).
                 </li>

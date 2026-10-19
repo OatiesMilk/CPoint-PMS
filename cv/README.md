@@ -4,7 +4,9 @@ A Python process that runs on the camera machine, outside Docker (D-003, D-048).
 model on one leather section at a time and reports what the model saw to the app through the
 existing camera contract (`POST /api/v1/scans`, see `docs/API.md`). The app decides every verdict.
 
-It has four commands:
+Factory staff use it through the **station window** (Phase 17): a desktop shortcut, a "Check this
+machine" button, a camera picker, a live preview with the model's boxes, and Capture / Stop. The
+commands below do the same from a terminal.
 
 - `predict`: run the model on photos and show the detections, the `modelVersion` and a
   **preview** of the verdict the app would give. Posts nothing (Phase 14).
@@ -12,7 +14,8 @@ It has four commands:
   runs the model and sends each scan to the app, surviving network and server failures (Phase 15).
 - `evaluate`: compares the preview verdicts with what a person expected (`labels.csv`) and writes
   a report to `reports/`. Posts nothing (Phase 16).
-- `doctor`: checks everything the station needs and says what to fix.
+- `doctor`: checks everything the station needs, the GPU included, and says what to fix.
+- `window`: the station window (Phase 17). `shortcut` puts it on the desktop.
 
 The model swap runbook and the demo script are at the end.
 
@@ -23,7 +26,8 @@ cpoint_cv/
   mapper.py         model output → the app's detections (class keys, boxes, floor, top 50)
   payload.py        the multipart text fields the station sends
   station.py        the run loop: batch, trigger, capture, spool, detect, send (D-050)
-  sources.py        webcam, folder and file frame sources; triggers.py: Space key or a timer
+  events.py         what the loop reports as data, for the window
+  sources.py        webcam, folder and file frame sources; triggers.py: Space, buttons or a timer
   client.py         the app's API: current batch and scan upload, with retries (retry.py)
   transport.py      the HTTP port (standard library only); spool.py: the outbox on disk
   encode.py         keeps every image a JPEG, PNG or WebP under 10 MB
@@ -33,6 +37,9 @@ cpoint_cv/
   config.py         config.toml + environment overrides
   model_info.py     SHA-256 and modelVersion
   summary.py        per-folder numbers; overlay.py draws boxes and masks
+  shortcut.py       the desktop shortcut to CPoint Camera.cmd (the launcher)
+  window/           the station window: presenter.py (state and words, no Tk), checks.py,
+                    cameras.py, settings.py, workers.py (threads), view.py and app.py (Tk)
 models/             model files (git-ignored); see MODEL_CARD.md for the checksum
 tests/              pytest; runs without torch
 ```
@@ -55,6 +62,50 @@ and keep `device = "cpu"`. In `config.toml` (git-ignored), set `device = "cuda:0
 
 Put the model at `cv/models/yolo-v1.pt`. Check it's the right file: `predict` warns when its
 SHA-256 doesn't match `[model] sha256`.
+
+Then make the desktop shortcut once: `.venv/Scripts/python -m cpoint_cv shortcut`.
+
+## Use the station window
+
+Open **CPoint Camera** on the desktop (or double-click `cv/CPoint Camera.cmd`). If the station
+isn't set up, a message box names the step that's missing instead of nothing happening.
+
+1. **Pick the camera.** The window lists the cameras that give a picture, by number and size
+   ("Camera 1 (1920 x 1080)"); **Find cameras** looks again. For a phone or network camera, pick
+   **Network camera (address)** and type its address. **Driver** is Default or DirectShow: try
+   DirectShow when a virtual camera (DroidCam, OBS) gives no picture. The choice is remembered in
+   `cv/station-window.json` (git-ignored); `config.toml` is never changed. An address with a
+   password is used but never saved: put it in `cv/.env` as `CPOINT_CV_CAMERA_URL` instead.
+2. **Check this machine.** Each line is a pass, a warning (!) or a failure, with the fix. A
+   failure keeps Start off: the config, the model file, Python, a missing package, the camera, the
+   app, the device token, or a clock more than 5 minutes ahead of the app. A warning never blocks:
+   no GPU (the window runs the model on the CPU, about 3 times slower), another package version,
+   no batch at Preparation yet, a clock a little off. Choosing another camera means checking again.
+3. **Start.** The model loads (a few seconds), the camera opens and the live picture appears with
+   the model's boxes. The banner says it: this is a **preview**. Nothing is sent until you press
+   Capture, and the boxes are in plain class colours, never the verdict colours.
+4. **Capture** (or Space) sends the frame that was on screen when you pressed, timed at that
+   moment, through the same spool and `captureId` path as `run webcam`. The capture runs at the
+   model's full size (`imgsz` 1536), not the preview's 960. **Last scan** shows the app's answer:
+   the section number and the verdict in its colour. One press, one scan.
+5. **Stop** frees the camera. Closing the window stops the station first.
+
+The top line always names the batch the next scan goes to. With no batch at Preparation, Capture
+stays off and the app's message shows until a batch starts. If the app doesn't answer, captures
+are saved and "N waiting to send" counts them until it does. A refused token stops the station
+with the fix. If a phone camera drops, the window reconnects for 30 seconds with Capture off, then
+stops and says what to check; saved captures are kept. Every line `run webcam` prints is in the
+**Messages** list. A failure at start is written to `out/logs/window-error.log`.
+
+### iPhone through DroidCam (development)
+
+1. Install **DroidCam** on the iPhone and the **DroidCam client** for Windows on the PC; put both
+   on the same Wi-Fi.
+2. Open DroidCam on the iPhone; it shows an address such as `192.168.1.23` and port `4747`.
+3. Either connect the Windows client to it (the phone then appears as a numbered camera, usually
+   the highest: pick it, with **DirectShow** if Default gives no picture), or skip the client and
+   pick **Network camera (address)** with `http://192.168.1.23:4747/video`.
+4. Close the client's own preview before **Start**: only one app can hold the camera.
 
 ## Run the model on images
 
@@ -109,7 +160,8 @@ Prepare once:
    never prints or logs it.
 2. If the app isn't at `http://localhost:3000`, set `CV_BASE_URL` in `cv/.env` (for example
    `http://localhost:3001`).
-3. Run `.venv/Scripts/python -m cpoint_cv doctor` and fix anything marked `FAIL`, top first. Add
+3. Run `.venv/Scripts/python -m cpoint_cv doctor` and fix anything marked `FAIL`, top first;
+   `warn` lines work but are worth reading (no GPU, another package version, no batch yet). Add
    `--no-camera` when you'll only replay a folder.
 
 Then start a batch in the app (Batches → Start) and run one of:
@@ -164,7 +216,7 @@ detections, inference time, HTTP status, attempts and the outcome.
 
 Every setting is in `config.example.toml` with a comment: the model, the mapper, the preview,
 `[server]` (address, timeout, retries), `[station]` (source, JPEG quality, interval, folders) and
-`[camera]` (index, resolution). These environment variables override the file: `CPOINT_CV_CONFIG`
+`[camera]` (index, resolution, `backend`) and `[window]` (the preview's size and rate). These environment variables override the file: `CPOINT_CV_CONFIG`
 (another file), `CPOINT_CV_MODEL_PATH`, `CPOINT_CV_MODEL_DEVICE`, `CPOINT_CV_MODEL_IMGSZ`,
 `CPOINT_CV_CONFIDENCE_FLOOR`, `CV_BASE_URL`, `CPOINT_CV_CAMERA_URL`. `CV_DEVICE_TOKEN`, `CV_BASE_URL` and `CPOINT_CV_CAMERA_URL` can also be in
 `cv/.env`; a variable set in the shell wins.
@@ -174,6 +226,10 @@ Every setting is in `config.example.toml` with a comment: the model, the mapper,
 - `overlap_iou` (0.7): two boxes of the same class that overlap this much are one defect reported
   twice, so only the more confident is sent (D-057). 0 sends every box.
 - `[station] check_in_seconds` (20): how often a waiting station checks in. 0 turns it off.
+- `[camera] backend`: `default` or `dshow` (DirectShow) for numbered cameras.
+- `[window] preview_imgsz` (960) and `preview_max_fps` (4): the live preview's size and how often
+  it runs. On the RTX 3060 the model takes about 35 ms at 960 and 55 ms at 1536 on a frame in
+  memory, so the rate can go up; on the CPU keep it low. Captures always use `[model] imgsz`.
 
 ## Small model check (D-058)
 
@@ -236,12 +292,15 @@ In Windows PowerShell, type `npm.cmd` instead of `npm` for commands with `--` fl
 2. **Start the app** (`npm run dev`, or `docker compose up -d`). If `CV_DEVICE_TOKEN` wasn't set
    before the reset, create a token under **API tokens** and put it in `cv/.env`.
 3. **Start a batch**: as the Floor Manager, Batches → New, then **Start** at Preparation.
-4. **Check the station**: `.venv/Scripts/python -m cpoint_cv doctor`.
-5. **Run it**: `.venv/Scripts/python -m cpoint_cv run folder "path/to/photos" --interval 5`, or
-   `run webcam` and press Space for each section.
+4. **Open CPoint Camera** on the station PC, pick the camera (the iPhone through DroidCam, or the
+   webcam), press **Check this machine** and show the list: the GPU line names the RTX 3060.
+5. **Start**, hold a leather section under the camera and show the live boxes (a preview), then
+   press **Capture**: Last scan shows the section number and the app's verdict. With no camera,
+   `.venv/Scripts/python -m cpoint_cv run folder "path/to/photos" --interval 5` still works.
 6. **Watch the Camera page**: the badge reads **Camera station active**, the last capture shows
    with its boxes, the Model card names `yolo-v1-…` with the early-model notice, and "Scans go to"
-   names the batch. With `run webcam` and no press for a minute, it reads **Station connected**.
+   names the batch. With the window running and no capture for a minute, it reads **Station
+   connected**.
 7. **Resolve a flagged scan as the Quality Inspector**: send a scan with a class the app doesn't
    know, e.g. `npm.cmd run cv:simulate -- --count 3 --classes qa-unknown` (turning a type off
    doesn't do it: an inactive type is ignored, not flagged). Open **Review**, open the scan and
@@ -258,7 +317,8 @@ In Windows PowerShell, type `npm.cmd` instead of `npm` for commands with `--` fl
 .venv/Scripts/python -m pytest
 ```
 
-CI runs the same four without torch, OpenCV or a network: the station's tests use fakes for the
-HTTP, camera and model. `tests/test_contract_fixture.py` writes and checks
+CI runs the same four without torch, OpenCV, Pillow, a display or a network: the station's tests
+use fakes for the HTTP, camera and model, and the window's state lives in `window/presenter.py`,
+which has no Tk. The window itself is tested by hand (the QA handoff). `tests/test_contract_fixture.py` writes and checks
 `tests/fixtures/cv-payload.json` at the repo root, which `tests/unit/cv-contract.test.ts` parses
 with the app's validator. To change it on purpose: `CPOINT_CV_UPDATE_FIXTURE=1` before `pytest`.

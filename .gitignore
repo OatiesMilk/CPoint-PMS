@@ -47,6 +47,8 @@ skills-lock.json
 /cv/models/*
 !/cv/models/.gitkeep
 /cv/config.toml
+# the station window's last camera choice (D-062)
+/cv/station-window.json
 /cv/out/
 /cv/.venv/
 __pycache__/

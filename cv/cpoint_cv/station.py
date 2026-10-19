@@ -5,6 +5,9 @@
 
 The app decides every verdict (D-011); the station prints what the app answered. A capture is
 always saved before it's sent, so a network or server failure only delays it, in order.
+
+``run webcam`` drives this loop from the console. The station window drives the same loop on a
+worker thread (D-059): it passes ``events`` to follow along and ``should_stop`` for its Stop button.
 """
 
 from __future__ import annotations
@@ -19,6 +22,19 @@ from .client import BatchInfo, NoBatch, Rejected, RetryLater, ScanClient, Sent, 
 from .config import Config
 from .detector import Detector
 from .encode import ImageError, sendable
+from .events import (
+    AppUnreachable,
+    BatchShown,
+    Captured,
+    NoBatchNow,
+    Pending,
+    ReadyToCapture,
+    ScanRefused,
+    ScanSent,
+    SendDelayed,
+    StationEvent,
+    StationStopped,
+)
 from .logs import StationLog
 from .mapper import map_detections
 from .payload import build_fields
@@ -40,6 +56,10 @@ def describe_detections(detections: list[Detection]) -> str:
     return f"{top.class_key} {top.confidence:.2f}{more}"
 
 
+def _ignore(_event: StationEvent) -> None:
+    pass
+
+
 @dataclass
 class Station:
     config: Config
@@ -54,6 +74,8 @@ class Station:
     clock: Callable[[], datetime] = field(default=lambda: datetime.now().astimezone())
     sleep: Callable[[float], None] = time.sleep
     new_id: Callable[[], str] = field(default=lambda: str(uuid.uuid4()))
+    events: Callable[[StationEvent], None] = _ignore
+    should_stop: Callable[[], bool] = field(default=lambda: False)
     _last_wait_message: str | None = field(default=None, init=False)
     _shown: BatchInfo | None = field(default=None, init=False)
 
@@ -63,13 +85,17 @@ class Station:
             f"Station {self.model_version}, {self.source.description}, sending to "
             f"{self.client.base_url}."
         )
+        problem: str | None = None
         try:
             self.flush()
-            while True:
+            while not self.should_stop():
                 if self.source.remaining() == 0:
                     self.say("No more images to send.")
                     break
                 batch = self.wait_for_batch()
+                if batch is None:
+                    break
+                self.events(ReadyToCapture())
                 if not self.trigger.wait(self.check_in):
                     break
                 current = self.recheck(self._shown or batch)
@@ -79,16 +105,13 @@ class Station:
                 if frame is None:
                     self.say("No more images to send.")
                     break
-                self.capture(frame.data, frame.label, current)
+                self.capture(frame.data, frame.label, current, frame.taken_at)
                 self.flush()
             return 0
-        except StationStop as stop:
-            self.say(str(stop))
-            self.log.write("stopped", reason=str(stop))
-            return 3
-        except SourceError as error:
-            self.say(str(error))
-            self.log.write("stopped", reason=str(error))
+        except (StationStop, SourceError) as stop:
+            problem = str(stop)
+            self.say(problem)
+            self.log.write("stopped", reason=problem)
             return 3
         finally:
             self.source.close()
@@ -98,32 +121,40 @@ class Station:
                     f"{waiting} capture(s) are saved and waiting to send. They go out, in order, "
                     "the next time the station runs."
                 )
+            self.events(Pending(waiting))
+            self.events(StationStopped(problem))
 
     # ───────────── the batch ─────────────
 
-    def wait_for_batch(self) -> BatchInfo:
-        """Ask until a batch is at Preparation. Never captures while waiting."""
+    def wait_for_batch(self) -> BatchInfo | None:
+        """Ask until a batch is at Preparation. Never captures while waiting. None when the
+        operator stopped while it waited."""
         while True:
             outcome = self.client.current_batch()
             if isinstance(outcome, BatchInfo):
                 self._last_wait_message = None
                 self._shown = outcome
                 self.say(f"Next scan goes to {outcome.describe()}.")
+                self.events(BatchShown(outcome))
                 return outcome
             if isinstance(outcome, TokenRefused):
                 raise StationStop(outcome.message)
             if isinstance(outcome, NoBatch):
                 message = f"{outcome.message} Waiting..."
+                self.events(NoBatchNow(outcome.message))
             else:
                 message = (
                     f"Can't reach the app at {self.client.base_url} ({outcome.reason}). "
                     f"Trying again every {self.config.station.no_batch_wait_seconds:g} s."
                 )
+                self.events(AppUnreachable(message))
             if message != self._last_wait_message:  # say it once, not every few seconds
                 self.say(message)
                 self.log.write("waiting", reason=message)
                 self._last_wait_message = message
             self.sleep(self.config.station.no_batch_wait_seconds)
+            if self.should_stop():
+                return None
             self.flush()
 
     def check_in(self) -> None:
@@ -134,16 +165,22 @@ class Station:
         if isinstance(outcome, TokenRefused):
             raise StationStop(outcome.message)
         if isinstance(outcome, BatchInfo):
-            self._last_wait_message = None
-            if self._shown is None or outcome.batch_id != self._shown.batch_id:
+            changed = self._shown is None or outcome.batch_id != self._shown.batch_id
+            if changed:
                 self.say(f"The batch changed. Next scan goes to {outcome.describe()}.")
+            if changed or self._last_wait_message is not None:
+                self.events(BatchShown(outcome, changed=changed))
+            self._last_wait_message = None
             self._shown = outcome
             return
-        message = (
-            f"{outcome.message} The next press won't capture until a batch is at Preparation."
-            if isinstance(outcome, NoBatch)
-            else f"Can't reach the app at {self.client.base_url} ({outcome.reason})."
-        )
+        if isinstance(outcome, NoBatch):
+            message = (
+                f"{outcome.message} The next press won't capture until a batch is at Preparation."
+            )
+            self.events(NoBatchNow(outcome.message))
+        else:
+            message = f"Can't reach the app at {self.client.base_url} ({outcome.reason})."
+            self.events(AppUnreachable(message))
         if message != self._last_wait_message:
             self.say(message)
             self.log.write("waiting", reason=message)
@@ -155,24 +192,31 @@ class Station:
         if isinstance(outcome, BatchInfo):
             if outcome.batch_id != shown.batch_id:
                 self.say(f"The batch changed. This scan goes to {outcome.describe()}.")
+                self.events(BatchShown(outcome, changed=True))
             return outcome
         if isinstance(outcome, TokenRefused):
             raise StationStop(outcome.message)
         if isinstance(outcome, NoBatch):
             self.say(f"{outcome.message} Nothing was captured.")
+            self.events(NoBatchNow(f"{outcome.message} Nothing was captured."))
             return None
         return shown  # the app didn't answer: keep the batch just shown; the spool covers sending
 
     # ───────────── one capture ─────────────
 
-    def capture(self, data: bytes, label: str, batch: BatchInfo) -> None:
-        captured_at = self.clock()
+    def capture(
+        self, data: bytes, label: str, batch: BatchInfo, captured_at: datetime | None = None
+    ) -> None:
+        """``captured_at`` is when the picture was taken, if the source knows (the window's
+        Capture press); otherwise now."""
+        captured_at = captured_at or self.clock()
         capture_id = self.new_id()
         try:
             image, kind = sendable(data, quality=self.config.station.jpeg_quality)
         except ImageError as error:
             self.say(f"{label}: can't be sent, {error}")
             self.log.write("capture_refused", label=label, reason=str(error))
+            self.events(ScanRefused(label, f"It can't be sent: {error}"))
             return
         path = self.spool.create(captured_at, capture_id, image, kind)
         output = self.detector.detect(path)
@@ -185,6 +229,7 @@ class Station:
             capture_id=capture_id,
             batch_id=batch.batch_id,
         )
+        found = describe_detections(detections)
         self.spool.complete(
             path,
             {
@@ -192,7 +237,7 @@ class Station:
                 "label": label,
                 "batchCode": batch.batch_code,
                 "inferenceMs": round(output.inference_ms, 1),
-                "found": describe_detections(detections),
+                "found": found,
             },
         )
         self.log.write(
@@ -203,11 +248,18 @@ class Station:
             detections=[d.to_contract() for d in detections],
             inferenceMs=round(output.inference_ms, 1),
         )
+        self.events(Captured(label, batch.batch_code, found))
 
     # ───────────── sending ─────────────
 
     def flush(self) -> None:
         """Send every saved capture, oldest first. Stop at the first one that must wait."""
+        try:
+            self._flush()
+        finally:
+            self.events(Pending(self.spool.count()))
+
+    def _flush(self) -> None:
         for entry in self.spool.pending():
             outcome = self.client.send(
                 entry.fields, entry.image.read_bytes(), entry.image.name, entry.mime
@@ -215,25 +267,47 @@ class Station:
             self._log_send(entry, outcome)
             if isinstance(outcome, Sent):
                 self.spool.remove(entry)
+                found = str(entry.record.get("found", ""))
                 repeat = " (the app already had it)" if outcome.duplicate else ""
                 self.say(
                     f"{entry.label}: {outcome.batch_code} section {outcome.sequence}, "
-                    f"{outcome.verdict} ({entry.record.get('found', '')}){repeat}"
+                    f"{outcome.verdict} ({found}){repeat}"
+                )
+                self.events(
+                    ScanSent(
+                        entry.label,
+                        outcome.batch_code,
+                        outcome.sequence,
+                        outcome.verdict,
+                        found,
+                        outcome.duplicate,
+                    )
                 )
             elif isinstance(outcome, Rejected):
                 where = self.spool.fail(entry, outcome.message)
                 self.say(f"{entry.label}: the app refused it: {outcome.message} Kept in {where}.")
+                self.events(
+                    ScanRefused(
+                        entry.label, f"The app refused it: {outcome.message} Kept in {where}."
+                    )
+                )
             elif isinstance(outcome, TokenRefused):
                 raise StationStop(outcome.message)
             elif isinstance(outcome, NoBatch):
                 self.say(f"{entry.label}: {outcome.message} It's saved and will be sent later.")
+                self.events(
+                    SendDelayed(
+                        entry.label, f"{outcome.message} It's saved and will be sent later."
+                    )
+                )
                 return
             else:
-                self.say(
-                    f"{entry.label}: couldn't send it ({outcome.reason}) after "
-                    f"{outcome.attempts} tries. It's saved; {self.spool.count()} waiting to send, "
-                    "in order."
+                message = (
+                    f"Couldn't send it ({outcome.reason}) after {outcome.attempts} tries. It's "
+                    f"saved; {self.spool.count()} waiting to send, in order."
                 )
+                self.say(f"{entry.label}: {message[0].lower()}{message[1:]}")
+                self.events(SendDelayed(entry.label, message))
                 return
 
     def _log_send(self, entry: Entry, outcome: object) -> None:

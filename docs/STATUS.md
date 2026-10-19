@@ -4,12 +4,11 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-19
-**Branch:** `main` @ `57694eb` (Phase 15 and its QA fixes merged as PRs #9 and #10). Phase 16 is
-on the `main` checkout, uncommitted (Dylan decides when to branch and commit; the team opens and
-merges the PR, D-032).
-**Current phase:** Phase 16, the Camera page, the small model check, clean data and the demo
-(done; Codex run 2 passed). That finishes `camera-yolo-integration.md`.
-**Overall:** 17 / 17 phases built
+**Branch:** `main` @ `dac8599` (Phase 16 merged as PR #11). Phase 17 is on the `main` checkout,
+uncommitted (Dylan decides when to branch and commit; the team opens and merges the PR, D-032).
+**Current phase:** Phase 17, the camera station window (built; waiting for Codex's hands-on run).
+Brief: `camera-station-window.md`; plan: `phase-17-plan.md`.
+**Overall:** 18 / 18 phases built
 
 ## Phase progress
 
@@ -30,6 +29,7 @@ merges the PR, D-032).
 - [x] 14. Camera YOLO model: intake and the inference core
 - [x] 15. Camera station: capture, send, recover
 - [x] 16. Camera page, a small model check, clean data and the demo
+- [x] 17. The camera station window (Codex run pending)
 
 ## What works right now
 
@@ -100,6 +100,22 @@ merges the PR, D-032).
   dry run on the dev database found 135 test accounts, 131 tokens, 248 batches, 541 scans, 167
   requests, 172 items and 3,680 audit rows; Dylan had it run with `--yes` on 2026-10-19 (no
   backup, his call): four demo accounts, a fresh demo week of 14 batches and 293 scans.
+- **Camera station window (Phase 17, D-059 to D-063):** `python -m cpoint_cv window`, or the
+  **CPoint Camera** desktop shortcut (`python -m cpoint_cv shortcut`, to `cv/CPoint Camera.cmd`,
+  which names the missing setup step when `cv/.venv` or a package is missing). Tkinter; the window
+  runs the same `Station` loop on a worker thread.
+  - **Check this machine:** `doctor`'s checks plus the GPU, each pass, warning or fail with its
+    fix; failures block Start, warnings (no GPU → CPU, another package version, no batch, a clock
+    2–5 minutes off) don't;
+  - camera picker: numbers that give a picture, an address (DroidCam `http://<IP>:4747/video`),
+    Default or DirectShow (`[camera] backend`); saved in `cv/station-window.json` (git-ignored),
+    never with a password;
+  - live preview at 960, up to 4 a second, boxes in class colours under a "Preview" banner, no
+    verdict; Capture (or Space) sends the frame on screen at the press through the spool and
+    `captureId` path at 1536; Last scan shows the app's verdict and section; "N waiting to send";
+  - no batch keeps Capture off; a refused token stops with the fix; a dropped camera reconnects
+    for 30 s, then stops; Stop frees the camera;
+  - measured on the RTX 3060 for a frame in memory: about 35 ms at 960 and 55 ms at 1536.
 - **Camera station (Phases 14–16, D-048 to D-058):** the `cpoint_cv` Python package in `cv/` runs
   `yolo-v1.pt` (`cv/models/`, git-ignored, SHA-256 in `cv/MODEL_CARD.md`), about 255 ms per image
   on Dylan's RTX 3060 and 780 ms on the CPU at `imgsz` 1536.
@@ -109,7 +125,8 @@ merges the PR, D-032).
     that `batchId`, a `captureId` and `capturedAt`; prints the app's verdict. Captures wait in
     `cv/out/spool/` until the app has them; network errors and 5xx are retried, then sent later
     in order; refused scans go to `cv/out/failed/`; a refused token stops it (D-050);
-  - `doctor`: model and checksum, versions, camera, app, token and clock;
+  - `doctor`: model and checksum, versions, the GPU, camera, app, token and clock; `warn` lines
+    don't fail it (D-061);
   - the app answers a repeated `captureId` with the first scan (200, `duplicate: true`), so
     retries never double a scan (D-051);
   - defect types: add `crease` and `scratch`, turn off `abrasion` and `dirt` in Settings, per
@@ -127,7 +144,8 @@ merges the PR, D-032).
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 537 unit tests pass (Vitest), plus 158 station tests (pytest, no torch, OpenCV or network).
+  - 537 unit tests pass (Vitest), plus 225 station tests (pytest; they also pass without OpenCV,
+    torch or Pillow, as in CI). Phase 17's window is tested by hand (Codex, pending).
   - Phase 16 (Codex, 2026-10-19, run 1): 19 of 21 passed, the app end to end with the real
     station. S14 failed because Dylan's local `cv/config.toml` lacked the "When found" preview
     settings (now added; `predict`/`evaluate` warn when they're missing); one e2e assertion was
@@ -159,15 +177,21 @@ merges the PR, D-032).
 
 ## Next step (exact)
 
-1. Dylan: after the demo, revoke the "Simulator" token (it was pasted in chat) and make a new one.
-   Before the panel, `npm run demo:reset -- --yes` gives a clean week again (run 2 left 13 extra
-   simulator scans).
-2. Dylan: branch, commit and push Phase 16 and open the PR (D-032). `phase-15-plan.md` is old and
-   can be deleted; `phase-16-plan.md` is this phase's plan.
-3. Codex: done (run 2 PASS WITH ISSUES; the issues were test-harness notes, not app faults).
-4. `camera-yolo-integration.md` is finished. Next work comes from the client follow-ups below.
+1. Dylan: branch, commit and push Phase 17 and open the PR (D-032). `phase-16-plan.md` is old and
+   can be deleted; `phase-17-plan.md` is this phase's plan.
+2. Codex: run `qa/handoffs/2026-10-19-phase-17-camera-window.md` (the window by hand with the
+   laptop webcam and the iPhone through DroidCam). Fix its failures before new work.
+3. Dylan: after the demo, revoke the "Simulator" token (it was pasted in chat) and make a new one.
+   Before the panel, `npm run demo:reset -- --yes` gives a clean week again.
+4. `camera-station-window.md` is finished once Codex passes. Next work comes from the client
+   follow-ups below (or, later, controlling the station from the Camera page).
 
 Later:
+
+- Phase 18 idea (Dylan, 2026-10-19, parked): capture from the QI's dashboard instead of a second
+  app. A browser Capture page; the model as ONNX in the app container (`onnxruntime-node`, no
+  third container, D-003); HTTPS on the LAN so other PCs and the iPhone's Safari may use the camera;
+  decide who captures (QI only, or the FM too). Prompt written: `camera-capture-page.md` (Dylan to review, then run it as Phase 18).
 
 - Apply CPoint's answers to the open questions below.
 - Component tracking, once CPoint gives the component counts per shoe type.
@@ -222,6 +246,12 @@ Later:
 - Decided (D-054 to D-058, Dylan 2026-10-19): station check-in through `batches/current`; the
   early-model notice is a setting; `demo:reset`; the duplicate-box filter and IP camera URL;
   `evaluate` with `labels.csv`, run on the five photos as a small check.
+- Decided (D-059 to D-063, Dylan 2026-10-19): a Tkinter station window on the camera PC (not the
+  website); the preview at 960 and 4 a second, Capture sends the frame on screen at full size;
+  failures block Start, warnings don't; the camera choice in a git-ignored file; a `.cmd` launcher
+  and a `shortcut` command.
+- ASSUMPTION (D-061): a clock 2 to 5 minutes off is only a warning, because the app accepts those
+  scans; only more than 5 minutes ahead blocks Start.
 - ASSUMPTION (D-058): the five photos' expected verdicts in `labels.csv` were drafted by Claude
   from the photos; Dylan to confirm.
 - Decided (D-049, Dylan 2026-10-19): model files stay out of git (`cv/models/`), not Git LFS.

@@ -152,3 +152,52 @@ class FakeTrigger:
             for _ in range(self._idles):
                 idle()
         return self._presses.pop(0) if self._presses else False
+
+
+class FakeImage:
+    """Stands in for an OpenCV frame: only ``shape`` is read."""
+
+    def __init__(self, width: int = 1280, height: int = 720, tag: int = 0) -> None:
+        self.shape = (height, width, 3)
+        self.tag = tag
+
+
+class FakeCapture:
+    """An OpenCV ``VideoCapture`` double. ``frames`` is how many reads succeed before it drops
+    (None: never drops)."""
+
+    def __init__(self, opened: bool = True, frames: int | None = None, width: int = 1280) -> None:
+        self._opened = opened
+        self._left = frames
+        self._width = width
+        self.reads = 0
+        self.released = False
+
+    def isOpened(self) -> bool:  # OpenCV's names, so the code under test can't tell
+        return self._opened
+
+    def read(self) -> tuple[bool, FakeImage | None]:
+        self.reads += 1
+        if self._left is not None:
+            if self._left <= 0:
+                return False, None
+            self._left -= 1
+        return True, FakeImage(self._width, tag=self.reads)
+
+    def release(self) -> None:
+        self.released = True
+
+
+class FakeCv2:
+    """``cv2`` as far as camera opening goes. ``cameras`` maps (index, backend) to a capture."""
+
+    CAP_DSHOW = 700
+
+    def __init__(self, cameras: Mapping[tuple[Any, str], FakeCapture]) -> None:
+        self._cameras: dict[tuple[Any, str], FakeCapture] = dict(cameras)
+        self.opened: list[tuple[int | str, int | None]] = []
+
+    def VideoCapture(self, device: int | str, api: int | None = None) -> FakeCapture:
+        self.opened.append((device, api))
+        backend = "dshow" if api == self.CAP_DSHOW else "default"
+        return self._cameras.get((device, backend), FakeCapture(opened=False))
