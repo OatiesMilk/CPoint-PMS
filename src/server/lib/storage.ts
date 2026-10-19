@@ -42,3 +42,15 @@ export function getStorage(): StorageService {
   storage ??= createLocalStorage(getEnv().UPLOADS_DIR);
   return storage;
 }
+
+/**
+ * Empties the given top-level folders under the uploads root (`npm run demo:reset`, D-056). Only
+ * plain folder names are accepted, so nothing outside the root can be touched.
+ */
+export async function clearUploadFolders(folders: string[], root = getEnv().UPLOADS_DIR) {
+  const base = path.resolve(root);
+  for (const folder of folders) {
+    if (!/^[a-z0-9_-]+$/i.test(folder)) throw new Error(`Refusing unsafe folder: ${folder}`);
+    await rm(path.join(base, folder), { recursive: true, force: true });
+  }
+}

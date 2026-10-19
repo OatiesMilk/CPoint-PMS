@@ -85,4 +85,9 @@ What it shows:
   more photos to REJECT rather than telling defects apart by how bad they are.
 - **Duplicates:** the model sometimes reports the same scratch twice with nearly the same box
   (e.g. 0.63 and 0.60). It doesn't change the verdict (the highest confidence decides) but inflates
-  counts per class. Worth checking in Phase 15 (an overlap filter in the mapper, as config).
+  counts per class. Since Phase 16 the mapper keeps only the more confident of two same-class
+  boxes overlapping by IoU ≥ 0.7 (`[mapper] overlap_iou`, D-057).
+
+Phase 16 added "When found" actions per defect type (D-053): with cut and hole on Reject and
+crease and scratch on Rework, all five photos get the verdict a person would expect. See
+`reports/2026-10-19-yolo-v1.md`, a small check, not a measurement.

@@ -54,7 +54,7 @@ export function findSupplier(id: string, db: Db = defaultDb()) {
 
 export function listDefectTypes(db: Db = defaultDb()) {
   return db.defectType.findMany({
-    select: { id: true, key: true, label: true, isActive: true },
+    select: { id: true, key: true, label: true, isActive: true, action: true },
     orderBy: { sortOrder: "asc" },
   });
 }
@@ -152,7 +152,19 @@ export async function listUnknownClassKeys(db: Db = defaultDb()): Promise<Unknow
 }
 
 export function updateThresholds(
-  data: { rejectAtOrAbove: number; reworkAtOrAbove: number; updatedById: string },
+  data: {
+    rejectAtOrAbove: number;
+    reworkAtOrAbove: number;
+    foundAtOrAbove: number;
+    updatedById: string;
+  },
+  db: Db = defaultDb(),
+) {
+  return db.cvSettings.update({ where: { id: 1 }, data });
+}
+
+export function updateModelNotice(
+  data: { earlyModelNotice: boolean; updatedById: string },
   db: Db = defaultDb(),
 ) {
   return db.cvSettings.update({ where: { id: 1 }, data });

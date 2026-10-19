@@ -15,10 +15,19 @@ import { saveThresholdsAction } from "./actions";
  * The two decision thresholds (D-011), edited as percentages with a live description of the
  * resulting bands, so the admin sees what a change means before saving.
  */
-export function ThresholdsForm({ reject, rework }: { reject: number; rework: number }) {
+export function ThresholdsForm({
+  reject,
+  rework,
+  found,
+}: {
+  reject: number;
+  rework: number;
+  found: number;
+}) {
   const [values, setValues] = useState({
     rejectPercent: String(Math.round(reject * 1000) / 10),
     reworkPercent: String(Math.round(rework * 1000) / 10),
+    foundPercent: String(Math.round(found * 1000) / 10),
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -26,14 +35,20 @@ export function ThresholdsForm({ reject, rework }: { reject: number; rework: num
 
   const r = Number(values.rejectPercent) / 100;
   const w = Number(values.reworkPercent) / 100;
+  const f = Number(values.foundPercent) / 100;
   const valid =
     values.rejectPercent !== "" &&
     values.reworkPercent !== "" &&
     validateThresholds({ rejectAtOrAbove: r, reworkAtOrAbove: w }).length === 0;
   const bands = valid ? describeThresholds({ rejectAtOrAbove: r, reworkAtOrAbove: w }) : null;
-  const changed = Math.abs(r - reject) > 1e-9 || Math.abs(w - rework) > 1e-9;
+  const changed =
+    Math.abs(r - reject) > 1e-9 || Math.abs(w - rework) > 1e-9 || Math.abs(f - found) > 1e-9;
 
-  const field = (key: "rejectPercent" | "reworkPercent", label: string, hint: string) => (
+  const field = (
+    key: "rejectPercent" | "reworkPercent" | "foundPercent",
+    label: string,
+    hint: string,
+  ) => (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={key}>{label}</Label>
       <div className="relative w-40">
@@ -92,9 +107,16 @@ export function ThresholdsForm({ reject, rework }: { reject: number; rework: num
         )}
         {field("reworkPercent", "Rework at or above", "Must be lower than Reject.")}
       </div>
+      {field(
+        "foundPercent",
+        "A defect counts as found at",
+        "Only for defect types set to Rework or Reject when found (Defect types tab).",
+      )}
 
       <div className="rounded-lg border bg-card p-4" aria-live="polite">
-        <p className="mb-3 text-sm font-medium">What the camera will decide</p>
+        <p className="mb-3 text-sm font-medium">
+          What the camera will decide for defect types set to “By confidence”
+        </p>
         {bands ? (
           <ul className="flex flex-col gap-2 text-sm">
             <li className="flex items-center gap-2">
@@ -116,8 +138,10 @@ export function ThresholdsForm({ reject, rework }: { reject: number; rework: num
           </p>
         )}
         <p className="mt-3 text-sm text-muted-foreground">
-          An unknown defect class always goes to the review queue. Scans already taken keep the
-          thresholds they were decided with.
+          A defect type set to Rework or Reject when found gets that result from{" "}
+          {values.foundPercent || "…"}% confidence, however sure the model is above it. An unknown
+          defect class always goes to the review queue. Scans already taken keep the rules they were
+          decided with.
         </p>
       </div>
 

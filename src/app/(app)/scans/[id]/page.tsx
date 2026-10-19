@@ -14,6 +14,7 @@ import { VerdictFlow } from "@/components/features/scans/verdict-flow";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { actionGroups, readSnapshot } from "@/lib/decision-engine";
 import { formatManilaDateTime, formatPercent } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
 import { can, requiredDecisionPermission } from "@/server/policies/permissions";
@@ -47,10 +48,9 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
   const scan = await getScanDetail(id);
   if (!scan) notFound();
 
-  const thresholds = scan.thresholdsSnapshot as {
-    rejectAtOrAbove: number;
-    reworkAtOrAbove: number;
-  };
+  const thresholds = readSnapshot(scan.thresholdsSnapshot);
+  const groups = actionGroups(thresholds.actions);
+  const hasActions = groups.reject.length + groups.rework.length > 0;
   const label = `${scan.batch.code} · section #${scan.sequence}`;
   const batchOpen = scan.batch.status === "IN_PROGRESS" || scan.batch.status === "PLANNED";
   const flagged = scan.aiVerdict === "NEEDS_REVIEW";
@@ -123,6 +123,7 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
               label: d.defectType?.label ?? d.rawClassKey,
               confidence: d.confidence,
               unknown: d.isUnknownClass,
+              action: thresholds.actions?.[d.rawClassKey] ?? null,
               inactive: d.defectType ? !d.defectType.isActive : false,
               box: { x: d.x, y: d.y, width: d.width, height: d.height },
             }))}
@@ -143,9 +144,25 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                 <dt className="text-muted-foreground">Highest confidence</dt>
                 <dd className="tabular-nums">{formatPercent(scan.maxConfidence)}</dd>
                 <dt className="text-muted-foreground">Rules used</dt>
-                <dd className="tabular-nums">
-                  Reject ≥ {formatPercent(thresholds.rejectAtOrAbove)}, Rework ≥{" "}
-                  {formatPercent(thresholds.reworkAtOrAbove)}
+                <dd className="flex flex-col gap-1 tabular-nums">
+                  {hasActions && (
+                    <>
+                      {groups.reject.length > 0 && (
+                        <span>Reject when found: {groups.reject.join(", ")}</span>
+                      )}
+                      {groups.rework.length > 0 && (
+                        <span>Rework when found: {groups.rework.join(", ")}</span>
+                      )}
+                      <span className="text-muted-foreground">
+                        Found at {formatPercent(thresholds.foundAtOrAbove ?? 0.5)} or more
+                      </span>
+                    </>
+                  )}
+                  <span className={hasActions ? "text-muted-foreground" : undefined}>
+                    {hasActions ? "Other types: " : ""}Reject ≥{" "}
+                    {formatPercent(thresholds.rejectAtOrAbove)}, Rework ≥{" "}
+                    {formatPercent(thresholds.reworkAtOrAbove)}
+                  </span>
                 </dd>
                 <dt className="text-muted-foreground">Decided</dt>
                 <dd>

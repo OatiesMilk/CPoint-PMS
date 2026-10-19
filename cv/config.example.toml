@@ -21,6 +21,9 @@ sha256 = "1d729fb0358d3140d5491d4124e2173ec228e42875e06a31a69f4530d83f157b"
 confidence_floor = 0.25
 # At most 50, the app's limit per scan. The strongest are kept.
 max_detections = 50
+# Two boxes of the same class overlapping this much (intersection over union, 0 to 1) are one
+# defect the model reported twice: only the more confident is sent. 0 sends every box.
+overlap_iou = 0.7
 
 [mapper.rename]
 # Optional: send a model class under another key, e.g.
@@ -35,6 +38,16 @@ rework_at_or_above = 0.60
 # "Defect types for yolo-v1", D-052): the model's four classes active, the two it never sends off.
 active_keys = ["crease", "cut", "hole", "scratch"]
 inactive_keys = ["abrasion", "dirt"]
+# "A defect counts as found at" in Settings > Thresholds (D-053).
+found_at_or_above = 0.50
+
+[preview.actions]
+# Each defect type's "When found" in Settings > Defect types (D-053). A type left out goes by
+# confidence (the two thresholds above). These match npm run demo:reset.
+crease = "REWORK"
+cut = "REJECT"
+hole = "REJECT"
+scratch = "REWORK"
 
 [server]
 # The app's address. CV_BASE_URL in cv/.env or the environment wins over this.
@@ -57,6 +70,9 @@ jpeg_quality = 90
 interval_seconds = 3
 # How often to ask again while no batch is at Preparation.
 no_batch_wait_seconds = 5
+# While waiting for Space, the station asks the app for the batch this often, so the Camera page
+# shows it as connected between captures and a batch change is announced (D-054). 0 turns it off.
+check_in_seconds = 20
 # Folders, relative to this file's folder. Captures wait in spool_dir until the app has them;
 # failed_dir keeps captures the app refused, each with reason.txt; log_dir has one JSON line per
 # event, per day.
@@ -67,6 +83,9 @@ log_dir = "out/logs"
 [camera]
 # OpenCV camera number: 0 is the first (often the laptop's built-in camera).
 index = 0
+# Or an IP camera on the network, used instead of index, e.g. "rtsp://192.168.1.50:554/stream1".
+# If the address holds a password, put it in cv/.env as CPOINT_CV_CAMERA_URL=... instead.
+url = ""
 # Requested resolution. The camera may pick the nearest it supports; doctor shows what it gives.
 width = 1920
 height = 1080

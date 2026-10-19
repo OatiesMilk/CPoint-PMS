@@ -44,6 +44,7 @@ def make(
     transport: FakeTransport,
     frames: int = 1,
     presses: list[bool] | None = None,
+    idles: int = 0,
 ) -> tuple[Station, list[str], list[float]]:
     base = parse_config({"model": {"path": "m.pt"}}, base_dir=tmp_path)
     config = Config(
@@ -57,7 +58,7 @@ def make(
     station = Station(
         config=config,
         source=FakeSource([Frame(JPEG, f"section-{i}.jpg") for i in range(1, frames + 1)]),
-        trigger=FakeTrigger(presses if presses is not None else [True] * frames),
+        trigger=FakeTrigger(presses if presses is not None else [True] * frames, idles=idles),
         detector=FakeDetector(
             NAMES,
             [RawDetection(1, 0.71, cx=0.5, cy=0.5, w=0.2, h=0.1)],
@@ -262,3 +263,50 @@ def test_every_send_event_records_its_status_and_attempts(tmp_path: Path) -> Non
     refused, failed = sends
     assert (refused["httpStatus"], refused["attempts"]) == (422, 1)
     assert (failed["httpStatus"], failed["attempts"]) == (None, 4)
+
+
+# ───────────── check-ins while waiting for the key (D-054) ─────────────
+
+
+def _gets(t: FakeTransport) -> int:
+    return sum(1 for r in t.requests if r.url.endswith("/batches/current"))
+
+
+def test_checks_in_while_waiting_for_the_key(tmp_path: Path) -> None:
+    t = FakeTransport(current=[batch_ok()], scans=[created()])
+    station, said, _ = make(tmp_path, t, idles=3)
+    assert station.run() == 0
+    # One before the key, three check-ins, one recheck after the press; nothing is said for them.
+    assert _gets(t) >= 5
+    assert not any("changed" in line for line in said)
+
+
+def test_a_check_in_announces_a_new_batch_and_the_scan_goes_there(tmp_path: Path) -> None:
+    other = {"batchId": "0199e2b4-1f00-7c3a-8d21-000000000099", "batchCode": "B-2026-0008"}
+    t = FakeTransport(current=[batch_ok(), batch_ok(**other)], scans=[created()])
+    station, said, _ = make(tmp_path, t, idles=1)
+    station.run()
+    assert "The batch changed. Next scan goes to B-2026-0008 (roll LR-0042, School Shoe)." in said
+    assert t.posts()[0].form()["batchId"] == other["batchId"]
+    assert sum("changed" in line for line in said) == 1  # the recheck doesn't say it again
+
+
+def test_a_check_in_says_once_when_the_batch_left_preparation(tmp_path: Path) -> None:
+    t = FakeTransport(
+        current=[batch_ok(), no_batch(), no_batch(), no_batch(), no_batch(), batch_ok()]
+    )
+    station, said, _ = make(tmp_path, t, idles=3, presses=[True])
+    station.run()
+    expected = f"{NO_BATCH_MESSAGE} The next press won't capture until a batch is at Preparation."
+    assert said.count(expected) == 1
+    assert t.posts() == []
+
+
+def test_a_refused_token_during_a_check_in_stops_the_station(tmp_path: Path) -> None:
+    t = FakeTransport(
+        current=[batch_ok(), error(401, "UNAUTHENTICATED", "That token isn't valid.")]
+    )
+    station, said, _ = make(tmp_path, t, idles=1)
+    assert station.run() == 3
+    assert t.posts() == []
+    assert any("device token was refused" in line for line in said)

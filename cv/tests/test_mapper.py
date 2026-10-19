@@ -1,6 +1,6 @@
 import pytest
 
-from cpoint_cv.mapper import MapperConfig, class_key_for, map_detections, to_box
+from cpoint_cv.mapper import MapperConfig, class_key_for, iou, map_detections, to_box
 from cpoint_cv.types import Box, RawDetection
 
 NAMES = {0: "crease", 1: "cut", 2: "hole", 3: "scratch"}
@@ -65,7 +65,9 @@ def test_floor_drops_noise_and_keeps_the_boundary() -> None:
 
 def test_sorted_by_confidence_and_capped() -> None:
     many = [raw(1, 0.3 + i / 100) for i in range(60)]
-    out = map_detections(many, NAMES, MapperConfig(confidence_floor=0.0, max_detections=50))
+    out = map_detections(
+        many, NAMES, MapperConfig(confidence_floor=0.0, max_detections=50, overlap_iou=0)
+    )
     assert len(out) == 50
     assert out[0].confidence == pytest.approx(0.89)
     assert [d.confidence for d in out] == sorted((d.confidence for d in out), reverse=True)
@@ -85,3 +87,34 @@ def test_confidence_and_box_are_rounded_to_four_decimals() -> None:
 def test_nothing_found_is_an_empty_list() -> None:
     assert map_detections([], NAMES, MapperConfig()) == []
     assert map_detections([raw(1, 0.1)], NAMES, MapperConfig()) == []
+
+
+# ───────────── the overlap filter (one defect reported twice) ─────────────
+
+
+def test_drops_a_same_class_copy_of_a_box_and_keeps_the_stronger() -> None:
+    raw = [
+        RawDetection(3, 0.60, cx=0.50, cy=0.50, w=0.20, h=0.10),
+        RawDetection(3, 0.63, cx=0.51, cy=0.50, w=0.20, h=0.10),
+        RawDetection(1, 0.55, cx=0.50, cy=0.50, w=0.20, h=0.10),  # a cut in the same place stays
+    ]
+    out = map_detections(raw, NAMES, MapperConfig())
+    assert [(d.class_key, d.confidence) for d in out] == [("scratch", 0.63), ("cut", 0.55)]
+
+
+def test_keeps_separate_boxes_of_one_class_and_can_be_turned_off() -> None:
+    raw = [
+        RawDetection(3, 0.60, cx=0.2, cy=0.2, w=0.1, h=0.1),
+        RawDetection(3, 0.63, cx=0.7, cy=0.7, w=0.1, h=0.1),
+    ]
+    assert len(map_detections(raw, NAMES, MapperConfig())) == 2
+    twice = [RawDetection(3, 0.6, cx=0.5, cy=0.5, w=0.2, h=0.1)] * 2
+    assert len(map_detections(twice, NAMES, MapperConfig(overlap_iou=0))) == 2
+    assert len(map_detections(twice, NAMES, MapperConfig())) == 1
+
+
+def test_iou() -> None:
+    a = Box(0.0, 0.0, 0.2, 0.2)
+    assert iou(a, a) == 1.0
+    assert iou(a, Box(0.5, 0.5, 0.1, 0.1)) == 0.0
+    assert round(iou(a, Box(0.1, 0.0, 0.2, 0.2)), 4) == round(0.02 / 0.06, 4)

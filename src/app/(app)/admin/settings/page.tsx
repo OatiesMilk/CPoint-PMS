@@ -23,6 +23,7 @@ import {
   unknownClasses,
 } from "@/server/services/settings.service";
 import { ReferenceManager, type Column, type Field, type Row } from "./reference-manager";
+import { ModelNoticeForm } from "./model-notice-form";
 import { ThresholdsForm } from "./thresholds-form";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -37,6 +38,12 @@ const TABS = [
 type Tab = (typeof TABS)[number]["id"];
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+
+const ACTION_LABEL: Record<string, string> = {
+  "": "By confidence",
+  REWORK: "Rework when found",
+  REJECT: "Reject when found",
+};
 
 export default async function SettingsPage({ searchParams }: PageProps<"/admin/settings">) {
   await requirePermission("settings:manage");
@@ -85,10 +92,16 @@ async function ThresholdsTab() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        The highest confidence among active defect types decides each scan (D-011). Last changed{" "}
-        {formatManilaDateTime(t.updatedAt)}.
+        Each defect the camera finds gives a result, and the worst one decides the section. A defect
+        type set to Rework or Reject when found always gives that; the others go by the model’s
+        confidence. Last changed {formatManilaDateTime(t.updatedAt)}.
       </p>
-      <ThresholdsForm reject={t.rejectAtOrAbove} rework={t.reworkAtOrAbove} />
+      <ThresholdsForm
+        reject={t.rejectAtOrAbove}
+        rework={t.reworkAtOrAbove}
+        found={t.foundAtOrAbove}
+      />
+      <ModelNoticeForm initial={t.earlyModelNotice} />
     </div>
   );
 }
@@ -98,6 +111,7 @@ async function DefectsTab({ add }: { add?: string }) {
   const columns: Column[] = [
     { key: "label", label: "Label" },
     { key: "key", label: "Class key", mono: true },
+    { key: "action", label: "When found" },
     { key: "description", label: "Description" },
     { key: "sortOrder", label: "Order", numeric: true },
   ];
@@ -110,6 +124,18 @@ async function DefectsTab({ add }: { add?: string }) {
       lockedOnEdit: "The camera sends this key, so it can’t change. Add a new type instead.",
     },
     { name: "label", label: "Label", placeholder: "e.g. Scratch" },
+    {
+      name: "action",
+      label: "When found",
+      type: "select",
+      optional: true,
+      placeholder: ACTION_LABEL[""],
+      options: [
+        { value: "REWORK", label: ACTION_LABEL.REWORK },
+        { value: "REJECT", label: ACTION_LABEL.REJECT },
+      ],
+      hint: "The model’s confidence says how sure it is a defect is there, not how bad it is. Choose Rework or Reject to decide by the type instead.",
+    },
     { name: "description", label: "Description", type: "textarea", optional: true },
     {
       name: "sortOrder",
@@ -176,11 +202,13 @@ async function DefectsTab({ add }: { add?: string }) {
           values: {
             key: str(r.key),
             label: str(r.label),
+            action: str(r.action),
             description: str(r.description),
             sortOrder: str(r.sortOrder),
           },
           cells: {
             label: str(r.label),
+            action: ACTION_LABEL[str(r.action)] ?? str(r.action),
             key: str(r.key),
             description: str(r.description),
             sortOrder: str(r.sortOrder),

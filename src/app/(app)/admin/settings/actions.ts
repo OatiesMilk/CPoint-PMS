@@ -5,6 +5,7 @@ import { toActionError, type ActionResult } from "@/server/lib/action-result";
 import { requirePermission } from "@/server/policies/guard";
 import {
   createReferenceRow,
+  saveModelNotice,
   saveThresholds,
   setReferenceActive,
   updateReferenceRow,
@@ -12,6 +13,7 @@ import {
 import {
   isReferenceId,
   isReferenceKind,
+  modelNoticeSchema,
   thresholdsSchema,
 } from "@/server/validators/settings.validator";
 
@@ -29,6 +31,18 @@ export async function saveThresholdsAction(input: unknown): Promise<ActionResult
   try {
     await saveThresholds(thresholdsSchema.parse(input), admin);
     refresh();
+    return { ok: true };
+  } catch (error) {
+    return toResult(error);
+  }
+}
+
+export async function saveModelNoticeAction(input: unknown): Promise<ActionResult> {
+  const admin = await requirePermission("settings:manage");
+  try {
+    await saveModelNotice(modelNoticeSchema.parse(input), admin);
+    refresh();
+    revalidatePath("/camera");
     return { ok: true };
   } catch (error) {
     return toResult(error);

@@ -14,6 +14,42 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-19 — Phase 16 follow-up: reset run and Codex run 1 fixes
+
+**Who:** Dylan (local `main` checkout, not committed)
+**Summary:** Ran `npm run demo:reset -- --yes` on the dev database at Dylan's word (no backup, his call). Codex run 1 (`qa/reports/2026-10-19-phase-16-camera-page.md`) passed 19 of 21; its two failures were a stale local config and a stale e2e assertion, both fixed, and A4 was blocked by test order.
+**Changed:**
+
+- `cv/config.toml` (git-ignored): `found_at_or_above` and `[preview.actions]`; `evaluate` now gives 5 of 5 again.
+- `cv/cpoint_cv/cli.py`: `predict` and `evaluate` warn when `[preview.actions]` is empty, and the settings line says so; `cv/tests/test_cli.py`.
+- `tests/e2e/admin.spec.ts`: the threshold snapshot check uses `toMatchObject`.
+- QA handoff `qa/handoffs/2026-10-19-phase-16-camera-page-run2.md` (R3 runs axe on the live camera states before any token is revoked).
+
+**Gates:** lint ✅ · typecheck ✅ · unit 537 ✅ · station: ruff ✅ · mypy ✅ · pytest 158 ✅ · `evaluate` 5 of 5 ✅ · build not re-run (no app code changed) · e2e not run (Codex)
+**Decisions:** none
+**Follow-ups:** Codex run 2 (`qa/reports/2026-10-19-phase-16-camera-page-run2.md`): 4 of 4 passed, axe clean on every live camera state, e2e 14/14, pytest 158. Its notes: on PowerShell use `npm.cmd run cv:simulate -- …` so the flags reach the script (now in `cv/README.md`).
+
+## 2026-10-19 — Phase 16: the Camera page, "When found" actions, a small model check and the demo reset
+
+**Who:** Dylan (local `main` checkout after PR #10, not committed)
+**Summary:** The Camera page now shows the real station honestly: Station connected between captures (the station checks in through `batches/current`), which model judged the last section, and an early-model notice that's a setting. "Confidence isn't severity" is handled as data: each defect type can be Rework or Reject when found. `evaluate` ran on the five sample photos (5 of 5, labelled a small check), and `npm run demo:reset` gives a clean demo system that keeps the accounts. Dylan took every recommended option in `phase-16-plan.md`. The newest QA report (Phase 15 run 2) had no app fault to fix.
+**Changed:**
+
+- App: migration `20261019120000_defect_actions` (`DefectAction`, `DefectType.action`, `CvSettings.foundAtOrAbove`, `earlyModelNotice`); decision engine (worst outcome wins) and ingest snapshot; Settings (When found field and column, found-at field, notice switch); Camera page and `cameraStatus` (states, Model card); scan page "Rules used"; `PUT /api/v1/settings/cv` takes an optional `foundPercent`.
+- Reset: `scripts/demo-reset.ts`, `demo-reset.service.ts`, `demo-reset.model.ts`, `clearUploadFolders`, `runInTransaction` timeout option. Dry run on the dev database only.
+- Simulator and demo week: the model's classes (`MODEL_CLASSES`, active types from the database); crease and scratch drawings.
+- Station: check-in while waiting (`check_in_seconds`), overlap filter (`overlap_iou`), `[camera] url` / `CPOINT_CV_CAMERA_URL`, preview actions, `evaluate`; `cv/reports/2026-10-19-yolo-v1.md`; a drafted `labels.csv` beside the sample photos (outside the repo).
+- Tests: 29 new Vitest (decision engine, camera status, reset, settings, scenario), 22 new pytest; e2e tests post their own `e2e-rule-*` types (not run).
+- Docs: D-053 to D-058, `cv/README.md` (swap runbook, demo script, small check, IP camera), MODEL_CARD, API.md, ROADMAP, STATUS, QA handoff `qa/handoffs/2026-10-19-phase-16-camera-page.md`.
+
+**Gates:** lint ✅ · typecheck ✅ · unit 537 ✅ · build ✅ · station: ruff ✅ · ruff format ✅ · mypy ✅ · pytest 156 ✅ · `evaluate` on the GPU ✅ · `demo:reset` dry run ✅ · e2e and browser not run (Codex) · docker not run (no Docker file changed)
+**Decisions:** D-053, D-054, D-055, D-056, D-057, D-058
+**Follow-ups:**
+
+- Dylan: back up, then `npm run demo:reset -- --yes`; update `[preview]` in `cv/config.toml`; check `labels.csv`; commit and open the PR.
+- Codex: the Phase 16 handoff.
+- Confirm with CPoint which defect gets which "When found" action.
+
 ## 2026-10-19 — Phase 15 follow-up: Codex run 1 fixes
 
 **Who:** Dylan (local `main` checkout after PR #9, not committed)

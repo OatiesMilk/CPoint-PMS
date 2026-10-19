@@ -1,4 +1,5 @@
 import { Errors } from "@/server/lib/errors";
+import { findLatestUsedCameraToken } from "@/server/models/api-token.model";
 import {
   findPreparationBatchById,
   listBatchesAtPreparation,
@@ -62,33 +63,69 @@ export async function setActiveBatch(batchId: string | null, actor: { id: string
 }
 
 export type CameraStatus = {
-  state: "not_connected" | "simulator" | "camera";
-  lastScan: { id: string; at: Date; source: string; device: string | null } | null;
+  /**
+   * camera / simulator: a scan arrived in the last minute. waiting: no scan for a minute, but a
+   * camera station checked in recently (D-054). not_connected: neither.
+   */
+  state: "not_connected" | "waiting" | "simulator" | "camera";
+  lastScan: {
+    id: string;
+    at: Date;
+    source: string;
+    device: string | null;
+    modelVersion: string | null;
+  } | null;
+  /** The station that checked in most recently, while it counts as connected. */
+  station: { name: string; seenAt: Date } | null;
+  earlyModelNotice: boolean;
   current: CameraBatch | null;
   candidates: PreparationBatch[];
   selectedBatchId: string | null;
 };
 
 const ACTIVE_WINDOW_MS = 60_000;
+/**
+ * A waiting station asks for the current batch every 20 s, and the app records a token's use at
+ * most once a minute, so a station counts as connected for two minutes after its last check-in.
+ */
+export const STATION_WINDOW_MS = 120_000;
 
 export async function cameraStatus(now: Date = new Date()): Promise<CameraStatus> {
-  const [latest, current, candidates, settings] = await Promise.all([
+  const [latest, current, candidates, settings, token] = await Promise.all([
     findLatestScan(),
     resolveCameraBatch(),
     listBatchesAtPreparation(),
     getCvSettings(),
+    findLatestUsedCameraToken(),
   ]);
   const recent = latest && now.getTime() - latest.createdAt.getTime() <= ACTIVE_WINDOW_MS;
+  // The simulator never checks in between scans; a token whose last scan was simulated is not a
+  // station, so its recent use doesn't read as "waiting".
+  const stationSeen =
+    token?.lastUsedAt &&
+    now.getTime() - token.lastUsedAt.getTime() <= STATION_WINDOW_MS &&
+    token.scans[0]?.source !== "SIMULATOR"
+      ? { name: token.name, seenAt: token.lastUsedAt }
+      : null;
   return {
-    state: !recent ? "not_connected" : latest.source === "SIMULATOR" ? "simulator" : "camera",
+    state: recent
+      ? latest.source === "SIMULATOR"
+        ? "simulator"
+        : "camera"
+      : stationSeen
+        ? "waiting"
+        : "not_connected",
     lastScan: latest
       ? {
           id: latest.id,
           at: latest.createdAt,
           source: latest.source,
           device: latest.deviceToken?.name ?? null,
+          modelVersion: latest.modelVersion,
         }
       : null,
+    station: stationSeen,
+    earlyModelNotice: settings?.earlyModelNotice ?? true,
     current,
     candidates,
     selectedBatchId: settings?.activeBatchId ?? null,

@@ -7,8 +7,19 @@
 export type Box = { x: number; y: number; width: number; height: number };
 export type Detection = { classKey: string; confidence: number; box: Box };
 export type Random = () => number;
+/** A defect class the scans may show, with its "When found" action if it has one (D-053). */
+export type SceneClass = { key: string; action?: "REWORK" | "REJECT" | null };
 
-export const KNOWN_CLASSES = ["cut", "hole", "abrasion", "dirt"] as const;
+/**
+ * The yolo-v1 classes with the actions `npm run demo:reset` sets. The simulator uses them unless
+ * told otherwise; the demo week reads the active defect types from the database instead.
+ */
+export const MODEL_CLASSES: SceneClass[] = [
+  { key: "crease", action: "REWORK" },
+  { key: "cut", action: "REJECT" },
+  { key: "hole", action: "REJECT" },
+  { key: "scratch", action: "REWORK" },
+];
 /**
  * A class no defect type covers, so its scans go to the review queue. No camera model emits it:
  * `scratch` was used before it became a real class of yolo-v1 (D-052).
@@ -31,9 +42,16 @@ export function randomBox(random: Random): Box {
 
 /**
  * One section's detections: ~30% clean, ~30% a low-confidence mark (Pass), ~22% Rework,
- * ~13% Reject, ~5% an unknown class that needs review (with the default 90% / 60% thresholds).
+ * ~13% Reject, ~5% an unknown class that needs review. The confidences suit both rules: the
+ * default thresholds (90% / 60%) and "when found" actions at 50% (D-053). A Rework section
+ * draws from the classes that rework, a Reject section from those that reject, so the mix holds
+ * whichever rule a type uses.
  */
-export function scenario(random: Random = Math.random): Detection[] {
+export function scenario(
+  random: Random = Math.random,
+  classes: readonly SceneClass[] = MODEL_CLASSES,
+): Detection[] {
+  if (classes.length === 0) throw new Error("scenario() needs at least one defect class.");
   const rand = (min: number, max: number) => min + random() * (max - min);
   const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)];
   const det = (classKey: string, lo: number, hi: number): Detection => ({
@@ -41,15 +59,20 @@ export function scenario(random: Random = Math.random): Detection[] {
     confidence: round(rand(lo, hi)),
     box: randomBox(random),
   });
+  const keys = classes.map((c) => c.key);
+  const pool = (action: "REWORK" | "REJECT") => {
+    const fit = classes.filter((c) => !c.action || c.action === action).map((c) => c.key);
+    return fit.length > 0 ? fit : keys;
+  };
   const r = random();
   if (r < 0.3) return [];
-  if (r < 0.6) return [det(pick(KNOWN_CLASSES), 0.15, 0.55)];
+  if (r < 0.6) return [det(pick(keys), 0.15, 0.45)];
   if (r < 0.82)
     return [
-      det(pick(KNOWN_CLASSES), 0.6, 0.89),
-      ...(random() < 0.3 ? [det(pick(KNOWN_CLASSES), 0.2, 0.5)] : []),
+      det(pick(pool("REWORK")), 0.6, 0.89),
+      ...(random() < 0.3 ? [det(pick(keys), 0.2, 0.45)] : []),
     ];
-  if (r < 0.95) return [det(pick(KNOWN_CLASSES), 0.9, 0.99)];
+  if (r < 0.95) return [det(pick(pool("REJECT")), 0.9, 0.99)];
   return [det(UNKNOWN_CLASS, 0.7, 0.95)];
 }
 
@@ -79,6 +102,10 @@ export async function renderLeatherImage(
           return `<ellipse cx="${cx}" cy="${cy}" rx="${w * 0.45}" ry="${h * 0.4}" fill="#c9a27a" opacity="0.75" filter="url(#rough)"/>`;
         case "dirt":
           return `<ellipse cx="${cx}" cy="${cy}" rx="${w * 0.4}" ry="${h * 0.35}" fill="#2b2118" opacity="0.6" filter="url(#rough)"/>`;
+        case "crease":
+          return `<path d="M${x} ${y + h * 0.3} q${w * 0.25} ${-h * 0.2} ${w * 0.5} 0 t${w * 0.5} 0 M${x} ${y + h * 0.6} q${w * 0.25} ${-h * 0.2} ${w * 0.5} 0 t${w * 0.5} 0" stroke="#3a2010" stroke-width="3" fill="none" opacity="0.7"/>`;
+        case "scratch":
+          return `<path d="M${x + w * 0.05} ${y + h * 0.8} L${x + w * 0.95} ${y + h * 0.2}" stroke="#c9a27a" stroke-width="2.5" stroke-linecap="round"/>`;
         default:
           return `<path d="M${x} ${y + h * 0.2} l${w} ${h * 0.2} M${x} ${y + h * 0.5} l${w} ${h * 0.15} M${x} ${y + h * 0.8} l${w} ${h * 0.1}" stroke="#e8cfae" stroke-width="2"/>`;
       }

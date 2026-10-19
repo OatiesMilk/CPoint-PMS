@@ -173,6 +173,12 @@ export function countScansByVerdict(batchId: string, db: Db = defaultDb()) {
 export function findLatestScan(db: Db = defaultDb()) {
   return db.scan.findFirst({
     orderBy: { createdAt: "desc" },
-    select: { id: true, createdAt: true, source: true, deviceToken: { select: { name: true } } },
+    select: {
+      id: true,
+      createdAt: true,
+      source: true,
+      modelVersion: true,
+      deviceToken: { select: { name: true } },
+    },
   });
 }

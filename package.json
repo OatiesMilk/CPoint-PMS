@@ -25,7 +25,8 @@
     "prepare": "husky || true",
     "cv:token": "tsx --conditions=react-server scripts/cv-token.ts",
     "cv:simulate": "tsx scripts/cv-simulate.ts",
-    "demo:seed": "tsx --conditions=react-server scripts/demo-seed.ts"
+    "demo:seed": "tsx --conditions=react-server scripts/demo-seed.ts",
+    "demo:reset": "tsx --conditions=react-server scripts/demo-reset.ts"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",

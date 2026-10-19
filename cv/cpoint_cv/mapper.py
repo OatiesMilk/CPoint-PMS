@@ -21,6 +21,19 @@ class MapperConfig:
     confidence_floor: float = 0.25
     rename: Mapping[str, str] = field(default_factory=dict)
     max_detections: int = CONTRACT_MAX_DETECTIONS
+    # Two boxes of the same class overlapping this much (intersection over union) are one
+    # defect reported twice; only the more confident is kept. 0 keeps every box.
+    overlap_iou: float = 0.7
+
+
+def iou(a: Box, b: Box) -> float:
+    """Intersection over union of two top-left boxes, 0 to 1."""
+    w = min(a.x + a.width, b.x + b.width) - max(a.x, b.x)
+    h = min(a.y + a.height, b.y + b.height) - max(a.y, b.y)
+    if w <= 0 or h <= 0:
+        return 0.0
+    inter = w * h
+    return inter / (a.width * a.height + b.width * b.height - inter)
 
 
 def _clamp(value: float) -> float:
@@ -69,11 +82,22 @@ def map_with_sources(
         )
         mapped.append((detection, d))
     mapped.sort(key=lambda pair: pair[0].confidence, reverse=True)
+    if config.overlap_iou > 0:
+        kept: list[tuple[Detection, RawDetection]] = []
+        for pair in mapped:  # strongest first, so the more confident of two copies stays
+            det = pair[0]
+            if not any(
+                k.class_key == det.class_key and iou(k.box, det.box) >= config.overlap_iou
+                for k, _ in kept
+            ):
+                kept.append(pair)
+        mapped = kept
     return mapped[: config.max_detections]
 
 
 def map_detections(
     raw: Iterable[RawDetection], names: Mapping[int, str], config: MapperConfig
 ) -> list[Detection]:
-    """Floor, map, sort by confidence (highest first) and keep the strongest ``max_detections``."""
+    """Floor, map, sort by confidence (highest first), drop same-class copies of one box and
+    keep the strongest ``max_detections``."""
     return [detection for detection, _ in map_with_sources(raw, names, config)]

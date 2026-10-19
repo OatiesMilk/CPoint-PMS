@@ -4,11 +4,12 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-19
-**Branch:** `main` @ `94844bc` (Phase 15 merged as PR #9). The Codex run 1 fixes are on the `main`
-checkout, uncommitted (Dylan decides when to branch and commit; the team opens and merges the PR, D-032).
-**Current phase:** Phase 15, the camera station: capture, send, recover (done, waiting for Codex).
-Next: Phase 16, the Camera page, evaluation and the demo.
-**Overall:** 16 / 17 phases built (Phase 16 of `camera-yolo-integration.md` remains)
+**Branch:** `main` @ `57694eb` (Phase 15 and its QA fixes merged as PRs #9 and #10). Phase 16 is
+on the `main` checkout, uncommitted (Dylan decides when to branch and commit; the team opens and
+merges the PR, D-032).
+**Current phase:** Phase 16, the Camera page, the small model check, clean data and the demo
+(done; Codex run 2 passed). That finishes `camera-yolo-integration.md`.
+**Overall:** 17 / 17 phases built
 
 ## Phase progress
 
@@ -28,11 +29,11 @@ Next: Phase 16, the Camera page, evaluation and the demo.
 - [x] 13. Ordering, delivery with proof, and the remaining gaps
 - [x] 14. Camera YOLO model: intake and the inference core
 - [x] 15. Camera station: capture, send, recover
-- [ ] 16. Camera page, evaluation and the demo
+- [x] 16. Camera page, a small model check, clean data and the demo
 
 ## What works right now
 
-- **Database:** 12 migrations (the latest is `scan_capture_id`: one nullable, unique column, D-051). UUIDv7 ids (D-018).
+- **Database:** 13 migrations (the latest is `defect_actions`: a "When found" action per defect type and two CV settings, D-053, D-055). UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017):
   - reference data and the first System Admin;
   - demo users and inventory when `SEED_DEMO_USERS=true`. The demo constructor is a designated
@@ -85,7 +86,21 @@ Next: Phase 16, the Camera page, evaluation and the demo.
   - the FM home card (to decide, to order, late), an Inventory "Requested" badge and "My
     requests" on the constructor home;
   - who may request leather rolls is chosen by the FM (Procurement tab) or the Admin (Users).
-- **Camera station (Phases 14–15, D-048 to D-052):** the `cpoint_cv` Python package in `cv/` runs
+- **Camera page (Phase 16, D-054, D-055):** badges for Not connected, **Station connected**
+  (the station checks in every 20 s while it waits for Space, through `batches/current`), Simulator
+  active and Camera station active; a Model card with the last scan's `modelVersion` and an
+  early-model notice (a Settings switch); "Connect the camera station" steps. Each scan's page shows
+  the model and the rules used.
+- **"When found" actions (D-053):** a defect type can be Rework or Reject when found (from "A
+  defect counts as found at", default 50%); other types keep the two thresholds; the worst result
+  decides. Migration `defect_actions` (13 migrations).
+- **`npm run demo:reset` (D-056):** dry run by default; `-- --yes` keeps the demo accounts, the
+  bootstrap admin and the `CV_DEVICE_TOKEN` token, removes all test data and files, sets cut/hole
+  Reject and crease/scratch Rework when found (abrasion/dirt off) and seeds a fresh demo week. The
+  dry run on the dev database found 135 test accounts, 131 tokens, 248 batches, 541 scans, 167
+  requests, 172 items and 3,680 audit rows; Dylan had it run with `--yes` on 2026-10-19 (no
+  backup, his call): four demo accounts, a fresh demo week of 14 batches and 293 scans.
+- **Camera station (Phases 14–16, D-048 to D-058):** the `cpoint_cv` Python package in `cv/` runs
   `yolo-v1.pt` (`cv/models/`, git-ignored, SHA-256 in `cv/MODEL_CARD.md`), about 255 ms per image
   on Dylan's RTX 3060 and 780 ms on the CPU at `imgsz` 1536.
   - `predict <folder>`: detections, `modelVersion` (`yolo-v1-1d729fb0`), time and a preview verdict;
@@ -98,14 +113,28 @@ Next: Phase 16, the Camera page, evaluation and the demo.
   - the app answers a repeated `captureId` with the first scan (200, `duplicate: true`), so
     retries never double a scan (D-051);
   - defect types: add `crease` and `scratch`, turn off `abrasion` and `dirt` in Settings, per
-    database (`cv/README.md`, D-052). The simulator's unknown class is `sim-unknown`.
+    database (`cv/README.md`, D-052), or run `demo:reset`. The simulator's unknown class is
+    `sim-unknown`; the simulator and demo week now draw the model's classes;
+  - same-class duplicate boxes (IoU ≥ 0.7) are sent once; `[camera] url` opens an IP camera
+    (D-057);
+  - `evaluate <folder>` compares preview verdicts with `labels.csv` (D-058):
+    `cv/reports/2026-10-19-yolo-v1.md`, 5 of 5 on the five sample photos, labelled a small check;
+  - `cv/README.md` has the model swap runbook and the demo script (station PC at the line, server
+    in the office, browsers anywhere on the network).
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
 - **Pagination** (D-047): every list that can grow pages at 15 rows with one pager; Settings
   and the leather-roll requesters have a Find box.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 508 unit tests pass (Vitest), plus 134 station tests (pytest, no torch, OpenCV or network).
+  - 537 unit tests pass (Vitest), plus 158 station tests (pytest, no torch, OpenCV or network).
+  - Phase 16 (Codex, 2026-10-19, run 1): 19 of 21 passed, the app end to end with the real
+    station. S14 failed because Dylan's local `cv/config.toml` lacked the "When found" preview
+    settings (now added; `predict`/`evaluate` warn when they're missing); one e2e assertion was
+    stale (fixed); A4 axe was blocked on the connected states. Run 2: 4 of 4, including axe with 0
+    violations on Station connected, Camera station active and Simulator active for every role,
+    and the e2e admin and cv specs 14/14. No app fault remains. The e2e tests post their own
+    `e2e-rule-*` defect types, so they don't depend on Settings.
   - Phase 15 (Codex, 2026-10-19, run 1): 18 of 19 scenarios passed, the model end to end on the
     website. The two failures (an e2e test still using `crease` as unknown, and `attempts` missing
     on refused log lines) and a duplicate `crease` row in Defects by type are fixed. Run 2: 5 of 6;
@@ -130,14 +159,13 @@ Next: Phase 16, the Camera page, evaluation and the demo.
 
 ## Next step (exact)
 
-1. Dylan: copy the new `[preview]` lists from `cv/config.example.toml` into his own
-   `cv/config.toml`. The Settings steps are done on the dev database (Codex run 1 found them set);
-   repeat them on any other database (`cv/README.md`, "Defect types for yolo-v1").
-2. Dylan: branch, commit and push the QA fixes with both reports and the run 2 handoff, and open
-   the PR (D-032). Phase 15 itself is merged (PR #9). Delete the untracked `phase-15-plan.md`.
-3. Phase 16's evaluation runs on the five sample photos and is labelled a small check (Dylan,
-   2026-10-19: the goal is to show the integration, not to measure the model).
-4. Next session: Phase 16 of `camera-yolo-integration.md` (the Camera page, evaluation, the demo).
+1. Dylan: after the demo, revoke the "Simulator" token (it was pasted in chat) and make a new one.
+   Before the panel, `npm run demo:reset -- --yes` gives a clean week again (run 2 left 13 extra
+   simulator scans).
+2. Dylan: branch, commit and push Phase 16 and open the PR (D-032). `phase-15-plan.md` is old and
+   can be deleted; `phase-16-plan.md` is this phase's plan.
+3. Codex: done (run 2 PASS WITH ISSUES; the issues were test-harness notes, not app faults).
+4. `camera-yolo-integration.md` is finished. Next work comes from the client follow-ups below.
 
 Later:
 
@@ -158,8 +186,10 @@ Later:
 - Decided (D-031, team, 2026-10-05; survey Q14): every constructor can request materials, and only
   the allowed one(s), usually whoever orders leather, can request leather rolls. The FM approves
   all requests.
-- Decided (D-011, team-confirmed): for all defect types, ≥ 90% → REJECT, 60–89% → REWORK, below
-  60% → PASS, and an unknown class key → NEEDS_REVIEW. Still to confirm with CPoint.
+- Decided (D-011, team-confirmed; D-053, Dylan 2026-10-19): a defect type set to Rework or Reject
+  "when found" gets that result from 50% confidence; other types: ≥ 90% → REJECT, 60–89% →
+  REWORK, below 60% → PASS; an unknown class key → NEEDS_REVIEW. Confirm with CPoint which defect
+  gets which action (the demo uses cut and hole → Reject, crease and scratch → Rework).
 - ASSUMPTION: one scan = one leather section of the roll; reworked sections aren't re-scanned.
 - ASSUMPTION: the sign-in lockout (5 tries / 15 minutes) and the 12-hour session suit factory
   shifts. Confirm the shift length.
@@ -185,14 +215,15 @@ Later:
 - Unknown: components per shoe type. Blocks component tracking only.
 - Decided (D-052, Dylan 2026-10-19): defect types follow the model's own classes. `crease` and
   `scratch` are added and `abrasion` and `dirt` turned off in Settings, by hand per database; the
-  bootstrap is unchanged. The simulator and demo week still draw `abrasion`/`dirt` (Phase 16).
+  bootstrap is unchanged; `demo:reset` applies it. The simulator and demo week draw the model's
+  classes.
 - Decided (D-050, D-051, Dylan 2026-10-19): Space captures one section; folder replay sends the
   default source (`WEBCAM`); scans carry an optional `captureId` so retries are safe.
-- Open (Phase 16): confidence is not severity. D-011 reads the model's confidence as how bad a
-  defect is; for yolo-v1 it means how sure it is a defect exists. In the five-photo baseline a
-  clear cut scored 0.51 (it would pass alone). Choose the approach in Phase 16, on a larger set.
-- Observed (Phase 14): the model sometimes reports one scratch twice with nearly the same box. It
-  doesn't change verdicts but inflates per-class counts; an overlap filter was not built in Phase 15 and is still open.
+- Decided (D-054 to D-058, Dylan 2026-10-19): station check-in through `batches/current`; the
+  early-model notice is a setting; `demo:reset`; the duplicate-box filter and IP camera URL;
+  `evaluate` with `labels.csv`, run on the five photos as a small check.
+- ASSUMPTION (D-058): the five photos' expected verdicts in `labels.csv` were drafted by Claude
+  from the photos; Dylan to confirm.
 - Decided (D-049, Dylan 2026-10-19): model files stay out of git (`cv/models/`), not Git LFS.
 - Pending: the new YOLO training photos will change the defect classes. They arrive as
   "unknown", go to the QI's review queue, and are added under Settings → Defect types.

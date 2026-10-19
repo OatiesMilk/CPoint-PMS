@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { decide, validateThresholds, type DefectTypeInfo } from "@/lib/decision-engine";
+import {
+  decide,
+  detectionOutcome,
+  validateThresholds,
+  type DefectTypeInfo,
+} from "@/lib/decision-engine";
 
 const types = new Map<string, DefectTypeInfo>([
   ["cut", { id: "t-cut", isActive: true }],
@@ -99,5 +104,62 @@ describe("validateThresholds", () => {
     expect(validateThresholds({ rejectAtOrAbove: 0.9, reworkAtOrAbove: 0 })).toMatch(
       /between 0 and 1/,
     );
+  });
+});
+
+describe("decide with per-type actions (D-053)", () => {
+  const withActions = new Map<string, DefectTypeInfo>([
+    ["cut", { id: "t-cut", isActive: true, action: "REJECT" }],
+    ["hole", { id: "t-hole", isActive: true, action: "REJECT" }],
+    ["crease", { id: "t-crease", isActive: true, action: "REWORK" }],
+    ["scratch", { id: "t-scratch", isActive: true, action: "REWORK" }],
+    ["stain", { id: "t-stain", isActive: true, action: null }], // by confidence
+    ["dirt", { id: "t-dirt", isActive: false, action: "REJECT" }],
+  ]);
+  const ta = { rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6, foundAtOrAbove: 0.5 };
+  const v = (...dets: [string, number][]) =>
+    decide(
+      dets.map(([classKey, confidence]) => ({ classKey, confidence })),
+      withActions,
+      ta,
+    ).verdict;
+
+  it("gives the type's action once a detection counts as found", () => {
+    expect(v(["cut", 0.51])).toBe("REJECT"); // the clear cut from the baseline photos
+    expect(v(["crease", 0.5])).toBe("REWORK");
+    expect(v(["crease", 0.4999])).toBe("PASS");
+  });
+
+  it("doesn't raise a Rework type to Reject on high confidence", () => {
+    expect(v(["scratch", 0.97])).toBe("REWORK");
+  });
+
+  it("lets the worst outcome win across types", () => {
+    expect(v(["scratch", 0.66], ["hole", 0.52])).toBe("REJECT");
+    expect(v(["scratch", 0.66], ["hole", 0.3])).toBe("REWORK");
+  });
+
+  it("keeps the confidence rule for a type without an action", () => {
+    expect(v(["stain", 0.59])).toBe("PASS");
+    expect(v(["stain", 0.75])).toBe("REWORK");
+    expect(v(["stain", 0.95])).toBe("REJECT");
+  });
+
+  it("still ignores inactive types and sends unknown keys to review", () => {
+    expect(v(["dirt", 0.99])).toBe("PASS");
+    expect(v(["cut", 0.95], ["sim-unknown", 0.7])).toBe("NEEDS_REVIEW");
+  });
+
+  it("uses 0.5 when an older snapshot has no found-at value", () => {
+    expect(detectionOutcome(0.5, "REWORK", { rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6 })).toBe(
+      "REWORK",
+    );
+  });
+
+  it("follows an edited found-at value", () => {
+    expect(
+      decide([{ classKey: "cut", confidence: 0.55 }], withActions, { ...ta, foundAtOrAbove: 0.6 })
+        .verdict,
+    ).toBe("PASS");
   });
 });

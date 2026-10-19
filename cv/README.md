@@ -4,15 +4,17 @@ A Python process that runs on the camera machine, outside Docker (D-003, D-048).
 model on one leather section at a time and reports what the model saw to the app through the
 existing camera contract (`POST /api/v1/scans`, see `docs/API.md`). The app decides every verdict.
 
-It has three commands:
+It has four commands:
 
 - `predict`: run the model on photos and show the detections, the `modelVersion` and a
   **preview** of the verdict the app would give. Posts nothing (Phase 14).
 - `run`: the station. It captures one section at a time from the webcam, a folder or a file,
   runs the model and sends each scan to the app, surviving network and server failures (Phase 15).
+- `evaluate`: compares the preview verdicts with what a person expected (`labels.csv`) and writes
+  a report to `reports/`. Posts nothing (Phase 16).
 - `doctor`: checks everything the station needs and says what to fix.
 
-Phase 16 adds the evaluation report and the demo script.
+The model swap runbook and the demo script are at the end.
 
 ```
 cpoint_cv/
@@ -26,7 +28,8 @@ cpoint_cv/
   transport.py      the HTTP port (standard library only); spool.py: the outbox on disk
   encode.py         keeps every image a JPEG, PNG or WebP under 10 MB
   doctor.py         the station checks; env.py: CV_DEVICE_TOKEN and CV_BASE_URL; logs.py
-  preview.py        Python port of the app's rule (D-011), for predict's preview only
+  preview.py        Python port of the app's rule (D-011, D-053), for the preview only
+  evaluate.py       labels.csv, the verdict table, per-class scores and the sweep (D-058)
   config.py         config.toml + environment overrides
   model_info.py     SHA-256 and modelVersion
   summary.py        per-folder numbers; overlay.py draws boxes and masks
@@ -64,10 +67,14 @@ verdict, then a summary: detections per class with their confidence spread, and 
 would be PASS, REWORK, REJECT or NEEDS_REVIEW. `--json` prints one JSON line per image instead.
 Keep photos and `out/` out of git (`out/` is ignored).
 
-The preview copies the app's rule using the thresholds and defect types under `[preview]` in the
-config. Copy them from Admin → Settings to match the app. The station never sends a verdict.
+The preview copies the app's rule using the thresholds, actions and defect types under
+`[preview]` in the config. Copy them from Admin → Settings to match the app. The station never
+sends a verdict.
 
-## Defect types for yolo-v1 (D-052)
+## Defect types for yolo-v1 (D-052, D-053)
+
+On the demo database `npm run demo:reset` does all of this for you (see the demo script). On any
+other database, do it by hand once.
 
 The model reports `crease`, `cut`, `hole` and `scratch`. The app starts with `cut`, `hole`,
 `abrasion` and `dirt`, so until this is done every `crease` or `scratch` sends the scan to the
@@ -79,11 +86,16 @@ Quality Inspector's review queue. Do it once per database, signed in as the Syst
 3. **Add** a defect type with key `scratch`, label `Scratch`, description "Scratch on the grain".
 4. **Turn off** `abrasion` and `dirt` (the model never reports them). Turning a type off keeps
    every past scan; it only stops the type from deciding new ones.
-5. Leave `cut` and `hole` as they are.
+5. Leave `cut` and `hole` on.
+6. Set **When found** on each type (Edit): `cut` and `hole` → **Reject when found**, `crease` and
+   `scratch` → **Rework when found**. Under **Thresholds**, keep **A defect counts as found at**
+   at 50%. The model's confidence says how sure it is a defect is there, not how bad it is, so the
+   type decides the result (D-053). A type left on **By confidence** keeps the two thresholds.
 
 Running the steps again changes nothing: a key can't be added twice, and a type that's already off
-stays off. Then copy the same list into `[preview]` in `config.toml` (the example already has it)
-so `predict` previews what the app will decide.
+stays off. Then copy the same lists, `found_at_or_above` and `[preview.actions]` into
+`config.toml` (the example already has them) so `predict` and `evaluate` preview what the app
+will decide.
 
 Scans that arrived before step 2 keep their `crease`/`scratch` detections as unknown classes;
 the Quality Inspector decides those, as for any flagged scan.
@@ -109,7 +121,9 @@ Then start a batch in the app (Batches → Start) and run one of:
 ```
 
 - **webcam:** press **Space** to capture the section under the camera, **Q** to stop. One picture
-  per press, never a stream.
+  per press, never a stream. While it waits it checks in with the app every 20 s, so the Camera
+  page shows **Station connected** between captures, and it says at once if someone changed the
+  batch (D-054).
 - **folder:** sends every image in the folder in name order, one every `--interval` seconds, then
   stops. Use it to demo with real leather photos and no camera.
 - **file:** sends one image, for debugging.
@@ -123,6 +137,11 @@ section number and the verdict the app decided. The station never decides a verd
 Every scan is sent as `source` = `[station] scan_source` (`WEBCAM` by default; folder replay too),
 `modelVersion` (e.g. `yolo-v1-1d729fb0`), `capturedAt` (when it was captured, not sent) and a new
 `captureId`.
+
+**An IP camera** on the network works too: set `[camera] url` to its stream address (for example
+`rtsp://192.168.1.50:554/stream1`), or `CPOINT_CV_CAMERA_URL` in `cv/.env` when the address holds
+a password. It replaces `[camera] index`; `doctor` checks it, and logs show it without the user
+name and password (D-057).
 
 ### When something fails
 
@@ -147,11 +166,88 @@ Every setting is in `config.example.toml` with a comment: the model, the mapper,
 `[server]` (address, timeout, retries), `[station]` (source, JPEG quality, interval, folders) and
 `[camera]` (index, resolution). These environment variables override the file: `CPOINT_CV_CONFIG`
 (another file), `CPOINT_CV_MODEL_PATH`, `CPOINT_CV_MODEL_DEVICE`, `CPOINT_CV_MODEL_IMGSZ`,
-`CPOINT_CV_CONFIDENCE_FLOOR`, `CV_BASE_URL`. `CV_DEVICE_TOKEN` and `CV_BASE_URL` can also be in
+`CPOINT_CV_CONFIDENCE_FLOOR`, `CV_BASE_URL`, `CPOINT_CV_CAMERA_URL`. `CV_DEVICE_TOKEN`, `CV_BASE_URL` and `CPOINT_CV_CAMERA_URL` can also be in
 `cv/.env`; a variable set in the shell wins.
 
 - `confidence_floor` (0.25) drops noise before anything is sent. It isn't the app's PASS threshold.
 - `[mapper.rename]` sends a model class under another key, e.g. `crease = "wrinkle"`.
+- `overlap_iou` (0.7): two boxes of the same class that overlap this much are one defect reported
+  twice, so only the more confident is sent (D-057). 0 sends every box.
+- `[station] check_in_seconds` (20): how often a waiting station checks in. 0 turns it off.
+
+## Small model check (D-058)
+
+Put a `labels.csv` beside the photos, one line per photo, saying what a person sees:
+
+```
+file,expected_verdict,classes
+IMG_6320.jpg,REWORK,crease
+IMG_6742.jpg,REJECT,cut;scratch
+```
+
+`expected_verdict` is PASS, REWORK, REJECT or NEEDS_REVIEW; `classes` lists the defect types on
+the photo, separated by `;` (empty when it's clean). Then:
+
+```bash
+.venv/Scripts/python -m cpoint_cv evaluate "path/to/photos"
+```
+
+It writes `reports/<date>-<model>.md`: each photo's expected and preview verdict, a verdict table,
+per-class precision and recall by photo, and how the verdicts shift as **A defect counts as found
+at** or the thresholds move. With 30 photos or fewer the report says it's a small check: it shows
+the model working with the app's rules, not how accurate it is. It changes nothing in the app.
+
+The current report is `reports/2026-10-19-yolo-v1.md` (the five sample photos; their labels were
+drafted from the photos in Phase 16 and still need a person's check).
+
+## Swap in a new model
+
+No app code changes. For example, for `yolo-v2.pt`:
+
+1. Copy it to `cv/models/yolo-v2.pt`. Keep `yolo-v1.pt` until you switch.
+2. Make a second config (`copy config.toml config-v2.toml`) and set `[model] path`,
+   `name = "yolo-v2"`, `imgsz` (the size it was trained at) and `sha256`
+   (`certutil -hashfile models\yolo-v2.pt SHA256`). Record them in `MODEL_CARD.md`.
+3. Run `doctor --config config-v2.toml` and fix anything it reports.
+4. Run `predict photos --config config-v2.toml`: it lists the model's classes. For any class the
+   app doesn't know, add a defect type under **Admin → Settings → Defect types** with that exact
+   key and its **When found** action, and turn off types the new model never reports. Until then
+   its detections go to the Quality Inspector's review queue.
+5. Run `evaluate` for both models on the same labelled photos (`--config config-v2.toml --out
+reports/<date>-yolo-v2.md`) and compare the two reports.
+6. To switch, make `config-v2.toml` your `config.toml` and restart the station. Every scan records
+   its `modelVersion`, so the Camera page and each scan show which model judged it. Switching back
+   is the same steps with the old file.
+
+## Demo script
+
+**Layout:** the camera station is a PC at the Preparation table, with the camera; the app (Docker
+or `npm run dev`) runs on a server in the office; anyone opens the app in a browser on the same
+network. The station only needs to reach the server's address (`CV_BASE_URL`). For the panel, all
+three can be one laptop.
+
+In Windows PowerShell, type `npm.cmd` instead of `npm` for commands with `--` flags (for example
+`npm.cmd run cv:simulate -- --count 2`); PowerShell's `npm` drops the flags.
+
+1. **Clean data.** From the repo root, back up the database
+   (`docker compose exec db pg_dump -U cpoint cpoint_pms > backup.sql`), run `npm run demo:reset`
+   to see what it would remove, then `npm run demo:reset -- --yes`. It keeps the accounts and the
+   station's token, sets the defect types above and seeds a fresh demo week (D-056).
+2. **Start the app** (`npm run dev`, or `docker compose up -d`). If `CV_DEVICE_TOKEN` wasn't set
+   before the reset, create a token under **API tokens** and put it in `cv/.env`.
+3. **Start a batch**: as the Floor Manager, Batches → New, then **Start** at Preparation.
+4. **Check the station**: `.venv/Scripts/python -m cpoint_cv doctor`.
+5. **Run it**: `.venv/Scripts/python -m cpoint_cv run folder "path/to/photos" --interval 5`, or
+   `run webcam` and press Space for each section.
+6. **Watch the Camera page**: the badge reads **Camera station active**, the last capture shows
+   with its boxes, the Model card names `yolo-v1-…` with the early-model notice, and "Scans go to"
+   names the batch. With `run webcam` and no press for a minute, it reads **Station connected**.
+7. **Resolve a flagged scan as the Quality Inspector**: send a scan with a class the app doesn't
+   know, e.g. `npm.cmd run cv:simulate -- --count 3 --classes qa-unknown` (turning a type off
+   doesn't do it: an inactive type is ignored, not flagged). Open **Review**, open the scan and
+   decide it.
+8. **See what came of it**: a Rework scan opens a repair ticket (**Rework** board) and a Reject scan
+   a salvage item (**Salvage**); each scan's page shows the model and the rules it was decided with.
 
 ## Checks
 

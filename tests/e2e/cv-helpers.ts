@@ -100,6 +100,30 @@ export async function sampleJpeg(): Promise<Buffer> {
   return jpeg;
 }
 
+/**
+ * The tests post "cut", "hole", "abrasion" and "dirt" and expect the confidence rule (D-011). The
+ * database's own types may differ (npm run demo:reset turns abrasion and dirt off and gives cut
+ * and hole a "When found" action, D-053, D-056), so the tests post their own copies instead:
+ * active, with no action, whatever Settings say.
+ */
+const RULE_KEYS = ["cut", "hole", "abrasion", "dirt"];
+export const e2eKey = (key: string) => (RULE_KEYS.includes(key) ? `e2e-rule-${key}` : key);
+
+let ruleTypes: Promise<void> | undefined;
+export function ensureRuleTypes(): Promise<void> {
+  ruleTypes ??= withDb(async (db) => {
+    for (const [i, key] of RULE_KEYS.entries()) {
+      await db.query(
+        `INSERT INTO defect_types (id, key, label, "isActive", action, "sortOrder", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, true, NULL, $4, now(), now())
+         ON CONFLICT (key) DO UPDATE SET "isActive" = true, action = NULL`,
+        [randomUUID(), e2eKey(key), `E2E ${key}`, 900 + i],
+      );
+    }
+  });
+  return ruleTypes;
+}
+
 export type Det = {
   classKey: string;
   confidence: number;
@@ -113,6 +137,7 @@ export async function postScan(
   detections: Det[],
   image?: Buffer,
 ) {
+  await ensureRuleTypes();
   return request.post("/api/v1/scans", {
     headers: { Authorization: `Bearer ${token}` },
     multipart: {
@@ -120,6 +145,7 @@ export async function postScan(
       detections: JSON.stringify(
         detections.map((d, i) => ({
           ...d,
+          classKey: e2eKey(d.classKey),
           box: d.box ?? { x: 0.1 + i * 0.3, y: 0.2, width: 0.2, height: 0.2 },
         })),
       ),
