@@ -3,12 +3,12 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-19
-**Branch:** `main` @ `95d80a8` (Phase 17 merged as PR #12). Phase 18 is on the `main` checkout,
+**Last updated:** 2026-10-20
+**Branch:** `main` @ `c29c871` (Phase 18 merged as PR #13). Phase 19 is on the `main` checkout,
 uncommitted (Dylan decides when to branch and commit; the team opens and merges the PR, D-032).
-**Current phase:** Phase 18, capture from the website (built; waiting for Codex's run).
-Brief: `camera-capture-page.md`; plan: `phase-18-plan.md`.
-**Overall:** 19 / 19 phases built
+**Current phase:** Phase 19, project cleanup and optimization (done; waiting for Codex's run).
+Brief: `docs/prompts/project-cleanup.md`; plan: `docs/prompts/plans/phase-19-plan.md`.
+**Overall:** 20 / 20 phases built
 
 ## Phase progress
 
@@ -31,6 +31,7 @@ Brief: `camera-capture-page.md`; plan: `phase-18-plan.md`.
 - [x] 16. Camera page, a small model check, clean data and the demo
 - [x] 17. The camera station window (Codex run pending)
 - [x] 18. Capture from the website (Codex run pending)
+- [x] 19. Project cleanup and optimization (Codex run pending)
 
 ## What works right now
 
@@ -115,7 +116,8 @@ Brief: `camera-capture-page.md`; plan: `phase-18-plan.md`.
     1.2 s per 1536 square photo (host and Docker). `npm run cv:parity` matched the station on 7 of
     7 photos (the "rect" letterbox and OpenCV-style resize are needed for that). Missing files:
     `503 MODEL_UNAVAILABLE` and a message on the page.
-  - Docker: `node:24-bookworm-slim` (ONNX Runtime has no Alpine build), 692 → 854 MB;
+  - Docker: `node:24-bookworm-slim` (ONNX Runtime has no Alpine build), 692 → 854 MB, 826 MB since
+    Phase 19 (sharp's musl build left out, D-068);
     `cv/models` mounted read-only at `/app/models`; `docker/https.mjs` serves HTTPS on 3443 when
     `certs/cert.pem` and `key.pem` (mkcert) are mounted. Still two containers.
   - The Camera page shows "Capture page active" and "Ways to capture"; the QI home has
@@ -198,19 +200,20 @@ Brief: `camera-capture-page.md`; plan: `phase-18-plan.md`.
 
 ## Next step (exact)
 
-1. Dylan: branch, commit and push Phase 18 and open the PR (D-032). `phase-16-plan.md` and
-   `phase-17-plan.md` are old and can be deleted; `phase-18-plan.md` is this phase's plan.
-2. Done (Dylan, 2026-10-19): mkcert installed, `certs/` made for 192.168.254.104 (Wi-Fi), the
-   root trusted on the iPhone; the Capture page works on the iPhone in Safari through
-   `npm run dev:https` (Dylan's own check). Rerun the `mkcert -cert-file` line if the IP changes.
-3. Codex: run `qa/handoffs/2026-10-19-phase-17-camera-window.md` and
-   `qa/handoffs/2026-10-19-phase-18-capture-page.md`. Fix their failures before new work.
+1. Dylan: branch, commit and push Phase 19 and open the PR (D-032).
+2. Dylan, after the merge: move the folder to `C:\dev\CPoint-PMS` (README, "Keeping the folder
+   small"; D-068): `robocopy` without `node_modules`, `.next` and `.venv`, `npm ci`, a new
+   `cv/.venv` with CUDA torch (`cv/README.md`), `python -m cpoint_cv shortcut` again, copy
+   `~/.claude/projects/C--Users-micro-OneDrive-Desktop-CPoint-PMS/memory/` to
+   `~/.claude/projects/C--dev-CPoint-PMS/memory/`, approve the new folder for Remote Control,
+   then delete the OneDrive copy yourself. `docker compose` reuses `cpoint-pms_pgdata`.
+3. Codex: run `qa/handoffs/2026-10-19-phase-17-camera-window.md`,
+   `qa/handoffs/2026-10-19-phase-18-capture-page.md` and
+   `qa/handoffs/2026-10-20-phase-19-cleanup.md`. Fix their failures before new work.
 4. Dylan: after the demo, revoke the "Simulator" token (it was pasted in chat) and make a new one.
    Before the panel, `npm run demo:reset -- --yes` gives a clean week again.
-5. `camera-capture-page.md` is finished once Codex passes.
-6. Next, Phase 19 (Dylan, 2026-10-19): project cleanup and optimization, prompt
-   `project-cleanup.md`. The folder is 8.5 GB, about 99% git-ignored tools and caches
-   (`cv/.venv` 5.2 GB, `.next` 2.2 GB, `node_modules` 1.3 GB), synced by OneDrive.
+5. Optional (Dylan's call): `docker image prune -a -f` frees about 8.4 GB of unused Supabase
+   images from another project.
 
 Later:
 

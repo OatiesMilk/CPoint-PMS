@@ -24,7 +24,9 @@ RUN --mount=type=cache,target=/root/.npm HUSKY=0 npm ci
 FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate && npm run build
+# Next's server trace brings sharp's musl (Alpine) build as well; this image is Debian (glibc).
+RUN npx prisma generate && npm run build \
+ && rm -rf .next/standalone/node_modules/@img/*linuxmusl*
 
 # ---- migrator: just the Prisma CLI, pinned to the project's versions ----
 FROM base AS migrator

@@ -2,7 +2,7 @@
 
 The first YOLO model for the Preparation checkpoint. Read from the file itself on 2026-10-19
 (`torch.load` of the checkpoint, then `YOLO(...)` through the station). Everything below matches
-the table in `camera-yolo-integration.md`; nothing in the file differed.
+the table in `docs/prompts/camera-yolo-integration.md`; nothing in the file differed.
 
 ## The file
 

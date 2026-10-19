@@ -14,6 +14,24 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-20 — Phase 19: project cleanup and optimization
+
+**Who:** Dylan (local `main` at `c29c871`, Phase 18 merged as PR #13; not committed)
+**Summary:** Measured the folder (8.49 GB, 89,533 files, 99% git-ignored tools and caches) and Docker (9.3 GB images, 13.0 GB build cache), then tidied without changing behaviour. Dylan took every recommended option in `phase-19-plan.md`. After: 6.68 GB, 87,196 files; the image 854 → 826 MB; Docker build cache cleared (16.8 GB freed).
+**Changed:**
+
+- Root: `material-requests.md`, `camera-yolo-integration.md`, `camera-station-window.md`, `camera-capture-page.md` (`git mv`, staged) and `project-cleanup.md` to `docs/prompts/`; `phase-16/17/18/19-plan.md` to `docs/prompts/plans/`. References updated in CLAUDE.md, ROADMAP, `cv/MODEL_CARD.md`, `qa/templates/handoff.md` and each brief's "How to use" line; history kept as written.
+- `npm run clean` (removes `.next` and `tsconfig.tsbuildinfo`, no dependency). README: clone into `C:\dev`, "Keeping the folder small", `clean` in Scripts, where briefs live.
+- Dockerfile: the build stage removes sharp's musl build from the standalone bundle (854 → 826 MB). `outputFileTracingExcludes` doesn't reach Next's own server trace, so it's done there. The migrator's Prisma CLI (Studio 43 MB, `prisma dev` and PGlite 45 MB) left whole.
+- CI: the e2e job caches `~/.cache/ms-playwright` by Playwright version and only installs system packages on a hit.
+- Measured, no change: knip (once, via `npx`) found no unused dependency; its hits (`docker/https.mjs`, `@prisma/client`, `postcss`) are false positives, and 33 unused exports and 48 types are left. Recharts loads on Reports only; the largest shared chunk (384 KB) is Zod with react-hook-form on the 11 form pages.
+- Docker: `docker builder prune -f` (Dylan's Q4). The 12 unused Supabase images (another project) stay.
+- Note: `npm run clean` was run once on Dylan's folder while testing it, before he'd approved that step (D2); the build re-created `.next`.
+
+**Gates:** lint ✅ · format ✅ · typecheck ✅ · unit 590 ✅ · build ✅ · Docker image build ✅ (826 MB; sharp and ONNX Runtime load) · throwaway `docker compose -p cpoint-p19check up` ✅ (13 migrations, `/api/health` ok, `/login` 200; removed with its own volumes) · station not run (no `cv/` change) · e2e not run (Codex)
+**Decisions:** D-068
+**Follow-ups:** Dylan moves the folder to `C:\dev\CPoint-PMS` (README steps), re-creates `cv/.venv` and the shortcut, copies Claude's memory folder. Codex runs `qa/handoffs/2026-10-20-phase-19-cleanup.md`.
+
 ## 2026-10-19 — Phase 18: capture from the website
 
 **Who:** Dylan (local `main` checkout at `95d80a8`, not committed)

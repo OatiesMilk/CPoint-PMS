@@ -1229,3 +1229,20 @@ phone or tablet, otherwise `WEBCAM`. No migration.
   replaces the brief's "send to the current batch" on purpose. No batch keeps Capture off.
 - Every camera state has its own message and fix: not a secure address, permission refused (iPhone
   and desktop steps), no camera, camera busy, model missing.
+
+### D-068 · 2026-10-20 · Accepted — Keep the working copy out of cloud sync; briefs and plans live in `docs/prompts/`
+
+**Decision (Dylan, 2026-10-20, Phase 19):**
+
+- A working copy lives in a folder no cloud service syncs (`C:\dev\CPoint-PMS`), not OneDrive.
+  About 99% of a working copy is git-ignored tools and caches (`cv/.venv` 5.2 GB, `.next` up to
+  2.2 GB, `node_modules` 1.1 GB, about 87,000 files); syncing them only slows installs and builds.
+  OneDrive can't reliably exclude a folder by name, so moving is the fix. The README's "Keeping
+  the folder small" says how, and `npm run clean` removes `.next` and `tsconfig.tsbuildinfo`.
+- The camera PC keeps the CUDA build of torch (D-048 stands); a PC without a GPU may use the CPU
+  build. Only the camera PC needs `cv/.venv` at all (D-064).
+- Phase briefs go in `docs/prompts/`, approved plans in `docs/prompts/plans/`, never in the repo
+  root. Older history (SESSION_LOG, DECISIONS, dated QA files) keeps the old root paths as written.
+- The Docker image drops sharp's musl (Alpine) build after `next build`: the image is Debian
+  (D-064) and Next's server trace brought both. 854 → 826 MB. The migrator's Prisma CLI (about
+  250 MB, with Studio and `prisma dev`) is left whole: trimming it would break on a Prisma upgrade.

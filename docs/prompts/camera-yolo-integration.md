@@ -2,7 +2,7 @@
 
 > **How to use this file.** It holds **three phases**, one per Claude Code session (CLAUDE.md:
 > one phase per session). Open Claude Code (Opus) at the repo root, switch to **plan mode**, and say:
-> _"Read `camera-yolo-integration.md` in the project root and run Phase 14. Stop for my approval
+> _"Read `docs/prompts/camera-yolo-integration.md` and run Phase 14. Stop for my approval
 > before writing code."_
 > Next session, say the same with Phase 15, then Phase 16. If a session ends mid-phase, say
 > _"Resume the camera YOLO integration"_ and the session works out where it stopped (see

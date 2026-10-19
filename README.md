@@ -34,6 +34,7 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
 - [Quick start: development](#quick-start-development)
 - [Environment](#environment), [Camera and simulator](#camera-and-simulator),
   [Capture from the website](#capture-from-the-website), [Scripts](#scripts)
+- [Keeping the folder small](#keeping-the-folder-small)
 
 ## Tech stack
 
@@ -368,9 +369,14 @@ the terminal. Use the same Node.js LTS version across the team where possible.
 If you have not cloned the repository yet:
 
 ```cmd
+cd /d C:\dev
 git clone https://github.com/OatiesMilk/CPoint-PMS.git
 cd CPoint-PMS
 ```
+
+Clone it into a folder that OneDrive, Dropbox or Google Drive doesn't sync, such as `C:\dev`
+(make it first with `mkdir C:\dev`). The installed tools add about 90,000 files; see [Keeping the
+folder small](#keeping-the-folder-small).
 
 If you already have it, open a terminal in that folder. For example, in Windows Command Prompt
 (replace the path with your own):
@@ -663,6 +669,7 @@ recorded as `PHONE` or `WEBCAM` and name no person (D-008); the audit log record
 | --------------------------- | ------------------------------------------------------------------------------- |
 | `npm run dev`               | Dev server with hot reload                                                      |
 | `npm run check`             | lint + typecheck + unit tests + build (run before pushing)                      |
+| `npm run clean`             | Delete `.next` and `tsconfig.tsbuildinfo` (the next build makes them again)     |
 | `npm run lint`              | ESLint, including the MVC layer import rules                                    |
 | `npm run typecheck`         | Generate route types, then `tsc --noEmit`                                       |
 | `npm run test`              | Unit tests (Vitest)                                                             |
@@ -682,6 +689,46 @@ recorded as `PHONE` or `WEBCAM` and name no person (D-008); the audit log record
 First time running e2e: `npx playwright install chromium`. If Chromium is already installed
 elsewhere, set `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome` instead. To test the Docker stack, set
 `E2E_BASE_URL=http://localhost:3000`.
+
+## Keeping the folder small
+
+The repository itself is about 35 MB. A working copy grows to 7–9 GB because of what gets
+installed and built, all of it git-ignored and safe to re-create:
+
+| Folder         | Size       | What it is                                       | To get it back                   |
+| -------------- | ---------- | ------------------------------------------------ | -------------------------------- |
+| `cv/.venv`     | about 5 GB | the camera station's Python (torch is 4.5 GB)    | `cv/README.md`, "Set up"         |
+| `.next`        | 0.5–2.5 GB | build output; `.next/dev` grows while `dev` runs | `npm run build` or `npm run dev` |
+| `node_modules` | about 1 GB | npm packages                                     | `npm ci`                         |
+
+- **Keep it out of OneDrive, Dropbox or Google Drive.** Syncing 90,000 generated files slows
+  installs and builds and fills cloud storage. Use a plain folder such as `C:\dev\CPoint-PMS`.
+- **`npm run clean`** when `.next` passes a gigabyte or a build acts stale. Stop `npm run dev`
+  first.
+- Only the camera PC needs `cv/.venv`. The website's Capture page runs the model in the app and
+  needs only the files in `cv/models` (D-064). A PC without a GPU can install the CPU build of
+  torch instead of the CUDA one (smaller, about 3× slower per scan).
+- `onnxruntime-node` in `node_modules` carries Windows, macOS and Linux builds (about 290 MB). npm
+  can't skip them; the Docker image keeps only the Linux one (`next.config.ts`).
+- Also safe to delete: `test-results/`, `playwright-report/`, `cv/out/` (except `cv/out/spool/`
+  and `cv/out/failed/`, which hold scans not yet sent) and `qa/reports/artifacts/`. Never delete
+  `storage/` by hand: its files belong to scans and deliveries in the database (`npm run
+demo:reset` cleans both together).
+- **Moving a working copy:** copy it without the generated folders, then re-install. A venv can't
+  be moved (its scripts hold the old path), so make a new one, and run
+  `python -m cpoint_cv shortcut` again for the desktop shortcut:
+
+  ```cmd
+  robocopy "C:\old\path\CPoint-PMS" "C:\dev\CPoint-PMS" /E /XD node_modules .next .venv
+  ```
+
+  `.env`, `certs/`, `cv/models/` and `cv/config.toml` are git-ignored, so copy rather than
+  re-clone. The database is in Docker's `cpoint-pms_pgdata` volume, which the new folder reuses.
+
+- **Docker** keeps old images and build cache outside the folder (`docker system df`).
+  `docker builder prune -f` clears the build cache; `docker image prune -a -f` removes every image
+  no container uses, including other projects'. **Never** run `docker volume prune` or
+  `docker compose down -v`: they delete the database.
 
 ## Project structure (MVC)
 
@@ -720,7 +767,9 @@ All endpoints are documented in [`docs/API.md`](docs/API.md). Errors always use 
 ## Working with Claude Code
 
 This project is built with Claude Code, one roadmap phase per session. Start with `/resume` and
-finish with `/wrap-up`. See [`docs/AGENTIC_WORKFLOW.md`](docs/AGENTIC_WORKFLOW.md).
+finish with `/wrap-up`. See [`docs/AGENTIC_WORKFLOW.md`](docs/AGENTIC_WORKFLOW.md). Each
+phase's brief is in [`docs/prompts/`](docs/prompts/), and its approved plan in
+`docs/prompts/plans/`.
 
 ## Design
 
