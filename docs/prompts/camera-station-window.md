@@ -2,7 +2,7 @@
 
 > **How to use this file.** It holds **one phase** for one Claude Code session (CLAUDE.md: one
 > phase per session). Open Claude Code (Opus) at the repo root, switch to **plan mode**, and say:
-> _"Read `camera-station-window.md` in the project root and run Phase 17. Stop for my approval
+> _"Read `docs/prompts/camera-station-window.md` and run Phase 17. Stop for my approval
 > before writing code."_ If the session ends mid-phase, say _"Resume the camera station window"_
 > and the session works out where it stopped (see `<session_setup>` step 4).
 

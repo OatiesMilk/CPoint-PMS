@@ -18,6 +18,8 @@ configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 
 - Current state (auto-loaded below): @docs/STATUS.md
 - Master spec: `docs/prompts/system-rebuild.md`. Read it before any feature work.
+- Phase briefs live in `docs/prompts/` and approved plans in `docs/prompts/plans/`, never in the
+  repo root.
 - Settled decisions: `docs/DECISIONS.md`. Don't re-litigate them; add a new entry to change one.
 - Phases + acceptance criteria: `docs/ROADMAP.md`
 - Client research: `docs/client-survey.md`

@@ -2,14 +2,14 @@
 
 <!-- Save as qa/handoffs/YYYY-MM-DD-<feature>.md. Delete these comments when filling in. -->
 
-| Field           | Value                                                            |
-| --------------- | ---------------------------------------------------------------- |
-| Date            | YYYY-MM-DD                                                       |
-| Feature         | <short name, matches the file name>                              |
-| Branch          | `<branch>` (commit `<short sha>`, or "uncommitted")              |
-| Spec / prompt   | e.g. `material-requests.md` Step N, or `docs/ROADMAP.md` Phase N |
-| Written by      | Claude                                                           |
-| Previous report | `qa/reports/<file>.md`, or "none"                                |
+| Field           | Value                                                                         |
+| --------------- | ----------------------------------------------------------------------------- |
+| Date            | YYYY-MM-DD                                                                    |
+| Feature         | <short name, matches the file name>                                           |
+| Branch          | `<branch>` (commit `<short sha>`, or "uncommitted")                           |
+| Spec / prompt   | e.g. `docs/prompts/material-requests.md` Step N, or `docs/ROADMAP.md` Phase N |
+| Written by      | Claude                                                                        |
+| Previous report | `qa/reports/<file>.md`, or "none"                                             |
 
 ## 1. What changed
 

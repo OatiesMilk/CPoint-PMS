@@ -118,7 +118,7 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 
 ## Phase 11 — Material requests: naming, remarks, urgency, specific messages
 
-Brief: `material-requests.md` (project root), Phase 11. Phases 12 and 13 are in the same file.
+Brief: `docs/prompts/material-requests.md`, Phase 11. Phases 12 and 13 are in the same file.
 
 - [x] Naming (D-035): Shoe Constructors see **Material requests** (nav, titles, buttons, empty
       states, "My material requests" on their home); the Floor Manager and Admin see
@@ -142,7 +142,7 @@ Brief: `material-requests.md` (project root), Phase 11. Phases 12 and 13 are in 
 
 ## Phase 12 — Item-level decisions guided by stock
 
-Brief: `material-requests.md` (project root), Phase 12.
+Brief: `docs/prompts/material-requests.md`, Phase 12.
 
 - [x] Per-item decisions (D-039): each line has `decision`, `rejectionReason`, `decidedById` and
       `decidedAt`; the decision panel lists every item with Approve or Reject (reason required),
@@ -171,7 +171,7 @@ Brief: `material-requests.md` (project root), Phase 12.
 
 ## Phase 13 — Ordering, delivery with proof, and the remaining gaps
 
-Brief: `material-requests.md` (project root), Phase 13.
+Brief: `docs/prompts/material-requests.md`, Phase 13.
 
 - [x] Ordering (D-041): "Mark as ordered" on an approved request with a supplier from Settings, an
       optional reference number, a required expected delivery date (today or later) and an optional
@@ -216,7 +216,7 @@ Brief: `material-requests.md` (project root), Phase 13.
 
 ## Phase 14 — Camera YOLO model: intake and the inference core
 
-Brief: `camera-yolo-integration.md` (project root), Phase 14. No app behaviour changes.
+Brief: `docs/prompts/camera-yolo-integration.md`, Phase 14. No app behaviour changes.
 
 - [x] Model card (`cv/MODEL_CARD.md`): file, SHA-256, versions, task, classes, `imgsz`, metrics,
       intended use, limits and the AGPL-3.0 note; the file matched the brief
@@ -239,7 +239,7 @@ Brief: `camera-yolo-integration.md` (project root), Phase 14. No app behaviour c
 
 ## Phase 15 — Camera station: capture, send, recover
 
-Brief: `camera-yolo-integration.md` (project root), Phase 15. One additive contract field.
+Brief: `docs/prompts/camera-yolo-integration.md`, Phase 15. One additive contract field.
 
 - [x] Frame sources (D-050): `run webcam` (one frame per Space press, Q stops), `run folder <dir>`
       (every image in order, `--interval`), `run file <image>`
@@ -262,8 +262,8 @@ Brief: `camera-yolo-integration.md` (project root), Phase 15. One additive contr
 
 ## Phase 16 — Camera page, a small model check, clean data and the demo
 
-Brief: `camera-yolo-integration.md` (project root), Phase 16, plus Dylan's clean-data request.
-Plan: `phase-16-plan.md`; Dylan took every recommended option.
+Brief: `docs/prompts/camera-yolo-integration.md`, Phase 16, plus Dylan's clean-data request.
+Plan: `docs/prompts/plans/phase-16-plan.md`; Dylan took every recommended option.
 
 - [x] Camera page: states for no captures, no batch, not connected, **station connected**
       (waiting), simulator and station active, each with its own copy; the model of the last scan;
@@ -289,7 +289,7 @@ Plan: `phase-16-plan.md`; Dylan took every recommended option.
 
 ## Phase 17 — The camera station window
 
-Brief: `camera-station-window.md` (project root). Plan: `phase-17-plan.md`; Dylan took every
+Brief: `docs/prompts/camera-station-window.md`. Plan: `docs/prompts/plans/phase-17-plan.md`; Dylan took every
 recommended option (Tkinter, preview at 960 and 4 a second, Capture sends the frame on screen,
 failures block Start, a `.cmd` launcher plus a `shortcut` command, the Camera page copy updated).
 
@@ -316,7 +316,7 @@ failures block Start, a `.cmd` launcher plus a `shortcut` command, the Camera pa
 
 ## Phase 18 — Capture from the website
 
-Brief: `camera-capture-page.md` (project root). Plan: `phase-18-plan.md`; Dylan took every
+Brief: `docs/prompts/camera-capture-page.md`. Plan: `docs/prompts/plans/phase-18-plan.md`; Dylan took every
 recommended option (server inference, bookworm-slim, mkcert with a listener in `app`, live video
 without boxes, QI and FM, its own nav item, the station's batch rule).
 
@@ -337,3 +337,23 @@ without boxes, QI and FM, its own nav item, the station's batch rule).
 - [x] Tests: 590 app unit tests (53 new), 231 station tests; Docker image builds and runs the model
 - [ ] Codex: the page on the server PC (localhost) and the iPhone in Safari over HTTPS, every
       state, `cv:parity`, and the negatives (`qa/handoffs/2026-10-19-phase-18-capture-page.md`)
+
+## Phase 19 — Project cleanup and optimization
+
+Brief: `docs/prompts/project-cleanup.md`. Plan: `docs/prompts/plans/phase-19-plan.md`; Dylan took
+every recommended option (commit Phase 18 first, move off OneDrive, keep CUDA torch, Docker build
+cache only, move the old plans, keep the QA screenshots). No behaviour change (D-068).
+
+- [x] The folder's size and file count measured before and after: 8.49 GB / 89,533 files →
+      6.68 GB / 87,196 files (`.next` 2.18 GB → 0.33 GB after one build); Docker build cache
+      13.0 GB → 0.9 GB
+- [x] Every gate passes; no flow, verdict, permission or API contract changes
+- [x] Prompts and plans moved from the root to `docs/prompts/` and `docs/prompts/plans/`; live
+      references updated (CLAUDE.md, ROADMAP, README, `cv/MODEL_CARD.md`, the handoff template)
+- [x] README "Keeping the folder small"; `npm run clean`; clone into `C:\dev`
+- [x] Docker image 854 → 826 MB (sharp's musl build left out); a throwaway stack is healthy
+- [x] CI caches Playwright's Chromium by version
+- [x] Nothing deleted from Dylan's machine, Docker or the repository without his word, except
+      `.next` and `tsconfig.tsbuildinfo` (re-created by the build; see the session log)
+- [ ] Dylan: move the folder to `C:\dev\CPoint-PMS` and re-create `cv/.venv` (README)
+- [ ] Codex: `qa/handoffs/2026-10-20-phase-19-cleanup.md`
