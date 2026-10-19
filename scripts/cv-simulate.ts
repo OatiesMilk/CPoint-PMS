@@ -2,13 +2,20 @@
  * Camera simulator: posts realistic scans to POST /api/v1/scans exactly as the real YOLO service
  * will, so dashboards can be demoed without a camera.
  *
- *   npm run cv:simulate -- --count 20 --interval 3 [--batch <batchId>]
+ *   npm run cv:simulate -- --count 20 --interval 3 [--batch <batchId>] [--classes <list>]
  *
  * Needs CV_DEVICE_TOKEN (create one: `npm run cv:token`) and optionally CV_BASE_URL in .env.
  * Mix: ~60% pass, ~22% rework, ~13% reject, ~5% an unknown class ("sim-unknown") that needs review.
+ * Classes default to the yolo-v1 ones with the actions `npm run demo:reset` sets; give your own as
+ * --classes crease:REWORK,cut:REJECT,stain (a type with no action goes by confidence).
  */
 import "dotenv/config";
-import { renderLeatherImage, scenario } from "../src/server/lib/leather-scan";
+import {
+  MODEL_CLASSES,
+  renderLeatherImage,
+  scenario,
+  type SceneClass,
+} from "../src/server/lib/leather-scan";
 
 function arg(name: string, fallback?: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -20,9 +27,25 @@ const intervalMs = Number(arg("interval", "3")) * 1000;
 const batchId = arg("batch");
 const baseUrl = (process.env.CV_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const token = process.env.CV_DEVICE_TOKEN;
+const classesArg = arg("classes");
+const classes: SceneClass[] = classesArg
+  ? classesArg
+      .split(",")
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .map((c) => {
+        const [key, action] = c.split(":");
+        const upper = action?.trim().toUpperCase();
+        if (upper && upper !== "REWORK" && upper !== "REJECT") {
+          console.error(`--classes: "${c}" must be key, key:REWORK or key:REJECT.`);
+          process.exit(2);
+        }
+        return { key: key.trim(), action: (upper as SceneClass["action"]) ?? null };
+      })
+  : MODEL_CLASSES;
 
 async function sendOne(n: number) {
-  const detections = scenario();
+  const detections = scenario(Math.random, classes);
   const image = await renderLeatherImage(detections);
   const form = new FormData();
   form.set("image", new Blob([new Uint8Array(image)], { type: "image/jpeg" }), `sim-${n}.jpg`);

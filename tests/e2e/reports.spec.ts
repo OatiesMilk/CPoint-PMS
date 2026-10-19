@@ -1,7 +1,15 @@
 import { randomInt } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { createBatch, createDeviceToken, inspectorApi, managerApi, sampleJpeg } from "./cv-helpers";
+import {
+  createBatch,
+  createDeviceToken,
+  e2eKey,
+  ensureRuleTypes,
+  inspectorApi,
+  managerApi,
+  sampleJpeg,
+} from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -22,12 +30,17 @@ async function scanOn(
   classKey: string,
   confidence: number,
 ) {
+  await ensureRuleTypes();
   const res = await request.post("/api/v1/scans", {
     headers: { Authorization: `Bearer ${token}` },
     multipart: {
       image: { name: "capture.jpg", mimeType: "image/jpeg", buffer: await sampleJpeg() },
       detections: JSON.stringify([
-        { classKey, confidence, box: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 } },
+        {
+          classKey: e2eKey(classKey),
+          confidence,
+          box: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
+        },
       ]),
       batchId,
       source: "SIMULATOR",
@@ -99,7 +112,7 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
     r.matrix.find((m: { ai: string }) => m.ai === ai).counts[f];
   expect(cell(after, "REJECT", "REWORK") - cell(before, "REJECT", "REWORK")).toBe(1);
   const defects = (r: typeof after, key: string) =>
-    r.defects.find((d: { key: string }) => d.key === key)?.scans ?? 0;
+    r.defects.find((d: { key: string }) => d.key === e2eKey(key))?.scans ?? 0;
   expect(defects(after, "cut") - defects(before, "cut")).toBe(2);
   expect(defects(after, "hole") - defects(before, "hole")).toBe(1);
 

@@ -15,7 +15,11 @@ import { renderReceiptImage, renderReceiptPdf } from "@/server/lib/receipt-sampl
 import { countBatches, listOpenBatches } from "@/server/models/batch.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
 import { findLiveOutcomes } from "@/server/models/outcome.model";
-import { listActiveShoeTypes, listActiveSuppliers } from "@/server/models/reference-data.model";
+import {
+  listActiveShoeTypes,
+  listActiveSuppliers,
+  listDefectTypes,
+} from "@/server/models/reference-data.model";
 import { findUserByEmail } from "@/server/models/user.model";
 import { createDeviceToken } from "./api-token.service";
 import { cancelBatch, createBatch, transitionBatchStage } from "./batch.service";
@@ -140,8 +144,17 @@ export async function seedDemoWeek(
   ]);
   if (!fm || !qi || !admin)
     return { seeded: false, reason: "demo users are missing (set SEED_DEMO_USERS=true)" };
-  const [shoeTypes, suppliers] = await Promise.all([listActiveShoeTypes(), listActiveSuppliers()]);
+  const [shoeTypes, suppliers, defectTypes] = await Promise.all([
+    listActiveShoeTypes(),
+    listActiveSuppliers(),
+    listDefectTypes(),
+  ]);
   if (shoeTypes.length === 0) return { seeded: false, reason: "no shoe types" };
+  // The week's scans show the defect types active in Settings, as the camera's model would.
+  const classes = defectTypes
+    .filter((t) => t.isActive)
+    .map((t) => ({ key: t.key, action: t.action }));
+  if (classes.length === 0) return { seeded: false, reason: "no active defect types" };
 
   const today = manilaToday(now);
   const at = (day: string, hour: number) => new Date(manilaDayStart(day).getTime() + hour * HOUR);
@@ -256,7 +269,7 @@ export async function seedDemoWeek(
       for (let i = 0; i < sections; i++) {
         const ts = sectionAt(i);
         if (!past(ts)) break;
-        let detections: Detection[] = scenario(random);
+        let detections: Detection[] = scenario(random, classes);
         const keepPending = newest && i >= captured - 2;
         if (keepPending)
           detections = [{ classKey: UNKNOWN_CLASS, confidence: 0.82, box: randomBox(random) }];

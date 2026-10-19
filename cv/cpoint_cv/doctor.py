@@ -105,9 +105,11 @@ def check_python(
     return checks
 
 
-def check_camera(index: int, probe: Callable[[int], str | None]) -> Check:
-    problem = probe(index)
-    return Check("Camera", problem is None, problem or f"camera {index} gives a picture")
+def check_camera(device: int | str, probe: Callable[[int | str], str | None]) -> Check:
+    from .sources import camera_name
+
+    problem = probe(device)
+    return Check("Camera", problem is None, problem or f"{camera_name(device)} gives a picture")
 
 
 def check_app(

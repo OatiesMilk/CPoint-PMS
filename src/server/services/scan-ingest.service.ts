@@ -95,9 +95,14 @@ export async function ingestScan(
   const thresholds: Thresholds = {
     rejectAtOrAbove: settings.rejectAtOrAbove,
     reworkAtOrAbove: settings.reworkAtOrAbove,
+    foundAtOrAbove: settings.foundAtOrAbove,
   };
   const byKey = new Map(defectTypes.map((t) => [t.key, t]));
   const decision = decide(input.detections, byKey, thresholds);
+  // The actions in force, kept with the thresholds so the decision stays explainable (D-053).
+  const actions = Object.fromEntries(
+    defectTypes.filter((t) => t.isActive && t.action).map((t) => [t.key, t.action]),
+  );
   const pending = decision.verdict === "NEEDS_REVIEW";
 
   const key = storageKey(now, input.image.type.ext);
@@ -119,7 +124,7 @@ export async function ingestScan(
           captureId: input.captureId ?? null,
           aiVerdict: decision.verdict,
           maxConfidence: decision.maxConfidence,
-          thresholdsSnapshot: thresholds,
+          thresholdsSnapshot: { ...thresholds, actions },
           finalVerdict: pending ? null : decision.verdict,
           status: pending ? "PENDING_REVIEW" : "DECIDED",
           decidedAt: pending ? null : now,

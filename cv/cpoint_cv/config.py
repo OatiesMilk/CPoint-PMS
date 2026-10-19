@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from .mapper import CONTRACT_MAX_DETECTIONS, MapperConfig
-from .preview import PreviewConfig
+from .preview import ACTIONS, PreviewConfig
 
 CV_DIR = Path(__file__).resolve().parent.parent
 
@@ -29,6 +29,8 @@ ENV_OVERRIDES = {
     "CPOINT_CV_MODEL_IMGSZ": ("model", "imgsz"),
     "CPOINT_CV_CONFIDENCE_FLOOR": ("mapper", "confidence_floor"),
     "CV_BASE_URL": ("server", "base_url"),  # the simulator's name, so one .env serves both
+    # An IP camera's address may hold its password, so it can live in cv/.env instead.
+    "CPOINT_CV_CAMERA_URL": ("camera", "url"),
 }
 
 # The app's ScanSource values a camera station may send (prisma/schema.prisma).
@@ -66,6 +68,8 @@ class StationConfig:
     jpeg_quality: int = 90
     interval_seconds: float = 3.0
     no_batch_wait_seconds: float = 5.0
+    # While waiting for Space, ask the app for the batch this often (D-054). 0 turns it off.
+    check_in_seconds: float = 20.0
 
 
 @dataclass(frozen=True)
@@ -74,6 +78,12 @@ class CameraConfig:
     width: int = 1920
     height: int = 1080
     warmup_frames: int = 5
+    # An IP camera's stream (rtsp://, http:// or https://). When set, it's used instead of index.
+    url: str | None = None
+
+    @property
+    def device(self) -> int | str:
+        return self.url or self.index
 
 
 def _default_station() -> StationConfig:
@@ -190,6 +200,7 @@ def parse_config(
             low=1,
             high=CONTRACT_MAX_DETECTIONS,
         ),
+        overlap_iou=_number("mapper", "overlap_iou", mp.get("overlap_iou", 0.7), low=0.0, high=1.0),
     )
 
     pv = merged["preview"]
@@ -208,6 +219,18 @@ def parse_config(
     if active & inactive:
         both = ", ".join(sorted(active & inactive))
         raise ConfigError(f"[preview] {both} can't be both active and inactive.")
+    found = _number(
+        "preview", "found_at_or_above", pv.get("found_at_or_above", 0.5), low=0.01, high=0.99
+    )
+    actions = pv.get("actions", {})
+    if not isinstance(actions, Mapping) or not all(
+        isinstance(k, str) and isinstance(v, str) and v.strip().upper() in ACTIONS
+        for k, v in actions.items()
+    ):
+        raise ConfigError(
+            '[preview.actions] maps a class key to "REWORK" or "REJECT", e.g. hole = "REJECT". '
+            "Leave a type out to go by confidence."
+        )
 
     def folder(key: str, default: str) -> Path:
         raw = merged["station"].get(key, default)
@@ -263,10 +286,24 @@ def parse_config(
             low=1,
             high=600,
         ),
+        check_in_seconds=_number(
+            "station", "check_in_seconds", st.get("check_in_seconds", 20.0), low=0, high=60
+        ),
     )
 
     cm = merged["camera"]
+    url = cm.get("url")
+    if url is not None:
+        if not isinstance(url, str):
+            raise ConfigError('[camera] url must be text, e.g. "rtsp://192.168.1.50:554/stream1".')
+        url = url.strip() or None
+    if url and not url.lower().startswith(("rtsp://", "http://", "https://")):
+        raise ConfigError(
+            "[camera] url must start with rtsp://, http:// or https://, "
+            'e.g. "rtsp://192.168.1.50:554/stream1". Leave it empty to use [camera] index.'
+        )
     camera = CameraConfig(
+        url=url,
         index=_whole("camera", "index", cm.get("index", 0), low=0, high=99),
         width=_whole("camera", "width", cm.get("width", 1920), low=160, high=8192),
         height=_whole("camera", "height", cm.get("height", 1080), low=120, high=8192),
@@ -290,6 +327,8 @@ def parse_config(
             rework_at_or_above=rework,
             active_keys=active,
             inactive_keys=inactive,
+            found_at_or_above=found,
+            actions={k: v.strip().upper() for k, v in actions.items()},
         ),
     )
 

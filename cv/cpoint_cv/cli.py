@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .client import ScanClient
-from .config import Config, ConfigError, load_config
+from .config import CV_DIR, Config, ConfigError, load_config
 from .doctor import check_app, check_camera, check_model, check_python
 from .env import BASE_URL_VAR, TOKEN_VAR, station_env
 from .logs import StationLog
@@ -36,12 +36,31 @@ def settings_line(config: Config) -> str:
     p = config.preview
     active = ", ".join(sorted(p.active_keys)) or "none"
     inactive = ", ".join(sorted(p.inactive_keys)) or "none"
+    actions = ", ".join(f"{k} {v.lower()}" for k, v in sorted(p.actions.items()))
+    when_found = (
+        f"; when found at {p.found_at_or_above:.2f}: {actions}"
+        if actions
+        else '; no "When found" actions (by confidence only)'
+    )
     return (
         f"Preview settings: reject at {p.reject_at_or_above:.2f}, rework at "
-        f"{p.rework_at_or_above:.2f}; active types: {active}; inactive: {inactive}. "
+        f"{p.rework_at_or_above:.2f}{when_found}; active types: {active}; inactive: {inactive}. "
         f"Confidence floor {config.mapper.confidence_floor:.2f}, imgsz {config.model.imgsz}, "
         f"device {config.model.device}."
     )
+
+
+NO_ACTIONS_WARNING = (
+    "warning: [preview.actions] is empty, so the preview decides by confidence only. If any "
+    'defect type has a "When found" action in Admin > Settings, copy found_at_or_above and '
+    "[preview.actions] into the config (cv/config.example.toml has the demo's), or the preview "
+    "won't match the app."
+)
+
+
+def preview_warning(config: Config) -> str | None:
+    """A warning when the preview has no actions: since D-053 the app usually has some."""
+    return None if config.preview.actions else NO_ACTIONS_WARNING
 
 
 def _model_version(config: Config) -> str | None:
@@ -89,6 +108,8 @@ def _predict(args: argparse.Namespace) -> int:
         return 2
 
     versions = ", ".join(f"{k} {v}" for k, v in runtime_versions().items())
+    if warning := preview_warning(config):
+        print(warning, file=sys.stderr)
     if not args.json:
         print(f"Model {version} ({detector.task}), classes {dict(detector.names)}")
         print(versions)
@@ -212,13 +233,13 @@ def _run(args: argparse.Namespace) -> int:
     try:
         if args.source == "webcam":
             source = WebcamSource(
-                config.camera.index,
+                config.camera.device,
                 config.camera.width,
                 config.camera.height,
                 warmup_frames=config.camera.warmup_frames,
                 jpeg_quality=config.station.jpeg_quality,
             )
-            trigger = KeyTrigger()
+            trigger = KeyTrigger(idle_seconds=config.station.check_in_seconds)
         elif args.path is None:
             print(
                 f"error: give the {args.source} to send, e.g. run {args.source} <path>.",
@@ -264,6 +285,52 @@ def _run(args: argparse.Namespace) -> int:
         return 130
 
 
+def _evaluate(args: argparse.Namespace) -> int:
+    from datetime import date
+
+    from .evaluate import LabelError, load_labels, run_cases, to_markdown
+
+    try:
+        config = load_config(args.config)
+        labels = load_labels(args.folder, args.labels)
+    except (ConfigError, LabelError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    from .yolo_detector import ModelError, YoloDetector
+
+    version = _model_version(config)
+    if version is None:
+        return 2
+    try:
+        detector = YoloDetector(config.model, config.mapper.confidence_floor)
+    except ModelError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    if warning := preview_warning(config):
+        print(warning, file=sys.stderr)
+    today = date.today().isoformat()
+    cases = run_cases(args.folder, labels, detector, config.mapper)
+    report = to_markdown(
+        cases,
+        config.preview,
+        model_version=version,
+        date=today,
+        settings_line=settings_line(config),
+        floor=config.mapper.confidence_floor,
+    )
+    out = args.out or CV_DIR / "reports" / f"{today}-{config.model.name}.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(report, encoding="utf-8")
+    matched = sum(
+        preview_verdict(c.detections, config.preview).verdict == c.label.expected for c in cases
+    )
+    print(f"The preview matched the expected verdict on {matched} of {len(cases)} photos.")
+    print(f"Report: {out}")
+    return 0
+
+
 def _doctor(args: argparse.Namespace) -> int:
     env = station_env()
     try:
@@ -279,7 +346,7 @@ def _doctor(args: argparse.Namespace) -> int:
     if not args.no_camera:
         from .sources import probe_camera
 
-        checks.append(check_camera(config.camera.index, probe_camera))
+        checks.append(check_camera(config.camera.device, probe_camera))
     checks += check_app(_client(config, env))
     for check in checks:
         print(check.line())
@@ -326,6 +393,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
     run.set_defaults(handler=_run)
+
+    evaluate = commands.add_parser(
+        "evaluate",
+        help="Compare preview verdicts with labels.csv and write a report. Posts nothing.",
+    )
+    evaluate.add_argument("folder", type=Path, help="The photos, with labels.csv beside them")
+    evaluate.add_argument(
+        "--labels", type=Path, metavar="FILE", help="Another labels file (default: labels.csv)"
+    )
+    evaluate.add_argument(
+        "--out",
+        type=Path,
+        metavar="FILE",
+        help="Where to write the report (default: cv/reports/<date>-<model>.md)",
+    )
+    evaluate.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
+    evaluate.set_defaults(handler=_evaluate)
 
     doctor = commands.add_parser("doctor", help="Check the station can run and say what to fix.")
     doctor.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")

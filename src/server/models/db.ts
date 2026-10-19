@@ -12,6 +12,11 @@ export function defaultDb(): Db {
  * Runs `fn` in one database transaction. Services wrap a mutation and its audit entry in this
  * so both commit or roll back together.
  */
-export function runInTransaction<T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-  return getPrisma().$transaction(fn);
+export function runInTransaction<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  options: { timeoutMs?: number } = {},
+): Promise<T> {
+  return options.timeoutMs
+    ? getPrisma().$transaction(fn, { timeout: options.timeoutMs, maxWait: 10_000 })
+    : getPrisma().$transaction(fn);
 }

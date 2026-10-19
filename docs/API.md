@@ -140,6 +140,18 @@ a signed-in session.
 `200 { "data": { "batchId", "batchCode", "rollCode", "shoeType", "selection": "selected" | "oldest", "stageStartedAt" } }`,
 or `404 NO_BATCH_AT_PREPARATION`.
 
+**It doubles as the station's check-in (D-054).** A waiting camera station calls it every 20 s.
+Any use of a device token is recorded (at most once a minute), and the Camera page shows
+**Station connected** while a camera token that isn't the simulator's was used in the last two
+minutes. There is no separate heartbeat endpoint.
+
+**How a scan is decided (D-011, D-053).** Each detection of an active defect type gives a result
+and the worst decides: a type with a **When found** action (`REWORK` or `REJECT`) gives it from
+`foundAtOrAbove` (Settings, default 0.5) up; other types use `reworkAtOrAbove` and
+`rejectAtOrAbove`; an unknown class key sends the scan to review. The scan keeps the rule in
+`thresholdsSnapshot`: `{ rejectAtOrAbove, reworkAtOrAbove, foundAtOrAbove, actions: { key: action } }`
+(the last two are missing on scans from before D-053).
+
 ## Scans (session)
 
 | Method & path                      | Permission                                      | Notes                                                                                                                               |
@@ -331,15 +343,15 @@ duplicate email is `422` on `email`.
 
 **Settings**
 
-| Method & path                        | Body                                                                                           |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `GET / PUT /api/v1/settings/cv`      | `{ rejectPercent, reworkPercent }`, e.g. `90`, `60`; rework must be below reject               |
-| `GET /api/v1/defect-types/unknown`   | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }` |
-| `GET / POST /api/v1/defect-types`    | `{ key, label, description?, sortOrder? }` (key fixed after creation)                          |
-| `GET / POST /api/v1/shoe-types`      | `{ code, name, sortOrder? }`                                                                   |
-| `GET / POST /api/v1/suppliers`       | `{ name, contactPerson?, phone?, notes? }`                                                     |
-| `GET / POST /api/v1/component-types` | `{ name, shoeTypeId?, sortOrder? }`                                                            |
-| `PATCH /api/v1/<list>/{id}`          | the same fields, or `{ isActive }`. There are no deletes.                                      |
+| Method & path                        | Body                                                                                                  |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `GET / PUT /api/v1/settings/cv`      | `{ rejectPercent, reworkPercent, foundPercent? }`, e.g. `90`, `60`, `50`; rework below reject (D-053) |
+| `GET /api/v1/defect-types/unknown`   | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }`        |
+| `GET / POST /api/v1/defect-types`    | `{ key, label, action?, description?, sortOrder? }` (key fixed; `action` REWORK or REJECT, D-053)     |
+| `GET / POST /api/v1/shoe-types`      | `{ code, name, sortOrder? }`                                                                          |
+| `GET / POST /api/v1/suppliers`       | `{ name, contactPerson?, phone?, notes? }`                                                            |
+| `GET / POST /api/v1/component-types` | `{ name, shoeTypeId?, sortOrder? }`                                                                   |
+| `PATCH /api/v1/<list>/{id}`          | the same fields, or `{ isActive }`. There are no deletes.                                             |
 
 New thresholds apply to new scans only; each scan keeps its `thresholdsSnapshot`.
 

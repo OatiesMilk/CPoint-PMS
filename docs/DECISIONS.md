@@ -1024,3 +1024,74 @@ week's flagged scans use it too. The simulator and demo week still draw `cut`, `
 and `dirt`; with the last two off, those detections no longer decide a verdict.
 **Consequences:** with the steps done, yolo-v1's detections are judged by D-011 instead of all
 going to review. Doing the steps is a per-database task for the demo and for CPoint.
+
+### D-053 · 2026-10-19 · Accepted — A defect type can say what a found defect means ("When found"), and the worst outcome decides
+
+**Context:** D-011 reads a detection's confidence as how bad a defect is. For a YOLO model it is how
+sure the model is that a defect is there. In the five-photo baseline a long, clear cut scored 0.51
+and would have passed on its own.
+**Decision (Dylan, 2026-10-19, the recommended option):** each defect type gets an optional
+**When found** action (Rework or Reject, `DefectType.action`), and Settings → Thresholds gets
+**A defect counts as found at** (`CvSettings.foundAtOrAbove`, default 50%). A detection of a type
+with an action gives that action from that confidence up, and Pass below it, however sure the
+model is above it. A type without an action keeps D-011's two thresholds. Each detection gives an
+outcome and the worst one decides the section; an unknown class still sends it to review (D-028).
+Migration `defect_actions`; the scan's `thresholdsSnapshot` now also keeps `foundAtOrAbove` and the
+`actions` in force, so old and new scans stay explainable. The Python preview follows the same rule.
+`PUT /api/v1/settings/cv` takes an optional `foundPercent`; defect types take an optional `action`.
+**Consequences:** supersedes D-011's "one rule for every defect type" for types that have an
+action. With no actions set, nothing changes. `npm run demo:reset` sets cut and hole to Reject,
+crease and scratch to Rework. Which action each defect type gets is still to confirm with CPoint.
+
+### D-054 · 2026-10-19 · Accepted — The camera station checks in while it waits, through the existing batch call
+
+**Context:** the Camera page said "Not connected" a minute after the last scan, even with the
+station running and waiting for the operator.
+**Decision (Dylan, 2026-10-19):** no new endpoint. While waiting for Space, the station calls
+`GET /api/v1/batches/current` every 20 s (`[station] check_in_seconds`), which records the token's
+use (at most once a minute). The Camera page shows **Station connected** when a camera token that
+isn't the simulator's was used in the last two minutes and no scan came in the last minute. The
+check-in also tells the operator straight away when the batch changes or leaves Preparation.
+**Consequences:** "Station connected" can last up to two minutes after the station stops. The
+contract is unchanged.
+
+### D-055 · 2026-10-19 · Accepted — The early-model notice is a setting
+
+**Decision (Dylan, 2026-10-19):** Settings → Thresholds has **Show “Early model” on the Camera
+page** (`CvSettings.earlyModelNotice`, on by default). The notice names the model from the last
+scan's `modelVersion` (the checksum suffix dropped), so no model name is in the code. It isn't
+shown for simulated scans.
+
+### D-056 · 2026-10-19 · Accepted — `npm run demo:reset` gives a clean demo system and keeps the accounts
+
+**Context:** months of e2e runs left 135 test accounts, 131 device tokens, hundreds of batches and
+requests, and test rows in Settings on the dev database.
+**Decision (Dylan, 2026-10-19):** a rerunnable script through the service and model layers, in
+one transaction. It keeps the bootstrap System Admin and the four demo accounts, the device token
+in `CV_DEVICE_TOKEN` (`.env` or `cv/.env`, matched by hash), the bootstrap shoe types and
+supplier, and the defect types; it removes every other account and token, batches, scans, repairs,
+salvage, stock items and movements, purchase requests with their files, the audit log (then
+writes one `system.demo_reset` row), and the scan and proof files under `UPLOADS_DIR`. It sets the
+yolo-v1 defect types (D-052, D-053), makes the demo constructor a leather-roll requester again, and
+seeds a fresh demo week, which brings the demo inventory back at its opening stock. Without
+`--yes` it only shows the counts; it refuses `NODE_ENV=production`.
+**Consequences:** the e2e tests post their own `e2e-rule-*` defect types (active, no action) so
+they no longer depend on how Settings are set up; the reset removes those too.
+
+### D-057 · 2026-10-19 · Accepted — The station drops duplicate boxes and can use an IP camera
+
+**Decision (Dylan, 2026-10-19):** the mapper keeps only the more confident of two same-class boxes
+that overlap by IoU ≥ 0.7 (`[mapper] overlap_iou`, 0 turns it off), so one scratch is no longer
+counted twice. `[camera] url` (or `CPOINT_CV_CAMERA_URL` in `cv/.env` when it holds a password)
+opens an `rtsp://` or `http(s)://` camera instead of `[camera] index`; logs show it without the
+user name and password. No ONNX export: 255 ms per capture on the GPU and 780 ms on the CPU is fine
+for one capture per key press.
+
+### D-058 · 2026-10-19 · Accepted — `evaluate` compares preview verdicts with a `labels.csv`, as a small check
+
+**Decision (Dylan, 2026-10-19):** expected results live in `labels.csv` beside the photos
+(`file,expected_verdict,classes`). `python -m cpoint_cv evaluate <folder>` writes
+`cv/reports/<date>-<model>.md`: per photo, a verdict table, per-class precision and recall by
+photo, and how verdicts shift with the found-at value and the thresholds. Up to 30 photos the
+report opens with "Small check"; the five sample photos show the integration, not the model's
+accuracy. It changes nothing in the app.

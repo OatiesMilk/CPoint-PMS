@@ -55,6 +55,7 @@ class Station:
     sleep: Callable[[float], None] = time.sleep
     new_id: Callable[[], str] = field(default=lambda: str(uuid.uuid4()))
     _last_wait_message: str | None = field(default=None, init=False)
+    _shown: BatchInfo | None = field(default=None, init=False)
 
     def run(self) -> int:
         """0 when the source ran out or the operator stopped; 3 when the station had to stop."""
@@ -69,9 +70,9 @@ class Station:
                     self.say("No more images to send.")
                     break
                 batch = self.wait_for_batch()
-                if not self.trigger.wait():
+                if not self.trigger.wait(self.check_in):
                     break
-                current = self.recheck(batch)
+                current = self.recheck(self._shown or batch)
                 if current is None:
                     continue
                 frame = self.source.capture()
@@ -106,6 +107,7 @@ class Station:
             outcome = self.client.current_batch()
             if isinstance(outcome, BatchInfo):
                 self._last_wait_message = None
+                self._shown = outcome
                 self.say(f"Next scan goes to {outcome.describe()}.")
                 return outcome
             if isinstance(outcome, TokenRefused):
@@ -123,6 +125,29 @@ class Station:
                 self._last_wait_message = message
             self.sleep(self.config.station.no_batch_wait_seconds)
             self.flush()
+
+    def check_in(self) -> None:
+        """While waiting for the key (D-054): ask the app for the batch again. The app records
+        the token's use, so the Camera page shows the station as connected between captures,
+        and the operator hears straight away when the batch changes."""
+        outcome = self.client.current_batch()
+        if isinstance(outcome, TokenRefused):
+            raise StationStop(outcome.message)
+        if isinstance(outcome, BatchInfo):
+            self._last_wait_message = None
+            if self._shown is None or outcome.batch_id != self._shown.batch_id:
+                self.say(f"The batch changed. Next scan goes to {outcome.describe()}.")
+            self._shown = outcome
+            return
+        message = (
+            f"{outcome.message} The next press won't capture until a batch is at Preparation."
+            if isinstance(outcome, NoBatch)
+            else f"Can't reach the app at {self.client.base_url} ({outcome.reason})."
+        )
+        if message != self._last_wait_message:
+            self.say(message)
+            self.log.write("waiting", reason=message)
+            self._last_wait_message = message
 
     def recheck(self, shown: BatchInfo) -> BatchInfo | None:
         """The batch can change while the operator waits; capture into the one current now."""

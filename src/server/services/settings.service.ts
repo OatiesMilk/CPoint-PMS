@@ -9,11 +9,13 @@ import {
   listReference,
   listUnknownClassKeys,
   updateReference,
+  updateModelNotice,
   updateThresholds,
   type ReferenceRow,
 } from "@/server/models/reference-data.model";
 import {
   referenceSchemas,
+  type ModelNoticeInput,
   type ReferenceKind,
   type ThresholdsInput,
 } from "@/server/validators/settings.validator";
@@ -29,6 +31,8 @@ export async function getThresholds() {
   return {
     rejectAtOrAbove: s.rejectAtOrAbove,
     reworkAtOrAbove: s.reworkAtOrAbove,
+    foundAtOrAbove: s.foundAtOrAbove,
+    earlyModelNotice: s.earlyModelNotice,
     updatedAt: s.updatedAt,
   };
 }
@@ -38,16 +42,25 @@ export async function getThresholds() {
  * their decisions stay explainable; only new scans use these.
  */
 export async function saveThresholds(input: ThresholdsInput, actor: Actor) {
+  const before = await getThresholds();
   const next = {
     rejectAtOrAbove: Math.round(input.rejectPercent * 10) / 1000,
     reworkAtOrAbove: Math.round(input.reworkPercent * 10) / 1000,
+    foundAtOrAbove:
+      input.foundPercent === undefined
+        ? before.foundAtOrAbove
+        : Math.round(input.foundPercent * 10) / 1000,
   };
+  const FIELD = {
+    rejectAtOrAbove: "rejectPercent",
+    reworkAtOrAbove: "reworkPercent",
+    foundAtOrAbove: "foundPercent",
+  } as const;
   const errors = validateThresholds(next).map((e) => ({
-    path: [e.path[0] === "rejectAtOrAbove" ? "rejectPercent" : "reworkPercent"],
+    path: [FIELD[e.path[0]]],
     message: e.message,
   }));
   if (errors.length > 0) throw Errors.validation(errors);
-  const before = await getThresholds();
   await runInTransaction(async (tx) => {
     await updateThresholds({ ...next, updatedById: actor.id }, tx);
     await recordAudit(tx, {
@@ -55,11 +68,36 @@ export async function saveThresholds(input: ThresholdsInput, actor: Actor) {
       action: "settings.thresholds",
       entity: "CvSettings",
       entityId: "1",
-      before: { rejectAtOrAbove: before.rejectAtOrAbove, reworkAtOrAbove: before.reworkAtOrAbove },
+      before: {
+        rejectAtOrAbove: before.rejectAtOrAbove,
+        reworkAtOrAbove: before.reworkAtOrAbove,
+        foundAtOrAbove: before.foundAtOrAbove,
+      },
       after: next,
     });
   });
   return next;
+}
+
+/** Turns the Camera page's early-model notice on or off (D-055). */
+export async function saveModelNotice(input: ModelNoticeInput, actor: Actor) {
+  const before = await getThresholds();
+  if (before.earlyModelNotice === input.earlyModelNotice) return input;
+  await runInTransaction(async (tx) => {
+    await updateModelNotice(
+      { earlyModelNotice: input.earlyModelNotice, updatedById: actor.id },
+      tx,
+    );
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: "settings.model_notice",
+      entity: "CvSettings",
+      entityId: "1",
+      before: { earlyModelNotice: before.earlyModelNotice },
+      after: { earlyModelNotice: input.earlyModelNotice },
+    });
+  });
+  return input;
 }
 
 // ───────────── reference data ─────────────
@@ -126,7 +164,7 @@ function uniqueRace(kind: ReferenceKind, error: unknown): never {
 /** Optional fields left blank are stored as null, so clearing a field on edit works. */
 function toColumns(kind: ReferenceKind, values: Record<string, unknown>) {
   const nullable: Record<ReferenceKind, string[]> = {
-    defectType: ["description"],
+    defectType: ["description", "action"],
     shoeType: [],
     supplier: ["contactPerson", "phone", "notes"],
     componentType: ["shoeTypeId"],

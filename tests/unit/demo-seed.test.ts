@@ -46,6 +46,11 @@ const mocks = {
     { id: "st2", name: "Topsider" },
   ]),
   listActiveSuppliers: vi.fn(async () => [{ id: "sp1", name: "Supplier" }]),
+  listDefectTypes: vi.fn(async () => [
+    { id: "d1", key: "crease", label: "Crease", isActive: true, action: "REWORK" },
+    { id: "d2", key: "cut", label: "Cut", isActive: true, action: "REJECT" },
+    { id: "d3", key: "dirt", label: "Dirt", isActive: false, action: null },
+  ]),
   findUserByEmail: vi.fn(async (email: string) => ({
     id: email,
     role: email.startsWith("inspector") ? "QUALITY_INSPECTOR" : "FLOOR_MANAGER",
@@ -70,6 +75,7 @@ vi.mock("@/server/models/outcome.model", () => ({ findLiveOutcomes: mocks.findLi
 vi.mock("@/server/models/reference-data.model", () => ({
   listActiveShoeTypes: mocks.listActiveShoeTypes,
   listActiveSuppliers: mocks.listActiveSuppliers,
+  listDefectTypes: mocks.listDefectTypes,
 }));
 vi.mock("@/server/models/user.model", () => ({ findUserByEmail: mocks.findUserByEmail }));
 vi.mock("@/server/services/api-token.service", () => ({
@@ -214,6 +220,20 @@ describe("seedDemoWeek", () => {
     expect(scans.length).toBeGreaterThan(100);
     expect(scans.slice(-2).map((c) => c.classKeys)).toEqual([[UNKNOWN_CLASS], [UNKNOWN_CLASS]]);
     expect(new Set(scans.slice(-2).map((c) => c.batchId)).size).toBe(1);
+  });
+
+  it("draws defects from the active defect types only", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    const keys = new Set(calls.filter((c) => c.fn === "scan").flatMap((c) => c.classKeys ?? []));
+    expect([...keys].sort()).toEqual(["crease", "cut", UNKNOWN_CLASS].sort());
+  });
+
+  it("seeds nothing when no defect type is active", async () => {
+    mocks.listDefectTypes.mockResolvedValueOnce([]);
+    expect(await seedDemoWeek({ now, seed: 1 })).toEqual({
+      seeded: false,
+      reason: "no active defect types",
+    });
   });
 
   it("decides flagged scans as the Quality Inspector only, never by override (D-028)", async () => {

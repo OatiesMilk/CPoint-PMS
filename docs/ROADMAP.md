@@ -257,5 +257,32 @@ Brief: `camera-yolo-integration.md` (project root), Phase 15. One additive contr
 - [x] `python -m cpoint_cv doctor`: model and checksum, versions, camera, app, token, clock
 - [x] Unit tests with mocked HTTP: client statuses, retries, spool, payload, station loop, doctor
       (133 station tests, 508 app tests)
-- [ ] Codex: folder replay shows on the Camera page, Latest scans and the review queue
-      (`qa/handoffs/2026-10-19-phase-15-camera-station.md`)
+- [x] Codex: folder replay shows on the Camera page, Latest scans and the review queue
+      (runs 1 and 2, `qa/reports/2026-10-19-phase-15-camera-station*.md`)
+
+## Phase 16 — Camera page, a small model check, clean data and the demo
+
+Brief: `camera-yolo-integration.md` (project root), Phase 16, plus Dylan's clean-data request.
+Plan: `phase-16-plan.md`; Dylan took every recommended option.
+
+- [x] Camera page: states for no captures, no batch, not connected, **station connected**
+      (waiting), simulator and station active, each with its own copy; the model of the last scan;
+      the early-model notice (a setting, D-055); "Connect the camera station" with the token,
+      `doctor` and `run`
+- [x] Station check-in (D-054): a waiting station asks for the batch every 20 s; no new endpoint
+- [x] Confidence isn't severity (D-053): a "When found" action per defect type and "A defect
+      counts as found at" in Settings; the worst outcome decides; migration `defect_actions`;
+      snapshot and scan page show the rules used; the Python preview matches
+- [x] Scan detail shows the model and the rules used
+- [x] `evaluate` (D-058): `labels.csv`, verdict table, per-class precision and recall, a sweep;
+      `cv/reports/2026-10-19-yolo-v1.md` on the five photos, labelled a small check (5 of 5)
+- [x] Station: duplicate-box filter and IP camera URL (D-057); no ONNX (timings are fine)
+- [x] Simulator and demo week use the model's classes (from Settings for the demo week)
+- [x] `npm run demo:reset` (D-056): keeps the accounts and the station's token, removes test
+      data and files, sets the yolo-v1 defect types, seeds a fresh demo week; dry run by default
+- [x] Model swap runbook and demo script with the station/server/browser layout (`cv/README.md`)
+- [x] Tests: 537 app unit tests, 156 station tests; the e2e tests post their own rule types
+- [x] `npm run demo:reset -- --yes` run on the dev database (Dylan's word, 2026-10-19)
+- [x] Codex: every Camera page state, Settings actions, the reset and the station check-in
+      (run 1: 19 of 21, two stale-config/test failures fixed; run 2: 4 of 4, axe on every live
+      state)

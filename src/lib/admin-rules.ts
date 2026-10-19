@@ -58,9 +58,19 @@ export function checkAccountChange(
 
 // ───────────── CV thresholds ─────────────
 
-/** Validates thresholds given as fractions (0.9 = 90%). Rework must stay below Reject (D-011). */
-export function validateThresholds(t: { rejectAtOrAbove: number; reworkAtOrAbove: number }) {
-  const errors: { path: ["rejectAtOrAbove" | "reworkAtOrAbove"]; message: string }[] = [];
+/**
+ * Validates thresholds given as fractions (0.9 = 90%). Rework must stay below Reject (D-011);
+ * the found-at value (D-053) only needs to be a real percentage.
+ */
+export function validateThresholds(t: {
+  rejectAtOrAbove: number;
+  reworkAtOrAbove: number;
+  foundAtOrAbove?: number;
+}) {
+  const errors: {
+    path: ["rejectAtOrAbove" | "reworkAtOrAbove" | "foundAtOrAbove"];
+    message: string;
+  }[] = [];
   const pct = (n: number) => Math.round(n * 1000) / 10;
   if (!(t.rejectAtOrAbove > 0 && t.rejectAtOrAbove <= 1))
     errors.push({ path: ["rejectAtOrAbove"], message: "Use a value above 0% and up to 100%." });
@@ -71,6 +81,8 @@ export function validateThresholds(t: { rejectAtOrAbove: number; reworkAtOrAbove
       path: ["reworkAtOrAbove"],
       message: `Rework must start below Reject (${pct(t.rejectAtOrAbove)}%).`,
     });
+  if (t.foundAtOrAbove !== undefined && !(t.foundAtOrAbove > 0 && t.foundAtOrAbove < 1))
+    errors.push({ path: ["foundAtOrAbove"], message: "Use a value above 0% and below 100%." });
   return errors;
 }
 

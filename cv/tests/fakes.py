@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -140,10 +140,15 @@ class FakeSource:
 
 
 class FakeTrigger:
-    """``presses`` answers in order, then False (stop)."""
+    """``presses`` answers in order, then False (stop). Before each answer it calls ``idle``
+    ``idles`` times, as a station waiting for the key would."""
 
-    def __init__(self, presses: Sequence[bool]) -> None:
+    def __init__(self, presses: Sequence[bool], idles: int = 0) -> None:
         self._presses = list(presses)
+        self._idles = idles
 
-    def wait(self) -> bool:
+    def wait(self, idle: Callable[[], None] | None = None) -> bool:
+        if idle is not None:
+            for _ in range(self._idles):
+                idle()
         return self._presses.pop(0) if self._presses else False

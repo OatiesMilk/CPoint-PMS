@@ -45,6 +45,13 @@ enum ScanStatus {
   DECIDED
 }
 
+/// What a found defect of a type means, whatever the model's confidence (D-053). Null on the
+/// type = the confidence rule (D-011).
+enum DefectAction {
+  REWORK
+  REJECT
+}
+
 enum ScanSource {
   SIMULATOR
   PHONE
@@ -257,6 +264,8 @@ model DefectType {
   label       String
   description String?
   isActive    Boolean  @default(true) // inactive types are ignored by the decision engine
+  /// Rework or Reject once found (confidence ≥ CvSettings.foundAtOrAbove); null = by confidence (D-053)
+  action      DefectAction?
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -270,6 +279,10 @@ model CvSettings {
   id              Int      @id @default(1)
   rejectAtOrAbove Float    @default(0.9)
   reworkAtOrAbove Float    @default(0.6)
+  /// A detection of a type with an action counts as found from this confidence (D-053).
+  foundAtOrAbove  Float    @default(0.5)
+  /// Show the early-model notice on the Camera page (D-055).
+  earlyModelNotice Boolean @default(true)
   /// The batch the single Preparation camera feeds (D-020). Null = oldest batch at Preparation.
   activeBatchId   String?  @db.Uuid
   updatedById     String?  @db.Uuid

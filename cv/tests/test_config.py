@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from cpoint_cv.config import CV_DIR, ConfigError, load_config, parse_config
+from cpoint_cv.sources import camera_name
 
 BASE = Path("/station")
 MINIMAL = {"model": {"path": "models/yolo-v1.pt"}}
@@ -124,3 +125,57 @@ def test_station_settings_name_the_setting_and_the_fix(
 ) -> None:
     with pytest.raises(ConfigError, match=message):
         parse_config({**MINIMAL, section: values}, base_dir=BASE)
+
+
+def test_camera_url_overlap_and_check_in(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "model": {"path": "m.pt"},
+            "camera": {"url": "rtsp://cam:secret@192.168.1.50:554/stream1"},
+            "mapper": {"overlap_iou": 0.5},
+            "station": {"check_in_seconds": 0},
+        },
+        base_dir=tmp_path,
+    )
+    assert config.camera.device == "rtsp://cam:secret@192.168.1.50:554/stream1"
+    assert config.mapper.overlap_iou == 0.5
+    assert config.station.check_in_seconds == 0
+    defaults = parse_config({"model": {"path": "m.pt"}, "camera": {"url": ""}}, base_dir=tmp_path)
+    assert defaults.camera.device == 0
+    assert defaults.mapper.overlap_iou == 0.7
+    assert defaults.station.check_in_seconds == 20
+
+
+def test_camera_url_from_the_environment_and_a_bad_one(tmp_path: Path) -> None:
+    env = {"CPOINT_CV_CAMERA_URL": "http://192.168.1.60/video"}
+    config = parse_config({"model": {"path": "m.pt"}}, base_dir=tmp_path, env=env)
+    assert config.camera.device == "http://192.168.1.60/video"
+    with pytest.raises(ConfigError, match=r"\[camera\] url must start with rtsp://"):
+        parse_config(
+            {"model": {"path": "m.pt"}, "camera": {"url": "192.168.1.60"}}, base_dir=tmp_path
+        )
+
+
+def test_camera_name_hides_the_password() -> None:
+    assert camera_name(0) == "camera 0"
+    assert camera_name("rtsp://cam:secret@10.0.0.5/s1") == "IP camera rtsp://10.0.0.5/s1"
+
+
+def test_preview_actions(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "model": {"path": "m.pt"},
+            "preview": {
+                "found_at_or_above": 0.45,
+                "actions": {"hole": "reject", "crease": "REWORK"},
+            },
+        },
+        base_dir=tmp_path,
+    )
+    assert config.preview.actions == {"hole": "REJECT", "crease": "REWORK"}
+    assert config.preview.found_at_or_above == 0.45
+    with pytest.raises(ConfigError, match=r"\[preview.actions\]"):
+        parse_config(
+            {"model": {"path": "m.pt"}, "preview": {"actions": {"hole": "DISCARD"}}},
+            base_dir=tmp_path,
+        )

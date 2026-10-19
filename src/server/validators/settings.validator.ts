@@ -26,9 +26,17 @@ const percent = (label: string) =>
 export const thresholdsSchema = z.object({
   rejectPercent: percent("reject threshold"),
   reworkPercent: percent("rework threshold"),
+  /** Optional, so API callers from before D-053 keep working; left out = unchanged. */
+  foundPercent: percent("found-at value").optional(),
+});
+
+/** The early-model notice on the Camera page (D-055). */
+export const modelNoticeSchema = z.object({
+  earlyModelNotice: z.boolean({ error: OUT_OF_DATE }),
 });
 
 export type ThresholdsInput = z.output<typeof thresholdsSchema>;
+export type ModelNoticeInput = z.output<typeof modelNoticeSchema>;
 
 export const defectTypeCreateSchema = z.object({
   key: z
@@ -45,6 +53,15 @@ export const defectTypeCreateSchema = z.object({
     .min(1, "Enter a label people will read, e.g. Scratch.")
     .max(40, "Keep the label under 40 characters."),
   description: optionalText(200, "description"),
+  /** What a found defect of this type means (D-053); blank = by confidence (D-011). */
+  action: z.preprocess(
+    blankToUndefined,
+    z
+      .enum(["REWORK", "REJECT"], {
+        error: "Choose what a found defect means: By confidence, Rework or Reject.",
+      })
+      .optional(),
+  ),
   sortOrder,
 });
 /** The key is fixed after creation: the camera sends it, and past detections reference it. */

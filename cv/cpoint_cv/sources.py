@@ -9,6 +9,7 @@ Only ``WebcamSource`` imports OpenCV, when it opens the camera.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -98,9 +99,42 @@ class FileSource:
         pass
 
 
+def camera_name(device: int | str) -> str:
+    """How a camera is shown in the console and logs: "camera 0", or an IP camera's address
+    without the user name and password it may carry."""
+    if isinstance(device, int):
+        return f"camera {device}"
+    return "IP camera " + re.sub(r"//[^/@]*@", "//", device)
+
+
+def _upper_first(text: str) -> str:
+    return text[:1].upper() + text[1:]
+
+
+def _open_problem(device: int | str) -> str:
+    if isinstance(device, int):
+        return (
+            f"Camera {device} couldn't be opened. Check it's plugged in and not in use by "
+            "another app (Camera, Teams, Zoom), or change [camera] index in cv/config.toml."
+        )
+    return (
+        f"{camera_name(device)} couldn't be opened. Check the PC can reach it on the network, "
+        "and the address, user name and password in [camera] url (or CPOINT_CV_CAMERA_URL)."
+    )
+
+
 class WebcamSource:
+    """A camera on the PC (a number) or an IP camera on the network (an rtsp:// or http://
+    address); OpenCV opens both the same way."""
+
     def __init__(
-        self, index: int, width: int, height: int, *, warmup_frames: int, jpeg_quality: int
+        self,
+        device: int | str,
+        width: int,
+        height: int,
+        *,
+        warmup_frames: int,
+        jpeg_quality: int,
     ) -> None:
         try:
             import cv2
@@ -109,22 +143,19 @@ class WebcamSource:
                 "OpenCV isn't installed. Run: pip install -r cv/requirements.txt"
             ) from None
         self._cv2: Any = cv2
-        self._index = index
+        self._name = camera_name(device)
         self._quality = jpeg_quality
         self._count = 0
-        self._camera: Any = cv2.VideoCapture(index)
+        self._camera: Any = cv2.VideoCapture(device)
         if not self._camera.isOpened():
-            raise SourceError(
-                f"Camera {index} couldn't be opened. Check it's plugged in and not in use by "
-                "another app (Camera, Teams, Zoom), or change [camera] index in cv/config.toml."
-            )
+            raise SourceError(_open_problem(device))
         self._camera.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self._camera.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         for _ in range(warmup_frames):  # let exposure and white balance settle
             self._camera.read()
         w = int(self._camera.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(self._camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.description = f"webcam {index} at {w} x {h}"
+        self.description = f"{self._name} at {w} x {h}"
 
     def capture(self) -> Frame | None:
         # Drop frames the driver buffered while waiting, so the picture is from the trigger.
@@ -133,10 +164,11 @@ class WebcamSource:
         ok, image = self._camera.read()
         if not ok or image is None:
             raise SourceError(
-                f"Camera {self._index} stopped giving frames. Check the cable, then restart."
+                f"{_upper_first(self._name)} stopped giving frames. Check the cable "
+                "or the network, then restart."
             )
         self._count += 1
-        return Frame(encode_jpeg(image, self._quality), f"webcam {self._index} #{self._count}")
+        return Frame(encode_jpeg(image, self._quality), f"{self._name} #{self._count}")
 
     def remaining(self) -> int | None:
         return None
@@ -145,20 +177,17 @@ class WebcamSource:
         self._camera.release()
 
 
-def probe_camera(index: int) -> str | None:
+def probe_camera(device: int | str) -> str | None:
     """For ``doctor``: None when the camera opens and gives a frame, else what's wrong."""
     try:
         import cv2
     except ImportError:
         return "OpenCV isn't installed. Run: pip install -r cv/requirements.txt"
-    camera: Any = cv2.VideoCapture(index)
+    camera: Any = cv2.VideoCapture(device)
     try:
         if not camera.isOpened():
-            return (
-                f"Camera {index} couldn't be opened. Check it's plugged in and not in use by "
-                "another app, or change [camera] index in cv/config.toml."
-            )
+            return _open_problem(device)
         ok, _ = camera.read()
-        return None if ok else f"Camera {index} opened but gave no picture."
+        return None if ok else f"{_upper_first(camera_name(device))} opened but gave no picture."
     finally:
         camera.release()

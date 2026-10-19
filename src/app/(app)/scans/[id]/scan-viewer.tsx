@@ -10,13 +10,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { Thresholds } from "@/lib/decision-engine";
 import { cn } from "@/lib/utils";
 
 type Props = {
   src: string;
   alt: string;
   detections: (OverlayDetection & { inactive: boolean })[];
-  thresholds: { rejectAtOrAbove: number; reworkAtOrAbove: number };
+  thresholds: Thresholds;
 };
 
 /** Image + detections table; hovering a row highlights its box and vice versa. */

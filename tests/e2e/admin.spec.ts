@@ -152,7 +152,12 @@ test.describe("camera settings", () => {
     const scan = (await res.json()).data;
     expect(scan.verdict).toBe("REJECT");
     const detail = await (await api.get(`/api/v1/scans/${scan.scanId}`)).json();
-    expect(detail.data.thresholdsSnapshot).toEqual({ rejectAtOrAbove: 0.85, reworkAtOrAbove: 0.5 });
+    // Since D-053 the snapshot also keeps foundAtOrAbove and the actions in force; this test only
+    // owns the two thresholds.
+    expect(detail.data.thresholdsSnapshot).toMatchObject({
+      rejectAtOrAbove: 0.85,
+      reworkAtOrAbove: 0.5,
+    });
   });
 
   test("an unknown class can be added as a defect type, and later scans are decided automatically", async ({

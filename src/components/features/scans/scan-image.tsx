@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
+import { detectionOutcome, type DefectAction, type Thresholds } from "@/lib/decision-engine";
 import { cn } from "@/lib/utils";
 
 export type OverlayDetection = {
@@ -9,6 +10,8 @@ export type OverlayDetection = {
   label: string;
   confidence: number;
   unknown: boolean;
+  /** The type's action when the scan was decided (D-053); null = by confidence. */
+  action?: DefectAction | null;
   box: { x: number; y: number; width: number; height: number };
 };
 
@@ -16,18 +19,17 @@ type Props = {
   src: string;
   alt: string;
   detections: OverlayDetection[];
-  thresholds: { rejectAtOrAbove: number; reworkAtOrAbove: number };
+  thresholds: Thresholds;
   /** Controlled highlight (e.g. when hovering a row in the detections table). */
   highlightId?: string | null;
   className?: string;
 };
 
-/** Box tone follows what the confidence alone would mean; unknown classes are "needs review". */
-function tone(d: OverlayDetection, t: Props["thresholds"]) {
+/** Box tone follows what this detection alone would mean; unknown classes are "needs review". */
+function tone(d: OverlayDetection, t: Thresholds) {
   if (d.unknown) return "review";
-  if (d.confidence >= t.rejectAtOrAbove) return "reject";
-  if (d.confidence >= t.reworkAtOrAbove) return "rework";
-  return "muted";
+  const outcome = detectionOutcome(d.confidence, d.action, t);
+  return outcome === "REJECT" ? "reject" : outcome === "REWORK" ? "rework" : "muted";
 }
 
 const TONES = {

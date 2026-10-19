@@ -16,6 +16,7 @@ const refs = {
     ...data,
   })),
   updateThresholds: vi.fn(),
+  updateModelNotice: vi.fn(),
 };
 const cv = { getCvSettings: vi.fn() };
 const recordAudit = vi.fn();
@@ -35,32 +36,61 @@ beforeEach(() => {
   cv.getCvSettings.mockResolvedValue({
     rejectAtOrAbove: 0.9,
     reworkAtOrAbove: 0.6,
+    foundAtOrAbove: 0.5,
+    earlyModelNotice: true,
     updatedAt: new Date(),
   });
 });
 
 describe("saveThresholds", () => {
   it("stores fractions and audits before/after", async () => {
-    await svc.saveThresholds({ rejectPercent: 85, reworkPercent: 50.5 }, admin);
+    await svc.saveThresholds({ rejectPercent: 85, reworkPercent: 50.5, foundPercent: 45 }, admin);
     expect(refs.updateThresholds).toHaveBeenCalledWith(
-      { rejectAtOrAbove: 0.85, reworkAtOrAbove: 0.505, updatedById: "a1" },
+      { rejectAtOrAbove: 0.85, reworkAtOrAbove: 0.505, foundAtOrAbove: 0.45, updatedById: "a1" },
       "tx",
     );
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
       expect.objectContaining({
         action: "settings.thresholds",
-        before: { rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6 },
-        after: { rejectAtOrAbove: 0.85, reworkAtOrAbove: 0.505 },
+        before: { rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6, foundAtOrAbove: 0.5 },
+        after: { rejectAtOrAbove: 0.85, reworkAtOrAbove: 0.505, foundAtOrAbove: 0.45 },
       }),
     );
   });
 
   it("refuses rework at or above reject, on the rework field", async () => {
     await expect(
-      svc.saveThresholds({ rejectPercent: 70, reworkPercent: 70 }, admin),
+      svc.saveThresholds({ rejectPercent: 70, reworkPercent: 70, foundPercent: 50 }, admin),
     ).rejects.toMatchObject({ status: 422, details: [{ path: ["reworkPercent"] }] });
     expect(refs.updateThresholds).not.toHaveBeenCalled();
+  });
+
+  it("refuses a found-at value of 100%, on its own field", async () => {
+    await expect(
+      svc.saveThresholds({ rejectPercent: 90, reworkPercent: 60, foundPercent: 100 }, admin),
+    ).rejects.toMatchObject({ status: 422, details: [{ path: ["foundPercent"] }] });
+  });
+});
+
+describe("saveModelNotice (D-055)", () => {
+  it("audits a change and skips a no-op", async () => {
+    await svc.saveModelNotice({ earlyModelNotice: false }, admin);
+    expect(refs.updateModelNotice).toHaveBeenCalledWith(
+      { earlyModelNotice: false, updatedById: "a1" },
+      "tx",
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "settings.model_notice",
+        before: { earlyModelNotice: true },
+        after: { earlyModelNotice: false },
+      }),
+    );
+    vi.clearAllMocks();
+    await svc.saveModelNotice({ earlyModelNotice: true }, admin);
+    expect(refs.updateModelNotice).not.toHaveBeenCalled();
   });
 });
 
@@ -69,7 +99,7 @@ describe("reference data", () => {
     await svc.createReferenceRow("defectType", { key: "Scratch", label: "Scratch" }, admin);
     expect(refs.insertReference).toHaveBeenCalledWith(
       "defectType",
-      { key: "scratch", label: "Scratch", description: null, sortOrder: 0 },
+      { key: "scratch", label: "Scratch", description: null, action: null, sortOrder: 0 },
       "tx",
     );
     refs.findReferenceByField.mockResolvedValueOnce({ id: "other" });
@@ -110,5 +140,15 @@ describe("reference data", () => {
     refs.findReference.mockResolvedValue({ id: "s1", isActive: false });
     await svc.setReferenceActive("supplier", "s1", false, admin);
     expect(refs.updateReference).not.toHaveBeenCalled();
+  });
+});
+
+describe("saveThresholds without a found-at value (API callers before D-053)", () => {
+  it("keeps the stored one", async () => {
+    await svc.saveThresholds({ rejectPercent: 90, reworkPercent: 60 }, admin);
+    expect(refs.updateThresholds).toHaveBeenCalledWith(
+      expect.objectContaining({ foundAtOrAbove: 0.5 }),
+      "tx",
+    );
   });
 });
