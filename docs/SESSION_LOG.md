@@ -14,6 +14,22 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-19 — Phase 17: the camera station window
+
+**Who:** Dylan (local `main` checkout at `dac8599`, not committed)
+**Summary:** Built the station window from `camera-station-window.md`: a Tkinter window with Check this machine (the GPU included), a camera picker with DirectShow and a DroidCam address, a live preview labelled as a preview, Capture and Stop, run by the existing station loop on a worker thread. A `.cmd` launcher and a `shortcut` command open it without a terminal. Dylan took every recommended option in `phase-17-plan.md`.
+**Changed:**
+
+- Station core: `events.py` (what the loop reports, as data); `station.py` (`events`, `should_stop`, a frame's own capture time); `triggers.py` (`ButtonTrigger`); `sources.py` (`open_capture`, DirectShow); `yolo_detector.py` (`detect_frame` at another size, one lock); `overlay.py` (`draw_boxes` shared with the preview); `doctor.py` (pass/warn/fail, the GPU check, softer clock and version lines); `config.py` and `config.example.toml` (`[camera] backend`, `[window]`); `cli.py` (`window`, `shortcut`, `make_client`).
+- Window: `cpoint_cv/window/` (presenter with no Tk, checks, cameras, settings, workers, view, app); `cpoint_cv/shortcut.py`; `cv/CPoint Camera.cmd`.
+- Config: `requirements.txt` pins `pillow==12.3.0`; `pyproject.toml` 0.17.0; `.gitignore` (`/cv/station-window.json`); `.gitattributes` (`*.cmd` CRLF).
+- App: the Camera page's "Connect the camera station" steps point at the shortcut and the window.
+- Tests: 67 new station tests (presenter, checks, cameras and drivers, saved choice, trigger, launcher, threads with fakes, station events). Docs: `cv/README.md` (Use the station window, iPhone through DroidCam, demo script), ROADMAP, STATUS, DECISIONS, QA handoff.
+
+**Gates:** lint ✅ · typecheck ✅ · unit 537 ✅ · build ✅ · station: ruff ✅ · ruff format ✅ · mypy ✅ · pytest 225 ✅ (also in a clean venv without OpenCV, torch or Pillow) · real model through the preview path on the GPU ✅ (35 ms at 960, 55 ms at 1536) · the window by hand, e2e and browser tests not run (Codex) · docker not run (no Docker change)
+**Decisions:** D-059, D-060, D-061, D-062, D-063
+**Follow-ups:** Codex runs `qa/handoffs/2026-10-19-phase-17-camera-window.md`. The preview rate (4 a second) is conservative for the GPU; raise `[window] preview_max_fps` if the panel wants smoother boxes. Dylans own test (2026-10-19, iPhone through DroidCam by address): live preview with boxes, Capture gave B-2026-0001 section 3, Reject, from the app. After it: the Checks list puts failures first with a scrollbar, the red bar names the failed check, the address message says DroidCam serves one viewer, and box colours avoid the verdict hues with labels on a dark chip. The DroidCam free watermark is detected as a scratch: use a clean view for real scans.
+
 ## 2026-10-19 — Phase 16 follow-up: reset run and Codex run 1 fixes
 
 **Who:** Dylan (local `main` checkout, not committed)

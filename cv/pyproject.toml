@@ -1,6 +1,6 @@
 [project]
 name = "cpoint-cv"
-version = "0.15.0"
+version = "0.17.0"
 description = "CPoint camera station: runs the YOLO model on leather sections at Preparation."
 requires-python = ">=3.13"
 
@@ -18,8 +18,10 @@ strict = true
 files = ["cpoint_cv", "tests"]
 
 [[tool.mypy.overrides]]
-# Optional at test time: the unit tests run without torch, ultralytics or OpenCV.
-module = ["ultralytics", "ultralytics.*", "torch", "torch.*", "cv2", "numpy", "numpy.*"]
+# Optional at test time: the unit tests run without torch, ultralytics, OpenCV or Pillow.
+module = [
+  "ultralytics", "ultralytics.*", "torch", "torch.*", "cv2", "numpy", "numpy.*", "PIL", "PIL.*",
+]
 ignore_missing_imports = true
 # Same result with or without them installed: treat them as untyped.
 follow_imports = "skip"

@@ -35,6 +35,9 @@ ENV_OVERRIDES = {
 
 # The app's ScanSource values a camera station may send (prisma/schema.prisma).
 STATION_SOURCES = ("WEBCAM", "DEDICATED_CAMERA")
+# How OpenCV opens a numbered camera on Windows: its default (Media Foundation), or DirectShow,
+# which some virtual cameras (DroidCam, OBS) only offer.
+CAMERA_BACKENDS = ("default", "dshow")
 
 
 class ConfigError(ValueError):
@@ -80,10 +83,20 @@ class CameraConfig:
     warmup_frames: int = 5
     # An IP camera's stream (rtsp://, http:// or https://). When set, it's used instead of index.
     url: str | None = None
+    # "default" or "dshow" (DirectShow), for numbered cameras only (D-062).
+    backend: str = "default"
 
     @property
     def device(self) -> int | str:
         return self.url or self.index
+
+
+@dataclass(frozen=True)
+class WindowConfig:
+    """The station window's live preview (D-060). Captures always run at [model] imgsz."""
+
+    preview_imgsz: int = 960
+    preview_max_fps: float = 4.0
 
 
 def _default_station() -> StationConfig:
@@ -99,6 +112,7 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     station: StationConfig = field(default_factory=_default_station)
     camera: CameraConfig = field(default_factory=CameraConfig)
+    window: WindowConfig = field(default_factory=WindowConfig)
     source_file: Path | None = None
 
 
@@ -154,7 +168,7 @@ def parse_config(
     """Validate raw settings. Relative model paths are taken from ``base_dir``."""
     merged: dict[str, dict[str, Any]] = {
         name: dict(_section(data, name))
-        for name in ("model", "mapper", "preview", "server", "station", "camera")
+        for name in ("model", "mapper", "preview", "server", "station", "camera", "window")
     }
     for var, (section, key) in ENV_OVERRIDES.items():
         if env and env.get(var, "").strip():
@@ -302,18 +316,40 @@ def parse_config(
             "[camera] url must start with rtsp://, http:// or https://, "
             'e.g. "rtsp://192.168.1.50:554/stream1". Leave it empty to use [camera] index.'
         )
+    backend = str(cm.get("backend", "default")).strip().lower()
+    if backend not in CAMERA_BACKENDS:
+        raise ConfigError(
+            f'[camera] backend must be "default" or "dshow" (DirectShow); got {backend!r}.'
+        )
     camera = CameraConfig(
         url=url,
+        backend=backend,
         index=_whole("camera", "index", cm.get("index", 0), low=0, high=99),
         width=_whole("camera", "width", cm.get("width", 1920), low=160, high=8192),
         height=_whole("camera", "height", cm.get("height", 1080), low=120, high=8192),
         warmup_frames=_whole("camera", "warmup_frames", cm.get("warmup_frames", 5), low=0, high=60),
     )
 
+    wv = merged["window"]
+    preview_imgsz = _whole(
+        "window", "preview_imgsz", wv.get("preview_imgsz", 960), low=160, high=4096
+    )
+    if preview_imgsz % 32:
+        raise ConfigError(
+            f"[window] preview_imgsz must be a multiple of 32, e.g. 960; got {preview_imgsz}."
+        )
+    window = WindowConfig(
+        preview_imgsz=preview_imgsz,
+        preview_max_fps=_number(
+            "window", "preview_max_fps", wv.get("preview_max_fps", 4.0), low=0.5, high=30
+        ),
+    )
+
     return Config(
         server=server,
         station=station,
         camera=camera,
+        window=window,
         model=ModelConfig(
             path=path if path.is_absolute() else (base_dir / path).resolve(),
             name=name.strip(),

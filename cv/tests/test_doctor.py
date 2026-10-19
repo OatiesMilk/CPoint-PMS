@@ -5,7 +5,15 @@ from fakes import TOKEN, FakeTransport, batch_ok, error, no_batch, reply
 
 from cpoint_cv.client import TOKEN_REFUSED, ScanClient
 from cpoint_cv.config import parse_config
-from cpoint_cv.doctor import check_app, check_camera, check_model, check_python, pinned_versions
+from cpoint_cv.doctor import (
+    GpuInfo,
+    check_app,
+    check_camera,
+    check_gpu,
+    check_model,
+    check_python,
+    pinned_versions,
+)
 from cpoint_cv.model_info import sha256_file
 from cpoint_cv.transport import HttpResponse, TransportError
 
@@ -51,7 +59,8 @@ class TestPython:
         by_name = {c.name: c for c in checks}
         assert by_name["Python"].ok
         assert by_name["torch"].ok  # the CUDA build's +cu124 suffix is fine
-        assert not by_name["numpy"].ok and "needs 2.5.2" in by_name["numpy"].detail
+        # Another version works but is worth knowing: a warning, never a failure (D-061).
+        assert by_name["numpy"].status == "warn" and "tested with 2.5.2" in by_name["numpy"].detail
         assert not by_name["ultralytics"].ok
         assert "not installed" in by_name["ultralytics"].detail
 
@@ -107,3 +116,45 @@ class TestApp:
         ahead = SERVER_NOW.replace(minute=40)
         clock = check_app(client(t), now=lambda: ahead)[2]
         assert not clock.ok and "600 s ahead of the app" in clock.detail
+
+    def test_a_clock_a_little_off_is_a_warning(self) -> None:
+        t = FakeTransport(health=[health_ok()], current=[batch_ok()])
+        behind = SERVER_NOW.replace(minute=27)  # 3 minutes behind: scans are accepted
+        clock = check_app(client(t), now=lambda: behind)[2]
+        assert clock.status == "warn" and "180 s behind the app" in clock.detail
+
+    def test_no_batch_is_a_warning(self) -> None:
+        t = FakeTransport(health=[health_ok()], current=[no_batch()])
+        token = check_app(client(t), now=lambda: SERVER_NOW)[1]
+        assert token.status == "warn" and "Batches page" in token.detail
+
+
+RTX = GpuInfo("2.6.0+cu124", "12.4", True, "NVIDIA GeForce RTX 3060 Laptop GPU")
+CPU_TORCH = GpuInfo("2.6.0+cpu", None, False, None)
+NO_DRIVER = GpuInfo("2.6.0+cu124", "12.4", False, None)
+
+
+class TestGpu:
+    def test_a_usable_gpu_names_it_and_its_cuda_build(self) -> None:
+        check = check_gpu("cuda:0", lambda: RTX)
+        assert check.status == "ok"
+        assert "RTX 3060" in check.detail and "CUDA 12.4" in check.detail
+
+    def test_a_gpu_left_unused_suggests_it(self) -> None:
+        check = check_gpu("cpu", lambda: RTX)
+        assert check.status == "warn" and 'device = "cuda:0"' in check.detail
+
+    def test_the_cpu_build_of_torch_says_how_to_get_the_gpu_one(self) -> None:
+        check = check_gpu("cpu", lambda: CPU_TORCH)
+        assert check.status == "warn" and "CPU build" in check.detail and "README" in check.detail
+
+    def test_a_configured_gpu_that_is_missing_fails_for_the_cli(self) -> None:
+        check = check_gpu("cuda:0", lambda: NO_DRIVER)
+        assert check.status == "fail" and 'device = "cpu"' in check.detail
+
+    def test_the_window_falls_back_to_the_cpu_with_a_warning(self) -> None:
+        check = check_gpu("cuda:0", lambda: NO_DRIVER, cpu_fallback=True)
+        assert check.status == "warn" and "on the CPU instead" in check.detail
+
+    def test_no_torch_is_left_to_the_package_line(self) -> None:
+        assert check_gpu("cuda:0", lambda: None).status == "warn"

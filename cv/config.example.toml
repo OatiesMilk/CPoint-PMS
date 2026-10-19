@@ -91,3 +91,13 @@ width = 1920
 height = 1080
 # Frames read and dropped when the camera opens, so exposure settles before the first capture.
 warmup_frames = 5
+# How Windows opens a numbered camera: "default" (Media Foundation) or "dshow" (DirectShow).
+# Try "dshow" when a virtual camera such as DroidCam or OBS gives no picture. Not used for url.
+backend = "default"
+
+[window]
+# The station window (python -m cpoint_cv window). Its live preview runs the model at this
+# smaller size, at most preview_max_fps times a second, so the window stays smooth. A capture
+# always runs at [model] imgsz. The preview never sends anything; the app decides (D-060).
+preview_imgsz = 960
+preview_max_fps = 4

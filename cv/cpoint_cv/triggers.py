@@ -7,6 +7,7 @@ captures, and the operator hears at once if someone changed the batch.
 
 from __future__ import annotations
 
+import queue
 import sys
 import time
 from collections.abc import Callable
@@ -89,3 +90,33 @@ class IntervalTrigger:
         else:
             self._sleep(self._seconds)
         return True
+
+
+class ButtonTrigger:
+    """The station window's Capture and Stop buttons (D-059). The window's thread calls
+    ``press`` or ``stop``; the station's thread waits in ``wait`` and checks in with the app every
+    ``idle_seconds`` meanwhile, as at the console. ``idle_seconds`` can change while it runs: the
+    window asks more often while no batch is at Preparation, so Capture comes back quickly."""
+
+    def __init__(self, idle_seconds: float = 20.0, clock: Callable[[], float] = time.monotonic):
+        self.idle_seconds = idle_seconds
+        self._clock = clock
+        self._presses: queue.Queue[bool] = queue.Queue()
+
+    def press(self) -> None:
+        self._presses.put(True)
+
+    def stop(self) -> None:
+        self._presses.put(False)
+
+    def wait(self, idle: Idle | None = None) -> bool:
+        since = self._clock()
+        while True:
+            try:
+                return self._presses.get(timeout=0.1)
+            except queue.Empty:
+                pass
+            due = self.idle_seconds > 0 and self._clock() - since >= self.idle_seconds
+            if idle is not None and due:
+                idle()
+                since = self._clock()

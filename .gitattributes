@@ -3,3 +3,4 @@
 *.png binary
 *.webp binary
 docker/*.sh text eol=lf
+*.cmd text eol=crlf

@@ -286,3 +286,30 @@ Plan: `phase-16-plan.md`; Dylan took every recommended option.
 - [x] Codex: every Camera page state, Settings actions, the reset and the station check-in
       (run 1: 19 of 21, two stale-config/test failures fixed; run 2: 4 of 4, axe on every live
       state)
+
+## Phase 17 — The camera station window
+
+Brief: `camera-station-window.md` (project root). Plan: `phase-17-plan.md`; Dylan took every
+recommended option (Tkinter, preview at 960 and 4 a second, Capture sends the frame on screen,
+failures block Start, a `.cmd` launcher plus a `shortcut` command, the Camera page copy updated).
+
+- [x] A desktop shortcut (`python -m cpoint_cv shortcut`) or `cv/CPoint Camera.cmd` opens the
+      window without a terminal; with no `cv/.venv` or a missing package it names the setup step
+      (D-063)
+- [x] **Check this machine** lists every check as pass, warning or fail with its fix, the GPU
+      included; Start stays off while a check fails (D-061)
+- [x] The camera picker lists cameras that give a picture, takes an address (DroidCam's
+      `http://<IP>:4747/video`) and offers DirectShow; the choice is saved in
+      `cv/station-window.json`, never with a password (D-062)
+- [x] Start shows a live preview with boxes labelled as a preview; Capture sends one scan through
+      the spool and `captureId` path and shows the app's verdict and section number; Stop frees
+      the camera; camera, model and HTTP run off the UI thread (D-059, D-060)
+- [x] No batch keeps Capture off with the app's message; a refused token stops with the fix;
+      unsent captures show as "waiting to send"; a dropped camera reconnects for 30 s, then stops
+- [x] `run webcam`, `doctor`, `predict` and `evaluate` still work; `doctor` has the GPU line and
+      warnings; CI's station job needs no display (225 station tests, also without OpenCV, torch
+      or Pillow); no app contract change
+- [x] Camera page "Connect the camera station" points at the shortcut and the window
+- [ ] Codex: the window by hand with the laptop webcam and the iPhone through DroidCam (by number
+      and by address), every state and check, and the negatives
+      (`qa/handoffs/2026-10-19-phase-17-camera-window.md`)
