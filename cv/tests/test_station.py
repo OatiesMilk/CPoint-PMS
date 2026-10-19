@@ -244,3 +244,21 @@ def test_the_log_has_each_capture_and_send_but_never_the_token(tmp_path: Path) -
     assert sent["httpStatus"] == 201 and sent["attempts"] == 1 and sent["verdict"] == "REWORK"
     log_text = next((tmp_path / "logs").glob("*.jsonl")).read_text(encoding="utf-8")
     assert TOKEN not in log_text
+
+
+def test_every_send_event_records_its_status_and_attempts(tmp_path: Path) -> None:
+    details = [{"path": ["image"], "message": "The image must be a JPEG, PNG or WebP file."}]
+    t = FakeTransport(
+        current=[batch_ok()],
+        scans=[
+            error(422, "VALIDATION", "Check the fields.", details),
+            TransportError("timed out"),
+        ],
+    )
+    station, _, _ = make(tmp_path, t, frames=2)
+    station.run()
+    sends = [line for line in log_lines(tmp_path) if str(line["event"]).startswith("send")]
+    assert [line["event"] for line in sends] == ["send_refused", "send_failed"]
+    refused, failed = sends
+    assert (refused["httpStatus"], refused["attempts"]) == (422, 1)
+    assert (failed["httpStatus"], failed["attempts"]) == (None, 4)

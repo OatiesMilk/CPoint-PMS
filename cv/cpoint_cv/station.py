@@ -237,5 +237,9 @@ class Station:
             )
         elif isinstance(outcome, Rejected | NoBatch | TokenRefused):
             self.log.write(
-                "send_refused", **common, httpStatus=outcome.http_status, reason=outcome.message
+                "send_refused",
+                **common,
+                httpStatus=outcome.http_status,
+                attempts=outcome.attempts,
+                reason=outcome.message,
             )

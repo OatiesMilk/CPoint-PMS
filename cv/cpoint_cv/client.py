@@ -52,6 +52,7 @@ class NoBatch:
 
     message: str
     http_status: int
+    attempts: int = 1
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ class TokenRefused:
 
     message: str
     http_status: int
+    attempts: int = 1
 
 
 @dataclass(frozen=True)
@@ -103,13 +105,14 @@ def error_message(response: HttpResponse) -> str:
     return message
 
 
-def _refused(response: HttpResponse) -> TokenRefused:
+def _refused(response: HttpResponse, attempts: int = 1) -> TokenRefused:
     if response.status == 401:
-        return TokenRefused(TOKEN_REFUSED, 401)
+        return TokenRefused(TOKEN_REFUSED, 401, attempts)
     return TokenRefused(
         f"{error_message(response)} Ask the System Admin for a device token with the "
         "scans:create scope and set CV_DEVICE_TOKEN.",
         response.status,
+        attempts,
     )
 
 
@@ -215,9 +218,9 @@ class ScanClient:
                 http_status=status,
             )
         if status in (401, 403):
-            return _refused(response)
+            return _refused(response, attempt)
         if status == 409 and not pinned:
-            return NoBatch(error_message(response), status)
+            return NoBatch(error_message(response), status, attempt)
         if status >= 500:
             return RetryLater(error_message(response), attempts=attempt, http_status=status)
         return Rejected(error_message(response), status, attempts=attempt)

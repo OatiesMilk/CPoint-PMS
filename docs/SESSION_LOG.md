@@ -14,6 +14,21 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-19 — Phase 15 follow-up: Codex run 1 fixes
+
+**Who:** Dylan (local `main` checkout after PR #9, not committed)
+**Summary:** Codex passed 18 of 19 scenarios (`qa/reports/2026-10-19-phase-15-camera-station.md`), with the model working end to end on the website. Fixed its two failures and the duplicate-key warning it noticed, which was a real report bug.
+**Changed:**
+
+- F2: `tests/e2e/cv.spec.ts` D-028 test sends `sim-unknown`, not `crease` (now a real type).
+- F1: `send_refused` station log lines carry `attempts` (`cv/cpoint_cv/client.py`, `station.py`), with a new test.
+- `src/server/models/report.model.ts` `defectBreakdown`: a class key that was unknown when scanned and is a defect type now joins that type, so "Defects by type" shows each key once (it listed `crease` twice and broke React's keys). Checked on the dev database with the old and new query side by side.
+- QA handoff `qa/handoffs/2026-10-19-phase-15-camera-station-run2.md`.
+
+**Gates:** lint ✅ · typecheck ✅ · unit 508 ✅ · build ✅ (`npm run check`) · station: ruff ✅ · ruff format ✅ · mypy ✅ · pytest 134 ✅ · e2e not run (Codex, R1)
+**Decisions:** none
+**Follow-ups:** Codex run 2 (`qa/reports/2026-10-19-phase-15-camera-station-run2.md`) passed every fix; its one failure (R3) expected a `scratch` row on the QI home's today-only card when no `scratch` scan was taken today, a handoff mistake, not an app fault. No run 3.
+
 ## 2026-10-19 — Phase 15: the camera station (capture, send, recover)
 
 **Who:** Dylan (local `main` checkout, not committed)
