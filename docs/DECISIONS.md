@@ -1486,3 +1486,27 @@ shows no Quality Inspector present."). The QI can always enter. One function dec
 (`mayEnterCheckIns` in `permissions.ts`); attendance answers yes or no for the role
 (`qualityInspectorPresent`), never a count or a name (D-008). A covering entry is saved under the
 Floor Manager's name and its audit row carries `coveringForQualityInspector: true`.
+
+### D-089 · 2026-10-22 · Accepted — Codex fixes failing CI checks; the vault is every agent's first lookup and records every change
+
+**Context:** Dylan asked (2026-10-22) that Claude stays the main developer, that Codex applies
+the fix when a GitHub CI check fails on a PR, and that every change is also documented in his
+Obsidian vault (`C:\dev\capstone-obsidian`), which agents read first to save tokens and avoid
+guessing.
+**Decision:**
+
+- When CI fails on a PR, Claude doesn't fix it. Claude reads the failing check and writes
+  `qa/CODEX_PROMPT_CI_FIX_<branch>.md` from `qa/templates/ci-fix-prompt.md` (failing jobs, error
+  lines, suspected files, gates to rerun). Dylan pastes it into Codex; Codex changes only what
+  makes the checks pass (never skipping or loosening a test), reruns the gates and writes
+  `qa/reports/YYYY-MM-DD-ci-fix-<branch>.md`. Claude may review the fix. This is the one case
+  where Codex changes application code.
+- Every agent reads the vault first (`CLAUDE.md`, `Rules.md`, `Home.md`, the "where to look"
+  note, the phase summary), then only the repo files it points to. The repo wins when they differ.
+- Every change, including a Codex CI fix, gets a line in the vault's Daily note, and each phase has
+  a short summary note in `Notes/Phases/` that links the repo docs.
+- Agents don't create branches, commit or push; Claude gives Dylan the git commands.
+
+**Where:** `CLAUDE.md`, `AGENTS.md`, `qa/README.md`, `qa/templates/ci-fix-prompt.md`,
+`docs/AGENTIC_WORKFLOW.md`, `.claude/skills/wrap-up/SKILL.md`; the vault's `CLAUDE.md`,
+`Rules.md`, `Home.md`, `Notes/Agent workflow.md`, `Notes/Phases/`.

@@ -14,6 +14,21 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-22 — Agent workflow: Codex fixes CI, the vault first
+
+**Who:** Dylan (on the merged Phases 20 to 23; not committed)
+**Summary:** Docs only, no app code. Codex now applies fixes for failing GitHub CI checks from a prompt Claude writes; every agent reads the Obsidian vault first and records every change there (D-089).
+**Changed:**
+
+- `qa/templates/ci-fix-prompt.md` (new); `qa/README.md` "CI fix loop" and Codex's one exception to "test only"; `AGENTS.md` rules for every agent below the Next.js block; `CLAUDE.md` "Roles, CI fixes and the vault"; `docs/AGENTIC_WORKFLOW.md`; `/wrap-up` updates the vault and leaves commits to Dylan; STATUS branch line corrected (Phases 20 to 23 are merged into `main`).
+- Vault: `CLAUDE.md`, `Rules.md` §9, `Home.md`, `Notes/Agent workflow.md`, `Templates/Phase summary.md`, `Notes/Phases/` (index and summaries for Phases 20 to 23), today's Daily note.
+
+**Gates:** not run (docs only, no code changed)
+**Decisions:** D-089
+**Follow-ups:**
+
+- Summaries for Phases 0 to 19 are added when a task first touches them.
+
 ## 2026-10-22 — PR #15 CI fixes
 
 **Who:** Dylan

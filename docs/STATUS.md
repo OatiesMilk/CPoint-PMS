@@ -4,9 +4,12 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-22
-**Branch:** `main` @ `cc612ee` (Phase 19 merged as PR #14). Phases 20 to 23 are on the `main`
-checkout in `C:\dev\CPoint-PMS`, uncommitted (Dylan decides when to branch and commit; the team
-opens and merges the PR, D-032).
+**Branch:** `main` now has Phases 20 to 23 (PR from `feature/phases-20-23`, merged by Dylan,
+including the CI fix `ad9ce6a`). The agent-workflow docs (D-089) are uncommitted, for a new branch
+from the latest `main` (Dylan commits; the team opens and merges the PR, D-032).
+**Agent workflow (D-089):** Claude builds; Codex runs QA and fixes failing CI checks from
+`qa/CODEX_PROMPT_CI_FIX_<branch>.md` (`qa/README.md` → "CI fix loop"); every agent reads the
+Obsidian vault (`C:\dev\capstone-obsidian`) first and records each change there.
 **Current phase:** Phase 23, Production progression in place of stage monitoring. **QA passed**
 (Codex run 2, 2026-10-22: R1 to R5; e2e 99 passed, 0 failed, 1 skipped). Run 1 failed on one
 fault (wide tables were scroll boxes a keyboard couldn't reach), fixed with `ScrollRegion`. Plan:
@@ -283,7 +286,9 @@ Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Att
    and the Space key; a leather piece that gives Fixable or Reject (F3, P18 S3); another app holding
    the webcam (P18 S18); R4 when a batch with an open Fixable section is completed. Revoke the
    "Simulator" token first (it was pasted in chat).
-2. Dylan: branch, commit and push Phases 20 to 23 and open the PR (D-032).
+2. Dylan: commit the D-089 docs on a new branch from the latest `main` (git commands from Claude)
+   and open the PR (D-032). If a CI check fails, Claude writes
+   `qa/CODEX_PROMPT_CI_FIX_<branch>.md` for Codex.
 3. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
    files; `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
 
