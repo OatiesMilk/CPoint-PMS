@@ -37,8 +37,8 @@ none of the PHP code.
 - Leather rolls have arrived late before and stopped production. Inventory low-stock awareness matters.
 - **Workforce metrics are sensitive.** Past awards caused jealousy. Do **not** build per-person
   rankings, leaderboards or individual scores.
-- The client wants **per-component tracking in Upper Making** (later), plus inventory management
-and batch quotas.
+- ~~The client wants **per-component tracking in Upper Making** (later)~~ Out of scope since
+Phase 20 (D-071). The client also wants inventory management and batch quotas.
 </context>
 
 <read_first>
@@ -215,7 +215,8 @@ OTHER`), unit, quantity on hand, reorder level. Changes happen only through `Inv
 (IN / OUT / ADJUST, with reason, optional batch, user). Show a low-stock alert when quantity ≤
 reorder level. Creating a batch can optionally consume one leather roll from inventory.
 
-**Component tracking (Upper Making):** placeholder only. Add a `ComponentType` table and a
+**Component tracking (Upper Making):** out of scope since Phase 20 (D-071); what follows is
+history. Placeholder only. Add a `ComponentType` table and a
 "Coming soon" page. Don't build the workflow.
 
 **Workforce:** no per-person metrics anywhere in the UI. Aggregates are per stage, per batch or per day only.
@@ -229,17 +230,22 @@ Seed one demo account per role (password from `.env`, documented in README).
 | Module                                                       | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor                 |
 | ------------------------------------------------------------ | -------------- | ----------------- | ------------------ | -------------------------------- |
 | Overview dashboard (role-specific)                           | ✅             | ✅                | ✅ (system health) | my requests                      |
-| Batches: list / create / edit / advance stage                | ✅ full        | view              | view               | —                                |
+| Batches (rolls): list / create / edit / start / cancel       | ✅ full        | view              | view               | —                                |
+| Batches: Finish roll (Phase 23, D-082)                       | ✅             | ✅                | —                  | —                                |
+| Production: today, recent days (Phase 23, D-086)             | ✅             | ✅                | view               | —                                |
+| Production: enter and correct check-ins (D-084, D-088)       | no QI present  | ✅                | —                  | —                                |
+| Production: schedule and daily quota (D-083, D-085)          | ✅             | —                 | —                  | —                                |
 | Camera (CV placeholder page)                                 | ✅             | ✅                | ✅                 | —                                |
-| Capture page: scan from the browser (Phase 18, D-066)        | ✅             | ✅                | —                  | —                                |
+| Capture page and Floor view (Phase 18, D-066; Phase 21)      | ✅             | ✅                | —                  | if allowed (D-075)               |
 | "Latest scans" widget (polls every 5s)                       | ✅ on overview | ✅ on overview    | —                  | —                                |
 | Recent decisions + override                                  | ✅             | ✅                | —                  | —                                |
 | Review queue: decide flagged scans (D-028)                   | view           | ✅                | —                  | —                                |
 | Scan history + detail (image + boxes)                        | ✅             | ✅                | view               | —                                |
 | Rework board                                                 | ✅             | ✅                | —                  | —                                |
 | Salvage                                                      | ✅             | view              | —                  | —                                |
+| Attendance: one day at a time (Phase 22, D-077 to D-079)     | ✅             | —                 | view               | —                                |
 | Inventory + movements                                        | ✅             | —                 | view               | —                                |
-| Reports: daily summary, defects, stage durations, CSV export | ✅             | ✅ (quality only) | —                  | —                                |
+| Reports: production vs quota, daily summary, defects, CSV    | ✅             | ✅ (quality only) | —                  | —                                |
 | Users (CRUD, deactivate, reset password)                     | —              | —                 | ✅                 | —                                |
 | Defect types, CV thresholds, shoe types, suppliers           | —              | —                 | ✅                 | —                                |
 | CV device API tokens (create / revoke, shown once)           | —              | —                 | ✅                 | —                                |
@@ -255,10 +261,12 @@ Seed one demo account per role (password from `.env`, documented in README).
 | Procurement: choose who can request leather rolls (D-031)    | ✅             | —                 | ✅                 | —                                |
 | Constructor home: my open requests (or how to get access)    | —              | —                 | —                  | ✅                               |
 
-**Floor Manager overview:** today's scans and pass/rework/reject split, open reworks, batches
-per stage (shows the bottleneck), low-stock alerts, pending purchase requests, and Latest scans.
+**Floor Manager overview:** today's production against the quota (Phase 23; replaced batches per
+stage), today's attendance, today's scans and pass/rework/reject split, open reworks, low-stock
+alerts, pending purchase requests, and Latest scans.
 **Quality Inspector overview:** today's REWORK/REJECT decisions to verify, with override (the primary
-action), the flagged-scan count, today's defect breakdown by type, AI agreement rate, and Latest scans.
+action), the flagged-scan count, the next production check-in (Phase 23), today's defect breakdown
+by type, AI agreement rate, and Latest scans.
 
 **Camera page (placeholder):** shows the connected source as "Not connected" with a
 "Simulator active" state when demo scans are arriving. It has a batch selector (the open batch at

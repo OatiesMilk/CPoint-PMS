@@ -8,7 +8,6 @@ const batches = {
   transitionBatch: vi.fn(async () => true),
   nextBatchNumber: vi.fn(async () => 7),
   listBatches: vi.fn(),
-  inProgressByStage: vi.fn(),
 };
 const logs = { openStageLog: vi.fn(), closeOpenStageLog: vi.fn() };
 const refs = {
@@ -84,13 +83,12 @@ describe("batch codes", () => {
 
 describe("createBatch", () => {
   it("stores the date as a calendar date and audits the creation in the same transaction", async () => {
-    await svc.createBatch({ ...values, targetQuotaPairs: 500 }, actor, now);
+    await svc.createBatch(values, actor, now);
     expect(batches.insertBatch).toHaveBeenCalledWith(
       expect.objectContaining({
         rollCode: "ROLL-88",
         receivedAt: new Date("2026-10-01T00:00:00.000Z"),
         supplierId: null,
-        targetQuotaPairs: 500,
         createdById: "fm1",
       }),
       "tx",
@@ -143,127 +141,112 @@ describe("updateBatch", () => {
   });
 });
 
-describe("transitionBatchStage", () => {
-  it("advances: closes the open log, opens the next stage and audits the move", async () => {
-    batches.findBatchById.mockResolvedValue(batch());
-    const result = await svc.transitionBatchStage(
-      "b1",
-      { action: "advance", expectedStage: "UPPER_MAKING" },
-      actor,
-      now,
-    );
-    expect(result).toEqual({ code: "B-2026-0007", status: "IN_PROGRESS", currentStage: "SOLEING" });
-    expect(batches.transitionBatch).toHaveBeenCalledWith(
-      "b1",
-      expect.objectContaining({ status: "IN_PROGRESS", currentStage: "UPPER_MAKING" }),
-      { status: "IN_PROGRESS", currentStage: "SOLEING" },
-      "tx",
-    );
-    expect(logs.closeOpenStageLog).toHaveBeenCalledWith("b1", "fm1", now, "tx");
-    expect(logs.openStageLog).toHaveBeenCalledWith(
-      expect.objectContaining({ stage: "SOLEING", isRollback: false, reason: undefined }),
-      "tx",
-    );
-    expect(recordAudit).toHaveBeenCalledWith(
-      "tx",
-      expect.objectContaining({ action: "batch.advance" }),
-    );
-  });
-
+describe("transitionBatchStage (the roll lifecycle, D-082)", () => {
   it("start opens Preparation without closing anything", async () => {
     batches.findBatchById.mockResolvedValue(
       batch({ status: "PLANNED", currentStage: "PREPARATION" }),
     );
-    await svc.transitionBatchStage(
+    const result = await svc.transitionBatchStage(
       "b1",
       { action: "start", expectedStage: "PREPARATION" },
       actor,
       now,
     );
+    expect(result).toEqual({
+      code: "B-2026-0007",
+      status: "IN_PROGRESS",
+      currentStage: "PREPARATION",
+    });
     expect(logs.closeOpenStageLog).not.toHaveBeenCalled();
     expect(logs.openStageLog).toHaveBeenCalledWith(
       expect.objectContaining({ stage: "PREPARATION" }),
       "tx",
     );
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({ action: "batch.start" }),
+    );
   });
 
-  it("move back records the reason on the new log", async () => {
-    batches.findBatchById.mockResolvedValue(batch());
-    await svc.transitionBatchStage(
+  it("finish roll closes the open log, opens nothing and audits batch.finish", async () => {
+    batches.findBatchById.mockResolvedValue(batch({ currentStage: "PREPARATION" }));
+    const result = await svc.finishRoll("b1", { expectedStage: "PREPARATION" }, actor, now);
+    expect(result).toEqual({
+      code: "B-2026-0007",
+      status: "COMPLETED",
+      currentStage: "PREPARATION",
+    });
+    expect(batches.transitionBatch).toHaveBeenCalledWith(
       "b1",
-      { action: "move_back", expectedStage: "UPPER_MAKING", reason: "Wrong last on 40 pairs" },
-      actor,
-      now,
-    );
-    expect(logs.openStageLog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        stage: "PREPARATION",
-        isRollback: true,
-        reason: "Wrong last on 40 pairs",
-      }),
+      expect.objectContaining({ status: "IN_PROGRESS", currentStage: "PREPARATION" }),
+      { status: "COMPLETED", currentStage: "PREPARATION" },
       "tx",
     );
+    expect(logs.closeOpenStageLog).toHaveBeenCalledWith("b1", "fm1", now, "tx");
+    expect(logs.openStageLog).not.toHaveBeenCalled();
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "batch.finish",
+        before: { status: "IN_PROGRESS", currentStage: "PREPARATION" },
+      }),
+    );
   });
 
-  it("requires a reason to move back", async () => {
-    batches.findBatchById.mockResolvedValue(batch());
-    await expect(
-      svc.transitionBatchStage(
-        "b1",
-        { action: "move_back", expectedStage: "UPPER_MAKING" },
-        actor,
-        now,
-      ),
-    ).rejects.toMatchObject({ status: 422 });
+  it("finishes a batch started before rolls were tracked, where it is", async () => {
+    batches.findBatchById.mockResolvedValue(batch({ currentStage: "UPPER_MAKING" }));
+    const result = await svc.finishRoll("b1", { expectedStage: "UPPER_MAKING" }, actor, now);
+    expect(result.status).toBe("COMPLETED");
+    expect(result.currentStage).toBe("UPPER_MAKING");
   });
 
-  it("returns 409 STALE when the page showed an older stage", async () => {
+  it("returns 409 STALE when the page showed another stage", async () => {
     batches.findBatchById.mockResolvedValue(batch({ currentStage: "SOLEING" }));
     await expect(
-      svc.transitionBatchStage(
-        "b1",
-        { action: "advance", expectedStage: "UPPER_MAKING" },
-        actor,
-        now,
-      ),
+      svc.finishRoll("b1", { expectedStage: "PREPARATION" }, actor, now),
     ).rejects.toMatchObject({ status: 409, code: "STALE" });
     expect(batches.transitionBatch).not.toHaveBeenCalled();
   });
 
-  it("returns 409 STALE when another user moved it between read and write", async () => {
-    batches.findBatchById.mockResolvedValue(batch());
+  it("returns 409 STALE when someone else finished it between read and write", async () => {
+    batches.findBatchById.mockResolvedValue(batch({ currentStage: "PREPARATION" }));
     batches.transitionBatch.mockResolvedValueOnce(false);
     await expect(
-      svc.transitionBatchStage(
-        "b1",
-        { action: "advance", expectedStage: "UPPER_MAKING" },
-        actor,
-        now,
-      ),
-    ).rejects.toMatchObject({ status: 409, code: "STALE" });
-    expect(logs.openStageLog).not.toHaveBeenCalled();
+      svc.finishRoll("b1", { expectedStage: "PREPARATION" }, actor, now),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: "STALE",
+      message: "This roll was already changed by someone else. Refresh to see where it is now.",
+    });
+    expect(logs.closeOpenStageLog).not.toHaveBeenCalled();
   });
 
-  it("explains a rule violation as a 409 conflict", async () => {
-    batches.findBatchById.mockResolvedValue(batch({ currentStage: "SOLEING" }));
+  it("refuses a roll that is already finished as a 409 conflict", async () => {
+    batches.findBatchById.mockResolvedValue(
+      batch({ status: "COMPLETED", currentStage: "PREPARATION" }),
+    );
     await expect(
-      svc.transitionBatchStage("b1", { action: "complete", expectedStage: "SOLEING" }, actor, now),
+      svc.finishRoll("b1", { expectedStage: "PREPARATION" }, actor, now),
     ).rejects.toMatchObject({
       status: 409,
       code: "CONFLICT",
-      message: expect.stringContaining("only be completed from Finishing"),
+      message: "This roll is already finished.",
     });
+  });
+
+  it("refuses to finish a planned roll", async () => {
+    batches.findBatchById.mockResolvedValue(
+      batch({ status: "PLANNED", currentStage: "PREPARATION" }),
+    );
+    await expect(
+      svc.finishRoll("b1", { expectedStage: "PREPARATION" }, actor, now),
+    ).rejects.toMatchObject({ status: 409, message: "Start the roll first." });
   });
 
   it("404s for an unknown batch", async () => {
     batches.findBatchById.mockResolvedValue(null);
     await expect(
-      svc.transitionBatchStage(
-        "nope",
-        { action: "advance", expectedStage: "PREPARATION" },
-        actor,
-        now,
-      ),
+      svc.finishRoll("nope", { expectedStage: "PREPARATION" }, actor, now),
     ).rejects.toMatchObject({ status: 404 });
   });
 });
@@ -287,23 +270,11 @@ describe("cancelBatch", () => {
   });
 });
 
-describe("describeTransition", () => {
-  it("names the destination", () => {
-    expect(svc.describeTransition("advance", "PREPARATION")).toBe("Move to Upper Making");
-    expect(svc.describeTransition("move_back", "SOLEING")).toBe("Move back to Upper Making");
-  });
-});
-
 describe("repairs and batch closing (D-021, D-022)", () => {
-  it("completes even while sections are still at the repair station", async () => {
-    batches.findBatchById.mockResolvedValue(batch({ currentStage: "FINISHING" }));
+  it("finishes a roll even while sections are still at the repair station", async () => {
+    batches.findBatchById.mockResolvedValue(batch({ currentStage: "PREPARATION" }));
     outcomes.countLiveReworkForBatch.mockResolvedValue(2);
-    await svc.transitionBatchStage(
-      "b1",
-      { action: "complete", expectedStage: "FINISHING" },
-      actor,
-      now,
-    );
+    await svc.finishRoll("b1", { expectedStage: "PREPARATION" }, actor, now);
     expect(batches.transitionBatch).toHaveBeenCalled();
     outcomes.countLiveReworkForBatch.mockResolvedValue(0);
   });
@@ -317,19 +288,14 @@ describe("repairs and batch closing (D-021, D-022)", () => {
       total: 2,
     });
     outcomes.countLiveReworkByBatch.mockResolvedValueOnce(new Map([["b1", 3]]));
-    const { rows } = await svc.listBatches({}, 1, now);
+    const { rows } = await svc.listBatches({}, 1);
     expect(outcomes.countLiveReworkByBatch).toHaveBeenCalledWith(["b1", "b2"]);
     expect(rows.map((r) => r.openRepairs)).toEqual([3, 0]);
   });
 
-  it("completes with no repairs open", async () => {
-    batches.findBatchById.mockResolvedValue(batch({ currentStage: "FINISHING" }));
-    await svc.transitionBatchStage(
-      "b1",
-      { action: "complete", expectedStage: "FINISHING" },
-      actor,
-      now,
-    );
+  it("finishes with no repairs open", async () => {
+    batches.findBatchById.mockResolvedValue(batch({ currentStage: "PREPARATION" }));
+    await svc.finishRoll("b1", { expectedStage: "PREPARATION" }, actor, now);
     expect(batches.transitionBatch).toHaveBeenCalled();
   });
 

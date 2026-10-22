@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 
 const VERDICTS = [
   ["PASS", "Pass"],
-  ["REWORK", "Rework"],
+  ["REWORK", "Fixable"],
   ["REJECT", "Reject"],
   ["NEEDS_REVIEW", "Needed review"],
 ] as const;

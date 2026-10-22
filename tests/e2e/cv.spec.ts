@@ -89,7 +89,7 @@ test.describe("camera ingestion API", () => {
 });
 
 test.describe("people deciding", () => {
-  test("scan detail draws the boxes; the inspector overrides a Reject to Rework with a reason", async ({
+  test("scan detail draws the boxes; the inspector overrides a Reject to Fixable with a reason", async ({
     browser,
     page,
     request,
@@ -112,7 +112,7 @@ test.describe("people deciding", () => {
 
     await page.getByRole("button", { name: "Override decision…" }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("radio", { name: /Rework/ }).check();
+    await dialog.getByRole("radio", { name: /Fixable/ }).check();
     await dialog.getByRole("button", { name: "Override" }).click();
     await expect(
       dialog.getByText(
@@ -126,7 +126,7 @@ test.describe("people deciding", () => {
     await expect(page.getByRole("img", { name: "Overridden by a person" })).toBeVisible();
     await expect(page.getByText("Surface cut only, can be skived")).toBeVisible();
     await expect(page.getByText("Cancelled (decision changed)")).toBeVisible();
-    await expect(page.getByText("Waiting at repair station")).toBeVisible();
+    await expect(page.getByText("Waiting to be cleaned or cut around")).toBeVisible();
   });
 
   test("the review queue settles an unknown-class scan in one click", async ({
@@ -174,7 +174,7 @@ test("only a Quality Inspector decides a flagged scan; the Floor Manager only se
   await page.goto(`/scans/${scanId}`);
   await expect(page.getByText(/Waiting for a Quality Inspector/)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Override decision|Pass|Rework|Reject/ }),
+    page.getByRole("button", { name: /Override decision|Pass|Fixable|Reject/ }),
   ).toHaveCount(0);
   await page.goto(`/review?batch=${batch.code}`);
   await expect(page.getByRole("group", { name: `Decide ${batch.code} · #1` })).toHaveCount(0);

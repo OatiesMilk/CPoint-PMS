@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  agreementRate,
-  csvCell,
-  fillDays,
-  parseRange,
-  pickBottleneck,
-  toCsv,
-} from "@/lib/report-rules";
+import { agreementRate, csvCell, fillDays, parseRange, toCsv } from "@/lib/report-rules";
 
 // 2026-10-03 01:00 in Manila is still 2026-10-02 in UTC.
 const now = new Date("2026-10-02T17:00:00.000Z");
@@ -63,20 +56,6 @@ describe("agreementRate", () => {
   it("is the share kept, or null when the AI decided nothing", () => {
     expect(agreementRate({ agreed: 9, aiDecided: 10 })).toBe(0.9);
     expect(agreementRate({ agreed: 0, aiDecided: 0 })).toBeNull();
-  });
-});
-
-describe("pickBottleneck", () => {
-  it("picks the highest median, ignores stages without data, and keeps line order on ties", () => {
-    expect(
-      pickBottleneck([
-        { stage: "PREPARATION", medianMs: 10, visits: 2 },
-        { stage: "UPPER_MAKING", medianMs: 50, visits: 3 },
-        { stage: "SOLEING", medianMs: 50, visits: 1 },
-        { stage: "FINISHING", medianMs: null, visits: 0 },
-      ]),
-    ).toBe("UPPER_MAKING");
-    expect(pickBottleneck([{ stage: "SOLEING", medianMs: null, visits: 0 }])).toBeNull();
   });
 });
 

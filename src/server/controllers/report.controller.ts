@@ -5,16 +5,12 @@ import {
   operationsReport,
   repairStation,
   stockCsv,
+  supplierRollsCsv,
   suppliersCsv,
 } from "@/server/services/ops-report.service";
 import { requireApiPermission } from "@/server/policies/guard";
-import {
-  dailyCsv,
-  defectsCsv,
-  productionReport,
-  qualityReport,
-  stagesCsv,
-} from "@/server/services/report.service";
+import { productionCsv, productionReport } from "@/server/services/production.service";
+import { dailyCsv, defectsCsv, qualityReport } from "@/server/services/report.service";
 import { reportQuerySchema } from "@/server/validators/report.validator";
 
 function rangeFrom(request: Request) {
@@ -40,7 +36,7 @@ export const reportController = {
     return json({ data: await qualityReport(rangeFrom(request)) });
   }),
 
-  /** GET /api/v1/reports/production?preset=|from=&to= (Floor Manager) */
+  /** GET /api/v1/reports/production?preset=|from=&to=: pairs per day per shoe type vs the quota */
   production: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     return json({ data: await productionReport(rangeFrom(request)) });
@@ -70,6 +66,12 @@ export const reportController = {
     return csv(await suppliersCsv(range), "suppliers", range);
   }),
 
+  supplierRollsCsv: handle(async (request: Request) => {
+    await requireApiPermission("report:production");
+    const range = rangeFrom(request);
+    return csv(await supplierRollsCsv(range), "supplier-rolls", range);
+  }),
+
   stockCsv: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     const range = rangeFrom(request);
@@ -88,9 +90,10 @@ export const reportController = {
     return csv(await defectsCsv(range), "defects", range);
   }),
 
-  stagesCsv: handle(async (request: Request) => {
+  /** One row per day and shoe type: pairs, quota, check-ins, constructors present (Phase 23). */
+  productionCsv: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     const range = rangeFrom(request);
-    return csv(await stagesCsv(range), "stages", range);
+    return csv(await productionCsv(range), "production", range);
   }),
 };

@@ -29,6 +29,7 @@ const batch = (id: string, code: string) => ({
   code,
   rollCode: "LR-1",
   shoeType: { name: "School Shoe" },
+  _count: { scans: 4 },
   selection: "oldest",
 });
 const IMAGE = {
@@ -115,7 +116,7 @@ describe("captureScan", () => {
     });
   });
 
-  it("refuses before the model runs when the batch shown has left Preparation", async () => {
+  it("refuses before the model runs when the roll shown was finished (D-082)", async () => {
     camera.resolveCameraBatch.mockImplementation(async (id?: string) => {
       if (id) throw new AppError(409, "CONFLICT", "That batch isn't in progress at Preparation.");
       return batch("b2", "B-2026-0002");
@@ -126,7 +127,7 @@ describe("captureScan", () => {
       status: 409,
       code: "BATCH_MOVED",
       message: expect.stringMatching(/The next scan goes to B-2026-0002\. Press Capture again\./),
-      details: { current: { batchId: "b2", batchCode: "B-2026-0002" } },
+      details: { current: { batchId: "b2", batchCode: "B-2026-0002", scanned: 4 } },
     });
     expect(runner.detect).not.toHaveBeenCalled();
   });

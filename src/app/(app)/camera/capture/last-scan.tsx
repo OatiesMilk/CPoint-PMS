@@ -29,7 +29,35 @@ export type ScanDetail = {
   }[];
 };
 
+/** What a capture returns: enough for someone who can't open Scans (an allowed constructor). */
+export type ScanSummary = { verdict: Verdict; sequence: number; batchCode: string };
+
 const percent = (v: number) => `${Math.round(v * 100)}%`;
+
+/** The verdict and section only, for a constructor allowed to capture (D-075). */
+export function LastScanSummary({ summary, repeat }: { summary: ScanSummary; repeat: boolean }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <VerdictBadge verdict={summary.verdict} className="text-base" />
+        <span className="font-medium">
+          Section #{summary.sequence} · <span className="font-mono">{summary.batchCode}</span>
+        </span>
+      </div>
+      {repeat && (
+        <p className="text-sm text-muted-foreground">
+          This capture had already reached the app, so it wasn’t saved twice.
+        </p>
+      )}
+      {summary.verdict === "NEEDS_REVIEW" && (
+        <p className="text-sm">
+          The model found something the app doesn’t know. Set the piece aside for the Quality
+          Inspector.
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** The app's verdict for the last capture, with the section and every defect it found. */
 export function LastScan({ scan, repeat }: { scan: ScanDetail; repeat: boolean }) {

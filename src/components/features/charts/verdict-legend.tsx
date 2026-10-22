@@ -9,7 +9,7 @@ export type VerdictKey = "pass" | "rework" | "reject" | "pending";
 export const VERDICT_SERIES: { key: VerdictKey; label: string; color: string; Icon: LucideIcon }[] =
   [
     { key: "pass", label: "Pass", color: "var(--chart-pass)", Icon: CircleCheck },
-    { key: "rework", label: "Rework", color: "var(--chart-rework)", Icon: Wrench },
+    { key: "rework", label: "Fixable", color: "var(--chart-rework)", Icon: Wrench },
     { key: "reject", label: "Reject", color: "var(--chart-reject)", Icon: CircleX },
     { key: "pending", label: "Needs review", color: "var(--chart-review)", Icon: CircleHelp },
   ];

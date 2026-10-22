@@ -73,4 +73,3 @@ export function referenceController(kind: ReferenceKind, what: string) {
 export const defectTypeController = referenceController("defectType", "This defect type");
 export const shoeTypeController = referenceController("shoeType", "This shoe type");
 export const supplierController = referenceController("supplier", "This supplier");
-export const componentTypeController = referenceController("componentType", "This component type");

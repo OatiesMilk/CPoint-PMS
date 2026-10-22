@@ -127,7 +127,7 @@ export default async function AdminHome() {
                 <dd className="font-medium">{bands.reject}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Rework</dt>
+                <dt className="text-muted-foreground">Fixable</dt>
                 <dd className="font-medium">{bands.rework}</dd>
               </div>
             </dl>

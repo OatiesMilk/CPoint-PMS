@@ -1,7 +1,7 @@
 [project]
 name = "cpoint-cv"
-version = "0.17.0"
-description = "CPoint camera station: runs the YOLO model on leather sections at Preparation."
+version = "0.20.0"
+description = "CPoint model toolkit: runs, checks and exports the YOLO model for the website's Capture page."
 requires-python = ">=3.13"
 
 [tool.ruff]
@@ -18,9 +18,10 @@ strict = true
 files = ["cpoint_cv", "tests"]
 
 [[tool.mypy.overrides]]
-# Optional at test time: the unit tests run without torch, ultralytics, OpenCV or Pillow.
+# Optional at test time: the unit tests run without torch, ultralytics, OpenCV or onnx.
 module = [
   "ultralytics", "ultralytics.*", "torch", "torch.*", "cv2", "numpy", "numpy.*", "PIL", "PIL.*",
+  "onnx", "onnx.*", "onnxslim", "onnxslim.*",
 ]
 ignore_missing_imports = true
 # Same result with or without them installed: treat them as untyped.

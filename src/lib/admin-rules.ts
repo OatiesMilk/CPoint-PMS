@@ -79,14 +79,14 @@ export function validateThresholds(t: {
   if (errors.length === 0 && t.reworkAtOrAbove >= t.rejectAtOrAbove)
     errors.push({
       path: ["reworkAtOrAbove"],
-      message: `Rework must start below Reject (${pct(t.rejectAtOrAbove)}%).`,
+      message: `Fixable must start below Reject (${pct(t.rejectAtOrAbove)}%).`,
     });
   if (t.foundAtOrAbove !== undefined && !(t.foundAtOrAbove > 0 && t.foundAtOrAbove < 1))
     errors.push({ path: ["foundAtOrAbove"], message: "Use a value above 0% and below 100%." });
   return errors;
 }
 
-/** "≥ 90% → Reject · 60–89.9% → Rework · below 60% → Pass" for the settings page. */
+/** "≥ 90% → Reject · 60–89.9% → Fixable · below 60% → Pass" for the settings page. */
 export function describeThresholds(t: { rejectAtOrAbove: number; reworkAtOrAbove: number }) {
   const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
   const below = Math.round(t.rejectAtOrAbove * 1000 - 1) / 10;

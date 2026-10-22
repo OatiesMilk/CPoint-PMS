@@ -1,14 +1,14 @@
-"""The camera station's commands.
+"""The model toolkit's commands (cv/README.md).
 
 - ``predict <image-or-folder>``: run the model, print what it saw, the ``modelVersion``, the time
-  taken and a *preview* of the app's verdict. Posts nothing.
-- ``run webcam | folder <dir> | file <image>``: the station. Captures one section at a time, runs
-  the model and sends each scan to the app, which decides the verdict.
-- ``doctor``: checks the model, packages, GPU, camera, app, token and clock, and says what to fix.
+  taken and a *preview* of the app's verdict. ``--json`` gives one line per image, which
+  ``npm run cv:parity`` compares with the website's ONNX model. Posts nothing.
+- ``evaluate <folder>``: compare preview verdicts with ``labels.csv`` and write a report.
 - ``export-onnx``: write the model as ONNX, with a JSON beside it, for the website's Capture page
   (Phase 18, D-064).
-- ``window``: the station window: check this machine, pick the camera, live preview, Capture and
-  Stop (D-059). ``shortcut`` puts it on the desktop (D-063).
+
+The station app and its ``run`` and ``doctor`` commands were retired in Phase 20 (D-069): capture
+happens on the website.
 """
 
 from __future__ import annotations
@@ -16,24 +16,17 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
-from .client import ScanClient
 from .config import CV_DIR, Config, ConfigError, load_config
-from .doctor import check_app, check_camera, check_gpu, check_model, check_python
-from .env import BASE_URL_VAR, TOKEN_VAR, station_env
-from .logs import StationLog
 from .mapper import map_with_sources
 from .model_info import model_version, sha256_file
 from .preview import preview_verdict
-from .retry import Backoff
 from .sources import collect_images
-from .spool import Spool
-from .station import Station
 from .summary import ImageResult, summarize, to_markdown
 
-__all__ = ["build_parser", "collect_images", "main", "make_client"]
+__all__ = ["build_parser", "collect_images", "main"]
 
 
 def settings_line(config: Config) -> str:
@@ -191,106 +184,6 @@ def _predict(args: argparse.Namespace) -> int:
     return 0
 
 
-def make_client(config: Config, env: Mapping[str, str]) -> ScanClient | None:
-    """The app client with the device token, or None when CV_DEVICE_TOKEN isn't set."""
-    token = env.get(TOKEN_VAR, "").strip()
-    if not token:
-        return None
-    from .transport import UrllibTransport
-
-    return ScanClient(
-        config.server.base_url,
-        token,
-        UrllibTransport(),
-        timeout=config.server.timeout_seconds,
-        backoff=Backoff(
-            config.server.attempts,
-            config.server.backoff_seconds,
-            config.server.max_backoff_seconds,
-        ),
-    )
-
-
-def _run(args: argparse.Namespace) -> int:
-    env = station_env()
-    try:
-        config = load_config(args.config, env)
-    except ConfigError as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 2
-    client = make_client(config, env)
-    if client is None:
-        print(
-            f"error: {TOKEN_VAR} isn't set. As the System Admin, create a device token under API "
-            f"tokens (or run npm run cv:token), then put {TOKEN_VAR}=... in cv/.env.",
-            file=sys.stderr,
-        )
-        return 2
-    version = _model_version(config)
-    if version is None:
-        return 2
-
-    from .sources import FileSource, FolderSource, FrameSource, SourceError, WebcamSource
-    from .triggers import IntervalTrigger, KeyTrigger, Trigger
-
-    source: FrameSource
-    trigger: Trigger
-    try:
-        if args.source == "webcam":
-            source = WebcamSource(
-                config.camera.device,
-                config.camera.width,
-                config.camera.height,
-                warmup_frames=config.camera.warmup_frames,
-                jpeg_quality=config.station.jpeg_quality,
-                backend=config.camera.backend,
-            )
-            trigger = KeyTrigger(idle_seconds=config.station.check_in_seconds)
-        elif args.path is None:
-            print(
-                f"error: give the {args.source} to send, e.g. run {args.source} <path>.",
-                file=sys.stderr,
-            )
-            return 2
-        elif args.source == "folder":
-            source = FolderSource(args.path)
-            interval = (
-                args.interval if args.interval is not None else config.station.interval_seconds
-            )
-            trigger = IntervalTrigger(interval)
-        else:
-            source = FileSource(args.path)
-            trigger = IntervalTrigger(0)
-    except SourceError as error:
-        print(f"error: {error}", file=sys.stderr)
-        return 2
-
-    from .yolo_detector import ModelError, YoloDetector
-
-    try:
-        detector = YoloDetector(config.model, config.mapper.confidence_floor)
-    except ModelError as error:
-        source.close()
-        print(f"error: {error}", file=sys.stderr)
-        return 2
-
-    station = Station(
-        config=config,
-        source=source,
-        trigger=trigger,
-        detector=detector,
-        client=client,
-        spool=Spool(config.station.spool_dir, config.station.failed_dir),
-        log=StationLog(config.station.log_dir),
-        model_version=version,
-    )
-    try:
-        return station.run()
-    except KeyboardInterrupt:
-        print("Stopped.")
-        return 130
-
-
 def _evaluate(args: argparse.Namespace) -> int:
     from datetime import date
 
@@ -337,43 +230,6 @@ def _evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
-def _doctor(args: argparse.Namespace) -> int:
-    env = station_env()
-    try:
-        config = load_config(args.config, env)
-    except ConfigError as error:
-        print(f"FAIL  Config: {error}")
-        return 1
-    print(
-        f"Config: {config.source_file}. App: {config.server.base_url} "
-        f"(from [server] base_url or {BASE_URL_VAR})."
-    )
-    checks = [check_model(config), *check_python(), check_gpu(config.model.device)]
-    if not args.no_camera:
-        from .sources import probe_camera
-
-        checks.append(
-            check_camera(
-                config.camera.device,
-                lambda device: probe_camera(device, config.camera.backend),
-            )
-        )
-    checks += check_app(make_client(config, env))
-    for check in checks:
-        print(check.line())
-    failed = [c for c in checks if not c.ok]
-    warnings = sum(1 for c in checks if c.status == "warn")
-    also = (
-        f" Read the {warnings} warning(s): it works, but slower or with a risk." if warnings else ""
-    )
-    print(
-        f"\nEverything the station needs is in place.{also}"
-        if not failed
-        else f"\n{len(failed)} check(s) failed. Fix them from the top, then run doctor again."
-    )
-    return 1 if failed else 0
-
-
 def _export_onnx(args: argparse.Namespace) -> int:
     from .onnx_export import ExportError, export_onnx
 
@@ -391,22 +247,12 @@ def _export_onnx(args: argparse.Namespace) -> int:
     return 0
 
 
-def _window(args: argparse.Namespace) -> int:
-    from .window.app import safe_main
-
-    return safe_main(args.config)
-
-
-def _shortcut(_args: argparse.Namespace) -> int:
-    from .shortcut import create_shortcut
-
-    made, message = create_shortcut()
-    print(message if made else f"error: {message}", file=sys.stdout if made else sys.stderr)
-    return 0 if made else 1
-
-
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="python -m cpoint_cv", description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog="python -m cpoint_cv",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     predict = commands.add_parser(
         "predict", help="Run the model on images and preview the app's verdicts. Posts nothing."
@@ -421,24 +267,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     predict.add_argument("--json", action="store_true", help="One JSON line per image")
     predict.set_defaults(handler=_predict)
-
-    run = commands.add_parser(
-        "run", help="Capture sections, run the model and send each scan to the app."
-    )
-    run.add_argument(
-        "source",
-        choices=("webcam", "folder", "file"),
-        help="webcam: Space captures one section; folder: every image in order; file: one image",
-    )
-    run.add_argument("path", nargs="?", type=Path, help="The folder or image (folder and file)")
-    run.add_argument(
-        "--interval",
-        type=float,
-        metavar="SECONDS",
-        help="Seconds between images in folder replay (default: [station] interval_seconds)",
-    )
-    run.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
-    run.set_defaults(handler=_run)
 
     evaluate = commands.add_parser(
         "evaluate",
@@ -457,13 +285,6 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
     evaluate.set_defaults(handler=_evaluate)
 
-    doctor = commands.add_parser("doctor", help="Check the station can run and say what to fix.")
-    doctor.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
-    doctor.add_argument(
-        "--no-camera", action="store_true", help="Skip the camera check (folder replay only)"
-    )
-    doctor.set_defaults(handler=_doctor)
-
     export = commands.add_parser(
         "export-onnx",
         help="Write the model as ONNX with a JSON beside it, for the website's Capture page.",
@@ -471,16 +292,6 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
     export.set_defaults(handler=_export_onnx)
 
-    window = commands.add_parser(
-        "window", help="Open the station window: check, camera, live preview, Capture and Stop."
-    )
-    window.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
-    window.set_defaults(handler=_window)
-
-    shortcut = commands.add_parser(
-        "shortcut", help="Put a CPoint Camera shortcut to the station window on the desktop."
-    )
-    shortcut.set_defaults(handler=_shortcut)
     return parser
 
 

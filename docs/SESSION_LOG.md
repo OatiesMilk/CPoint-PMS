@@ -14,6 +14,249 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-22 — PR #15 CI fixes
+
+**Who:** Dylan
+**Summary:** PR #15 (Phases 20 to 23) had two failing CI jobs. `station`: mypy couldn't find
+`onnx` (imported only inside the ONNX export); added `onnx` and `onnxslim` to the optional-module
+override in `cv/pyproject.toml`. `e2e`: `capture.spec.ts` looked for "isn’t installed" with a
+curly apostrophe, but the app's missing-model message uses a straight one; the test now accepts
+both (CI has no model files, so only CI runs that branch).
+**Gates:** lint ✅ (file) · typecheck ✅ · mypy not run locally (not installed) · e2e not run (CI)
+**Decisions:** none
+
+## 2026-10-22 — Phase 23 QA passed
+
+**Who:** Dylan
+**Summary:** Codex run 2 (`qa/reports/2026-10-22-phase-23-qa-run2.md`) passed: R1 to R5, e2e 99
+passed, 0 failed, 1 skipped (the capture test that depends on model files).
+**Gates:** e2e ✅ (Codex) · no code changed this step
+**Decisions:** none
+**Follow-ups:** Dylan branches and commits Phases 20 to 23; Phase 24 in a new session.
+
+## 2026-10-22 — Phase 23 QA run 1 fix
+
+**Who:** Dylan
+**Summary:** Codex run 1 (`qa/reports/2026-10-22-phase-23-production-progression.md`) was FAIL:
+45 of 46 scenarios, e2e 90 passed, 5 failed, 1 skipped. One app fault (F1): a table wider than its
+card was a scroll box with no keyboard access (axe `scrollable-region-focusable`), which caused
+all five e2e failures. Fixed; run 2 is ready.
+**Changed:** new `src/components/ui/scroll-region.tsx` (full card width, scrolls sideways,
+focusable with a name only while it overflows); `table.tsx` uses it with an optional `label`;
+labels on the Phase 23 and Batches tables.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (714) · build ✅ · e2e not run (Codex run 2)
+**Decisions:** none
+**Follow-ups:** Codex run 2 (`qa/CODEX_PROMPT_PHASE_23_RUN2.md`). Run 1's clean-up removed the
+default schedule from the dev database; the app recreates it on start.
+
+## 2026-10-22 — Phase 23 follow-up: the Floor Manager covers check-ins
+
+**Who:** Dylan
+**Summary:** Dylan asked that the Floor Manager can also do check-ins, only when the QI isn't
+present. The rule reads today's attendance: no Quality Inspector marked present → the FM can enter
+and correct; a QI present or attendance not taken → refused with the reason.
+**Changed:** `mayEnterCheckIns` and `checkInCoverReason` (permissions), `qualityInspectorPresent`
+(attendance rules and service), the check-in service, the Production page and FM home notes,
+unit tests, `production.spec.ts`, the handoff (C1 to C4).
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (714) · build ✅ · e2e not run (Codex)
+**Decisions:** D-088
+**Follow-ups:** Codex QA from the handoff.
+
+## 2026-10-21 — Phase 23: Production progression in place of stage monitoring
+
+**Who:** Dylan
+**Summary:** Built Phase 23 from `docs/prompts/production-progression.md` with Dylan's answers (1A
+Finish roll, 2B every 4 hours, 3B only the QI enters check-ins, 4A 10 days, 5A a first quota from
+today). Production progression replaces batch-and-stage monitoring; a batch is now one leather
+roll that is started and finished.
+**Changed:**
+
+- **Data:** migration `production_progression` (schedule, daily quota, check-in, count).
+- **Rules:** `src/lib/production-rules.ts` (slots, states, progress, suggestion, shortfall);
+  `stage-machine.ts` is the roll lifecycle (start, finish, cancel).
+- **Server:** `production.{model,service,controller,validator}`, six API routes and
+  `production.csv`; `batch:finish` and `production:*` permissions; `finishRoll`; attendance
+  `workforceByDay`; the stage report queries, `stagesCsv`, `findStuckBatches`, `stageShares` and
+  `pickBottleneck` deleted.
+- **Screens:** `/production`, `/production/plan`, Next check-in (QI home), Today's production (FM
+  home, replaces Batches by stage), Operations Production section and KPIs, batch page Finish roll
+  and History, Capture page finish hint and roll wording; `batches-by-stage-card`,
+  `stage-progress`, `flow-chart` and `FlowLanes` deleted.
+- **Seeds:** default schedule in the bootstrap; the demo week starts and finishes rolls and adds
+  quotas and check-ins; `demo:reset` clears them; CI checks the schedule, quotas and check-ins.
+- **Tests:** `production-rules`, `production.service` and updated unit tests; e2e
+  `production.spec.ts` written and five specs updated (not run).
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (710) · build ✅ · e2e not run (Codex) · docker not run
+**Decisions:** D-082 to D-087
+**Follow-ups:** Codex QA from the handoff; Phase 24 (materials used); branch and commit Phases 20
+to 23 when Dylan says.
+
+## 2026-10-21 — Phase 22 QA passed
+
+**Who:** Dylan
+**Summary:** Codex run 2 (`qa/reports/2026-10-21-phase-22-attendance-run2.md`) passed: R1 to R4,
+e2e 94 passed, 0 failed, 1 skipped (the capture test that needs missing model files). Codex
+removed the attendance it added to the dev database.
+**Gates:** e2e ✅ (Codex) · no code changed this step
+**Decisions:** none
+**Follow-ups:** Phase 23 in a new session; branch and commit Phases 20 to 22 when Dylan says.
+
+## 2026-10-21 — Phase 22 QA run 1 fixes
+
+**Who:** Dylan
+**Summary:** Codex run 1 (`qa/reports/2026-10-21-phase-22-attendance.md`) was FAIL: 16 of 18
+scenarios, e2e 92 passed, 2 failed, 1 skipped. Fixed all four findings; run 2 is ready.
+**Changed:**
+
+- **App:** the attendance summary always shows "· N others present", zero included (F1).
+- **Handoff:** S2 expects the Floor Manager account's own name (Ivy on the dev database) (F2).
+- **Tests:** `auth.spec.ts` reads the constructor's capture switch and opens the account menu by
+  its role label, so renamed or allowed dev accounts don't fail it (F3, F4).
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (646) · build ✅ · e2e not run (Codex run 2)
+**Decisions:** none
+**Follow-ups:** Codex run 2 (`qa/CODEX_PROMPT_PHASE_22_RUN2.md`).
+
+## 2026-10-21 — Phase 22: Attendance
+
+**Who:** Dylan (local `main` at `cc612ee`, Phases 20 to 22 uncommitted)
+**Summary:** Built Production → Attendance from `docs/prompts/production-progression.md` (plan
+approved 1A, 2A, 3A): the Floor Manager takes attendance one day at a time for today and the past
+7 days, the Admin views it, the FM home has an Attendance card, and `workforceFor` is the worker
+count Phase 23 will read. The Phase 21 QA report had no failures to fix first.
+**Changed:**
+
+- **Data:** migration `attendance` (`attendance_days`, `attendance_marks`; a mark's user link
+  cascades on a hard delete so test clean-ups aren't blocked). Started the project's DB container
+  (it was stopped) to create it.
+- **Server:** `attendance-rules.ts` (roster, edit window, `workforceFor`, summary, changed names),
+  model, validator, service (one transaction, one audit row, `409 STALE`), controller,
+  `GET /api/v1/attendance` and `PUT /api/v1/attendance/{day}`; `attendance:read` and
+  `attendance:manage`; the nav item.
+- **UI:** `/attendance` (day picker, summary, roster with role badges and Present ticks, Find, role
+  filter, pager, Mark everyone present, Save attendance (N changes), leave prompt, read-only for
+  the Admin and locked days); the FM home card.
+- **Seeds:** 12 demo Shoe Constructors (random passwords, dated 30 days back) and a week of
+  attendance in the demo week; `demo:reset` keeps them and clears attendance.
+- **Docs:** API, D-077 to D-081, ROADMAP, STATUS, README demo script, the roles table; the saved
+  brief now matches the Phase 24 details Dylan pasted.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (646) · build ✅ · e2e written, not run (project rule) · docker not run
+**Decisions:** D-077 to D-081
+**Follow-ups:** Codex runs `qa/handoffs/2026-10-21-phase-22-attendance.md`; then Phase 23.
+
+## 2026-10-20 — Phase 21 QA passed; test data cleaned up
+
+**Who:** Dylan (local `main` at `cc612ee`, Phases 20 and 21 uncommitted)
+**Summary:** Codex's Phase 21 run (`qa/reports/2026-10-20-phase-21-repair-station-floor-view.md`) passed: 29 of 31 scenarios, e2e 87 passed, 0 failed, 1 skipped. R4 and F3 are blocked on data and real leather, not app faults. Cleaned up the test data afterwards, as Dylan asked.
+**Changed:**
+
+- **Data:** started the dev database (Codex had stopped it), backed it up (`storage/backups/before-cleanup-2026-10-20-phase21.dump`), then `demo:reset -- --yes`; a second dry run found no test data left.
+- **Docker:** removed Codex's throwaway `p21-floor` stack (containers, volumes, network).
+
+**Gates:** e2e ✅ (Codex) · no code changed this step
+**Decisions:** none
+**Follow-ups:** Dylan's station checks; branch, commit and PR when Dylan says.
+
+## 2026-10-20 — Phase 21: Repair Station, Floor view, constructor capture, no mkcert
+
+**Who:** Dylan (local `main` at `cc612ee`, Phases 20 and 21 uncommitted)
+**Summary:** Built Dylan's Phase 21 plan (`docs/prompts/plans/phase-21-plan.md`, A, B and C as recommended) for the real station: an operator at a fixed camera with only a monitor, and the site reached through a Cloudflare Tunnel.
+**Changed:**
+
+- **Repair Station (D-073):** the board's name everywhere a user sees it (nav, page, Operations card, FM home card, Override, scan page, stage message, error page); description "Clean the section or cut around the defect."
+- **Floor view (D-074):** `camera/capture/floor-view.tsx`, entered from the Capture page; full-screen live preview, coloured frame and verdict band until the next capture, problems in the band, Esc leaves, remembered per browser, no sounds. `FLOOR_VERDICT` in `capture-rules.ts`.
+- **Constructor capture (D-075):** migration `user_can_capture`; `canCaptureFor`, `requireCapture`/`requireApiCapture`, per-user nav; `PUT /api/v1/camera/operators/{userId}` (`camera:operators`), the Camera page's Camera operators panel, a Users menu item and badge, a home card; a constructor sees a verdict summary (no scan fetch).
+- **mkcert removed (D-076, supersedes D-065):** `docker/https.mjs`, the entrypoint branch, `HTTPS_PORT`/3443, the `certs` mount, `dev:https`, `secureAddress`; README "Floor view at the station" and "Reach the site with Cloudflare Tunnel"; new `docs/STATION_SETUP.md`; `/certs/` stays ignored.
+- **Docs:** DECISIONS D-073 to D-076, ROADMAP Phase 21, API.md, master spec role table, STATUS.
+- **Tests:** unit tests for Floor view copy, `canCaptureFor`, nav, the operator switch and the capture route (605 pass); e2e: renamed heading/nav, Floor view, constructor capture (not run).
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (605) · build ✅ · e2e not run (project rule: Codex runs it) · docker not run
+**Decisions:** D-073, D-074, D-075, D-076
+**Follow-ups:** Codex run; Dylan's quick-tunnel staging and station check; branch, commit and PR when Dylan says.
+
+## 2026-10-20 — Phase 20 QA passed; test data cleaned up
+
+**Who:** Dylan (local `main` at `cc612ee`, Phase 20 uncommitted)
+**Summary:** Codex run 4 (`qa/reports/2026-10-20-phase-20-qa-run4.md`) passed: e2e 85 passed, 0 failed, 1 skipped. As Dylan asked, cleaned up all test data afterwards.
+**Changed:**
+
+- **Data:** backed up the dev database (`storage/backups/before-cleanup-2026-10-20.dump`, git-ignored), then `npm run demo:reset -- --yes`: 85 test accounts, 96 tokens, 182 batches, 223 scans, 95 requests, 109 items, 2,123 audit rows and the test shoe types, suppliers and defect types removed; a fresh demo week seeded (14 batches, 308 scans, 9 requests). A second dry run found no test data left.
+- **Docker:** removed the throwaway `cpoint-qa` stack's containers, volumes and network.
+
+**Gates:** e2e ✅ (Codex run 4) · no code changed this step
+**Decisions:** none
+**Follow-ups:** Dylan's device checks; branch, commit and PR when Dylan says.
+
+## 2026-10-20 — Phase 20 QA fixes (Codex run 3)
+
+**Who:** Dylan (local `main` at `cc612ee`, Phase 20 uncommitted)
+**Summary:** Codex run 3 (`qa/reports/2026-10-20-phase-20-qa-run3.md`): two full e2e runs, 84 passed and 1 failed each. The reset and close-short tests passed (the 60 s limit was right). Fixed the last failure. Plan `docs/prompts/plans/phase-20-qa-run3-fixes-plan.md`, approved by Dylan, who also asked for all test data to be cleaned up once every fix is in.
+**Changed:**
+
+- **E2E:** `cut-around-or-clean.spec.ts` finds Defect types rows by the key in their text (a row is named by its label).
+- **QA:** `qa/handoffs/2026-10-20-phase-20-qa-run4.md` and `qa/CODEX_PROMPT_PHASE_20_RUN4.md`.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (591) · build ✅ · e2e not run (project rule: Codex runs it) · docker not run
+**Decisions:** none
+**Follow-ups:** Codex run 4; then clean up the test data (`demo:reset`, the `cpoint-qa` stack); Dylan's device checks; branch, commit and PR when Dylan says.
+
+## 2026-10-20 — Phase 20 QA fixes (Codex run 2)
+
+**Who:** Dylan (local `main` at `cc612ee`, Phase 20 uncommitted)
+**Summary:** Codex run 2 (`qa/reports/2026-10-20-phase-20-qa-fixes.md`) passed all 14 browser scenarios, including the three run 1 blocked; 4 e2e tests failed, all test problems. Fixed them. Plan `docs/prompts/plans/phase-20-qa-run2-fixes-plan.md`, approved by Dylan.
+**Changed:**
+
+- **E2E:** 60 s limit on the admin reset test and the procurement close-short test (both ran out of time under the parallel run; the auth code is unchanged since run 1, when the reset test passed); the Defect types test finds each key with the Find box (15 per page); the smoke item code is 12 characters with `reorderLevel: 0` (run 1's fix was over 20 and got a 422).
+- **QA:** `qa/handoffs/2026-10-20-phase-20-qa-run3.md` and `qa/CODEX_PROMPT_PHASE_20_RUN3.md`: the e2e suite twice, with a trace if the reset or close-short test fails again.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (591) · build ✅ · e2e not run (project rule: Codex runs it) · docker not run
+**Decisions:** none
+**Follow-ups:** Codex run 3; Dylan's device checks; branch, commit and PR when Dylan says.
+
+## 2026-10-20 — Phase 20 QA fixes (Codex run 1)
+
+**Who:** Dylan (local `main` at `cc612ee`, Phase 20 uncommitted)
+**Summary:** Fixed everything Codex's Phase 20 run 1 failed on (`qa/reports/2026-10-20-phase-20-website-camera-and-reports.md`): three app issues and ten stale e2e tests. Plan `docs/prompts/plans/phase-20-qa-fixes-plan.md`, approved by Dylan.
+**Changed:**
+
+- **Wording:** Review queue button Fixable; scan Override dialog names the verdict like the badge (new `verdictLabel()` in `verdict-badge.tsx`) and says the section moves on or off the board or Salvage; Operations card "Fixable leather sections" and "N being handled".
+- **Settings → Thresholds:** `validateThresholds()` messages show under their field on blur, then live; empty fields get their own message; saving marks every field.
+- **Rolls CSV:** header `Sections` (was "Sections scanned").
+- **E2E:** Capture in the FM/QI nav, wait for the home URL after sign-in, `section #N` card names, "To handle" column, the smoke test makes its own stock item, the missing claim sheet checks the 404 page (Reports streams, so the status is 200).
+- **QA:** `qa/handoffs/2026-10-20-phase-20-qa-fixes.md` and `qa/CODEX_PROMPT_PHASE_20_RUN2.md`; three blocked checks move to a throwaway `cpoint-qa` Docker stack.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (591) · build ✅ · e2e not run (project rule: Codex runs it) · docker not run
+**Decisions:** none
+**Follow-ups:** Codex run 2; Dylan's device checks (P18 S3, S12 to S15, S18); branch, commit and PR when Dylan says.
+
+## 2026-10-20 — Phase 20: website-only camera, "Cut around or clean", supplier quality, no components
+
+**Who:** Dylan (local `main` at `cc612ee`, Phase 19 merged as PR #14; not committed)
+**Summary:** First checked the move to `C:\dev\CPoint-PMS` (git clean on `main`, `.env`, `certs/`, `cv/models`, the venv rebuilt with CUDA torch, memory copied; all gates green). Then built Dylan's five changes from `phase-20-plan.md`, every recommended option, no "Ready to capture" line.
+**Changed:**
+
+- **Camera (D-069):** `cv/` is the model toolkit only (`predict`, `evaluate`, `export-onnx`): the Tkinter window, `.cmd` launcher, `shortcut`, `run`, `doctor`, spool, transport and their tests removed (231 → 81 pytest), `cv/README.md` rewritten, `cv/.env.example` gone. The Camera page has no station states (`cameraStatus`: capturing, simulator, idle); `findLatestUsedCameraToken` removed. No check button on the Capture page.
+- **Fixable (D-070):** migration `defect_handling` (`DefectType.handling` CLEAN | CUT_AROUND, dirt → CLEAN). Settings → Defect types "When Fixable". `sectionHandling` rule; the board is "Cut around or clean" with To handle / Being handled / Done, usable and the action on each card. "Rework" reads Fixable in badges, filters, charts, Settings, review, scans, batches, reports and CSV headers; internal names unchanged.
+- **Supplier quality (D-072):** `supplierQuality` gains rolls; new `supplierDefects`, `rollsWithMostRejects`, `findClaimBatch`, `countBatchVerdicts`; `supplierIsHigh` shared with the attention item. Operations → Supplier quality card, `/reports/claims/[batchId]` (print / Save as PDF; the sidebar hides in print), `supplier-rolls.csv`, more columns in `suppliers.csv`. Demo week adds Marikina Leather and Bulacan Hides (`src/server/lib/demo-suppliers.ts`) and rotates rolls; `demo:reset` keeps them. The queries were run read-only against the dev database.
+- **Components (D-071):** `/components`, the Settings tab, `/api/v1/component-types`, the service/validator/model code and the table (migration `drop_component_types`) removed.
+- **Docs:** README, API.md, DECISIONS D-069 to D-072, ROADMAP Phase 20 (Phase 17 marked retired), master spec, STATUS, script and CI comments.
+- **Tests:** unit tests updated and added (camera status, section handling, supplier High, supplier rows, claim sheet; 591 pass). E2E specs updated for the new wording, plus `supplier-quality.spec.ts` and `cut-around-or-clean.spec.ts` (not run).
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (591) · build ✅ · cv ruff/mypy/pytest ✅ (81) · e2e not run (project rule: Codex runs it) · docker not run
+**Decisions:** D-069, D-070, D-071, D-072
+**Follow-ups:**
+
+- Codex: `qa/handoffs/2026-10-20-phase-20-website-camera-and-reports.md` (it also covers what Phases 18 and 19 still needed). The Phase 17 handoff and `qa/CODEX_PROMPT_PHASES_17_19.md` are superseded.
+- The two migrations haven't been applied to the dev database yet; `npm run db:deploy` does it.
+- `cv/pyproject.toml` version was raised to 0.20.0 by the cleanup; revert if unwanted.
+- Dylan asked to remove what's no longer needed: deleted the station's local leftovers
+  (`cv/station-window.json`, `cv/out/logs/`, `cv/out/spool/`) and the dead "CPoint Camera"
+  desktop shortcut. Every top-level package in `cv/.venv` is still in a requirements file and
+  every npm dependency is still imported, so no package was removed. `cv/.env` stays: `demo:reset`
+  reads its `CV_DEVICE_TOKEN`.
+
 ## 2026-10-20 — Phase 19: project cleanup and optimization
 
 **Who:** Dylan (local `main` at `c29c871`, Phase 18 merged as PR #13; not committed)

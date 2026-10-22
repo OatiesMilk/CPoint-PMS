@@ -57,7 +57,7 @@ def test_the_mapper_and_payload_builder_produce_the_shared_fixture() -> None:
         FIXTURE.parent.mkdir(parents=True, exist_ok=True)
         document = {
             "description": (
-                "Text fields of POST /api/v1/scans as the camera station sends them. Written by "
+                "Text fields of POST /api/v1/scans as a device-token client sends them. Written by "
                 "cv/tests/test_contract_fixture.py; parsed by tests/unit/cv-contract.test.ts."
             ),
             "fields": fields,

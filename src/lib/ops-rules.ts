@@ -1,12 +1,10 @@
-import type { Stage } from "./domain";
-import { STAGE_LABELS } from "./domain";
 import { formatDuration } from "./format";
 
 export { stockLevel, type StockLevel } from "./inventory-rules";
 
 /**
  * Operations report rules (D-033), pure and client-safe. Everything is an aggregate per day,
- * stage, batch, item, supplier or request, never per person (D-008). The thresholds below are
+ * shoe type, batch, item, supplier or request, never per person (D-008). The thresholds below are
  * operational defaults for what the report calls "needs attention"; they are named here so a
  * later settings screen can take them over.
  */
@@ -15,12 +13,6 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 export const ATTENTION = {
-  /** A batch is "waiting longer than usual" past this multiple of its stage's median visit. */
-  stuckFactor: 1.5,
-  /** Visits needed before a stage median is trusted enough to flag against it. */
-  minVisitsForMedian: 3,
-  /** Never flag a batch that has been in a stage for less than this. */
-  minStuckMs: HOUR,
   /** A repair that nobody has started after this long is "waiting". */
   repairWaitingMs: DAY,
   /** Stock that would run out within this many days at the recent pace. */
@@ -29,11 +21,28 @@ export const ATTENTION = {
   requestPendingMs: 2 * DAY,
   /** An approved request not received after this long is late. */
   requestLateMs: 7 * DAY,
-  /** A supplier is flagged when its rework + reject share is this far above the line's. */
+  /** A supplier is flagged when its Fixable + reject share is this far above the line's. */
   supplierGap: 0.1,
   /** Sections needed before a supplier's share means anything. */
   supplierMinSections: 30,
 } as const;
+
+/**
+ * A supplier whose Fixable + reject share is well above the whole line's, over enough sections to
+ * mean something. The Supplier quality "High" badge and the attention item use this one rule, so
+ * they never disagree (Phase 20).
+ */
+export function supplierIsHigh(
+  s: { sections: number; problemShare: number | null },
+  lineProblemShare: number | null,
+): boolean {
+  return (
+    lineProblemShare !== null &&
+    s.problemShare !== null &&
+    s.sections >= ATTENTION.supplierMinSections &&
+    s.problemShare >= lineProblemShare + ATTENTION.supplierGap
+  );
+}
 
 // ───────────── period comparison ─────────────
 
@@ -59,48 +68,6 @@ export function describeChange(change: number | null): string {
   const pct = Math.round(Math.abs(change) * 100);
   if (pct === 0) return "no change";
   return `${change > 0 ? "up" : "down"} ${pct}%`;
-}
-
-// ───────────── flow ─────────────
-
-export type OpenBatch = {
-  id: string;
-  code: string;
-  shoeType: string;
-  stage: Stage;
-  /** How long it has been in this stage, in ms. */
-  inStageMs: number;
-  openRepairs: number;
-};
-
-export type StageStat = { stage: Stage; visits: number; medianMs: number | null };
-
-/**
- * Batches that have sat in their stage longer than usual: more than `stuckFactor` × that stage's
- * median visit (trusted only with enough visits) and at least `minStuckMs`. Longest wait first.
- */
-export function findStuckBatches(batches: OpenBatch[], stages: StageStat[]): OpenBatch[] {
-  const median = new Map(
-    stages
-      .filter((s) => s.medianMs !== null && s.visits >= ATTENTION.minVisitsForMedian)
-      .map((s) => [s.stage, s.medianMs as number]),
-  );
-  return batches
-    .filter((b) => {
-      const m = median.get(b.stage);
-      return (
-        m !== undefined && b.inStageMs > Math.max(m * ATTENTION.stuckFactor, ATTENTION.minStuckMs)
-      );
-    })
-    .sort((a, b) => b.inStageMs - a.inStageMs);
-}
-
-/** Each stage's share of the total of all stage medians (where the lead time goes). */
-export function stageShares<T extends { stage: Stage; medianMs: number | null }>(
-  stages: T[],
-): Map<Stage, number | null> {
-  const total = stages.reduce((t, s) => t + (s.medianMs ?? 0), 0);
-  return new Map(stages.map((s) => [s.stage, total > 0 && s.medianMs ? s.medianMs / total : null]));
 }
 
 // ───────────── inventory ─────────────
@@ -143,9 +110,8 @@ export type AttentionItem = {
 const RANK = { critical: 0, warning: 1, info: 2 } as const;
 
 export type AttentionInput = {
-  stages: (StageStat & { inStageNow: number; longestWaitMs: number | null })[];
-  bottleneck: Stage | null;
-  stuck: OpenBatch[];
+  /** "3 of the last 5 working days were below quota" (Phase 23); null when fewer than 2 were. */
+  belowQuota: { below: number; of: number } | null;
   repairs: { waitingOverDay: number; open: number; oldestWaitingMs: number | null };
   stock: { out: number; low: number; shortCover: { item: string; days: number }[] };
   requests: {
@@ -197,37 +163,21 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
     });
   }
 
-  if (i.bottleneck) {
-    const s = i.stages.find((x) => x.stage === i.bottleneck);
-    if (s && s.inStageNow > 0 && s.medianMs !== null)
-      out.push({
-        id: "bottleneck",
-        severity: "warning",
-        title: `${STAGE_LABELS[s.stage]} is the bottleneck`,
-        detail: `Median ${formatDuration(s.medianMs)} per visit, with ${plural(s.inStageNow, "batch", "batches")} in it now.`,
-        href: `/batches?stage=${s.stage}`,
-      });
-  }
-
-  if (i.stuck.length > 0) {
-    const names = i.stuck
-      .slice(0, 3)
-      .map((b) => b.code)
-      .join(", ");
+  if (i.belowQuota)
     out.push({
-      id: "stuck",
+      id: "below-quota",
       severity: "warning",
-      title: `${plural(i.stuck.length, "batch", "batches")} waiting longer than usual`,
-      detail: `${names}${i.stuck.length > 3 ? ` and ${i.stuck.length - 3} more` : ""}. Longest: ${formatDuration(i.stuck[0].inStageMs)} in ${STAGE_LABELS[i.stuck[0].stage]}.`,
-      href: "/batches?status=IN_PROGRESS",
+      title: `${i.belowQuota.below} of the last ${i.belowQuota.of} working days were below quota`,
+      detail:
+        "Production shows each day's pairs against the quota and how many Shoe Constructors were present.",
+      href: "/production",
     });
-  }
 
   if (i.repairs.waitingOverDay > 0)
     out.push({
       id: "repairs-waiting",
       severity: "warning",
-      title: `${plural(i.repairs.waitingOverDay, "section")} waiting over a day at the repair station`,
+      title: `${plural(i.repairs.waitingOverDay, "section")} waiting over a day to be cleaned or cut around`,
       detail:
         i.repairs.oldestWaitingMs !== null
           ? `The oldest has waited ${formatDuration(i.repairs.oldestWaitingMs)} without being started.`
@@ -265,20 +215,15 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
 
   if (i.lineProblemShare !== null) {
     const worst = i.suppliers
-      .filter(
-        (s) =>
-          s.sections >= ATTENTION.supplierMinSections &&
-          s.problemShare !== null &&
-          s.problemShare >= (i.lineProblemShare as number) + ATTENTION.supplierGap,
-      )
+      .filter((s) => supplierIsHigh(s, i.lineProblemShare))
       .sort((a, b) => (b.problemShare ?? 0) - (a.problemShare ?? 0))[0];
     if (worst)
       out.push({
         id: "supplier",
         severity: "warning",
         title: `Leather from ${worst.supplier} has more defects than the rest`,
-        detail: `${Math.round((worst.problemShare ?? 0) * 100)}% of its sections needed rework or were rejected, against ${Math.round(i.lineProblemShare * 100)}% overall.`,
-        href: "/reports?view=operations#suppliers",
+        detail: `${Math.round((worst.problemShare ?? 0) * 100)}% of its sections were Fixable or rejected, against ${Math.round(i.lineProblemShare * 100)}% overall.`,
+        href: "/reports?view=operations#supplier-quality",
       });
   }
 

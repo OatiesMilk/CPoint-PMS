@@ -55,13 +55,15 @@ export async function updateBatchAction(id: string, input: unknown): Promise<Act
 
 export async function transitionBatchAction(
   id: string,
-  input: { action: TransitionAction; expectedStage: Stage; reason?: string },
+  input: { action: TransitionAction; expectedStage: Stage },
 ): Promise<ActionResult<{ currentStage: Stage; status: string }>> {
-  const user = await requirePermission("batch:manage");
-  if (!isBatchId(id)) return { ok: false, error: "This batch doesn't exist." };
+  // Start needs batch:manage (Floor Manager); finish needs batch:finish (Floor Manager, QI).
+  const user = await requirePermission(input.action === "finish" ? "batch:finish" : "batch:manage");
+  if (!isBatchId(id)) return { ok: false, error: "This roll doesn't exist." };
   try {
     const result = await transitionBatchStage(id, transitionSchema.parse(input), user);
     refresh(id);
+    revalidatePath("/camera/capture");
     return { ok: true, currentStage: result.currentStage, status: result.status };
   } catch (error) {
     return toResult(error);

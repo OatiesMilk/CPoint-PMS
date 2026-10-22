@@ -19,15 +19,6 @@ export const batchFormSchema = z.object({
       (d) => d <= manilaToday(),
       "The arrival date can't be in the future. Pick today or an earlier date.",
     ),
-  targetQuotaPairs: z.preprocess(
-    blankToUndefined,
-    z.coerce
-      .number({ error: "Enter the target quota as a whole number of pairs, like 120." })
-      .int("Enter the target quota as a whole number of pairs, like 120.")
-      .min(1, "The target quota must be at least 1 pair.")
-      .max(100_000, "The target quota can't be more than 100,000 pairs. Check the number.")
-      .optional(),
-  ),
   notes: optionalText(500, "notes"),
   /** Create only (D-023): take one roll from this leather-roll inventory item. Ignored on edit. */
   rollItemId: z.preprocess(
@@ -45,21 +36,13 @@ const reason = z
   .min(3, "Enter a reason of at least 3 characters, so it makes sense in the batch's history.")
   .max(300, "Keep the reason under 300 characters.");
 
-export const transitionSchema = z
-  .object({
-    action: z.enum(["start", "advance", "complete", "move_back"], { error: OUT_OF_DATE }),
-    expectedStage: z.enum(Stage, { error: OUT_OF_DATE }),
-    reason: z.preprocess(blankToUndefined, reason.optional()),
-  })
-  .superRefine((value, ctx) => {
-    if (value.action === "move_back" && !value.reason) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["reason"],
-        message: "Enter a reason for moving the batch back, e.g. “Soles came loose.”",
-      });
-    }
-  });
+/** A roll is started or finished (D-082). The old stage moves are refused with this message. */
+export const transitionSchema = z.object({
+  action: z.enum(["start", "finish"], {
+    error: "Choose start or finish. A roll no longer moves through stages.",
+  }),
+  expectedStage: z.enum(Stage, { error: OUT_OF_DATE }),
+});
 
 export type TransitionInput = z.infer<typeof transitionSchema>;
 
@@ -71,7 +54,6 @@ export const cancelSchema = z.object({
 /** List query (URL search params). Unknown or invalid values are dropped rather than erroring. */
 export const batchListQuerySchema = z.object({
   status: z.enum(BatchStatus).optional().catch(undefined),
-  stage: z.enum(Stage).optional().catch(undefined),
   shoeTypeId: z.uuid().optional().catch(undefined),
   q: z.string().trim().max(50).optional().catch(undefined),
   page: z.coerce.number().int().min(1).max(10_000).optional().catch(undefined),

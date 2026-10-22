@@ -11,7 +11,7 @@ export async function moveReworkAction(
   input: { move: string; expectedStatus: string; note?: string },
 ): Promise<ActionResult<{ status: string }>> {
   const user = await requirePermission("rework:manage");
-  if (!isOutcomeId(id)) return { ok: false, error: "This repair doesn't exist." };
+  if (!isOutcomeId(id)) return { ok: false, error: "This section isn't on the board." };
   try {
     const result = await moveReworkTicket(id, reworkMoveSchema.parse(input), user);
     revalidatePath("/rework");
@@ -20,6 +20,6 @@ export async function moveReworkAction(
     revalidatePath("/scans", "layout");
     return { ok: true, status: result.status };
   } catch (error) {
-    return toActionError(error, "Rework move");
+    return toActionError(error, "Board move");
   }
 }

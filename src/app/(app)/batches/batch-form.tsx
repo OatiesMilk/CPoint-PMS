@@ -39,7 +39,6 @@ const FIELDS = [
   "shoeTypeId",
   "supplierId",
   "receivedAt",
-  "targetQuotaPairs",
   "notes",
   "rollItemId",
 ] as const;
@@ -58,7 +57,6 @@ export function BatchForm({ shoeTypes, suppliers, rollItems = [], today, batch }
       shoeTypeId: shoeTypes.length === 1 ? shoeTypes[0].id : "",
       supplierId: "",
       receivedAt: today,
-      targetQuotaPairs: "",
       notes: "",
       rollItemId: "",
     },
@@ -226,27 +224,6 @@ export function BatchForm({ shoeTypes, suppliers, rollItems = [], today, batch }
                 </p>
               )
             )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="targetQuotaPairs">
-              Target quota <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <div className="relative">
-              <Input
-                id="targetQuotaPairs"
-                inputMode="numeric"
-                autoComplete="off"
-                className="pr-14"
-                aria-invalid={!!errors.targetQuotaPairs}
-                aria-describedby={describedBy("targetQuotaPairs")}
-                {...form.register("targetQuotaPairs")}
-              />
-              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                pairs
-              </span>
-            </div>
-            <FieldError id="targetQuotaPairs-error" message={errors.targetQuotaPairs?.message} />
           </div>
         </div>
 

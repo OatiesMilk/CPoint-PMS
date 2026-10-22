@@ -3,7 +3,6 @@ import { type Db, defaultDb } from "./db";
 
 export type BatchListFilters = {
   status?: BatchStatus;
-  stage?: Stage;
   shoeTypeId?: string;
   q?: string;
 };
@@ -11,7 +10,6 @@ export type BatchListFilters = {
 const listInclude = {
   shoeType: { select: { id: true, name: true } },
   supplier: { select: { id: true, name: true } },
-  stageLogs: { where: { endedAt: null }, select: { stage: true, startedAt: true }, take: 1 },
 } satisfies Prisma.BatchInclude;
 
 export type BatchListRow = Prisma.BatchGetPayload<{ include: typeof listInclude }>;
@@ -21,10 +19,6 @@ function listWhere(filters: BatchListFilters): Prisma.BatchWhereInput {
   return {
     status: filters.status,
     shoeTypeId: filters.shoeTypeId,
-    // A stage filter only makes sense for batches that are actually on the line.
-    ...(filters.stage
-      ? { currentStage: filters.stage, status: filters.status ?? "IN_PROGRESS" }
-      : {}),
     ...(q
       ? {
           OR: [
@@ -111,21 +105,13 @@ export async function nextBatchNumber(year: number, db: Db = defaultDb()): Promi
   return rows[0].lastValue;
 }
 
-export async function inProgressByStage(db: Db = defaultDb()) {
-  const [counts, openLogs, planned] = await Promise.all([
-    db.batch.groupBy({
-      by: ["currentStage"],
-      where: { status: "IN_PROGRESS" },
-      _count: { _all: true },
-    }),
-    db.batchStageLog.groupBy({
-      by: ["stage"],
-      where: { endedAt: null, batch: { status: "IN_PROGRESS" } },
-      _min: { startedAt: true },
-    }),
+/** Rolls in progress at Preparation and rolls planned, for the reports and the homes. */
+export async function countRollsByStatus(db: Db = defaultDb()) {
+  const [atPreparation, planned] = await Promise.all([
+    db.batch.count({ where: { status: "IN_PROGRESS", currentStage: "PREPARATION" } }),
     db.batch.count({ where: { status: "PLANNED" } }),
   ]);
-  return { counts, openLogs, planned };
+  return { atPreparation, planned };
 }
 
 const prepSelect = {
@@ -136,6 +122,7 @@ const prepSelect = {
   currentStage: true,
   shoeType: { select: { name: true } },
   stageLogs: { where: { endedAt: null }, select: { startedAt: true }, take: 1 },
+  _count: { select: { scans: true } },
 } satisfies Prisma.BatchSelect;
 
 export type PreparationBatch = Prisma.BatchGetPayload<{ select: typeof prepSelect }>;

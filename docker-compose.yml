@@ -47,12 +47,8 @@ services:
       # The camera model for the Capture page: yolo-v1.onnx + yolo-v1.json from
       # `python -m cpoint_cv export-onnx` (D-064). Read-only; never in the image or git.
       - ./cv/models:/app/models:ro
-      # HTTPS on the LAN: cert.pem and key.pem from mkcert (README, "Capture from the website").
-      # Empty folder = HTTPS off. Never committed.
-      - ./certs:/app/certs:ro
     ports:
       - "${APP_PORT:-3000}:3000"
-      - "${HTTPS_PORT:-3443}:3443"
 
 volumes:
   pgdata:

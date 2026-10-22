@@ -9,7 +9,7 @@ import type { Metadata } from "next";
 import { MATCHING, TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { CircleCheck, CircleSlash, LockKeyhole, ShoppingCart } from "lucide-react";
+import { Aperture, CircleCheck, CircleSlash, LockKeyhole, ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,6 +105,12 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
                           <Badge tone="neutral">
                             <ShoppingCart aria-hidden />
                             Leather rolls
+                          </Badge>
+                        )}
+                        {u.canCapture && (
+                          <Badge tone="neutral">
+                            <Aperture aria-hidden />
+                            Camera
                           </Badge>
                         )}
                       </div>

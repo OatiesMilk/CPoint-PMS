@@ -29,9 +29,11 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 
 ## Phase 2 — Batches & stages
 
-- [x] Batch list (filter by status/stage/shoe type), create, edit, cancel
+- [x] Batch list (filter by status/stage/shoe type), create, edit, cancel (the stage filter became
+      a status filter in Phase 23)
 - [x] Advance stage (no skipping; going backwards needs a reason) with `BatchStageLog`
-- [x] Batch detail: stage timeline with durations
+      (**replaced in Phase 23, D-082**: a batch is one roll, Start roll then Finish roll)
+- [x] Batch detail: stage timeline with durations (kept as History for old batches)
 - [x] Unit tests for stage transitions
 
 ## Phase 3 — CV skeleton
@@ -66,13 +68,14 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 - [x] Users CRUD, deactivate, reset password (temporary password, forced change, sessions ended)
 - [x] Defect types, CV thresholds, shoe types, suppliers management (+ unknown classes panel)
 - [x] Audit log viewer with filters
-- [x] Component types table + "Coming soon" page; Constructor placeholder home
+- [x] Component types table + "Coming soon" page; Constructor placeholder home (components
+      removed in Phase 20, D-071)
 
 ## Phase 7 — Dashboards & reports
 
 - [x] FM overview and QI overview (as specified in the master spec)
 - [x] Daily summary (Manila day), defect analytics, AI agreement rate
-- [x] Stage-duration / bottleneck chart
+- [x] Stage-duration / bottleneck chart (**replaced in Phase 23** by pairs per day against the quota)
 - [x] CSV export
 - [x] No per-person metrics anywhere (checked: report payload unit test + UI review, D-025)
 
@@ -289,6 +292,9 @@ Plan: `docs/prompts/plans/phase-16-plan.md`; Dylan took every recommended option
 
 ## Phase 17 — The camera station window
 
+> **Retired by Phase 20 (D-069).** Capture happens on the website; the window, its launcher and
+> the station runtime were removed. Kept here as history.
+
 Brief: `docs/prompts/camera-station-window.md`. Plan: `docs/prompts/plans/phase-17-plan.md`; Dylan took every
 recommended option (Tkinter, preview at 960 and 4 a second, Capture sends the frame on screen,
 failures block Start, a `.cmd` launcher plus a `shortcut` command, the Camera page copy updated).
@@ -331,7 +337,7 @@ without boxes, QI and FM, its own nav item, the station's batch rule).
 - [x] Camera permission refused, no camera, camera busy, model missing and a non-HTTPS address
       each show their own message and fix
 - [x] HTTPS on the LAN: `docker/https.mjs` on 3443 with an mkcert certificate (D-065);
-      `npm run dev:https` for development
+      `npm run dev:https` for development (both removed in Phase 21: Cloudflare Tunnel, D-076)
 - [x] The station (`POST /api/v1/scans` with a token) and the Phase 17 window are unchanged; no
       person on scans (D-066); the Camera page shows "Capture page active" and "Ways to capture"
 - [x] Tests: 590 app unit tests (53 new), 231 station tests; Docker image builds and runs the model
@@ -355,5 +361,99 @@ cache only, move the old plans, keep the QA screenshots). No behaviour change (D
 - [x] CI caches Playwright's Chromium by version
 - [x] Nothing deleted from Dylan's machine, Docker or the repository without his word, except
       `.next` and `tsconfig.tsbuildinfo` (re-created by the build; see the session log)
-- [ ] Dylan: move the folder to `C:\dev\CPoint-PMS` and re-create `cv/.venv` (README)
-- [ ] Codex: `qa/handoffs/2026-10-20-phase-19-cleanup.md`
+- [x] Dylan: move the folder to `C:\dev\CPoint-PMS` and re-create `cv/.venv` (README); checked
+      on 2026-10-20
+- [ ] Codex: folded into the Phase 20 handoff (its Docker checks)
+
+## Phase 20 — Website-only camera, "Cut around or clean", supplier quality, no components
+
+Asked by Dylan on 2026-10-20 (five changes). Plan: `docs/prompts/plans/phase-20-plan.md`; Dylan
+took every recommended option and no "Ready to capture" line (D-069 to D-072).
+
+- [x] The CPoint Camera app and the station runtime (`run`, `doctor`, spool) are gone; `cv/` is
+      the model toolkit (`predict`, `evaluate`, `export-onnx`); the Camera page has no station
+      states (D-069)
+- [x] No camera check button on the Capture page; the page already checks camera, model and batch
+      (D-069)
+- [x] "Rework" reads Fixable everywhere a user sees it; the board is Cut around or clean; each
+      defect type is Clean or Cut around (migration `defect_handling`) and the board shows it
+      (D-070)
+- [x] The FM's Operations report has Supplier quality (rolls, Fixable %, Reject %, top defect,
+      High) and the rolls with the most rejects, each with a printable claim sheet; two CSVs
+      (D-072)
+- [x] Component tracking removed: page, Settings tab, API and table (migration
+      `drop_component_types`, D-071)
+- [x] Typecheck, lint, unit tests, build, ruff, mypy and pytest pass; e2e specs updated and two new
+      ones written (not run, project rule)
+- [ ] Codex: `qa/handoffs/2026-10-20-phase-20-website-camera-and-reports.md`
+
+## Phase 21 — Repair Station, Floor view, constructor capture, no mkcert
+
+Asked by Dylan on 2026-10-20 after Phase 20 passed QA. Plan: `docs/prompts/plans/phase-21-plan.md`
+(A, B and C as recommended; D-073 to D-076).
+
+- [x] The board is named Repair Station everywhere; the page says "Clean the section or cut around
+      the defect." (D-073)
+- [x] Floor view on the Capture page: full-screen live preview, verdict frame and band until the
+      next capture, Esc leaves, remembered per browser, no sounds (D-074)
+- [x] "Can capture at the camera" for Shoe Constructors, set by the FM (Camera → Camera operators)
+      or the Admin (Users); Capture, its API and the nav follow it (migration `user_can_capture`,
+      D-075)
+- [x] mkcert, the HTTPS listener and port 3443 removed; README "Reach the site with Cloudflare
+      Tunnel" and `docs/STATION_SETUP.md` (D-076)
+- [x] Typecheck, lint, unit tests (605) and build pass; e2e specs updated and new ones written
+      (not run, project rule)
+- [x] Codex: `qa/handoffs/2026-10-20-phase-21-repair-station-floor-view.md` (PASS, 29 of 31; R4 and
+      F3 blocked)
+- [ ] Dylan: a real station check (a second laptop on a quick tunnel, the webcam and a pedal)
+
+## Phase 22 — Attendance
+
+Asked by Dylan on 2026-10-21 (brief `docs/prompts/production-progression.md`). Plan:
+`docs/prompts/plans/phase-22-plan.md` (1A, 2A, 3A as recommended; D-077 to D-081).
+
+- [x] `AttendanceDay` and `AttendanceMark` (migration `attendance`), saved in one transaction
+      with one audit row; a changed `updatedAt` is `409 STALE` (D-077, D-079)
+- [x] Rules in `src/lib/attendance-rules.ts`: the roster (D-078), the edit window (D-079) and
+      `workforceFor`, the only worker count (D-080)
+- [x] Production → Attendance (`/attendance`): one day at a time, Find, role filter, 15-row pager,
+      Mark everyone present, Save attendance (N changes), unsaved-changes prompt; read-only for the
+      Admin and for locked days
+- [x] Floor Manager home: the Attendance card
+- [x] `GET /api/v1/attendance`, `PUT /api/v1/attendance/{day}` (`docs/API.md`)
+- [x] Demo: 12 demo Shoe Constructors and a week of attendance; `demo:reset` keeps them (D-081)
+- [x] Nothing shows a per-person figure (D-008)
+- [x] Lint, typecheck, unit tests (646) and build pass; `tests/e2e/attendance.spec.ts` written and
+      `auth.spec.ts` nav lists updated (not run, project rule)
+- [x] Codex: run 1 FAIL (one app fault, the "· 0 others present" summary; three test or handoff
+      mistakes), all fixed; run 2 PASS (e2e 94 passed, 0 failed, 1 skipped)
+
+## Phase 23 — Production progression in place of stage monitoring
+
+Asked by Dylan on 2026-10-21 (brief `docs/prompts/production-progression.md`). Plan:
+`docs/prompts/plans/phase-23-plan.md` (1A Finish roll, **2B every 4 hours**, **3B the QI only**,
+4A 10 working days, 5A a first quota from today; D-082 to D-087).
+
+- [x] `ProductionSchedule`, `DailyQuota`, `ProductionCheckIn`, `ProductionCount` (migration
+      `production_progression`); a slot takes one entry (`409 STALE`), every save audited
+- [x] Rules in `src/lib/production-rules.ts`: slots, states (Late after 30 minutes, Missed at
+      midnight), progress and pace, the quota suggestion, the shortfall sentence
+- [x] A batch is one roll: Start roll, Finish roll (FM and QI, `batch:finish`), cancel; the stage
+      moves are gone from the UI, the API and the rules (D-082, supersedes D-019's lifecycle)
+- [x] Finish hint "All 10 pieces scanned. Finish this roll?" on the batch and Capture pages
+- [x] Production (`/production`): today's check-ins with Enter count and Correct (QI), today
+      against the quota, the last 14 working days with a chart and the shortfall sentences
+- [x] Schedule and quota (`/production/plan`, FM): a schedule change from tomorrow, a quota per
+      shoe type with the suggestion and Use suggestion, history of both (15 per page)
+- [x] Homes: Next check-in (QI); Today's production replaces Batches by stage (FM)
+- [x] Reports → Operations: a Production section, new KPI tiles, a below-quota attention item;
+      `production.csv` replaces `stages.csv`; the stage sections are gone
+- [x] Bootstrap default schedule (08:00 to 17:00, every 4 hours, Mon to Sat); demo week quotas and
+      check-ins whose three short days line up with the absences; `demo:reset` clears them
+- [x] Nothing per person (D-008): day rows carry no name; the only name is who entered a check-in
+- [x] Lint, typecheck, unit tests and build pass; `tests/e2e/production.spec.ts` written and the
+      batch, outcome, report, smoke and nav specs updated (not run, project rule)
+- [x] Follow-up (Dylan 2026-10-22, D-088): the Floor Manager covers check-ins on a day no Quality
+      Inspector is present
+- [x] Codex: run 1 FAIL (one fault, wide tables not keyboard-reachable), fixed; run 2 PASS (e2e
+      99 passed, 0 failed, 1 skipped)

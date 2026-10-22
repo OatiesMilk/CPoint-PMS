@@ -1,4 +1,4 @@
-import type { DefectAction } from "@/generated/prisma/client";
+import type { DefectAction, DefectHandling } from "@/generated/prisma/client";
 import { hashDeviceToken } from "@/server/lib/device-token";
 import { getEnv } from "@/server/lib/env";
 import { clearUploadFolders } from "@/server/lib/storage";
@@ -12,7 +12,14 @@ import {
   type ResetKeep,
 } from "@/server/models/demo-reset.model";
 import { recordAudit } from "./audit.service";
-import { DEMO_USERS, ensureDemoInventory, REFERENCE_DATA } from "./bootstrap.service";
+import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
+import {
+  DEMO_CONSTRUCTORS,
+  DEMO_USERS,
+  ensureDemoConstructors,
+  ensureDemoInventory,
+  REFERENCE_DATA,
+} from "./bootstrap.service";
 import { seedDemoWeek } from "./demo-seed.service";
 
 /**
@@ -38,6 +45,7 @@ export const MODEL_DEFECT_TYPES: {
   sortOrder: number;
   isActive: boolean;
   action: DefectAction | null;
+  handling: DefectHandling;
 }[] = [
   {
     key: "cut",
@@ -46,6 +54,7 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 1,
     isActive: true,
     action: "REJECT",
+    handling: "CUT_AROUND",
   },
   {
     key: "hole",
@@ -54,6 +63,7 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 2,
     isActive: true,
     action: "REJECT",
+    handling: "CUT_AROUND",
   },
   {
     key: "crease",
@@ -62,6 +72,7 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 3,
     isActive: true,
     action: "REWORK",
+    handling: "CUT_AROUND",
   },
   {
     key: "scratch",
@@ -70,6 +81,7 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 4,
     isActive: true,
     action: "REWORK",
+    handling: "CUT_AROUND",
   },
   {
     key: "abrasion",
@@ -78,6 +90,7 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 5,
     isActive: false,
     action: null,
+    handling: "CUT_AROUND",
   },
   {
     key: "dirt",
@@ -86,6 +99,7 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 6,
     isActive: false,
     action: null,
+    handling: "CLEAN",
   },
 ];
 
@@ -95,10 +109,19 @@ const DEMO_LEATHER_REQUESTER = "constructor@cpoint.local";
 export function resetKeep(deviceTokens: string[]): ResetKeep {
   const admin = getEnv().BOOTSTRAP_ADMIN_EMAIL?.toLowerCase();
   return {
-    emails: [...new Set([...DEMO_USERS.map((u) => u.email), ...(admin ? [admin] : [])])],
+    emails: [
+      ...new Set([
+        ...DEMO_USERS.map((u) => u.email),
+        ...DEMO_CONSTRUCTORS.map((u) => u.email),
+        ...(admin ? [admin] : []),
+      ]),
+    ],
     tokenHashes: [...new Set(deviceTokens.filter(Boolean).map(hashDeviceToken))],
     shoeTypeCodes: REFERENCE_DATA.shoeTypes.map((s) => s.code),
-    supplierNames: REFERENCE_DATA.suppliers.map((s) => s.name),
+    supplierNames: [
+      ...REFERENCE_DATA.suppliers.map((s) => s.name),
+      ...DEMO_SUPPLIERS.map((s) => s.name),
+    ],
     defectTypeKeys: [
       ...new Set([
         ...REFERENCE_DATA.defectTypes.map((d) => d.key),
@@ -151,6 +174,7 @@ export async function resetDemoData(
     { timeoutMs: 120_000 },
   );
   await clearUploadFolders(["scans", "pod"]);
+  await ensureDemoConstructors(options.now);
   const demoWeek = options.demoWeek === false ? null : await seedDemoWeek({ now: options.now });
   await ensureDemoInventory();
   return { removed, demoWeek };

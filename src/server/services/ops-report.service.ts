@@ -1,4 +1,3 @@
-import { STAGE_ORDER, type Stage } from "@/lib/domain";
 import { manilaToday } from "@/lib/format";
 import { urgencyCutoffs } from "@/lib/procurement-rules";
 import {
@@ -6,35 +5,35 @@ import {
   buildAttention,
   compare,
   daysOfCover,
-  findStuckBatches,
   paretoShares,
-  stageShares,
   stockLevel,
+  supplierIsHigh,
 } from "@/lib/ops-rules";
+import { agreementRate, previousRange, toCsv, type ReportRange } from "@/lib/report-rules";
+import { belowQuotaAttention, ATTENTION_DAYS } from "@/lib/production-rules";
+import { countRollsByStatus } from "@/server/models/batch.model";
 import {
-  agreementRate,
-  parseRange,
-  previousRange,
-  toCsv,
-  type ReportRange,
-} from "@/lib/report-rules";
-import { stageDurations } from "@/server/models/report.model";
-import {
-  leadTimes,
-  openBatches,
   procurementFlow,
   repairQueue,
   repairTurnaround,
+  countBatchVerdicts,
+  findClaimBatch,
+  rollsWithMostRejects,
   stockPosition,
+  supplierDefects,
   supplierQuality,
 } from "@/server/models/ops-report.model";
-import { productionReport, qualityReport } from "./report.service";
+import { productionReport, recentProductionDays } from "./production.service";
+import { qualityReport, rollFlow } from "./report.service";
 
 // Operations report (D-033): what is happening on the floor, in resources, flow, stock, purchasing
-// and supply. Aggregates per batch, stage, item, supplier or request. Nothing here carries a user
+// and supply. Aggregates per day, shoe type, batch, item, supplier or request. Nothing here carries a user
 // id, name or email (D-008); tests/unit/ops-report.service.test.ts checks that.
 
 const share = (part: number, whole: number) => (whole > 0 ? part / whole : null);
+/** Rolls listed under Supplier quality, and in its CSV. */
+const ROLLS_SHOWN = 5;
+const ROLLS_CSV = 100;
 
 // ───────────── repair station ─────────────
 
@@ -72,57 +71,37 @@ export type RepairStation = Awaited<ReturnType<typeof repairStation>>;
 
 export async function operationsReport(range: ReportRange, now: Date = new Date()) {
   const prev = previousRange(range, now);
-  const baseline = parseRange({ preset: "30d" }, now);
   const [
     production,
     prevProduction,
+    rolls,
+    prevRolls,
+    rollsNow,
+    recent,
     quality,
     prevQuality,
-    lead,
-    prevLead,
-    open,
-    baselineStages,
     repairs,
     stockRows,
     procurement,
     supplierRows,
+    supplierDefectRows,
+    rejectedRolls,
   ] = await Promise.all([
     productionReport(range, now),
     productionReport(prev, now),
+    rollFlow(range),
+    rollFlow(prev),
+    countRollsByStatus(),
+    recentProductionDays(ATTENTION_DAYS, now),
     qualityReport(range),
     qualityReport(prev),
-    leadTimes(range),
-    leadTimes(prev),
-    openBatches(now),
-    stageDurations(baseline),
     repairStation(range, now),
     stockPosition(range),
     procurementFlow(range, now, urgencyCutoffs(manilaToday(now)).highThrough, manilaToday(now)),
     supplierQuality(range),
+    supplierDefects(range),
+    rollsWithMostRejects(range, ROLLS_SHOWN),
   ]);
-
-  // Flow: where the batches are, and which have waited longer than that stage usually takes.
-  const stuck = findStuckBatches(open, baselineStages);
-  const stuckIds = new Set(stuck.map((b) => b.id));
-  const shares = stageShares(production.stages);
-  const lanes = STAGE_ORDER.map((stage: Stage) => {
-    const s = production.stages.find((x) => x.stage === stage)!;
-    return {
-      ...s,
-      shareOfLeadTime: shares.get(stage) ?? null,
-      batches: open
-        .filter((b) => b.stage === stage)
-        .sort((a, b) => b.inStageMs - a.inStageMs)
-        .map((b) => ({
-          id: b.id,
-          code: b.code,
-          shoeType: b.shoeType,
-          inStageMs: b.inStageMs,
-          openRepairs: b.openRepairs,
-          stuck: stuckIds.has(b.id),
-        })),
-    };
-  });
 
   // Stock: level, and how long it lasts at the pace used in this period.
   const stockItems = stockRows.map((r) => ({
@@ -169,47 +148,55 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     byCategory,
   };
 
-  // Supply: how each supplier's leather performed on the camera.
-  const suppliers = supplierRows.map((r) => {
-    const decided = r.pass + r.rework + r.reject;
-    return {
-      id: r.id,
-      supplier: r.name,
-      batches: r.batches,
-      sections: r.scanned,
-      decided,
-      pass: r.pass,
-      rework: r.rework,
-      reject: r.reject,
-      cleanShare: share(r.pass, decided),
-      problemShare: share(r.rework + r.reject, decided),
-    };
-  });
+  // Supply: how each supplier's leather performed on the camera, worst first (Phase 20).
   const lineDecided = quality.totals.pass + quality.totals.rework + quality.totals.reject;
   const lineProblemShare = share(quality.totals.rework + quality.totals.reject, lineDecided);
+  const suppliers = supplierRows
+    .map((r) => {
+      const decided = r.pass + r.rework + r.reject;
+      const problemShare = share(r.rework + r.reject, decided);
+      // Rows come most common first, so the first one for this supplier is its top defect.
+      const top = supplierDefectRows.find((d) => d.groupId === r.id);
+      return {
+        id: r.id,
+        supplier: r.name,
+        batches: r.batches,
+        rolls: r.rolls,
+        sections: r.scanned,
+        decided,
+        pass: r.pass,
+        rework: r.rework,
+        reject: r.reject,
+        cleanShare: share(r.pass, decided),
+        reworkShare: share(r.rework, decided),
+        rejectShare: share(r.reject, decided),
+        problemShare,
+        topDefect: top?.label ?? null,
+        high: supplierIsHigh({ sections: r.scanned, problemShare }, lineProblemShare),
+      };
+    })
+    .sort((a, b) => (b.problemShare ?? -1) - (a.problemShare ?? -1) || b.sections - a.sections);
 
   const qt = quality.totals;
   const pt = prevQuality.totals;
   const fpy = (t: typeof qt) => share(t.pass, t.pass + t.rework + t.reject);
 
   const kpis = {
-    completed: compare(production.totals.completed, prevProduction.totals.completed),
-    started: compare(production.totals.started, prevProduction.totals.started),
-    leadTimeMedianMs: compare(lead.medianMs, prevLead.medianMs),
+    pairs: compare(production.totals.pairs, prevProduction.totals.pairs),
+    ofQuota: compare(production.totals.share, prevProduction.totals.share),
+    rollsFinished: compare(rolls.totals.completed, prevRolls.totals.completed),
+    rollsAtPreparation: rollsNow.atPreparation,
     firstPassYield: compare(fpy(qt), fpy(pt)),
     rejectRate: compare(
       share(qt.reject, lineDecided),
       share(pt.reject, pt.pass + pt.rework + pt.reject),
     ),
     sectionsScanned: compare(qt.scanned, pt.scanned),
-    wip: open.length,
     repairsOpen: repairs.total,
   };
 
   const attention = buildAttention({
-    stages: production.stages,
-    bottleneck: production.bottleneck,
-    stuck,
+    belowQuota: belowQuotaAttention(recent.days),
     repairs: {
       waitingOverDay: repairs.waitingOverDay,
       open: repairs.total,
@@ -235,8 +222,8 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     flaggedScans: qt.pending,
   });
 
-  // One row per day: the flow (started, finished), the camera's checkpoint and repairs done.
-  const productionByDay = new Map(production.days.map((d) => [d.day, d]));
+  // One row per day: rolls started and finished, the camera's checkpoint and repairs done.
+  const productionByDay = new Map(rolls.days.map((d) => [d.day, d]));
   const days = quality.days.map((d) => ({
     day: d.day,
     started: productionByDay.get(d.day)?.started ?? 0,
@@ -254,17 +241,14 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     asOf: now.toISOString(),
     kpis,
     attention,
-    flow: {
-      lanes,
-      bottleneck: production.bottleneck,
-      stuck: stuck.length,
-      leadTime: { medianMs: lead.medianMs, avgMs: lead.avgMs, batches: lead.batches },
-    },
+    /** Pairs per day per shoe type against the quota (Phase 23; replaces the stage sections). */
+    production,
     days,
     repairs,
     stock,
     procurement,
     suppliers,
+    rejectedRolls,
     lineProblemShare,
     /** The checkpoint before cutting, kept as a short summary; the full view is Quality. */
     checkpoint: {
@@ -280,18 +264,18 @@ export type OperationsReport = Awaited<ReturnType<typeof operationsReport>>;
 
 const pct = (v: number | null) => (v === null ? "" : (Math.round(v * 1000) / 10).toFixed(1));
 
-/** One row per Manila day: flow, checkpoint and repairs. */
+/** One row per Manila day: rolls, checkpoint and repairs. */
 export async function operationsCsv(range: ReportRange) {
   const r = await operationsReport(range);
   return toCsv(r.days, [
     { header: "Date (Manila)", value: (d) => d.day },
-    { header: "Batches started", value: (d) => d.started },
-    { header: "Batches completed", value: (d) => d.completed },
+    { header: "Rolls started", value: (d) => d.started },
+    { header: "Rolls finished", value: (d) => d.completed },
     { header: "Sections scanned", value: (d) => d.scanned },
     { header: "Pass", value: (d) => d.pass },
-    { header: "Rework", value: (d) => d.rework },
+    { header: "Fixable", value: (d) => d.rework },
     { header: "Reject", value: (d) => d.reject },
-    { header: "Repairs done", value: (d) => d.repairsDone },
+    { header: "Cleaned or cut around", value: (d) => d.repairsDone },
   ]);
 }
 
@@ -299,13 +283,34 @@ export async function suppliersCsv(range: ReportRange) {
   const r = await operationsReport(range);
   return toCsv(r.suppliers, [
     { header: "Supplier", value: (s) => s.supplier },
+    { header: "Rolls", value: (s) => s.rolls },
     { header: "Batches", value: (s) => s.batches },
     { header: "Sections scanned", value: (s) => s.sections },
     { header: "Pass", value: (s) => s.pass },
-    { header: "Rework", value: (s) => s.rework },
+    { header: "Fixable", value: (s) => s.rework },
     { header: "Reject", value: (s) => s.reject },
     { header: "Pass %", value: (s) => pct(s.cleanShare) },
-    { header: "Rework + reject %", value: (s) => pct(s.problemShare) },
+    { header: "Fixable %", value: (s) => pct(s.reworkShare) },
+    { header: "Reject %", value: (s) => pct(s.rejectShare) },
+    { header: "Fixable + reject %", value: (s) => pct(s.problemShare) },
+    { header: "Top defect", value: (s) => s.topDefect ?? "" },
+    { header: "High", value: (s) => (s.high ? "yes" : "") },
+  ]);
+}
+
+/** The rolls with the most rejects, as shown on the report (D-008: per roll, never per person). */
+export async function supplierRollsCsv(range: ReportRange) {
+  const rolls = await rollsWithMostRejects(range, ROLLS_CSV);
+  return toCsv(rolls, [
+    { header: "Roll", value: (r) => r.rollCode },
+    { header: "Batch", value: (r) => r.batchCode },
+    { header: "Supplier", value: (r) => r.supplier },
+    { header: "Sections", value: (r) => r.sections },
+    { header: "Rejected", value: (r) => r.rejected },
+    {
+      header: "Defects",
+      value: (r) => r.defects.map((d) => `${d.label} ${d.sections}`).join(" · "),
+    },
   ]);
 }
 
@@ -324,4 +329,49 @@ export async function stockCsv(range: ReportRange) {
     { header: "Status", value: (i) => i.level },
     { header: "Open request", value: (i) => (i.requested ? "yes" : "") },
   ]);
+}
+
+// ───────────── claim sheet ─────────────
+
+export type ClaimSheet = NonNullable<Awaited<ReturnType<typeof claimSheet>>>;
+
+/**
+ * Everything a supplier claim for one roll needs: the roll, its supplier, the counts and each
+ * rejected section with its photo and defects (Phase 20). Per roll, never per person: no one who
+ * captured or decided a section is named (D-008). Null when the batch doesn't exist.
+ */
+export async function claimSheet(batchId: string) {
+  const [batch, verdicts] = await Promise.all([
+    findClaimBatch(batchId),
+    countBatchVerdicts(batchId),
+  ]);
+  if (!batch) return null;
+  const count = (v: string | null) => verdicts.find((g) => g.finalVerdict === v)?._count._all ?? 0;
+  const sections = verdicts.reduce((sum, g) => sum + g._count._all, 0);
+  return {
+    batchId: batch.id,
+    batchCode: batch.code,
+    rollCode: batch.rollCode,
+    receivedAt: batch.receivedAt.toISOString().slice(0, 10),
+    shoeType: batch.shoeType.name,
+    supplier: batch.supplier,
+    totals: {
+      sections,
+      pass: count("PASS"),
+      rework: count("REWORK"),
+      reject: count("REJECT"),
+      pending: count(null),
+    },
+    rejected: batch.scans.map((scan) => ({
+      scanId: scan.id,
+      sequence: scan.sequence,
+      capturedAt: scan.capturedAt.toISOString(),
+      hasImage: !!scan.imagePath,
+      decidedByPerson: scan.isOverride,
+      defects: scan.detections.map((d) => ({
+        label: d.defectType?.label ?? d.rawClassKey,
+        confidence: d.confidence,
+      })),
+    })),
+  };
 }

@@ -131,42 +131,50 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
   const body = (await csv.body()).toString("utf8");
   expect(body.charCodeAt(0)).toBe(0xfeff);
   const lines = body.slice(1).trim().split("\r\n");
-  expect(lines[0]).toMatch(/^Date \(Manila\),Scanned,Pass,Rework,Reject/);
+  expect(lines[0]).toMatch(/^Date \(Manila\),Scanned,Pass,Fixable,Reject/);
   expect(lines[1]).toMatch(
     new RegExp(`^${day},${after.totals.scanned},${after.totals.pass},${after.totals.rework},`),
   );
 });
 
-test("the Floor Manager sees time in each stage with the bottleneck", async ({ browser, page }) => {
-  const api = await managerApi(browser);
-  const batch = await createBatch(api);
-  for (const stage of ["PREPARATION", "UPPER_MAKING", "SOLEING"]) {
-    const res = await api.post(`/api/v1/batches/${batch.id}/stages`, {
-      data: { action: "advance", expectedStage: stage },
-    });
-    expect(res.status()).toBe(200);
-  }
+test("the Floor Manager sees production against the quota in place of stage times (Phase 23)", async ({
+  page,
+}) => {
   await signInAs(page, ACCOUNTS.manager);
-  await page.goto("/reports?preset=today");
-  // The Floor Manager lands on Operations: the line now, with one bottleneck, and what's wrong.
+  await page.goto("/reports?preset=7d");
+  // The Floor Manager lands on Operations: production against the quota, and what's wrong.
   await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await expect(page.getByTestId("production-section")).toContainText("Time in each stage");
-  await expect(page.getByTestId("flow-lanes").getByText("Bottleneck", { exact: true })).toHaveCount(
-    1,
-  );
+  await expect(page.getByTestId("production-section")).toContainText("Production");
+  await expect(
+    page
+      .getByTestId("ops-production-table")
+      .or(page.getByText("No working days with check-ins yet.")),
+  ).toBeVisible();
+  await expect(page.getByText("Time in each stage")).toHaveCount(0);
+  await expect(page.getByText("On the floor now")).toHaveCount(0);
+  await expect(page.getByTestId("flow-lanes")).toHaveCount(0);
   await expect(page.getByTestId("attention")).toContainText("What needs attention");
   await expect(page.getByTestId("repair-station")).toBeVisible();
   await expect(page.getByTestId("stock-risk")).toBeVisible();
-  await expect(page.getByTestId("suppliers")).toBeVisible();
-  await expect(page.getByTestId("kpi-wip")).toBeVisible();
-  for (const path of ["operations", "repairs"])
+  await expect(page.getByTestId("supplier-quality")).toBeVisible();
+  for (const kpi of ["kpi-pairs", "kpi-quota", "kpi-rolls", "kpi-preparation"])
+    await expect(page.getByTestId(kpi)).toBeVisible();
+  await expect(page.getByTestId("kpi-wip")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Stages CSV" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Production CSV" })).toBeVisible();
+  for (const path of ["operations", "repairs", "production"])
     expect((await page.request.get(`/api/v1/reports/${path}?preset=today`)).status()).toBe(200);
-  for (const csv of ["operations", "stock", "suppliers"])
+  for (const csv of ["operations", "stock", "suppliers", "supplier-rolls", "production"])
     expect((await page.request.get(`/api/v1/reports/${csv}.csv?preset=today`)).status()).toBe(200);
-  expect((await page.request.get("/api/v1/reports/stages.csv?preset=today")).status()).toBe(200);
+  // stages.csv is gone with stage monitoring.
+  expect((await page.request.get("/api/v1/reports/stages.csv?preset=today")).status()).toBe(404);
+  const csv = await (await page.request.get("/api/v1/reports/production.csv?preset=7d")).text();
+  expect(csv).toContain("Date (Manila),Shoe type,Pairs finished,Daily quota,% of quota");
+  const ops = await (await page.request.get("/api/v1/reports/operations.csv?preset=today")).text();
+  expect(ops).toContain("Rolls started,Rolls finished");
 
   // Range presets live in the URL.
   await page.getByRole("link", { name: "7 days" }).click();
@@ -195,9 +203,9 @@ test("the Quality Inspector gets quality reports only, and both homes show live 
   expect((await page.request.get("/api/v1/reports/operations")).status()).toBe(403);
   expect((await page.request.get("/api/v1/reports/repairs")).status()).toBe(200);
   await expect(page.getByTestId("production-section")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Stages CSV" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Production CSV" })).toHaveCount(0);
   expect((await page.request.get("/api/v1/reports/production")).status()).toBe(403);
-  expect((await page.request.get("/api/v1/reports/stages.csv")).status()).toBe(403);
+  expect((await page.request.get("/api/v1/reports/production.csv")).status()).toBe(403);
   expect((await page.request.get("/api/v1/reports/quality")).status()).toBe(200);
 
   const fm = await browser.newPage();

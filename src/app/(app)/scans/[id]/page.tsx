@@ -32,9 +32,9 @@ const SOURCE: Record<string, string> = {
   DEDICATED_CAMERA: "Dedicated camera",
 };
 const STATUS_LABEL: Record<string, string> = {
-  OPEN: "Waiting at repair station",
-  IN_PROGRESS: "Being repaired",
-  DONE: "Repaired",
+  OPEN: "Waiting to be cleaned or cut around",
+  IN_PROGRESS: "Being handled",
+  DONE: "Done, usable",
   CANCELLED: "Cancelled (decision changed)",
   AVAILABLE: "Kept as salvage",
   ASSIGNED: "Reused in another batch",
@@ -62,7 +62,7 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
   const outcomes = [
     ...scan.reworkTickets.map((t) => ({
       id: t.id,
-      kind: "Repair ticket",
+      kind: "Repair Station",
       status: t.status,
       at: t.openedAt,
       href: `/rework?batch=${scan.batch.code}`,
@@ -151,7 +151,7 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                         <span>Reject when found: {groups.reject.join(", ")}</span>
                       )}
                       {groups.rework.length > 0 && (
-                        <span>Rework when found: {groups.rework.join(", ")}</span>
+                        <span>Fixable when found: {groups.rework.join(", ")}</span>
                       )}
                       <span className="text-muted-foreground">
                         Found at {formatPercent(thresholds.foundAtOrAbove ?? 0.5)} or more
@@ -160,7 +160,7 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                   )}
                   <span className={hasActions ? "text-muted-foreground" : undefined}>
                     {hasActions ? "Other types: " : ""}Reject ≥{" "}
-                    {formatPercent(thresholds.rejectAtOrAbove)}, Rework ≥{" "}
+                    {formatPercent(thresholds.rejectAtOrAbove)}, Fixable ≥{" "}
                     {formatPercent(thresholds.reworkAtOrAbove)}
                   </span>
                 </dd>

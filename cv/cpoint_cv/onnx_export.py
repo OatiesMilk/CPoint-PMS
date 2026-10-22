@@ -2,8 +2,8 @@
 
 The app runs the ONNX file with ONNX Runtime inside its container. ONNX Runtime for Node can't read
 the model's own metadata, so a sidecar JSON beside the file carries what the app needs: the class
-names, the input size, the ``modelVersion`` of the ``.pt`` weights (so station and website scans
-read as one model), the ONNX file's SHA-256, and the mapper settings (floor, overlap, renames).
+names, the input size, the ``modelVersion`` of the ``.pt`` weights (so the toolkit and the website
+read it as one model), the ONNX file's SHA-256, and the mapper settings (floor, overlap, renames).
 Both files stay in ``cv/models/``, out of git and the image (D-049).
 """
 
@@ -61,7 +61,8 @@ def sidecar(
 
 def ultralytics_exporter(model: ModelConfig) -> Exported:
     """Exports FP32, simplified, on the CPU, with a dynamic input size: the app pads a photo only
-    to the next multiple of the stride, as the station's ``.pt`` model does, not to a square."""
+    to the next multiple of the stride, as ``predict`` does with the ``.pt`` model, not to a
+    square."""
     try:
         import onnx  # noqa: F401  # Ultralytics needs it; check before it tries to pip install
         from ultralytics import YOLO

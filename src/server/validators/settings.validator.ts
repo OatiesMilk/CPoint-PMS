@@ -58,9 +58,16 @@ export const defectTypeCreateSchema = z.object({
     blankToUndefined,
     z
       .enum(["REWORK", "REJECT"], {
-        error: "Choose what a found defect means: By confidence, Rework or Reject.",
+        error: "Choose what a found defect means: By confidence, Fixable or Reject.",
       })
       .optional(),
+  ),
+  /** How a Fixable section of this type is made usable (D-070); blank = cut around. */
+  handling: z.preprocess(
+    (v) => blankToUndefined(v) ?? "CUT_AROUND",
+    z.enum(["CLEAN", "CUT_AROUND"], {
+      error: "Choose how a Fixable section is handled: Cut around the marked area, or Clean.",
+    }),
   ),
   sortOrder,
 });
@@ -103,27 +110,13 @@ export const supplierSchema = z.object({
   notes: optionalText(300, "notes"),
 });
 
-export const componentTypeSchema = z.object({
-  name: z
-    .string({ error: "Enter the component's name, e.g. Vamp." })
-    .trim()
-    .min(2, "Enter the component's name (at least 2 characters), e.g. Vamp.")
-    .max(60, "Keep the component's name under 60 characters."),
-  shoeTypeId: z.preprocess(
-    blankToUndefined,
-    z.uuid("Choose a shoe type from the list.").optional(),
-  ),
-  sortOrder,
-});
-
-export const REFERENCE_KINDS = ["defectType", "shoeType", "supplier", "componentType"] as const;
+export const REFERENCE_KINDS = ["defectType", "shoeType", "supplier"] as const;
 export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
 
 export const referenceSchemas = {
   defectType: { create: defectTypeCreateSchema, update: defectTypeUpdateSchema },
   shoeType: { create: shoeTypeSchema, update: shoeTypeSchema },
   supplier: { create: supplierSchema, update: supplierSchema },
-  componentType: { create: componentTypeSchema, update: componentTypeSchema },
 } as const;
 
 export const referenceActiveSchema = z.object({ isActive: z.boolean({ error: OUT_OF_DATE }) });

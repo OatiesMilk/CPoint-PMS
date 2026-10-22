@@ -28,6 +28,8 @@ test("a new account signs in with its temporary password, must choose its own, a
   browser,
   page,
 }) => {
+  // Long under a full parallel run (several sign-ins and password hashes): 30 s was too tight.
+  test.setTimeout(60_000);
   const email = `e2e-qi-${suffix()}@cpoint.local`;
   const name = `E2E Inspector ${suffix()}`;
   const admin = await adminPage(browser);
@@ -134,12 +136,12 @@ test.describe("camera settings", () => {
     await signInAs(page, ACCOUNTS.admin);
     await page.goto("/admin/settings");
     await page.getByLabel("Reject at or above").fill("80");
-    await page.getByLabel("Rework at or above").fill("80");
+    await page.getByLabel("Fixable at or above").fill("80");
     await page.getByRole("button", { name: "Save thresholds" }).click();
-    await expect(page.getByText("Rework must start below Reject (80%).")).toBeVisible();
+    await expect(page.getByText("Fixable must start below Reject (80%).")).toBeVisible();
 
     await page.getByLabel("Reject at or above").fill("85");
-    await page.getByLabel("Rework at or above").fill("50");
+    await page.getByLabel("Fixable at or above").fill("50");
     await expect(page.getByText("85% and above")).toBeVisible();
     await page.getByRole("button", { name: "Save thresholds" }).click();
     await expect(page.getByText("Thresholds saved")).toBeVisible();

@@ -1,7 +1,7 @@
 # Model card: yolo-v1
 
 The first YOLO model for the Preparation checkpoint. Read from the file itself on 2026-10-19
-(`torch.load` of the checkpoint, then `YOLO(...)` through the station). Everything below matches
+(`torch.load` of the checkpoint, then `YOLO(...)` through `cpoint_cv`). Everything below matches
 the table in `docs/prompts/camera-yolo-integration.md`; nothing in the file differed.
 
 ## The file
@@ -15,7 +15,7 @@ the table in `docs/prompts/camera-yolo-integration.md`; nothing in the file diff
 | Base model     | `yolo26s-seg` (YOLO26 small, segmentation), end-to-end head (no NMS)                 |
 | Task           | `segment`: a mask and a box per detection                                            |
 | Classes        | `0 crease`, `1 cut`, `2 hole`, `3 scratch` (the model's own `names`)                 |
-| Input size     | trained at `imgsz=1536`; the station runs at the same size                           |
+| Input size     | trained at `imgsz=1536`; `predict` and the website run at the same size              |
 | Weights        | FP16                                                                                 |
 | Training       | 300 epochs, batch 4, dataset `preparation-images` (hosted, not in repo)              |
 | Licence        | AGPL-3.0 (Ultralytics). Fine for the capstone demo; review before any commercial use |
@@ -30,7 +30,7 @@ the table in `docs/prompts/camera-yolo-integration.md`; nothing in the file diff
 | Input          | `images`, `[1, 3, height, width]`, dynamic; the app uses `imgsz` 1536, stride 32 |
 | Output used    | `output0`, `[1, 300, 38]`: x1, y1, x2, y2, score, class, 32 mask coefficients    |
 | Output ignored | `output1` (mask prototypes): the contract is boxes only                          |
-| `modelVersion` | `yolo-v1-1d729fb0`, the weights' version, as from the station                    |
+| `modelVersion` | `yolo-v1-1d729fb0`, the weights' version, as from `predict`                      |
 | Runtime        | onnxruntime-node 1.30.0, CPU                                                     |
 
 The ONNX file's SHA-256 is in `yolo-v1.json` (`onnxSha256`); it changes with every export even for
@@ -38,7 +38,7 @@ the same weights, so `modelVersion` stays the `.pt` file's.
 
 Time per capture on Dylan's laptop (CPU, model loaded): about **0.65 s for a 1920 × 1080 frame**
 (1536 × 864 input) and **1.2 s for a 1536 × 1536 photo**, both on the host and in the Docker
-image. `npm run cv:parity` matched the station on the five sample photos and two 16:9 crops
+image. `npm run cv:parity` matched `predict` on the five sample photos and two 16:9 crops
 (2026-10-19).
 
 ## Validation (from the checkpoint)
@@ -59,7 +59,7 @@ about **255 ms on the GPU** and **780 ms on the CPU**. Both are fine for one cap
 ## Intended use
 
 Finds surface defects on one leather section at a time at Preparation, before cutting (D-005).
-The station reports what the model saw; the app decides the verdict (D-011), and the Quality
+The model reports what it saw; the app decides the verdict (D-011), and the Quality
 Inspector decides every flagged section (D-028).
 
 ## Known limits

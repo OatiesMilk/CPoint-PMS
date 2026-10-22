@@ -4,6 +4,9 @@ import { navigationFor } from "@/server/policies/navigation";
 import {
   PERMISSIONS,
   can,
+  canCaptureFor,
+  checkInCoverReason,
+  mayEnterCheckIns,
   canRequestLeatherRollsFor,
   mayActOnRequest,
   mayCopyRequest,
@@ -21,9 +24,11 @@ const SC: Role = "SHOE_CONSTRUCTOR";
 const EXPECTED: Record<Permission, Role[]> = {
   "batch:read": [FM, QI, AD],
   "batch:manage": [FM],
+  "batch:finish": [FM, QI],
   "camera:view": [FM, QI, AD],
   "camera:manage": [FM, QI],
   "camera:capture": [FM, QI],
+  "camera:operators": [FM, AD],
   "scan:read": [FM, QI, AD],
   "scan:decide": [FM, QI],
   "scan:review": [QI],
@@ -44,6 +49,11 @@ const EXPECTED: Record<Permission, Role[]> = {
   "procurement:decide": [FM],
   "procurement:remark": [FM, SC],
   "procurement:designate": [FM, AD],
+  "attendance:read": [FM, AD],
+  "attendance:manage": [FM],
+  "production:read": [FM, QI, AD],
+  "production:checkin": [QI, FM],
+  "production:plan": [FM],
 };
 
 describe("permissions matrix", () => {
@@ -65,12 +75,39 @@ describe("permissions matrix", () => {
   });
 });
 
+describe("production access (Phase 23, Dylan 3B)", () => {
+  it("lets the QI enter check-ins, the FM only with no QI present (D-088), and only the FM plan", () => {
+    expect(mayEnterCheckIns(QI, true)).toBe(true);
+    expect(mayEnterCheckIns(QI, null)).toBe(true);
+    expect(mayEnterCheckIns(FM, false)).toBe(true);
+    expect(mayEnterCheckIns(FM, true)).toBe(false);
+    expect(mayEnterCheckIns(FM, null)).toBe(false); // attendance not taken
+    expect(mayEnterCheckIns(AD, false)).toBe(false);
+    expect(checkInCoverReason(FM, false)).toBeNull();
+    expect(checkInCoverReason(FM, true)).toBe(
+      "A Quality Inspector is present today, so they enter the check-ins.",
+    );
+    expect(can(FM, "production:plan")).toBe(true);
+    expect(can(QI, "production:plan")).toBe(false);
+    expect(can(SC, "production:read")).toBe(false);
+  });
+
+  it("lets the QI finish a roll but not start, edit or cancel one (D-082)", () => {
+    expect(can(QI, "batch:finish")).toBe(true);
+    expect(can(QI, "batch:manage")).toBe(false);
+    expect(can(AD, "batch:finish")).toBe(false);
+  });
+});
+
 describe("navigationFor", () => {
-  const labels = (role: Role) => navigationFor(role).flatMap((s) => s.items.map((i) => i.label));
+  const labels = (role: Role) =>
+    navigationFor({ role }).flatMap((s) => s.items.map((i) => i.label));
 
   it("builds each role's sidebar from its permissions", () => {
     expect(labels(FM)).toEqual([
       "Overview",
+      "Production",
+      "Attendance",
       "Batches",
       "Inventory",
       "Procurement",
@@ -78,23 +115,26 @@ describe("navigationFor", () => {
       "Capture",
       "Scans",
       "Review queue",
-      "Rework",
+      "Repair Station",
       "Salvage",
       "Reports",
     ]);
     expect(labels(QI)).toEqual([
       "Overview",
+      "Production",
       "Batches",
       "Camera",
       "Capture",
       "Scans",
       "Review queue",
-      "Rework",
+      "Repair Station",
       "Salvage",
       "Reports",
     ]);
     expect(labels(AD)).toEqual([
       "Overview",
+      "Production",
+      "Attendance",
       "Batches",
       "Inventory",
       "Procurement",
@@ -109,8 +149,19 @@ describe("navigationFor", () => {
     expect(labels(SC)).toEqual(["Home", "Material requests"]);
   });
 
+  it("adds Capture for a constructor allowed to capture, and only Capture (D-075)", () => {
+    const items = navigationFor({ role: SC, canCapture: true }).flatMap((s) =>
+      s.items.map((i) => i.label),
+    );
+    expect(items).toEqual(["Home", "Material requests", "Capture"]);
+    // The switch means nothing for other roles: an admin never gets Capture.
+    expect(
+      navigationFor({ role: AD, canCapture: true }).flatMap((s) => s.items.map((i) => i.label)),
+    ).not.toContain("Capture");
+  });
+
   it("links each role's first item to its own home", () => {
-    expect(navigationFor(QI)[0].items[0].href).toBe("/quality-inspector");
+    expect(navigationFor({ role: QI })[0].items[0].href).toBe("/quality-inspector");
   });
 });
 
@@ -198,5 +249,21 @@ describe("procurement access (D-031)", () => {
     expect(mayRemarkOnRequest({ id: "q", role: QI, canRequestLeatherRolls: false }, own)).toBe(
       false,
     );
+  });
+});
+
+describe("who may capture at the camera (D-075)", () => {
+  it("lets the QI and the Floor Manager capture whatever the switch says", () => {
+    expect(canCaptureFor({ role: QI, canCapture: false })).toBe(true);
+    expect(canCaptureFor({ role: FM, canCapture: false })).toBe(true);
+  });
+
+  it("lets a Shoe Constructor capture only when allowed", () => {
+    expect(canCaptureFor({ role: SC, canCapture: false })).toBe(false);
+    expect(canCaptureFor({ role: SC, canCapture: true })).toBe(true);
+  });
+
+  it("never lets the System Admin capture, even with the switch on", () => {
+    expect(canCaptureFor({ role: AD, canCapture: true })).toBe(false);
   });
 });

@@ -18,13 +18,13 @@ export function OpenReworksCard({
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle>Open reworks</CardTitle>
+            <CardTitle>Repair Station</CardTitle>
             <CardDescription>
               {waiting + inProgress === 0
-                ? "Nothing at the repair station."
+                ? "Nothing to clean or cut around."
                 : oldestWaitMs !== null
                   ? `Oldest has waited ${formatDuration(oldestWaitMs)}.`
-                  : "All open repairs are being worked on."}
+                  : "Every Fixable section is being handled."}
             </CardDescription>
           </div>
           <Link
@@ -43,7 +43,7 @@ export function OpenReworksCard({
             <dd className="text-2xl font-semibold text-rework tabular-nums">{waiting}</dd>
           </div>
           <div>
-            <dt className="text-sm text-muted-foreground">Being repaired</dt>
+            <dt className="text-sm text-muted-foreground">Being handled</dt>
             <dd className="text-2xl font-semibold tabular-nums">{inProgress}</dd>
           </div>
         </dl>

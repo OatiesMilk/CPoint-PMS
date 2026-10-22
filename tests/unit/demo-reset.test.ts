@@ -10,6 +10,7 @@ const env = { NODE_ENV: "development", BOOTSTRAP_ADMIN_EMAIL: "Owner@CPoint.loca
 const recordAudit = vi.fn();
 const seedDemoWeek = vi.fn(async () => ({ seeded: true, batches: 14, scans: 290, requests: 9 }));
 const ensureDemoInventory = vi.fn();
+const ensureDemoConstructors = vi.fn();
 const clearUploadFolders = vi.fn();
 const runInTransaction = vi.fn(
   async (fn: (tx: unknown) => unknown, _options?: { timeoutMs?: number }) => fn("tx"),
@@ -24,6 +25,8 @@ vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 vi.mock("@/server/services/demo-seed.service", () => ({ seedDemoWeek }));
 vi.mock("@/server/services/bootstrap.service", () => ({
   DEMO_USERS: [{ email: "manager@cpoint.local" }, { email: "admin@cpoint.local" }],
+  DEMO_CONSTRUCTORS: [{ email: "ana.cruz@cpoint.local" }],
+  ensureDemoConstructors,
   REFERENCE_DATA: {
     shoeTypes: [{ code: "SCH" }, { code: "TOP" }],
     suppliers: [{ name: "Sample Leather Supplier" }],
@@ -47,6 +50,7 @@ describe("resetKeep (D-056)", () => {
     expect(keep.emails).toEqual([
       "manager@cpoint.local",
       "admin@cpoint.local",
+      "ana.cruz@cpoint.local",
       "owner@cpoint.local",
     ]);
     expect(keep.tokenHashes).toEqual([hashDeviceToken("cpt_station_token")]);
@@ -80,6 +84,11 @@ describe("resetDemoData", () => {
       }),
     );
     expect(clearUploadFolders).toHaveBeenCalledWith(["scans", "pod"]);
+    // The demo constructors come back before the week, so its attendance has a roster (D-081).
+    expect(ensureDemoConstructors).toHaveBeenCalled();
+    expect(ensureDemoConstructors.mock.invocationCallOrder[0]).toBeLessThan(
+      seedDemoWeek.mock.invocationCallOrder[0],
+    );
     expect(seedDemoWeek).toHaveBeenCalled();
     expect(result.demoWeek).toMatchObject({ seeded: true });
   });

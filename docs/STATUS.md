@@ -3,12 +3,18 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-20
-**Branch:** `main` @ `c29c871` (Phase 18 merged as PR #13). Phase 19 is on the `main` checkout,
-uncommitted (Dylan decides when to branch and commit; the team opens and merges the PR, D-032).
-**Current phase:** Phase 19, project cleanup and optimization (done; waiting for Codex's run).
-Brief: `docs/prompts/project-cleanup.md`; plan: `docs/prompts/plans/phase-19-plan.md`.
-**Overall:** 20 / 20 phases built
+**Last updated:** 2026-10-22
+**Branch:** `main` @ `cc612ee` (Phase 19 merged as PR #14). Phases 20 to 23 are on the `main`
+checkout in `C:\dev\CPoint-PMS`, uncommitted (Dylan decides when to branch and commit; the team
+opens and merges the PR, D-032).
+**Current phase:** Phase 23, Production progression in place of stage monitoring. **QA passed**
+(Codex run 2, 2026-10-22: R1 to R5; e2e 99 passed, 0 failed, 1 skipped). Run 1 failed on one
+fault (wide tables were scroll boxes a keyboard couldn't reach), fixed with `ScrollRegion`. Plan:
+`docs/prompts/plans/phase-23-plan.md` (1A Finish roll, 2B every 4 hours, 3B the QI only enters
+check-ins, 4A 10 days, 5A a first quota from today). Follow-up 2026-10-22 (D-088): the Floor
+Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Attendance) passed QA. Phase 24
+(materials used) follows from `docs/prompts/production-progression.md`.
+**Overall:** 24 / 25 phases built
 
 ## Phase progress
 
@@ -29,13 +35,21 @@ Brief: `docs/prompts/project-cleanup.md`; plan: `docs/prompts/plans/phase-19-pla
 - [x] 14. Camera YOLO model: intake and the inference core
 - [x] 15. Camera station: capture, send, recover
 - [x] 16. Camera page, a small model check, clean data and the demo
-- [x] 17. The camera station window (Codex run pending)
-- [x] 18. Capture from the website (Codex run pending)
-- [x] 19. Project cleanup and optimization (Codex run pending)
+- [x] 17. The camera station window (retired by Phase 20, D-069)
+- [x] 18. Capture from the website (checked in Phase 20 run 1; device checks need Dylan)
+- [x] 19. Project cleanup and optimization (checked in Phase 20 run 1)
+- [x] 20. Website-only camera, "Cut around or clean", supplier quality, no components (QA passed;
+      device checks need Dylan)
+- [x] 21. Repair Station, Floor view, constructor capture, no mkcert (QA passed; station checks
+      need Dylan)
+- [x] 22. Attendance (QA passed)
+- [x] 23. Production progression in place of stage monitoring (QA passed)
+- [ ] 24. Materials used, worked out from the check-ins
 
 ## What works right now
 
-- **Database:** 13 migrations (the latest is `defect_actions`: a "When found" action per defect type and two CV settings, D-053, D-055). UUIDv7 ids (D-018).
+- **Database:** 18 migrations (the latest is `production_progression`, D-082 to D-087, applied to
+  the dev database on 2026-10-21; before it `attendance`, D-077; before it `user_can_capture`, D-075; before it `defect_handling`, D-070, and `drop_component_types`, D-071). UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017):
   - reference data and the first System Admin;
   - demo users and inventory when `SEED_DEMO_USERS=true`. The demo constructor is a designated
@@ -50,10 +64,11 @@ Brief: `docs/prompts/project-cleanup.md`; plan: `docs/prompts/plans/phase-19-pla
   - 12-hour sessions, lockout, a role × permission matrix, and server-side sign-out;
   - the leather-roll flag is read fresh on every request.
 - **Modules:**
-  - batches (D-019) and the camera with the decision engine (D-011, D-020);
+  - batches as leather rolls (D-082: Start roll, Finish roll; the old stage moves are gone) and
+    the camera with the decision engine (D-011, D-020);
   - **flagged scans are decided by the Quality Inspector only** (D-028, team-confirmed). The FM
     sees them read-only;
-  - rework & salvage (D-021, D-022), the inventory ledger (D-023), admin (D-024), reports (D-025).
+  - the Repair Station (the Fixable board, D-021, D-022, D-070, D-073) and salvage, the inventory ledger (D-023), admin (D-024), reports (D-025).
 - **Material requests / Procurement** (D-029, D-031, D-035 to D-045):
   - constructors see "Material requests", the FM and Admin "Procurement" (one label map);
   - every Shoe Constructor sends requests (1–10 items, with the stock snapshot, a required
@@ -88,17 +103,28 @@ Brief: `docs/prompts/project-cleanup.md`; plan: `docs/prompts/plans/phase-19-pla
   - the FM home card (to decide, to order, late), an Inventory "Requested" badge and "My
     requests" on the constructor home;
   - who may request leather rolls is chosen by the FM (Procurement tab) or the Admin (Users).
-- **Camera page (Phase 16, D-054, D-055):** badges for Not connected, **Station connected**
-  (the station checks in every 20 s while it waits for Space, through `batches/current`), Simulator
-  active and Camera station active; a Model card with the last scan's `modelVersion` and an
-  early-model notice (a Settings switch); "Connect the camera station" steps. Each scan's page shows
-  the model and the rules used.
-- **"When found" actions (D-053):** a defect type can be Rework or Reject when found (from "A
+- **Camera page (Phase 16, D-055; Phase 20, D-069):** badges **Capture page active** (or "Scans
+  arriving" for a device token), **Simulator active** and **No recent captures**; a Model card with
+  the last scan's `modelVersion` and an early-model notice (a Settings switch); "Ways to capture"
+  (the Capture page; the simulator). Each scan's page shows the model and the rules used.
+- **Fixable and the Repair Station (Phase 20, D-070; renamed in Phase 21, D-073):** the REWORK verdict reads **Fixable**
+  everywhere a user sees it. Each defect type is **Clean before cutting** or **Cut around the
+  marked area** (`handling`, Settings → Defect types → "When Fixable"; migration
+  `defect_handling`, dirt → Clean). The board (`/rework`) is the **Repair Station** ("Clean the section or cut around the defect."): To handle,
+  Being handled, Done, usable; each card says what the section needs.
+- **Supplier quality (Phase 20, D-072):** Reports → Operations: per supplier the rolls, sections,
+  Fixable %, Reject %, top defect and **High** (same rule as the attention item), worst first;
+  **Rolls with the most rejects** (top 5) each with a **Claim sheet** (`/reports/claims/[batchId]`,
+  Save as PDF through print; FM only; no person named). `suppliers.csv` and `supplier-rolls.csv`.
+  The demo week spreads rolls over three suppliers (Marikina Leather has more defects).
+- **Component tracking: removed** (Phase 20, D-071): no page, Settings tab, API or table
+  (migration `drop_component_types`).
+- **"When found" actions (D-053):** a defect type can be Fixable or Reject when found (from "A
   defect counts as found at", default 50%); other types keep the two thresholds; the worst result
   decides. Migration `defect_actions` (13 migrations).
 - **`npm run demo:reset` (D-056):** dry run by default; `-- --yes` keeps the demo accounts, the
   bootstrap admin and the `CV_DEVICE_TOKEN` token, removes all test data and files, sets cut/hole
-  Reject and crease/scratch Rework when found (abrasion/dirt off) and seeds a fresh demo week. The
+  Reject and crease/scratch Fixable when found (abrasion/dirt off) and seeds a fresh demo week. The
   dry run on the dev database found 135 test accounts, 131 tokens, 248 batches, 541 scans, 167
   requests, 172 items and 3,680 audit rows; Dylan had it run with `--yes` on 2026-10-19 (no
   backup, his call): four demo accounts, a fresh demo week of 14 batches and 293 scans.
@@ -118,57 +144,106 @@ Brief: `docs/prompts/project-cleanup.md`; plan: `docs/prompts/plans/phase-19-pla
     `503 MODEL_UNAVAILABLE` and a message on the page.
   - Docker: `node:24-bookworm-slim` (ONNX Runtime has no Alpine build), 692 → 854 MB, 826 MB since
     Phase 19 (sharp's musl build left out, D-068);
-    `cv/models` mounted read-only at `/app/models`; `docker/https.mjs` serves HTTPS on 3443 when
-    `certs/cert.pem` and `key.pem` (mkcert) are mounted. Still two containers.
+    `cv/models` mounted read-only at `/app/models`. HTTPS comes from a Cloudflare Tunnel run on the
+    host (D-076; mkcert and port 3443 removed in Phase 21). Still two containers.
+  - **Floor view (Phase 21, D-074):** a full-screen mode of Capture for a monitor facing the
+    operator: live preview, "Next scan goes to …", and after each capture a coloured frame and band
+    (Pass green, Fixable orange, Reject red, Needs review blue) with the section and the bin, until
+    the next capture. No sounds. Esc leaves; remembered per browser. Space on the station's
+    keyboard captures (no pedal, Dylan 2026-10-20). Station guide: `docs/STATION_SETUP.md`.
+  - **Constructor capture (Phase 21, D-075):** `User.canCapture`, set by the FM (Camera → Camera
+    operators) or the Admin (Users → More actions); `canCaptureFor` guards Capture, its API,
+    `batches/current` and the nav. They see the verdict and section, not Scans.
   - The Camera page shows "Capture page active" and "Ways to capture"; the QI home has
     **Capture sections**.
-- **Camera station window (Phase 17, D-059 to D-063):** `python -m cpoint_cv window`, or the
-  **CPoint Camera** desktop shortcut (`python -m cpoint_cv shortcut`, to `cv/CPoint Camera.cmd`,
-  which names the missing setup step when `cv/.venv` or a package is missing). Tkinter; the window
-  runs the same `Station` loop on a worker thread.
-  - **Check this machine:** `doctor`'s checks plus the GPU, each pass, warning or fail with its
-    fix; failures block Start, warnings (no GPU → CPU, another package version, no batch, a clock
-    2–5 minutes off) don't;
-  - camera picker: numbers that give a picture, an address (DroidCam `http://<IP>:4747/video`),
-    Default or DirectShow (`[camera] backend`); saved in `cv/station-window.json` (git-ignored),
-    never with a password;
-  - live preview at 960, up to 4 a second, boxes in class colours under a "Preview" banner, no
-    verdict; Capture (or Space) sends the frame on screen at the press through the spool and
-    `captureId` path at 1536; Last scan shows the app's verdict and section; "N waiting to send";
-  - no batch keeps Capture off; a refused token stops with the fix; a dropped camera reconnects
-    for 30 s, then stops; Stop frees the camera;
-  - measured on the RTX 3060 for a frame in memory: about 35 ms at 960 and 55 ms at 1536.
-- **Camera station (Phases 14–16, D-048 to D-058):** the `cpoint_cv` Python package in `cv/` runs
-  `yolo-v1.pt` (`cv/models/`, git-ignored, SHA-256 in `cv/MODEL_CARD.md`), about 255 ms per image
-  on Dylan's RTX 3060 and 780 ms on the CPU at `imgsz` 1536.
-  - `predict <folder>`: detections, `modelVersion` (`yolo-v1-1d729fb0`), time and a preview verdict;
-  - `run webcam | folder <dir> | file <image>`: asks which batch is at Preparation, captures one
-    section per Space press (or every image in a folder), runs the model and posts the scan with
-    that `batchId`, a `captureId` and `capturedAt`; prints the app's verdict. Captures wait in
-    `cv/out/spool/` until the app has them; network errors and 5xx are retried, then sent later
-    in order; refused scans go to `cv/out/failed/`; a refused token stops it (D-050);
-  - `doctor`: model and checksum, versions, the GPU, camera, app, token and clock; `warn` lines
-    don't fail it (D-061);
-  - the app answers a repeated `captureId` with the first scan (200, `duplicate: true`), so
-    retries never double a scan (D-051);
-  - defect types: add `crease` and `scratch`, turn off `abrasion` and `dirt` in Settings, per
-    database (`cv/README.md`, D-052), or run `demo:reset`. The simulator's unknown class is
-    `sim-unknown`; the simulator and demo week now draw the model's classes;
-  - same-class duplicate boxes (IoU ≥ 0.7) are sent once; `[camera] url` opens an IP camera
-    (D-057);
-  - `evaluate <folder>` compares preview verdicts with `labels.csv` (D-058):
-    `cv/reports/2026-10-19-yolo-v1.md`, 5 of 5 on the five sample photos, labelled a small check;
-  - `cv/README.md` has the model swap runbook and the demo script (station PC at the line, server
-    in the office, browsers anywhere on the network).
+- **Model toolkit (`cv/`, Phases 14–16, D-048 to D-058; Phase 20, D-069):** the `cpoint_cv` Python
+  package runs `yolo-v1.pt` (`cv/models/`, git-ignored, SHA-256 in `cv/MODEL_CARD.md`), about
+  255 ms per image on Dylan's RTX 3060 at `imgsz` 1536.
+  - `predict <folder>`: detections, `modelVersion` (`yolo-v1-1d729fb0`), time and a preview
+    verdict; `evaluate <folder>` compares preview verdicts with `labels.csv` (D-058, 5 of 5 on
+    the five sample photos, a small check); `export-onnx` writes the website's model files.
+  - The station app (window, `run`, `doctor`, spool) was retired in Phase 20 (D-069). Device
+    tokens and the token scan API stay for the simulator; a repeated `captureId` still returns the
+    first scan (D-051). `DEDICATED_CAMERA` scans from before still show.
+- **Attendance (Phase 22, D-077 to D-081):** Production → **Attendance** for the Floor Manager
+  (the Admin views it). One day at a time: every active user on that day with a role badge and a
+  Present tick, Find, a role filter and the 15-row pager, **Mark everyone present** and **Save
+  attendance (N changes)**. Today and 7 days back are editable; older days are locked, the future
+  refused. A stale save is `409 STALE`. The FM home has an **Attendance** card. `workforceFor` is
+  the only worker count (constructors present / on the roster); Phase 23 reads it. No per-person
+  history, count or streak anywhere (D-008). 12 demo Shoe Constructors (random passwords) and a
+  week of attendance in the demo week; `demo:reset` keeps them.
+- **Production progression (Phase 23, D-082 to D-087):** replaces stage monitoring.
+  - **Schedule** (Production → Schedule and quota, FM): shift start and end, every 1 to 4 hours,
+    working days; changes apply from tomorrow. Bootstrap default 08:00 to 17:00 every 4 hours,
+    Monday to Saturday: check-ins at **12:00, 16:00 and 17:00**.
+  - **Check-ins** (Production, the **QI**; the **FM only on a day attendance shows no QI present**,
+    D-088): pairs finished since the previous check-in, per active
+    shoe type, with notes; Due, Late after 30 minutes, Missed at midnight; one entry per slot
+    (`409 STALE`); a same-day **Correct** needs a reason and the audit keeps both counts. The
+    constructors present are read from attendance at save (never blocking).
+  - **Daily quota** per shoe type for the whole line (FM), with a **suggestion** from the last 10
+    full working days and **Use suggestion**; a first quota applies today, a change tomorrow.
+  - **Production page:** today's check-ins, today against the quota with the pace, the last 14
+    working days (chart and table) with one sentence for each short day ("Below quota by 18
+    pairs. 3 of 12 Shoe Constructors were absent."). Never a name.
+  - **Homes:** Next check-in (QI); Today's production replaces Batches by stage (FM).
+  - **Operations report:** a Production section, KPI tiles Pairs made, Of quota, Rolls finished,
+    Rolls at Preparation; "3 of the last 5 working days were below quota"; `production.csv`
+    replaces `stages.csv`.
+  - **Rolls:** Start roll (FM), **Finish roll** (FM or QI) with the hint "All 10 pieces scanned.
+    Finish this roll?" on the batch and Capture pages; old batches past Preparation read "Started
+    before rolls were tracked" and can be finished. The target quota left the batch form.
+  - Demo week: quotas and the QI's check-ins (one late, one missed); its three short days line up
+    with the absences. `demo:reset` clears check-ins, quotas and saved schedules.
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
 - **Pagination** (D-047): every list that can grow pages at 15 rows with one pager; Settings
   and the leather-roll requesters have a Find box.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 590 unit tests pass (Vitest), plus 231 station tests (pytest; they also pass without OpenCV,
-    torch or Pillow, as in CI). Phase 17's window is tested by hand (Codex, pending). Phase 18's
-    `tests/e2e/capture.spec.ts` (6 tests, Chromium's fake camera) is written, not run (Codex).
+  - 714 unit tests pass (Vitest; 646 before Phase 23), plus 81 model-toolkit tests (pytest; they also pass without
+    OpenCV or torch, as in CI).
+  - Phase 20 (Codex, 2026-10-20, run 1, which also covered Phases 18 and 19): 56 of 69 passed, 4
+    failed, 9 blocked; e2e 75 passed, 10 failed, 1 skipped (86). The app faults were old wording
+    (a "Rework" button in Review, "the camera decided rework" in Override, "need rework" and "in
+    repair" on Operations), no inline "Fixable must start below Reject" message in Settings →
+    Thresholds, and "Sections scanned" in the Rolls CSV header. All ten e2e failures were stale
+    tests. All fixed (lint, typecheck, 591 unit tests and build pass); e2e not re-run yet. Three
+    blocked checks (P20 Q3, P18 S7, P19 S5) move to a throwaway `cpoint-qa` Docker stack in run 2;
+    six still need Dylan's devices (P18 S3, S12 to S15, S18).
+  - Phase 20 run 2 (Codex, 2026-10-20): 14 of 14 browser scenarios passed (R1 to R10, A1, and U1
+    to U3 in a throwaway `cpoint-qa` stack, which unblocked P20 Q3, P18 S7 and P19 S5). E2E 81
+    passed, 4 failed, 1 skipped. All four were test problems: two long tests hit the 30 s limit
+    under the parallel run (the reset test and close-short; now 60 s), the Defect types row was on
+    page 2 (now found with the Find box), and the smoke item code was too long with no reorder
+    level. Fixed; lint, typecheck, 591 unit tests and build pass.
+  - Phase 20 run 3 (Codex, 2026-10-20): two full e2e runs, each 84 passed, 1 failed, 1 skipped.
+    The reset and close-short tests passed both times (the 60 s limit was right). The one failure
+    was the Defect types test looking up rows by class key, but a row is named by its label; it now
+    matches the key in the row's text.
+  - Phase 20 run 4 (Codex, 2026-10-20): **PASS**. The fixed test passed alone; the full e2e suite
+    85 passed, 0 failed, 1 skipped (the capture API test that needs missing model files).
+  - Test data clean-up (2026-10-20, Dylan asked): the dev database was backed up to
+    `storage/backups/before-cleanup-2026-10-20.dump` (git-ignored), then `npm run demo:reset -- --yes`
+    removed 85 test accounts, 96 tokens, 182 batches, 223 scans, 95 requests, 109 items, 2,123 audit
+    rows and the test shoe types, suppliers and defect types, and seeded a fresh demo week (14
+    batches, 308 scans, 9 requests). The throwaway `cpoint-qa` stack (containers, volumes, network)
+    was removed.
+  - Phase 23 (Codex, 2026-10-22): run 1 FAIL, 45 of 46 scenarios, e2e 90 passed, 5 failed, 1
+    skipped (one fault: wide tables not keyboard-reachable). Run 2 **PASS**: R1 to R5, e2e 99
+    passed, 0 failed, 1 skipped.
+  - Phase 22 (Codex, 2026-10-21): run 1 FAIL, 16 of 18 scenarios, e2e 92 passed, 2 failed, 1
+    skipped (the summary dropped "· 0 others present"; the handoff named the wrong saver; two
+    `auth.spec.ts` tests assumed untouched demo accounts). Run 2 **PASS**: R1 to R4, e2e 94 passed,
+    0 failed, 1 skipped. Codex removed the attendance it added to the dev database both times.
+  - Phase 21 (Codex, 2026-10-20): **PASS**, 29 of 31 scenarios; e2e 87 passed, 0 failed, 1
+    skipped. Blocked: R4 (no batch with an open Fixable section at completion in the dev data) and
+    F3 (the fake camera only gives Pass, so orange and red need real leather). Docker without
+    certificates: health 200, only port 3000. Clean-up afterwards: backup
+    `storage/backups/before-cleanup-2026-10-20-phase21.dump`, then `demo:reset -- --yes` removed 18
+    test accounts, 20 tokens, 52 batches, 347 scans, 28 requests, 1,099 audit rows and the test
+    types; fresh demo week (14 batches, 313 scans, 9 requests); Codex's `p21-floor` stack removed.
   - Phase 16 (Codex, 2026-10-19, run 1): 19 of 21 passed, the app end to end with the real
     station. S14 failed because Dylan's local `cv/config.toml` lacked the "When found" preview
     settings (now added; `predict`/`evaluate` warn when they're missing); one e2e assertion was
@@ -200,25 +275,21 @@ Brief: `docs/prompts/project-cleanup.md`; plan: `docs/prompts/plans/phase-19-pla
 
 ## Next step (exact)
 
-1. Dylan: branch, commit and push Phase 19 and open the PR (D-032).
-2. Dylan, after the merge: move the folder to `C:\dev\CPoint-PMS` (README, "Keeping the folder
-   small"; D-068): `robocopy` without `node_modules`, `.next` and `.venv`, `npm ci`, a new
-   `cv/.venv` with CUDA torch (`cv/README.md`), `python -m cpoint_cv shortcut` again, copy
-   `~/.claude/projects/C--Users-micro-OneDrive-Desktop-CPoint-PMS/memory/` to
-   `~/.claude/projects/C--dev-CPoint-PMS/memory/`, approve the new folder for Remote Control,
-   then delete the OneDrive copy yourself. `docker compose` reuses `cpoint-pms_pgdata`.
-3. Codex: run `qa/handoffs/2026-10-19-phase-17-camera-window.md`,
-   `qa/handoffs/2026-10-19-phase-18-capture-page.md` and
-   `qa/handoffs/2026-10-20-phase-19-cleanup.md`. Fix their failures before new work.
-4. Dylan: after the demo, revoke the "Simulator" token (it was pasted in chat) and make a new one.
-   Before the panel, `npm run demo:reset -- --yes` gives a clean week again.
-5. Optional (Dylan's call): `docker image prune -a -f` frees about 8.4 GB of unused Supabase
-   images from another project.
+0. Phase 24 in a new
+   session: "Read `docs/prompts/production-progression.md` and run Phase 24. Stop for my approval
+   before writing code."
+1. Dylan, at the real station (`docs/STATION_SETUP.md`): a quick tunnel
+   (`cloudflared tunnel --url http://localhost:3000`), a second laptop with the webcam, Floor view
+   and the Space key; a leather piece that gives Fixable or Reject (F3, P18 S3); another app holding
+   the webcam (P18 S18); R4 when a batch with an open Fixable section is completed. Revoke the
+   "Simulator" token first (it was pasted in chat).
+2. Dylan: branch, commit and push Phases 20 to 23 and open the PR (D-032).
+3. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
+   files; `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
 
 Later:
 
 - Apply CPoint's answers to the open questions below.
-- Component tracking, once CPoint gives the component counts per shoe type.
 - Optional for procurement: CSV export and monthly counts by status and category (never per
   person).
 
@@ -228,13 +299,30 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (D-082 to D-087, Dylan 2026-10-21): a batch ends with Finish roll; check-ins every 4
+  hours (12:00, 16:00, 17:00); only the QI enters them; the suggestion averages 10 full days; a
+  first quota applies today. Tell CPoint that stage monitoring is gone.
+- Decided (D-088, Dylan 2026-10-22): the FM enters the check-ins on a day attendance shows no QI
+  present; with a QI present, or attendance not taken, only the QI can. Tell CPoint.
+- ASSUMPTION (D-084): Late starts 30 minutes after a check-in's time; a check-in can be entered
+  until midnight and corrected the same day only.
+- ASSUMPTION (D-082): a roll gives about 10 pieces (the Finish hint); Phase 24 makes it per roll
+  item.
+- ASSUMPTION (D-083): Monday to Saturday are working days for production (D-037's urgency still
+  counts Monday to Friday).
+
+- Open (D-078, Phase 22): **do all of CPoint's Shoe Constructors have accounts?** The roster is the
+  system's users; constructors without one need an account from the Admin (they never sign in).
+- Decided (D-077 to D-079, Dylan 2026-10-21): attendance is present or absent only (no reasons),
+  taken by the Floor Manager for today and 7 days back, viewed by the Admin. Tell CPoint it is a
+  one-day log book with no per-person history.
 - Decided (D-028, team-confirmed 2026-10-05): only the QI resolves flagged (NEEDS_REVIEW) scans;
   the FM can't. This differs from survey Q5 ("whoever is available"), so tell CPoint. If no QI is
   on shift, flagged scans wait.
 - Decided (D-031, team, 2026-10-05; survey Q14): every constructor can request materials, and only
   the allowed one(s), usually whoever orders leather, can request leather rolls. The FM approves
   all requests.
-- Decided (D-011, team-confirmed; D-053, Dylan 2026-10-19): a defect type set to Rework or Reject
+- Decided (D-011, team-confirmed; D-053, Dylan 2026-10-19): a defect type set to Fixable or Reject
   "when found" gets that result from 50% confidence; other types: ≥ 90% → REJECT, 60–89% →
   REWORK, below 60% → PASS; an unknown class key → NEEDS_REVIEW. Confirm with CPoint which defect
   gets which action (the demo uses cut and hole → Reject, crease and scratch → Rework).
@@ -260,7 +348,14 @@ Later:
 - Open (survey Q14): who orders leather rolls. Today only the Floor Manager can mark a request
   as ordered and record deliveries.
 - ASSUMPTION (D-026): the demo week's stage times match the survey.
-- Unknown: components per shoe type. Blocks component tracking only.
+- Closed (D-071, Dylan 2026-10-20): component tracking is out of scope.
+- Decided (D-073 to D-076, Dylan 2026-10-20): the board is the Repair Station; Floor view with
+  colour-coded bins (`docs/STATION_SETUP.md`); allowed constructors capture; HTTPS through a
+  Cloudflare Tunnel. Tell CPoint about the bins and the station setup.
+- Decided (D-069 to D-072, Dylan 2026-10-20): the station app retired, capture on the website only,
+  no camera check button; "Fixable" and "Cut around or clean" with a Clean / Cut around setting per
+  defect type; Supplier quality with a printable claim sheet per roll. Tell CPoint about the new
+  wording.
 - Decided (D-052, Dylan 2026-10-19): defect types follow the model's own classes. `crease` and
   `scratch` are added and `abrasion` and `dirt` turned off in Settings, by hand per database; the
   bootstrap is unchanged; `demo:reset` applies it. The simulator and demo week draw the model's
@@ -307,8 +402,8 @@ Later:
 - `npm audit`: 9 highs, all in dev tooling (the Prisma CLI and eslint-config-next, D-027);
   none from `onnxruntime-node`.
 - `onnxruntime-node` downloads a CUDA build on Linux unless `ONNXRUNTIME_NODE_INSTALL=skip`
-  (set in the Dockerfile and CI). mkcert is installed on Dylan's laptop; `certs/` covers
-  localhost, 127.0.0.1 and 192.168.254.104.
+  (set in the Dockerfile and CI). Dylan's old mkcert files are still in `certs/` (git-ignored, no
+  longer used since D-076); delete them and run `mkcert -uninstall` when convenient.
 - Cloud sandbox only:
   - Build Docker with `--build-arg NODE_IMAGE=<local base image>`, then `up -d`.
   - Use `-p <name>` (and other `DB_PORT`/`APP_PORT` values) for a throwaway stack beside the dev

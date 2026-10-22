@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Camera, CameraOff, LoaderCircle, RefreshCw, Send } from "lucide-react";
+import { Camera, CameraOff, LoaderCircle, Maximize2, RefreshCw, Send } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
+import { finishHint } from "@/lib/stage-machine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -13,16 +14,23 @@ import {
   cameraProblemMessage,
   isAppleMobile,
   isPhoneOrTablet,
-  secureAddress,
   SEND_ATTEMPTS,
   sendFailureMessage,
   shouldRetry,
   spaceCaptures,
   type CameraProblem,
 } from "@/lib/capture-rules";
-import { LastScan, type ScanDetail } from "./last-scan";
+import { FloorView, type FloorBand } from "./floor-view";
+import { LastScan, LastScanSummary, type ScanDetail, type ScanSummary } from "./last-scan";
 
-type Batch = { batchId: string; batchCode: string; rollCode: string; shoeType: string } | null;
+type Batch = {
+  batchId: string;
+  batchCode: string;
+  rollCode: string;
+  shoeType: string;
+  /** Sections scanned so far, for the Finish roll hint (D-082). */
+  scanned: number;
+} | null;
 type ModelStatus = { state: "ready"; modelVersion: string } | { state: "missing"; message: string };
 
 /** One press of Capture, kept until the app has it so "Send again" reuses its captureId. */
@@ -32,7 +40,13 @@ type Pending = {
   captureId: string;
   capturedAt: string;
   batchId: string;
+  batchCode: string;
 };
+
+/** The last result: the full scan for people who can open scans, else what the capture returned. */
+type Last =
+  | { kind: "detail"; scan: ScanDetail; repeat: boolean }
+  | { kind: "summary"; summary: ScanSummary; repeat: boolean };
 
 type CameraState =
   { kind: "starting" } | { kind: "live" } | { kind: "problem"; problem: CameraProblem };
@@ -42,6 +56,7 @@ type SendState =
   | { kind: "failed"; message: string; pending: Pending | null };
 
 const CAMERA_KEY = "cpoint.capture.camera";
+const FLOOR_KEY = "cpoint.capture.floor";
 const BATCH_REFRESH_MS = 20_000;
 const JPEG_QUALITY = 0.92;
 
@@ -52,6 +67,24 @@ function savedCamera(): string | undefined {
     return localStorage.getItem(CAMERA_KEY) ?? undefined;
   } catch {
     return undefined;
+  }
+}
+
+/** Floor view is remembered per browser, so a station PC opens straight into it (D-074). */
+function savedFloor(): boolean {
+  try {
+    return localStorage.getItem(FLOOR_KEY) === "on";
+  } catch {
+    return false;
+  }
+}
+
+function saveFloor(on: boolean) {
+  try {
+    if (on) localStorage.setItem(FLOOR_KEY, "on");
+    else localStorage.removeItem(FLOOR_KEY);
+  } catch {
+    // Private mode: the choice just isn't remembered.
   }
 }
 
@@ -86,10 +119,16 @@ export function CaptureClient({
   initialBatch,
   model,
   earlyModelNotice,
+  canSeeScans,
+  canFinish,
 }: {
   initialBatch: Batch;
+  /** The Floor Manager and the QI finish rolls (batch:finish); others are told who can. */
+  canFinish: boolean;
   model: ModelStatus;
   earlyModelNotice: boolean;
+  /** A constructor allowed to capture can't open Scans (D-075): they see the verdict and section. */
+  canSeeScans: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -105,8 +144,59 @@ export function CaptureClient({
   }, [batch]);
   const [batchNotice, setBatchNotice] = useState<string | null>(null);
   const [send, setSend] = useState<SendState>({ kind: "idle" });
-  const [last, setLast] = useState<{ scan: ScanDetail; repeat: boolean } | null>(null);
+  const [last, setLast] = useState<Last | null>(null);
   const [lastNote, setLastNote] = useState<string | null>(null);
+  const [floor, setFloor] = useState(false);
+  const fullscreenRef = useRef(false);
+
+  useEffect(() => {
+    // Read after mount: localStorage isn't there on the server.
+    const timer = setTimeout(() => setFloor(savedFloor()), 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Floor view and the page each render their own <video>; give the new one the running stream.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && streamRef.current && video.srcObject !== streamRef.current) {
+      video.srcObject = streamRef.current;
+      void video.play().catch(() => undefined);
+    }
+  }, [floor, camera.kind]);
+
+  const enterFloor = useCallback(() => {
+    setFloor(true);
+    saveFloor(true);
+    // Full screen needs this click; a station that opens in Floor view uses F11 instead.
+    void document.documentElement
+      .requestFullscreen?.()
+      .then(() => {
+        fullscreenRef.current = true;
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const leaveFloor = useCallback(() => {
+    setFloor(false);
+    saveFloor(false);
+    fullscreenRef.current = false;
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!floor) return;
+    // Esc leaves: in full screen the browser takes the key, so watch full screen ending too.
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && leaveFloor();
+    const onFullscreen = () => {
+      if (!document.fullscreenElement && fullscreenRef.current) leaveFloor();
+    };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onFullscreen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("fullscreenchange", onFullscreen);
+    };
+  }, [floor, leaveFloor]);
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -171,7 +261,7 @@ export function CaptureClient({
       const prev = batchRef.current;
       if (prev && prev.batchId !== body.data.batchId)
         setBatchNotice(
-          `The batch at Preparation changed from ${prev.batchCode} to ${body.data.batchCode}. Your next capture goes to ${body.data.batchCode}.`,
+          `The roll at Preparation changed from ${prev.batchCode} to ${body.data.batchCode}. Your next capture goes to ${body.data.batchCode}.`,
         );
       setBatch(body.data);
     } catch {
@@ -195,7 +285,7 @@ export function CaptureClient({
       const res = await fetch(`/api/v1/scans/${scanId}`, { cache: "no-store" });
       if (!res.ok) throw new Error(String(res.status));
       const body = (await res.json()) as { data: ScanDetail };
-      setLast({ scan: body.data, repeat });
+      setLast({ kind: "detail", scan: body.data, repeat });
     } catch {
       setLastNote(
         "The scan was saved, but its details couldn’t be loaded here. Open it from Scans.",
@@ -208,7 +298,14 @@ export function CaptureClient({
       setSend({ kind: "sending", pending });
       const phone = isPhoneOrTablet(navigator.userAgent, navigator.maxTouchPoints);
       let status: number | "network" = "network";
-      let body: ApiError & { data?: { scanId: string; duplicate: boolean } } = {};
+      let body: ApiError & {
+        data?: {
+          scanId: string;
+          duplicate: boolean;
+          sequence: number;
+          verdict: ScanSummary["verdict"];
+        };
+      } = {};
       for (let attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
         const form = new FormData();
         form.set("image", pending.blob, "capture.jpg");
@@ -231,7 +328,22 @@ export function CaptureClient({
       if (status === 200 || status === 201) {
         URL.revokeObjectURL(pending.frameUrl);
         setSend({ kind: "idle" });
-        await showResult(body.data!.scanId, body.data!.duplicate);
+        const data = body.data!;
+        if (!data.duplicate)
+          setBatch((b) =>
+            b && b.batchId === pending.batchId ? { ...b, scanned: b.scanned + 1 } : b,
+          );
+        if (canSeeScans) await showResult(data.scanId, data.duplicate);
+        else
+          setLast({
+            kind: "summary",
+            summary: {
+              verdict: data.verdict,
+              sequence: data.sequence,
+              batchCode: pending.batchCode,
+            },
+            repeat: data.duplicate,
+          });
         return;
       }
       const code = body.error?.code;
@@ -252,7 +364,7 @@ export function CaptureClient({
         pending: retryable ? pending : null,
       });
     },
-    [showResult],
+    [canSeeScans, showResult],
   );
 
   const modelReady = model.state === "ready";
@@ -289,6 +401,7 @@ export function CaptureClient({
         captureId: crypto.randomUUID(),
         capturedAt,
         batchId: batch.batchId,
+        batchCode: batch.batchCode,
       });
     } finally {
       busyRef.current = false;
@@ -309,12 +422,7 @@ export function CaptureClient({
     typeof navigator !== "undefined" &&
     isAppleMobile(navigator.userAgent, navigator.maxTouchPoints);
   const problem =
-    camera.kind === "problem"
-      ? cameraProblemMessage(camera.problem, {
-          appleMobile,
-          secureUrl: typeof window !== "undefined" ? secureAddress(window.location) : "",
-        })
-      : null;
+    camera.kind === "problem" ? cameraProblemMessage(camera.problem, { appleMobile }) : null;
 
   const offReason = !modelReady
     ? "Capture is off until the model is installed."
@@ -327,6 +435,69 @@ export function CaptureClient({
           : null;
 
   const frozen = send.kind === "sending" || send.kind === "failed" ? send.pending : null;
+
+  if (floor) {
+    const retryCamera =
+      camera.kind === "problem" && camera.problem !== "insecure"
+        ? () => void start(deviceId || undefined)
+        : undefined;
+    const band: FloorBand =
+      send.kind === "sending"
+        ? { kind: "checking" }
+        : send.kind === "failed"
+          ? {
+              kind: "failed",
+              message: send.message,
+              resend: send.pending ? () => void deliver(send.pending!) : undefined,
+              discard: send.pending
+                ? () => {
+                    URL.revokeObjectURL(send.pending!.frameUrl);
+                    setSend({ kind: "idle" });
+                  }
+                : undefined,
+            }
+          : problem
+            ? { kind: "problem", title: problem.title, fix: problem.fix, retry: retryCamera }
+            : !modelReady
+              ? { kind: "problem", title: "Capture is off.", fix: model.message }
+              : !batch
+                ? {
+                    kind: "problem",
+                    title: "Capture is off.",
+                    fix: "No batch is at Preparation. Ask the Floor Manager to start one; this screen picks it up within 20 seconds.",
+                  }
+                : last
+                  ? {
+                      kind: "result",
+                      result:
+                        last.kind === "detail"
+                          ? {
+                              verdict: last.scan.finalVerdict ?? last.scan.aiVerdict,
+                              sequence: last.scan.sequence,
+                              batchCode: last.scan.batch.code,
+                              repeat: last.repeat,
+                            }
+                          : { ...last.summary, repeat: last.repeat },
+                    }
+                  : lastNote
+                    ? { kind: "problem", title: "Saved.", fix: lastNote }
+                    : { kind: "ready" };
+    return (
+      <FloorView
+        videoRef={videoRef}
+        live={live}
+        frozenUrl={frozen?.frameUrl ?? null}
+        batchLine={
+          batch
+            ? `Next scan goes to ${batch.batchCode} · roll ${batch.rollCode} · ${batch.shoeType}`
+            : "No roll is at Preparation"
+        }
+        batchNotice={batchNotice}
+        band={band}
+        onLeave={leaveFloor}
+      />
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
@@ -342,11 +513,30 @@ export function CaptureClient({
             </p>
           ) : (
             <p className="text-lg">
-              No batch is at Preparation, so Capture is off.{" "}
-              <Link href="/batches?status=PLANNED" className="underline underline-offset-4">
-                Start a batch
-              </Link>{" "}
-              first. This page picks it up within 20 seconds.
+              No roll is at Preparation, so Capture is off.{" "}
+              {canSeeScans ? (
+                <>
+                  <Link href="/batches?status=PLANNED" className="underline underline-offset-4">
+                    Start a roll
+                  </Link>{" "}
+                  first.
+                </>
+              ) : (
+                "Ask the Floor Manager to start one."
+              )}{" "}
+              This page picks it up within 20 seconds.
+            </p>
+          )}
+          {batch && finishHint(batch.scanned) && (
+            <p className="mt-2 text-sm" data-testid="capture-finish-hint">
+              {finishHint(batch.scanned)}{" "}
+              {canFinish ? (
+                <Link href={`/batches/${batch.batchId}`} className="underline underline-offset-4">
+                  Open {batch.batchCode} to finish it
+                </Link>
+              ) : (
+                "Ask the Floor Manager or the Quality Inspector to finish it."
+              )}
             </p>
           )}
           {batchNotice && (
@@ -458,6 +648,20 @@ export function CaptureClient({
               </p>
             )}
           </div>
+          <div className="flex flex-col gap-1">
+            <Button
+              size="lg"
+              variant="secondary"
+              onClick={enterFloor}
+              aria-describedby="floor-hint"
+            >
+              <Maximize2 aria-hidden />
+              Floor view
+            </Button>
+            <p id="floor-hint" className="text-sm text-muted-foreground">
+              Full screen for a monitor facing the operator.
+            </p>
+          </div>
           {devices.length > 0 && (
             <div className="flex min-w-60 flex-col gap-1.5">
               <Label htmlFor="capture-camera">Camera</Label>
@@ -493,7 +697,13 @@ export function CaptureClient({
           </CardHeader>
           {(last || lastNote) && (
             <CardContent>
-              {last ? <LastScan scan={last.scan} repeat={last.repeat} /> : <p>{lastNote}</p>}
+              {last?.kind === "detail" ? (
+                <LastScan scan={last.scan} repeat={last.repeat} />
+              ) : last ? (
+                <LastScanSummary summary={last.summary} repeat={last.repeat} />
+              ) : (
+                <p>{lastNote}</p>
+              )}
             </CardContent>
           )}
         </Card>

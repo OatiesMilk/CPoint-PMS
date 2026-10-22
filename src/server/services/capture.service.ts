@@ -25,6 +25,8 @@ export const batchSummary = (batch: CameraBatch | null) =>
         batchCode: batch.code,
         rollCode: batch.rollCode,
         shoeType: batch.shoeType.name,
+        /** Sections scanned so far, for "All 10 pieces scanned. Finish this roll?" (D-082). */
+        scanned: batch._count.scans,
       }
     : null;
 
@@ -44,7 +46,7 @@ async function checkBatch(shownBatchId: string | undefined): Promise<void> {
     throw new AppError(
       409,
       "BATCH_MOVED",
-      `The batch you saw has left Preparation, so this section wasn't saved. The next scan goes to ${current.code}. Press Capture again.`,
+      `This roll was finished, so this section wasn't saved. The next scan goes to ${current.code}. Press Capture again.`,
       { current: batchSummary(current) },
     );
   }

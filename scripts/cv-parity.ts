@@ -1,5 +1,5 @@
 /**
- * Runs the app's ONNX model (the Capture page's path) on photos and, given the station's
+ * Runs the app's ONNX model (the Capture page's path) on photos and, given the model toolkit's
  * `predict --json` output for the same photos, checks the two agree (Phase 18, D-064).
  *
  *   cd cv && .venv/Scripts/python -m cpoint_cv predict <folder> --json > ../storage/py.jsonl
@@ -52,7 +52,7 @@ if (compareFile) {
 function differences(ours: MappedDetection[], theirs: MappedDetection[]): string[] {
   const problems: string[] = [];
   if (ours.length !== theirs.length)
-    problems.push(`${ours.length} detections here, ${theirs.length} from the station`);
+    problems.push(`${ours.length} detections here, ${theirs.length} from predict`);
   const n = Math.min(ours.length, theirs.length);
   for (let i = 0; i < n; i++) {
     const a = ours[i];
@@ -104,8 +104,8 @@ async function main() {
   if (compareFile) {
     console.log(
       failed
-        ? `${failed} of ${images.length} photos differ from the station beyond the tolerance.`
-        : `All ${images.length} photos agree with the station (confidence ±${CONFIDENCE_TOLERANCE}, box edges ±${BOX_TOLERANCE}).`,
+        ? `${failed} of ${images.length} photos differ from predict beyond the tolerance.`
+        : `All ${images.length} photos agree with predict (confidence ±${CONFIDENCE_TOLERANCE}, box edges ±${BOX_TOLERANCE}).`,
     );
   }
   process.exit(failed ? 1 : 0);

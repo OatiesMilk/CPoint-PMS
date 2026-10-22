@@ -1,11 +1,10 @@
-import { STAGE_ORDER, type Stage } from "@/lib/domain";
+import type { Stage } from "@/lib/domain";
 import { PAGE_SIZE } from "@/lib/pagination";
 import { manilaYear } from "@/lib/format";
 import {
   availableActions,
   planCancel,
   planTransition,
-  stageDurations,
   type BatchActions,
   type PlanResult,
   type TransitionAction,
@@ -14,7 +13,6 @@ import { AppError, Errors } from "@/server/lib/errors";
 import {
   findBatchById,
   findBatchDetail,
-  inProgressByStage,
   insertBatch,
   listBatches as listBatchRows,
   nextBatchNumber,
@@ -49,12 +47,11 @@ export function formatBatchCode(year: number, n: number): string {
 }
 
 const STALE_MESSAGE =
-  "This batch was already moved by someone else. Refresh to see where it is now.";
+  "This roll was already changed by someone else. Refresh to see where it is now.";
 
 // ───────────── reads ─────────────
 
 export type BatchListItem = BatchListRow & {
-  timeInStageMs: number | null;
   /** Sections still at the repair station (D-022 "In repair" tag). */
   openRepairs: number;
 };
@@ -62,7 +59,6 @@ export type BatchListItem = BatchListRow & {
 export async function listBatches(
   filters: BatchListFilters,
   page = 1,
-  now: Date = new Date(),
 ): Promise<{ rows: BatchListItem[]; total: number; page: number; pageCount: number }> {
   const { rows, total } = await listBatchRows(filters, {
     skip: (page - 1) * PAGE_SIZE,
@@ -70,14 +66,7 @@ export async function listBatches(
   });
   const repairs = await countLiveReworkByBatch(rows.map((r) => r.id));
   return {
-    rows: rows.map((row) => {
-      const open = row.status === "IN_PROGRESS" ? row.stageLogs[0] : undefined;
-      return {
-        ...row,
-        timeInStageMs: open ? now.getTime() - open.startedAt.getTime() : null,
-        openRepairs: repairs.get(row.id) ?? 0,
-      };
-    }),
+    rows: rows.map((row) => ({ ...row, openRepairs: repairs.get(row.id) ?? 0 })),
     total,
     page,
     pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
@@ -91,8 +80,7 @@ export type BatchDetail = {
   openRepairs: number;
   /** The inventory roll recorded as used for this batch (D-023), if any. */
   rollFromInventory: { itemId: string; label: string; returned: boolean } | null;
-  durations: Record<Stage, number>;
-  /** The "now" the durations were computed at, so the page can show matching open-log times. */
+  /** The "now" the page shows open history rows against. */
   now: number;
 };
 
@@ -118,7 +106,6 @@ export async function getBatchDetail(
           returned: rollMovements.some((m) => m.type === "IN"),
         }
       : null,
-    durations: stageDurations(batch.stageLogs, now),
     now: now.getTime(),
   };
 }
@@ -130,27 +117,6 @@ export async function getBatchFormOptions() {
     rollItemOptions(),
   ]);
   return { shoeTypes, suppliers, rollItems };
-}
-
-export type StageSummary = {
-  planned: number;
-  stages: { stage: Stage; count: number; oldestWaitMs: number | null }[];
-};
-
-/** In-progress batches per stage with the longest wait, for spotting the bottleneck. */
-export async function batchesByStageSummary(now: Date = new Date()): Promise<StageSummary> {
-  const { counts, openLogs, planned } = await inProgressByStage();
-  return {
-    planned,
-    stages: STAGE_ORDER.map((stage) => ({
-      stage,
-      count: counts.find((c) => c.currentStage === stage)?._count._all ?? 0,
-      oldestWaitMs: (() => {
-        const oldest = openLogs.find((l) => l.stage === stage)?._min.startedAt;
-        return oldest ? now.getTime() - oldest.getTime() : null;
-      })(),
-    })),
-  };
 }
 
 // ───────────── writes ─────────────
@@ -178,7 +144,6 @@ function toColumns(values: BatchFormValues) {
     shoeTypeId: values.shoeTypeId,
     supplierId: values.supplierId ?? null,
     receivedAt: new Date(`${values.receivedAt}T00:00:00.000Z`),
-    targetQuotaPairs: values.targetQuotaPairs ?? null,
     notes: values.notes ?? null,
   };
 }
@@ -257,9 +222,7 @@ export async function updateBatch(id: string, values: BatchFormValues, actor: Ac
 
 const AUDIT_ACTION: Record<TransitionAction, string> = {
   start: "batch.start",
-  advance: "batch.advance",
-  complete: "batch.complete",
-  move_back: "batch.move_back",
+  finish: "batch.finish",
 };
 
 async function applyPlan(
@@ -281,7 +244,7 @@ async function applyPlan(
 
   const result = plan(batch);
   if (!result.ok) throw Errors.conflict(result.reason);
-  const { next, opensStage, closesOpenLog, isRollback } = result.plan;
+  const { next, opensStage, closesOpenLog } = result.plan;
 
   return runInTransaction(async (tx) => {
     const moved = await transitionBatch(id, batch, { ...next, ...extra }, tx);
@@ -295,8 +258,6 @@ async function applyPlan(
           stage: opensStage,
           startedById: actor.id,
           startedAt: now,
-          isRollback,
-          reason: isRollback ? audit.reason : undefined,
         },
         tx,
       );
@@ -313,20 +274,37 @@ async function applyPlan(
   });
 }
 
+/**
+ * Start a planned roll (Preparation) or finish one (D-082). Finishing is allowed with sections
+ * still at the Repair Station (D-022) and for a batch started before rolls were tracked. Who may
+ * do which is checked by the caller: start needs batch:manage, finish batch:finish.
+ */
 export async function transitionBatchStage(
   id: string,
-  input: { action: TransitionAction; expectedStage: Stage; reason?: string },
+  input: { action: TransitionAction; expectedStage: Stage },
   actor: Actor,
   now: Date = new Date(),
 ) {
-  if (input.action === "move_back" && !input.reason) {
-    throw Errors.validation([{ path: ["reason"], message: "Say why the batch is moving back." }]);
-  }
   return applyPlan(
     id,
     input.expectedStage,
     (b) => planTransition(b, input.action),
-    { action: AUDIT_ACTION[input.action], reason: input.reason },
+    { action: AUDIT_ACTION[input.action] },
+    actor,
+    now,
+  );
+}
+
+/** Finish a roll once it is used up (D-082): the Floor Manager or the Quality Inspector. */
+export function finishRoll(
+  id: string,
+  input: { expectedStage: Stage },
+  actor: Actor,
+  now: Date = new Date(),
+) {
+  return transitionBatchStage(
+    id,
+    { action: "finish", expectedStage: input.expectedStage },
     actor,
     now,
   );
@@ -362,8 +340,6 @@ export async function cancelBatch(
     },
   );
 }
-
-export { transitionLabel as describeTransition } from "@/lib/stage-machine";
 
 /**
  * A planned batch never cut its roll, so cancelling it puts the roll back on the shelf (D-023).

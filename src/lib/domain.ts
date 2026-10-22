@@ -50,7 +50,7 @@ export const STAGE_LABELS: Record<Stage, string> = {
 
 export const BATCH_STATUS_LABELS: Record<BatchStatus, string> = {
   PLANNED: "Planned",
-  IN_PROGRESS: "In progress",
-  COMPLETED: "Completed",
+  IN_PROGRESS: "At Preparation",
+  COMPLETED: "Finished",
   CANCELLED: "Cancelled",
 };

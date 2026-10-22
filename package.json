@@ -28,8 +28,7 @@
     "cv:simulate": "tsx scripts/cv-simulate.ts",
     "demo:seed": "tsx --conditions=react-server scripts/demo-seed.ts",
     "demo:reset": "tsx --conditions=react-server scripts/demo-reset.ts",
-    "cv:parity": "tsx scripts/cv-parity.ts",
-    "dev:https": "next dev -H 0.0.0.0 --experimental-https --experimental-https-key certs/key.pem --experimental-https-cert certs/cert.pem"
+    "cv:parity": "tsx scripts/cv-parity.ts"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",

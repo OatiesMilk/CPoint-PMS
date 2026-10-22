@@ -31,7 +31,7 @@ jobs:
       - run: npm run build
 
   station:
-    # The camera station (cv/, D-048): lint, types and unit tests. No torch is installed here.
+    # The model toolkit (cv/, D-048, D-069): lint, types and unit tests. No torch is installed here.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -127,6 +127,10 @@ jobs:
           test "$(q "select count(*) from batches")" -ge 10
           test "$(q "select count(*) from scans")" -ge 150
           test "$(q "select count(*) from scans where status='PENDING_REVIEW'")" -ge 1
+          # Production progression (Phase 23): the default schedule, a quota per shoe type, check-ins.
+          test "$(q "select count(*) from production_schedules")" -eq 1
+          test "$(q "select count(*) from daily_quotas")" -eq 2
+          test "$(q "select count(*) from production_check_ins")" -ge 1
           # Every item's on-hand quantity equals the sum of its ledger.
           q "select count(*) from inventory_items i where i.\"quantityOnHand\" <> (select coalesce(sum(m.\"quantityDelta\"),0) from inventory_movements m where m.\"itemId\"=i.id)" | grep -qx 0
       - name: A restart doesn't seed again

@@ -1,73 +1,12 @@
-import type { Stage } from "@/generated/prisma/enums";
 import { type Db, defaultDb } from "./db";
 
-// Operations report queries (D-033). Like report.model.ts these are aggregates per batch, stage,
+// Operations report queries (D-033). Like report.model.ts these are aggregates per batch,
 // item, supplier or request. No query here selects or groups by a person (D-008).
 
 type Range = { start: Date; end: Date };
 const iso = (d: Date) => d.toISOString();
 const n = (v: bigint | number | null | undefined) => Number(v ?? 0);
 const num = (v: number | string | null | undefined) => (v == null ? null : Number(v));
-
-/** Lead time (first stage start → last stage end) of batches completed in the range, in ms. */
-export async function leadTimes(range: Range, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<
-    { batches: bigint; medianMs: number | null; avgMs: number | null }[]
-  >`
-    SELECT count(*) AS batches,
-      percentile_cont(0.5) WITHIN GROUP (ORDER BY t.secs) * 1000 AS "medianMs",
-      avg(t.secs) * 1000 AS "avgMs"
-    FROM (
-      SELECT extract(epoch FROM max(l."endedAt") - min(l."startedAt")) AS secs, max(l."endedAt") AS done
-      FROM batch_stage_logs l JOIN batches b ON b.id = l."batchId"
-      WHERE b.status = 'COMPLETED' GROUP BY l."batchId"
-    ) t
-    WHERE t.done >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND t.done <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')`;
-  const r = rows[0];
-  return { batches: n(r?.batches), medianMs: num(r?.medianMs), avgMs: num(r?.avgMs) };
-}
-
-export type OpenBatchRow = {
-  id: string;
-  code: string;
-  shoeType: string;
-  stage: Stage;
-  inStageMs: number;
-  openRepairs: number;
-};
-
-/** Every in-progress batch with the stage it is in and how long it has been there. */
-export async function openBatches(now: Date, db: Db = defaultDb()): Promise<OpenBatchRow[]> {
-  const rows = await db.$queryRaw<
-    {
-      id: string;
-      code: string;
-      shoeType: string;
-      stage: Stage;
-      inStageMs: number;
-      openRepairs: bigint;
-    }[]
-  >`
-    SELECT b.id, b.code, st.name AS "shoeType", l.stage,
-      extract(epoch FROM (${iso(now)}::timestamptz AT TIME ZONE 'UTC') - l."startedAt") * 1000 AS "inStageMs",
-      (SELECT count(*) FROM rework_tickets r JOIN scans s ON s.id = r."scanId"
-        WHERE s."batchId" = b.id AND r.status IN ('OPEN', 'IN_PROGRESS')) AS "openRepairs"
-    FROM batch_stage_logs l
-    JOIN batches b ON b.id = l."batchId"
-    JOIN shoe_types st ON st.id = b."shoeTypeId"
-    WHERE l."endedAt" IS NULL AND b.status = 'IN_PROGRESS'
-    ORDER BY l."startedAt"
-    LIMIT 200`;
-  return rows.map((r) => ({
-    id: r.id,
-    code: r.code,
-    shoeType: r.shoeType,
-    stage: r.stage,
-    inStageMs: Number(r.inStageMs),
-    openRepairs: n(r.openRepairs),
-  }));
-}
 
 export type RepairRow = {
   id: string;
@@ -241,6 +180,8 @@ export type SupplierRow = {
   id: string | null;
   name: string;
   batches: number;
+  /** Distinct roll codes: one batch is cut from one roll (Phase 20). */
+  rolls: number;
   scanned: number;
   pass: number;
   rework: number;
@@ -251,7 +192,7 @@ export type SupplierRow = {
 export async function supplierQuality(range: Range, db: Db = defaultDb()): Promise<SupplierRow[]> {
   const rows = await db.$queryRaw<Record<string, bigint | string | null>[]>`
     SELECT b."supplierId" AS id, coalesce(sp.name, 'No supplier recorded') AS name,
-      count(DISTINCT b.id) AS batches, count(*) AS scanned,
+      count(DISTINCT b.id) AS batches, count(DISTINCT b."rollCode") AS rolls, count(*) AS scanned,
       count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
       count(*) FILTER (WHERE s."finalVerdict" = 'REWORK') AS rework,
       count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
@@ -266,9 +207,131 @@ export async function supplierQuality(range: Range, db: Db = defaultDb()): Promi
     id: r.id === null ? null : String(r.id),
     name: String(r.name),
     batches: n(r.batches as bigint),
+    rolls: n(r.rolls as bigint),
     scanned: n(r.scanned as bigint),
     pass: n(r.pass as bigint),
     rework: n(r.rework as bigint),
     reject: n(r.reject as bigint),
   }));
+}
+
+/**
+ * Each scan's strongest detection, for scans with a final verdict in `verdicts`, as
+ * (supplier or batch, defect label) counts. One count per section, never per detection, so "Hole 4"
+ * means four sections whose main defect was a hole.
+ */
+async function mainDefects(
+  range: Range,
+  verdicts: string[],
+  groupBy: "supplier" | "batch",
+  batchIds: string[] | null,
+  db: Db,
+) {
+  const rows = await db.$queryRaw<{ groupId: string | null; label: string; sections: bigint }[]>`
+    SELECT CASE WHEN ${groupBy} = 'supplier' THEN b."supplierId"::text ELSE b.id::text END AS "groupId",
+      coalesce(dt.label, d."rawClassKey") AS label, count(*) AS sections
+    FROM scans s
+    JOIN batches b ON b.id = s."batchId"
+    JOIN LATERAL (
+      SELECT x."defectTypeId", x."rawClassKey" FROM detections x
+      WHERE x."scanId" = s.id ORDER BY x.confidence DESC LIMIT 1
+    ) d ON true
+    LEFT JOIN defect_types dt ON dt.id = d."defectTypeId"
+    WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
+      AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+      AND s."finalVerdict"::text = ANY(${verdicts})
+      AND (${batchIds}::uuid[] IS NULL OR b.id = ANY(${batchIds}::uuid[]))
+    GROUP BY 1, 2
+    ORDER BY 3 DESC, 2`;
+  return rows.map((r) => ({ groupId: r.groupId, label: r.label, sections: n(r.sections) }));
+}
+
+/** The main defect of each supplier's Fixable and rejected sections, most common first. */
+export function supplierDefects(range: Range, db: Db = defaultDb()) {
+  return mainDefects(range, ["REWORK", "REJECT"], "supplier", null, db);
+}
+
+export type RollRejectRow = {
+  batchId: string;
+  batchCode: string;
+  rollCode: string;
+  supplier: string;
+  sections: number;
+  rejected: number;
+  defects: { label: string; sections: number }[];
+};
+
+/** The rolls (one per batch) with the most rejected sections in the range, worst first. */
+export async function rollsWithMostRejects(
+  range: Range,
+  limit: number,
+  db: Db = defaultDb(),
+): Promise<RollRejectRow[]> {
+  const rows = await db.$queryRaw<Record<string, bigint | string>[]>`
+    SELECT b.id AS "batchId", b.code AS "batchCode", b."rollCode" AS "rollCode",
+      coalesce(sp.name, 'No supplier recorded') AS supplier,
+      count(*) AS sections,
+      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS rejected
+    FROM scans s
+    JOIN batches b ON b.id = s."batchId"
+    LEFT JOIN suppliers sp ON sp.id = b."supplierId"
+    WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
+      AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+    GROUP BY b.id, b.code, b."rollCode", sp.name
+    HAVING count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') > 0
+    ORDER BY 6 DESC, 5 DESC, b.code
+    LIMIT ${limit}`;
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => String(r.batchId));
+  const defects = await mainDefects(range, ["REJECT"], "batch", ids, db);
+  return rows.map((r) => ({
+    batchId: String(r.batchId),
+    batchCode: String(r.batchCode),
+    rollCode: String(r.rollCode),
+    supplier: String(r.supplier),
+    sections: n(r.sections as bigint),
+    rejected: n(r.rejected as bigint),
+    defects: defects
+      .filter((d) => d.groupId === String(r.batchId))
+      .map((d) => ({ label: d.label, sections: d.sections })),
+  }));
+}
+
+/** One roll's batch, its supplier and every rejected section with its defects, for a claim sheet. */
+export function findClaimBatch(batchId: string, db: Db = defaultDb()) {
+  return db.batch.findUnique({
+    where: { id: batchId },
+    select: {
+      id: true,
+      code: true,
+      rollCode: true,
+      receivedAt: true,
+      shoeType: { select: { name: true } },
+      supplier: { select: { name: true, contactPerson: true, phone: true } },
+      scans: {
+        where: { finalVerdict: "REJECT" },
+        orderBy: { sequence: "asc" },
+        select: {
+          id: true,
+          sequence: true,
+          capturedAt: true,
+          imagePath: true,
+          isOverride: true,
+          detections: {
+            orderBy: { confidence: "desc" },
+            select: {
+              confidence: true,
+              rawClassKey: true,
+              defectType: { select: { label: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+/** Sections of one batch by final verdict, for the claim sheet's totals. */
+export function countBatchVerdicts(batchId: string, db: Db = defaultDb()) {
+  return db.scan.groupBy({ by: ["finalVerdict"], where: { batchId }, _count: { _all: true } });
 }

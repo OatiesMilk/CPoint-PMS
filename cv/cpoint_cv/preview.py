@@ -1,6 +1,6 @@
 """A Python port of the app's decision rule (``src/lib/decision-engine.ts``, D-011 and D-053).
 
-Used only by ``predict`` and ``evaluate`` to show what the app *would* decide. The station never
+Used only by ``predict`` and ``evaluate`` to show what the app *would* decide. The toolkit never
 sends a verdict and never filters by these settings; the app decides with the settings in force
 when the scan arrives. Keep this in step with ``decide()``: ``tests/test_preview.py`` mirrors its
 unit tests.

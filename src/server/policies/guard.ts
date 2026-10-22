@@ -7,7 +7,7 @@ import { AppError, Errors } from "@/server/lib/errors";
 import type { DeviceScope } from "@/server/lib/device-token";
 import { authenticateDevice, type DeviceIdentity } from "@/server/services/api-token.service";
 import { checkSession, type SessionState, type SessionUser } from "@/server/services/auth.service";
-import { can, type Permission } from "./permissions";
+import { can, canCaptureFor, type Permission } from "./permissions";
 
 /**
  * Data Access Layer: the real authorization check (src/proxy.ts only does a cookie check).
@@ -53,8 +53,29 @@ export async function requirePermission(permission: Permission): Promise<Session
   return user;
 }
 
+/** Pages: the Capture page, for the QI, the FM and the constructors allowed to capture (D-075). */
+export async function requireCapture(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!canCaptureFor(user)) redirect("/forbidden");
+  return user;
+}
+
+/** Route handlers: the capture checks as 401/403 JSON errors (D-075). */
+export async function requireApiCapture(): Promise<SessionUser> {
+  const user = await requireApiUser();
+  if (!canCaptureFor(user)) throw Errors.forbidden();
+  return user;
+}
+
 /** Route handlers: same checks, but as 401/403 JSON errors instead of redirects. */
 export async function requireApiPermission(permission: Permission): Promise<SessionUser> {
+  const user = await requireApiUser();
+  if (!can(user.role, permission)) throw Errors.forbidden();
+  return user;
+}
+
+/** Route handlers: the signed-in, active user who has chosen their own password, or 401/403. */
+export async function requireApiUser(): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) throw Errors.unauthenticated();
   if (user.mustChangePassword) {
@@ -64,7 +85,6 @@ export async function requireApiPermission(permission: Permission): Promise<Sess
       "Choose a new password at /account/password first.",
     );
   }
-  if (!can(user.role, permission)) throw Errors.forbidden();
   return user;
 }
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BarList } from "@/components/features/charts/bar-list";
-import { FlowChart } from "@/components/features/charts/flow-chart";
+import { ProductionChart } from "@/components/features/charts/production-chart";
+import { ProductionDaysTable } from "@/components/features/production/production-parts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -10,23 +11,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDayLabel, formatDuration, formatManilaDateTime, formatPercent } from "@/lib/format";
+import { formatDayLabel, formatManilaDateTime, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { AttentionList, FlowLanes, KpiTile } from "./ops-parts";
+import { AttentionList, KpiTile } from "./ops-parts";
 import {
   ProcurementFlowCard,
   RepairStationCard,
   StockRiskCard,
-  SupplierCard,
+  SupplierQualityCard,
 } from "./ops-sections";
 import type { OperationsReport } from "@/server/services/ops-report.service";
 import type { ReportRange } from "@/lib/report-rules";
 
 /**
- * The Floor Manager's report: what is happening on the production floor in this range and right
- * now, and what is wrong. Order follows the questions: is anything on fire, where is the work,
- * is it flowing, what's at the repair station, will we run out, is supply good, and the
- * checkpoint before cutting in brief.
+ * The Floor Manager's report: what is happening on the production floor in this range, and what
+ * is wrong. Order follows the questions: is anything on fire, did the line make its quota (and
+ * how many were present), what's at the repair station, will we run out, is supply good, and the
+ * checkpoint before cutting in brief. Stage monitoring was replaced by production in Phase 23.
  */
 export function OperationsView({
   report,
@@ -35,9 +36,13 @@ export function OperationsView({
   report: OperationsReport;
   range: ReportRange;
 }) {
-  const { kpis, flow, checkpoint } = report;
+  const { kpis, production, checkpoint } = report;
   const compareLabel = range.days === 1 ? "vs yesterday" : `vs previous ${range.days} days`;
   const yieldNote = `${checkpoint.totals.pass} of ${checkpoint.totals.pass + checkpoint.totals.rework + checkpoint.totals.reject} sections passed`;
+  const quotaNote =
+    production.totals.daysWithQuota === 0
+      ? "no finished day with a quota yet"
+      : `${production.totals.daysBelow} of ${production.totals.daysWithQuota} days below quota`;
 
   return (
     <>
@@ -46,32 +51,33 @@ export function OperationsView({
         className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4"
       >
         <KpiTile
-          label="Batches completed"
-          value={String(kpis.completed.value ?? 0)}
-          change={kpis.completed.change}
+          label="Pairs made"
+          value={(kpis.pairs.value ?? 0).toLocaleString("en-PH")}
+          sub="counted at the check-ins"
+          change={kpis.pairs.change}
           compareLabel={compareLabel}
-          testid="kpi-completed"
+          testid="kpi-pairs"
         />
         <KpiTile
-          label="Batches started"
-          value={String(kpis.started.value ?? 0)}
-          change={kpis.started.change}
+          label="Of quota"
+          value={formatPercent(kpis.ofQuota.value)}
+          sub={quotaNote}
+          change={kpis.ofQuota.change}
           compareLabel={compareLabel}
+          testid="kpi-quota"
         />
         <KpiTile
-          label="Typical lead time"
-          value={
-            kpis.leadTimeMedianMs.value === null ? "—" : formatDuration(kpis.leadTimeMedianMs.value)
-          }
-          sub="start to finish, per batch"
-          change={kpis.leadTimeMedianMs.change}
+          label="Rolls finished"
+          value={String(kpis.rollsFinished.value ?? 0)}
+          change={kpis.rollsFinished.change}
           compareLabel={compareLabel}
+          testid="kpi-rolls"
         />
         <KpiTile
-          label="In production now"
-          value={String(kpis.wip)}
-          sub={kpis.wip === 1 ? "batch on the line" : "batches on the line"}
-          testid="kpi-wip"
+          label="Rolls at Preparation"
+          value={String(kpis.rollsAtPreparation)}
+          sub={kpis.rollsAtPreparation === 1 ? "roll being cut now" : "rolls being cut now"}
+          testid="kpi-preparation"
         />
         <KpiTile
           label="First-pass yield"
@@ -81,80 +87,48 @@ export function OperationsView({
           compareLabel={compareLabel}
         />
         <KpiTile
-          label="At the repair station"
+          label="To clean or cut around"
           value={String(kpis.repairsOpen)}
-          sub="sections, waiting or repairing"
+          sub="sections, waiting or being handled"
         />
       </section>
 
       <AttentionList items={report.attention} asOf={formatManilaDateTime(report.asOf)} />
 
-      <section aria-labelledby="line-heading" className="flex flex-col gap-3">
-        <div>
-          <h2 id="line-heading" className="text-xl font-semibold">
-            On the floor now
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Every batch in production, by stage. “Longer than usual” means more than 1.5 times that
-            stage’s typical visit over the last 30 days.
-          </p>
-        </div>
-        <FlowLanes lanes={flow.lanes} bottleneck={flow.bottleneck} />
-      </section>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Flow</CardTitle>
-          <CardDescription>
-            Batches started and completed per day.
-            {flow.leadTime.batches > 0 &&
-              ` ${flow.leadTime.batches} finished in this range, typically in ${formatDuration(flow.leadTime.medianMs ?? 0)}.`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FlowChart days={report.days} />
-        </CardContent>
-      </Card>
-
       <Card data-testid="production-section">
         <CardHeader>
-          <CardTitle>Time in each stage</CardTitle>
-          <CardDescription>
-            Per visit, for stages finished in this range (moves back included). Slowest 1 in 10
-            shows how bad the bad days are.
-          </CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>Production</CardTitle>
+              <CardDescription>
+                Pairs finished per working day against the daily quota, with the Shoe Constructors
+                present. Each shortfall gets one sentence from the day’s numbers, never a name.
+              </CardDescription>
+            </div>
+            <Link
+              href="/production"
+              className="text-sm font-medium underline-offset-4 hover:underline"
+            >
+              Today’s check-ins
+            </Link>
+          </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Stage</TableHead>
-                <TableHead numeric>Visits</TableHead>
-                <TableHead numeric>Typical</TableHead>
-                <TableHead numeric>Slowest 1 in 10</TableHead>
-                <TableHead numeric>Average</TableHead>
-                <TableHead numeric>In stage now</TableHead>
-                <TableHead numeric>Longest wait now</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {flow.lanes.map((s) => (
-                <TableRow key={s.stage}>
-                  <TableCell className="font-medium">{s.label}</TableCell>
-                  <TableCell numeric>{s.visits}</TableCell>
-                  <TableCell numeric>
-                    {s.medianMs === null ? "—" : formatDuration(s.medianMs)}
-                  </TableCell>
-                  <TableCell numeric>{s.p90Ms === null ? "—" : formatDuration(s.p90Ms)}</TableCell>
-                  <TableCell numeric>{s.avgMs === null ? "—" : formatDuration(s.avgMs)}</TableCell>
-                  <TableCell numeric>{s.inStageNow}</TableCell>
-                  <TableCell numeric>
-                    {s.longestWaitMs === null ? "—" : formatDuration(s.longestWaitMs)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <CardContent className="flex flex-col gap-6">
+          {production.days.length > 0 && (
+            <ProductionChart
+              days={production.days.map((d) => ({
+                day: d.day,
+                pairs: d.pairs,
+                quota: d.quota,
+                constructorsPresent: d.constructorsPresent,
+              }))}
+            />
+          )}
+          <ProductionDaysTable
+            shoeTypes={production.shoeTypes}
+            days={production.days}
+            testid="ops-production-table"
+          />
         </CardContent>
       </Card>
 
@@ -165,7 +139,12 @@ export function OperationsView({
         <ProcurementFlowCard p={report.procurement} />
       </div>
 
-      <SupplierCard suppliers={report.suppliers} lineProblemShare={report.lineProblemShare} />
+      <SupplierQualityCard
+        suppliers={report.suppliers}
+        rolls={report.rejectedRolls}
+        lineProblemShare={report.lineProblemShare}
+        rangeQuery={`from=${range.from}&to=${range.to}`}
+      />
 
       <Card data-testid="checkpoint">
         <CardHeader>
@@ -196,7 +175,7 @@ export function OperationsView({
               <dd className="text-2xl font-semibold tabular-nums">{checkpoint.totals.reject}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Sent to rework</dt>
+              <dt className="text-muted-foreground">Marked Fixable</dt>
               <dd className="text-2xl font-semibold tabular-nums">{checkpoint.totals.rework}</dd>
             </div>
             <div>
@@ -236,13 +215,13 @@ export function OperationsView({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Day</TableHead>
-                <TableHead numeric>Started</TableHead>
-                <TableHead numeric>Completed</TableHead>
+                <TableHead numeric>Rolls started</TableHead>
+                <TableHead numeric>Rolls finished</TableHead>
                 <TableHead numeric>Scanned</TableHead>
                 <TableHead numeric>Pass</TableHead>
-                <TableHead numeric>Rework</TableHead>
+                <TableHead numeric>Fixable</TableHead>
                 <TableHead numeric>Reject</TableHead>
-                <TableHead numeric>Repairs done</TableHead>
+                <TableHead numeric>Cleaned or cut around</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

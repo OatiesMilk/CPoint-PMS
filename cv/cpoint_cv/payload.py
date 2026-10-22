@@ -1,7 +1,9 @@
-"""The text fields of ``POST /api/v1/scans`` (multipart), exactly as the station sends them.
+"""The text fields of ``POST /api/v1/scans`` (multipart), as a device-token client sends them.
 
-The image goes alongside as the ``image`` file part. The contract is documented in
-``docs/API.md`` and checked from both sides with ``tests/fixtures/cv-payload.json``.
+Nothing in the toolkit posts scans since the station was retired (Phase 20, D-069). This builder
+stays so ``tests/test_contract_fixture.py`` can still write ``tests/fixtures/cv-payload.json``,
+which the app's ``tests/unit/cv-contract.test.ts`` parses: the mapper's output in the contract's
+shape, checked from both sides. The contract is documented in ``docs/API.md``.
 """
 
 from __future__ import annotations

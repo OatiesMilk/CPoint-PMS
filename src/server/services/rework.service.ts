@@ -1,5 +1,10 @@
 import type { ReworkStatus } from "@/lib/domain";
-import { planReworkMove, type ReworkMove } from "@/lib/outcome-rules";
+import {
+  planReworkMove,
+  sectionHandling,
+  type DefectHandling,
+  type ReworkMove,
+} from "@/lib/outcome-rules";
 import { Errors } from "@/server/lib/errors";
 import { runInTransaction } from "@/server/models/db";
 import {
@@ -12,7 +17,7 @@ import {
 import { recordAudit } from "./audit.service";
 
 const DONE_WINDOW_MS = 7 * 24 * 3_600_000;
-const STALE = "Someone else already moved this repair. Refresh the board.";
+const STALE = "Someone else already moved this section on the board. Refresh the board.";
 
 export type ReworkCard = {
   id: string;
@@ -23,6 +28,8 @@ export type ReworkCard = {
   batchId: string;
   batchCode: string;
   defect: { label: string; confidence: number } | null;
+  /** Clean the section, or cut around the defect (D-070). */
+  handling: DefectHandling;
   openedAt: string;
   startedAt: string | null;
   completedAt: string | null;
@@ -43,6 +50,7 @@ function toCard(row: ReworkRow): ReworkCard {
     defect: top
       ? { label: top.defectType?.label ?? top.rawClassKey, confidence: top.confidence }
       : null,
+    handling: sectionHandling(row.scan.detections.map((d) => d.defectType?.handling)),
     openedAt: row.openedAt.toISOString(),
     startedAt: row.startedAt?.toISOString() ?? null,
     completedAt: row.completedAt?.toISOString() ?? null,
@@ -70,7 +78,7 @@ export async function reworkBoard(batchCode?: string, now: Date = new Date()) {
   };
 }
 
-/** Counts for the Floor Manager home: what's at the repair station and the longest wait. */
+/** Counts for the Floor Manager home: what's at the Repair Station and the longest wait. */
 export async function reworkSummary(now: Date = new Date()) {
   const groups = await countReworkByStatus({ status: { in: ["OPEN", "IN_PROGRESS"] } });
   const open = groups.find((g) => g.status === "OPEN");
@@ -96,7 +104,7 @@ export async function moveReworkTicket(
   now: Date = new Date(),
 ) {
   const ticket = await findReworkTicket(id);
-  if (!ticket) throw Errors.notFound("This repair");
+  if (!ticket) throw Errors.notFound("This section on the board");
   if (ticket.status !== input.expectedStatus) throw Errors.stale(STALE);
   const plan = planReworkMove(ticket, ticket.scan.batch.status, input.move);
   if (!plan.ok) throw Errors.conflict(plan.reason);

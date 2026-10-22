@@ -52,7 +52,7 @@ export async function decideScan(
   const live = await findLiveOutcomes(id);
   if (live.rework && live.rework.status !== "OPEN" && input.verdict !== "REWORK") {
     throw Errors.conflict(
-      "The repair station has already worked on this section, so the decision can't change now.",
+      "This section has already been cleaned or cut around, so the decision can't change now.",
     );
   }
   if (live.salvage && live.salvage.status !== "AVAILABLE" && input.verdict !== "REJECT") {

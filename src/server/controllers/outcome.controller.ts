@@ -38,7 +38,7 @@ export const outcomeController = {
   /** POST /api/v1/rework/{id}/status  { move: start|done|reopen|unstart, expectedStatus, note? } */
   reworkMove: handle(async (request: Request, ctx: IdContext) => {
     const user = await requireApiPermission("rework:manage");
-    const id = await idFrom(ctx, "This repair");
+    const id = await idFrom(ctx, "This section on the board");
     return json({
       data: await moveReworkTicket(id, reworkMoveSchema.parse(await readJsonBody(request)), user),
     });

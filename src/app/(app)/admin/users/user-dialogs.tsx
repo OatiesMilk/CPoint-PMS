@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { ROLE_LABELS, type Role } from "@/lib/domain";
 import { userFormSchema } from "@/server/validators/user.validator";
+import { setCameraOperatorAction } from "../../camera/actions";
 import { setRequesterAction } from "../../procurement/actions";
 import {
   createUserAction,
@@ -225,6 +226,7 @@ type Row = {
   isActive: boolean;
   status: "ACTIVE" | "DEACTIVATED" | "LOCKED";
   canRequestLeatherRolls: boolean;
+  canCapture: boolean;
 };
 
 /**
@@ -294,6 +296,21 @@ export function UserRowActions({
     });
   }
 
+  /** Camera operators (D-075): the same action the Floor Manager uses on the Camera page. */
+  function setOperator(value: boolean, quiet = false) {
+    startTransition(async () => {
+      const result = await setCameraOperatorAction(user.id, value);
+      if (!result.ok) return void toast.error(result.error);
+      if (quiet) return;
+      toast.success(
+        value
+          ? `${user.name} can now capture at the camera.`
+          : `${user.name} can no longer capture at the camera.`,
+        { duration: 6000, action: { label: "Undo", onClick: () => setOperator(!value, true) } },
+      );
+    });
+  }
+
   function unlock() {
     startTransition(async () => {
       const result = await unlockUserAction(user.id);
@@ -332,6 +349,11 @@ export function UserRowActions({
                 {user.canRequestLeatherRolls
                   ? "Stop leather roll requests"
                   : "Allow leather roll requests"}
+              </DropdownMenuItem>
+            )}
+            {user.role === "SHOE_CONSTRUCTOR" && user.isActive && (
+              <DropdownMenuItem onSelect={() => setOperator(!user.canCapture)}>
+                {user.canCapture ? "Stop capturing at the camera" : "Allow capturing at the camera"}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

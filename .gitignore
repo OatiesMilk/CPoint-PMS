@@ -27,9 +27,9 @@ next-env.d.ts
 .env.*
 !.env.example
 
-# HTTPS certificate and key for the LAN (mkcert, D-065): never committed
-/certs/*
-!/certs/.gitkeep
+# Old mkcert certificate and key from before the Cloudflare Tunnel (D-065, retired by D-076).
+# A private key: never commit it, even after HTTPS moved to the tunnel.
+/certs/
 
 # misc
 .DS_Store
@@ -45,14 +45,12 @@ Thumbs.db
 /.windsurf
 skills-lock.json
 
-# camera station (cv/): model files, local config, outputs and Python caches (D-049)
+# model toolkit (cv/): model files, local config, outputs and Python caches (D-049)
 *.pt
 *.onnx
 /cv/models/*
 !/cv/models/.gitkeep
 /cv/config.toml
-# the station window's last camera choice (D-062)
-/cv/station-window.json
 /cv/out/
 /cv/.venv/
 __pycache__/
