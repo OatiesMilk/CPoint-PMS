@@ -120,7 +120,9 @@ test.describe("Capture page", () => {
     const button = page.getByRole("button", { name: "Capture", exact: true });
 
     if (!hasModel) {
-      await expect(page.getByText(/The camera model isn’t installed on the server/)).toBeVisible();
+      await expect(
+        page.getByText(/The camera model isn['’]t installed on the server/),
+      ).toBeVisible();
       await expect(button).toBeDisabled();
       return;
     }

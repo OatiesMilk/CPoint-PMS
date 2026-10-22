@@ -14,6 +14,17 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-22 — PR #15 CI fixes
+
+**Who:** Dylan
+**Summary:** PR #15 (Phases 20 to 23) had two failing CI jobs. `station`: mypy couldn't find
+`onnx` (imported only inside the ONNX export); added `onnx` and `onnxslim` to the optional-module
+override in `cv/pyproject.toml`. `e2e`: `capture.spec.ts` looked for "isn’t installed" with a
+curly apostrophe, but the app's missing-model message uses a straight one; the test now accepts
+both (CI has no model files, so only CI runs that branch).
+**Gates:** lint ✅ (file) · typecheck ✅ · mypy not run locally (not installed) · e2e not run (CI)
+**Decisions:** none
+
 ## 2026-10-22 — Phase 23 QA passed
 
 **Who:** Dylan
