@@ -5,6 +5,7 @@ const model = {
   deleteResetTargets: vi.fn(),
   upsertDefectTypeState: vi.fn(),
   setLeatherRollRequester: vi.fn(),
+  setDemoAccountNames: vi.fn(),
 };
 const env = { NODE_ENV: "development", BOOTSTRAP_ADMIN_EMAIL: "Owner@CPoint.local" };
 const recordAudit = vi.fn();
@@ -24,8 +25,11 @@ vi.mock("@/server/models/demo-reset.model", () => model);
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 vi.mock("@/server/services/demo-seed.service", () => ({ seedDemoWeek }));
 vi.mock("@/server/services/bootstrap.service", () => ({
-  DEMO_USERS: [{ email: "manager@cpoint.local" }, { email: "admin@cpoint.local" }],
-  DEMO_CONSTRUCTORS: [{ email: "ana.cruz@cpoint.local" }],
+  DEMO_USERS: [
+    { email: "manager@cpoint.local", name: "Rodel Pascual" },
+    { email: "admin@cpoint.local", name: "Jerome Salazar" },
+  ],
+  DEMO_CONSTRUCTORS: [{ email: "arnel.bautista@cpoint.local" }],
   ensureDemoConstructors,
   REFERENCE_DATA: {
     shoeTypes: [{ code: "SCH" }, { code: "TOP" }],
@@ -50,7 +54,7 @@ describe("resetKeep (D-056)", () => {
     expect(keep.emails).toEqual([
       "manager@cpoint.local",
       "admin@cpoint.local",
-      "ana.cruz@cpoint.local",
+      "arnel.bautista@cpoint.local",
       "owner@cpoint.local",
     ]);
     expect(keep.tokenHashes).toEqual([hashDeviceToken("cpt_station_token")]);
@@ -72,6 +76,14 @@ describe("resetDemoData", () => {
     expect(model.setLeatherRollRequester).toHaveBeenCalledWith(
       "constructor@cpoint.local",
       true,
+      "tx",
+    );
+    // The demo accounts get their names back (D-090).
+    expect(model.setDemoAccountNames).toHaveBeenCalledWith(
+      [
+        { email: "manager@cpoint.local", name: "Rodel Pascual" },
+        { email: "admin@cpoint.local", name: "Jerome Salazar" },
+      ],
       "tx",
     );
     expect(recordAudit).toHaveBeenCalledTimes(1);

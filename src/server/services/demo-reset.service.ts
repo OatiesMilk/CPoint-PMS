@@ -6,6 +6,7 @@ import { runInTransaction } from "@/server/models/db";
 import {
   countResetTargets,
   deleteResetTargets,
+  setDemoAccountNames,
   setLeatherRollRequester,
   upsertDefectTypeState,
   type ResetCounts,
@@ -153,6 +154,11 @@ export async function resetDemoData(
       await deleteResetTargets(keep, tx);
       for (const type of MODEL_DEFECT_TYPES) await upsertDefectTypeState(type, tx);
       await setLeatherRollRequester(DEMO_LEATHER_REQUESTER, true, tx);
+      // Accounts made before the demo names (D-090) get them; the constructors list has its own.
+      await setDemoAccountNames(
+        DEMO_USERS.filter((u) => u.name).map((u) => ({ email: u.email, name: u.name })),
+        tx,
+      );
       // The audit log starts again with this one row, so anyone can see when and what was reset.
       await recordAudit(tx, {
         actor: { type: "SYSTEM" },

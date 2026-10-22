@@ -1510,3 +1510,36 @@ guessing.
 **Where:** `CLAUDE.md`, `AGENTS.md`, `qa/README.md`, `qa/templates/ci-fix-prompt.md`,
 `docs/AGENTIC_WORKFLOW.md`, `.claude/skills/wrap-up/SKILL.md`; the vault's `CLAUDE.md`,
 `Rules.md`, `Home.md`, `Notes/Agent workflow.md`, `Notes/Phases/`.
+
+### D-090 · 2026-10-22 · Accepted — A smaller, realistic demo week that matches the system after Phase 23
+
+**Context:** Dylan asked (2026-10-22) that the demo seed match the current system, with minimal
+data named like real data instead of "Demo …" or A-to-L names. The demo week still sent its scans
+as "Simulator" through a demo device token with model "demo-seed", although capture is on the
+website only since D-069, and it scanned 20 to 30 sections a roll against Finish roll's "about 10
+pieces" (D-082).
+**Decision:**
+
+- **Scans:** every demo scan is a Capture page capture (`WEBCAM`, no device token, the audit names
+  the person) with model `yolo-v1-1d729fb0`; 10 sections a roll (`SECTIONS_PER_ROLL`), so about 120
+  scans instead of about 290. The demo week no longer creates a device token.
+- **People:** the demo accounts keep their emails and get names: Rodel Pascual (FM), Maricel
+  Dizon (QI), Jerome Salazar (Admin), Noel Manalo (the constructor who orders leather, also allowed
+  to capture, D-075). The 12 constructors get a mixed list of Filipino names. Demo accounts are
+  dated 30 days back like the constructors, so the FM and QI are on the demo week's attendance.
+  `demo:reset` puts the demo names back and removes the old A-to-L constructors.
+- **Suppliers:** Marikina Leather Trading (the one with more defects), Meycauayan Tannery, JM
+  Leather Supply (Divisoria) as the fallback store (survey: two usual suppliers, other stores when
+  both run out), and San Roque Shoe Supplies for thread, tacks, cement and soles. Rolls alternate
+  between the two tanneries, every sixth from the store; the bootstrap placeholder supplier is no
+  longer used by the demo.
+- **D-088 in the demo:** on one past day with no constructor absent, the QI is absent; the FM
+  captures that day and enters its check-ins; that day's flagged scans wait for the QI the next
+  morning (D-028).
+- CI's demo-week check expects at least 40 scans (was 150).
+
+**Where:** `src/server/services/demo-seed.service.ts`, `bootstrap.service.ts`,
+`demo-reset.service.ts`, `models/demo-reset.model.ts`, `lib/demo-suppliers.ts`,
+`.github/workflows/ci.yml`, `tests/unit/demo-seed.test.ts`, `tests/unit/demo-reset.test.ts`.
+**Consequences:** demo data only; no migration and no rule changes. The names and suppliers are
+invented for the demo; none is a real CPoint person or supplier.

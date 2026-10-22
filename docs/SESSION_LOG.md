@@ -14,6 +14,24 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-22 — Demo seed refresh
+
+**Who:** Dylan (uncommitted, on top of `main`)
+**Summary:** The demo week now matches the system after Phase 23 and is smaller: website-camera scans with the real model name, 10 sections a roll (about 120 scans instead of 290), realistic names for the demo accounts, constructors and suppliers, and one day where the QI is absent and the FM covers (D-090).
+**Changed:**
+
+- `demo-seed.service.ts`: `WEBCAM` captures by the QI (the FM on the QI's day off), no demo device token, `SECTIONS_PER_ROLL = 10`, demo suppliers only (leather from the tanneries, supplies from San Roque), the leather requester may capture, "Too small to cut any shoe part".
+- `bootstrap.service.ts`: named demo accounts dated 30 days back; a new constructor list. `demo-reset`: puts the demo names back (`setDemoAccountNames`). `demo-suppliers.ts`: four suppliers with realistic notes.
+- CI: the demo-week check expects at least 40 scans. Unit tests: website capture, 10 a roll, the QI-absent day.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (716) · build ✅ (in the cloud copy with the same changes; the laptop's `node_modules` are Windows builds) · real `npm run demo:seed` on a throwaway PostgreSQL ✅ (14 batches, 120 scans, 9 requests, 5 attendance days; stock equals the ledger) · e2e n/a (Codex) · docker not run
+**Decisions:** D-090
+**Follow-ups:**
+
+- Dylan: back up, then `npm run demo:reset -- --yes` to see the new demo on the dev database.
+- Codex QA **PASS** (2026-10-22): D1 to D10, e2e 99 passed, 0 failed, 1 skipped
+  (`qa/reports/2026-10-22-demo-seed-refresh.md`).
+
 ## 2026-10-22 — Agent workflow: Codex fixes CI, the vault first
 
 **Who:** Dylan (on the merged Phases 20 to 23; not committed)

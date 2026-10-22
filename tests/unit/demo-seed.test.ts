@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { manilaToday } from "@/lib/format";
 
-const calls: { fn: string; batchId?: string; now: Date; classKeys?: string[] }[] = [];
+const calls: { fn: string; batchId?: string; now: Date; classKeys?: string[]; by?: string }[] = [];
 let nextBatch = 0;
 const svc = {
   createBatch: vi.fn(async (_v: unknown, _a: unknown, now: Date) => {
@@ -17,11 +17,12 @@ const svc = {
   ingestScan: vi.fn(
     async (
       input: { batchId: string; detections: { classKey: string }[] },
-      _d: unknown,
+      origin: { kind?: string; userId?: string },
       now: Date,
     ) => {
       calls.push({
         fn: "scan",
+        by: origin.userId,
         batchId: input.batchId,
         now,
         classKeys: input.detections.map((d) => d.classKey),
@@ -79,9 +80,8 @@ vi.mock("@/server/models/reference-data.model", () => ({
   ensureSupplier: vi.fn(),
 }));
 vi.mock("@/server/models/user.model", () => ({ findUserByEmail: mocks.findUserByEmail }));
-vi.mock("@/server/services/api-token.service", () => ({
-  createDeviceToken: vi.fn(async () => ({ id: "tok" })),
-}));
+const setCameraOperator = vi.fn(async () => ({}));
+vi.mock("@/server/services/camera.service", () => ({ setCameraOperator }));
 vi.mock("@/server/services/batch.service", () => svc);
 vi.mock("@/server/services/inventory.service", () => ({
   createItem: vi.fn(async () => ({ id: "item" })),
@@ -251,9 +251,70 @@ describe("seedDemoWeek", () => {
   ])("leaves the newest batch's last two sections for review (%s)", async (_label, at) => {
     await seedDemoWeek({ now: at, seed: 1 });
     const scans = calls.filter((c) => c.fn === "scan");
-    expect(scans.length).toBeGreaterThan(100);
+    // Ten sections a roll (D-082): small, but every roll has a full set.
+    expect(scans.length).toBeGreaterThanOrEqual(80);
     expect(scans.slice(-2).map((c) => c.classKeys)).toEqual([[UNKNOWN_CLASS], [UNKNOWN_CLASS]]);
     expect(new Set(scans.slice(-2).map((c) => c.batchId)).size).toBe(1);
+  });
+
+  it("captures every section from the website camera with the real model, ten a roll (D-090)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    const inputs = svc.ingestScan.mock.calls.map(
+      (c) => c[0] as unknown as { source: string; modelVersion: string; batchId: string },
+    );
+    expect(new Set(inputs.map((i) => i.source))).toEqual(new Set(["WEBCAM"]));
+    expect(new Set(inputs.map((i) => i.modelVersion))).toEqual(new Set(["yolo-v1-1d729fb0"]));
+    const perRoll = new Map<string, number>();
+    for (const i of inputs) perRoll.set(i.batchId, (perRoll.get(i.batchId) ?? 0) + 1);
+    expect(Math.max(...perRoll.values())).toBe(10);
+    for (const [, origin] of svc.ingestScan.mock.calls)
+      expect(origin).toMatchObject({ kind: "website" });
+    // The constructor who orders leather may also capture (D-075).
+    expect(setCameraOperator).toHaveBeenCalledWith("constructor@cpoint.local", true, {
+      id: "manager@cpoint.local",
+      role: "FLOOR_MANAGER",
+      isActive: true,
+      canRequestLeatherRolls: true,
+    });
+  });
+
+  it("has the Floor Manager capture and enter the check-ins on the day the QI is absent (D-088)", async () => {
+    roster.push({ id: "inspector@cpoint.local", role: "QUALITY_INSPECTOR" });
+    try {
+      await seedDemoWeek({ now, seed: 1 });
+    } finally {
+      roster.pop();
+    }
+    // 30 Sep: no constructor absent, the QI away.
+    const away = attendance.saveAttendanceDay.mock.calls.find(([day]) => day === "2026-09-30")!;
+    const marks = (away[1] as { marks: { userId: string; present: boolean }[] }).marks;
+    expect(marks.filter((m) => !m.present).map((m) => m.userId)).toEqual([
+      "inspector@cpoint.local",
+    ]);
+    const byDay = (t: Date) => new Date(t.getTime() + 8 * 3_600_000).toISOString().slice(0, 10);
+    const checkIns = production.saveCheckIn.mock.calls as unknown as [
+      unknown,
+      { id: string },
+      Date,
+    ][];
+    for (const [, actor, when] of checkIns)
+      expect(actor.id).toBe(
+        byDay(when) === "2026-09-30" ? "manager@cpoint.local" : "inspector@cpoint.local",
+      );
+    expect(checkIns.some(([, actor]) => actor.id === "manager@cpoint.local")).toBe(true);
+    const scans = calls.filter((c) => c.fn === "scan");
+    for (const scan of scans)
+      expect(scan.by).toBe(
+        byDay(scan.now) === "2026-09-30" ? "manager@cpoint.local" : "inspector@cpoint.local",
+      );
+    // Nobody decides a flagged scan that day: the QI does it the next morning (D-028).
+    for (const [, , actor, when] of decideScan.mock.calls as unknown as [
+      string,
+      { expectedFinalVerdict: string | null },
+      { id: string },
+      Date,
+    ][])
+      if (actor.id === "inspector@cpoint.local") expect(byDay(when)).not.toBe("2026-09-30");
   });
 
   it("draws defects from the active defect types only", async () => {

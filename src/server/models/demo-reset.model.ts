@@ -138,3 +138,9 @@ export function upsertDefectTypeState(
 export function setLeatherRollRequester(email: string, value: boolean, db: Db) {
   return db.user.updateMany({ where: { email }, data: { canRequestLeatherRolls: value } });
 }
+
+/** Puts the demo accounts' names back (D-090); an account that isn't there is skipped. */
+export async function setDemoAccountNames(people: { email: string; name: string }[], db: Db) {
+  for (const { email, name } of people)
+    await db.user.updateMany({ where: { email }, data: { name } });
+}
