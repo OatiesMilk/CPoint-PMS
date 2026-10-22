@@ -17,14 +17,25 @@ const isOpen = (status: BatchStatus) => OPEN_BATCH.includes(status);
 
 // ───────────── rework ─────────────
 
+export type DefectHandling = "CLEAN" | "CUT_AROUND";
+
+/**
+ * How a Fixable section is made usable (D-070): cleaned only when every defect found on it is of
+ * a type that's cleaned (dirt); any other defect, or one the app doesn't know, means cutting
+ * around it. A section with no detections (sent by a person) is cut around.
+ */
+export function sectionHandling(handlings: (DefectHandling | null | undefined)[]): DefectHandling {
+  return handlings.length > 0 && handlings.every((h) => h === "CLEAN") ? "CLEAN" : "CUT_AROUND";
+}
+
 export type ReworkMove = "start" | "done" | "reopen" | "unstart";
 
 export const REWORK_MOVES: Record<
   ReworkMove,
   { from: ReworkStatus; to: ReworkStatus; label: string }
 > = {
-  start: { from: "OPEN", to: "IN_PROGRESS", label: "Start repair" },
-  done: { from: "IN_PROGRESS", to: "DONE", label: "Mark repaired" },
+  start: { from: "OPEN", to: "IN_PROGRESS", label: "Start" },
+  done: { from: "IN_PROGRESS", to: "DONE", label: "Mark done" },
   reopen: { from: "DONE", to: "IN_PROGRESS", label: "Reopen" },
   unstart: { from: "IN_PROGRESS", to: "OPEN", label: "Back to waiting" },
 };
@@ -35,13 +46,19 @@ export function planReworkMove(
   move: ReworkMove,
 ): Result<{ to: ReworkStatus }> {
   if (ticket.status === "CANCELLED")
-    return { ok: false, reason: "This repair was cancelled because the decision changed." };
+    return {
+      ok: false,
+      reason: "This section was taken off the board because its decision changed.",
+    };
   // A completed batch keeps its repairs on the board (D-022); only a cancelled roll freezes them.
   if (batchStatus === "CANCELLED")
-    return { ok: false, reason: "The batch was cancelled, so its repairs can't change." };
+    return {
+      ok: false,
+      reason: "The batch was cancelled, so its sections on the board can't change.",
+    };
   const { from, to } = REWORK_MOVES[move];
   if (ticket.status !== from)
-    return { ok: false, reason: "This repair has already moved on. Refresh the board." };
+    return { ok: false, reason: "This section has already moved on. Refresh the board." };
   return { ok: true, to };
 }
 

@@ -45,7 +45,6 @@ export default async function EditBatchPage({ params }: PageProps<"/batches/[id]
             shoeTypeId: batch.shoeTypeId,
             supplierId: batch.supplierId ?? "",
             receivedAt: batch.receivedAt.toISOString().slice(0, 10),
-            targetQuotaPairs: batch.targetQuotaPairs?.toString() ?? "",
             notes: batch.notes ?? "",
           },
         }}

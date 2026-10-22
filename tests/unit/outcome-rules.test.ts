@@ -3,6 +3,7 @@ import type { BatchStatus, ReworkStatus, SalvageStatus } from "@/lib/domain";
 import {
   computeBatchYield,
   planReworkMove,
+  sectionHandling,
   planSalvageMove,
   type ReworkMove,
 } from "@/lib/outcome-rules";
@@ -124,5 +125,15 @@ describe("computeBatchYield", () => {
     });
     expect(y.usable).toBe(0);
     expect(y.scanned).toBe(0);
+  });
+});
+
+describe("sectionHandling (D-070)", () => {
+  it("cleans a section only when every defect on it is cleaned", () => {
+    expect(sectionHandling(["CLEAN"])).toBe("CLEAN");
+    expect(sectionHandling(["CLEAN", "CLEAN"])).toBe("CLEAN");
+    expect(sectionHandling(["CLEAN", "CUT_AROUND"])).toBe("CUT_AROUND");
+    expect(sectionHandling(["CLEAN", null])).toBe("CUT_AROUND");
+    expect(sectionHandling([])).toBe("CUT_AROUND");
   });
 });

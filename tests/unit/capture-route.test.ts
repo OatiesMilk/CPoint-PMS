@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Errors } from "@/server/lib/errors";
 
-const guard = { requireApiPermission: vi.fn(), requireDevice: vi.fn() };
+const guard = {
+  requireApiCapture: vi.fn(),
+  requireApiPermission: vi.fn(),
+  requireApiUser: vi.fn(),
+  requireDevice: vi.fn(),
+};
 const capture = { captureScan: vi.fn() };
 vi.mock("@/server/policies/guard", () => guard);
 vi.mock("@/server/services/capture.service", () => capture);
@@ -22,15 +27,15 @@ function request(fields: Record<string, string> = {}, image: Uint8Array | null =
 
 beforeEach(() => {
   vi.clearAllMocks();
-  guard.requireApiPermission.mockResolvedValue({ id: "user-qi", role: "QUALITY_INSPECTOR" });
+  guard.requireApiCapture.mockResolvedValue({ id: "user-qi", role: "QUALITY_INSPECTOR" });
   capture.captureScan.mockResolvedValue({ scanId: "scan1", duplicate: false });
 });
 
 describe("POST /api/v1/scans/capture", () => {
-  it("needs camera:capture, and never a device token", async () => {
+  it("needs someone who may capture (D-075), and never a device token", async () => {
     const res = await POST(request());
     expect(res.status).toBe(201);
-    expect(guard.requireApiPermission).toHaveBeenCalledWith("camera:capture");
+    expect(guard.requireApiCapture).toHaveBeenCalled();
     expect(guard.requireDevice).not.toHaveBeenCalled();
     expect(capture.captureScan).toHaveBeenCalledWith(
       { bytes: JPEG, type: { mime: "image/jpeg", ext: "jpg" } },
@@ -39,10 +44,10 @@ describe("POST /api/v1/scans/capture", () => {
     );
   });
 
-  it("answers 401 signed out and 403 for a role without the permission", async () => {
-    guard.requireApiPermission.mockRejectedValueOnce(Errors.unauthenticated());
+  it("answers 401 signed out and 403 for someone not allowed to capture", async () => {
+    guard.requireApiCapture.mockRejectedValueOnce(Errors.unauthenticated());
     expect((await POST(request())).status).toBe(401);
-    guard.requireApiPermission.mockRejectedValueOnce(Errors.forbidden());
+    guard.requireApiCapture.mockRejectedValueOnce(Errors.forbidden());
     expect((await POST(request())).status).toBe(403);
     expect(capture.captureScan).not.toHaveBeenCalled();
   });

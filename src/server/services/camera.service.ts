@@ -1,5 +1,4 @@
 import { Errors } from "@/server/lib/errors";
-import { findLatestUsedCameraToken } from "@/server/models/api-token.model";
 import {
   findPreparationBatchById,
   listBatchesAtPreparation,
@@ -8,6 +7,13 @@ import {
 import { getCvSettings, updateActiveBatch } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
 import { findLatestScan } from "@/server/models/scan.model";
+import {
+  findUserById,
+  listCameraOperatorCandidates,
+  setCanCapture,
+} from "@/server/models/user.model";
+import type { Role } from "@/lib/domain";
+import { can } from "@/server/policies/permissions";
 import { recordAudit } from "./audit.service";
 
 export type CameraBatch = PreparationBatch & { selection: "explicit" | "selected" | "oldest" };
@@ -16,7 +22,7 @@ const atPreparation = (b: PreparationBatch | null): b is PreparationBatch =>
   !!b && b.status === "IN_PROGRESS" && b.currentStage === "PREPARATION";
 
 export const NO_BATCH_MESSAGE =
-  "No batch is at Preparation. Start one on the Batches page, then scan again.";
+  "No roll is at Preparation. Start one on the Batches page, then scan again.";
 
 /**
  * Which batch a scan belongs to (D-020): an explicit batchId from the device, else the batch picked
@@ -39,6 +45,45 @@ export async function resolveCameraBatch(explicitBatchId?: string): Promise<Came
   }
   const [oldest] = await listBatchesAtPreparation();
   return oldest ? { ...oldest, selection: "oldest" } : null;
+}
+
+/** Active Shoe Constructors and whether each may capture at the camera (D-075). */
+export function listCameraOperators() {
+  return listCameraOperatorCandidates();
+}
+
+/**
+ * Allow or stop a Shoe Constructor capturing at the camera (D-075), as the Floor Manager or the
+ * System Admin. Applies on the person's next request; they stay signed in.
+ */
+export async function setCameraOperator(
+  userId: string,
+  canCapture: boolean,
+  actor: { id: string; role: Role },
+) {
+  if (!can(actor.role, "camera:operators"))
+    throw Errors.forbidden(
+      "Only the Floor Manager or the System Admin chooses who can capture at the camera.",
+    );
+  const target = await findUserById(userId);
+  if (!target) throw Errors.notFound("This person");
+  if (target.role !== "SHOE_CONSTRUCTOR" || !target.isActive)
+    throw Errors.conflict(
+      "Only an active Shoe Constructor can be allowed to capture. The QI and the Floor Manager already can.",
+    );
+  if (target.canCapture === canCapture) return { id: userId, canCapture };
+  await runInTransaction(async (tx) => {
+    await setCanCapture(userId, canCapture, tx);
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: canCapture ? "camera.capture_access.grant" : "camera.capture_access.revoke",
+      entity: "User",
+      entityId: userId,
+      before: { email: target.email, canCapture: target.canCapture },
+      after: { email: target.email, canCapture },
+    });
+  });
+  return { id: userId, canCapture };
 }
 
 /** Pick the batch the camera feeds, or null to go back to "oldest at Preparation". */
@@ -64,10 +109,11 @@ export async function setActiveBatch(batchId: string | null, actor: { id: string
 
 export type CameraStatus = {
   /**
-   * camera / simulator: a scan arrived in the last minute. waiting: no scan for a minute, but a
-   * camera station checked in recently (D-054). not_connected: neither.
+   * capturing / simulator: a scan arrived in the last minute (the Capture page, or a device token
+   * other than the simulator). idle: nothing for a minute. The station check-in (D-054) was
+   * retired with the station app in Phase 20 (D-069).
    */
-  state: "not_connected" | "waiting" | "simulator" | "camera";
+  state: "idle" | "simulator" | "capturing";
   lastScan: {
     id: string;
     at: Date;
@@ -75,8 +121,6 @@ export type CameraStatus = {
     device: string | null;
     modelVersion: string | null;
   } | null;
-  /** The station that checked in most recently, while it counts as connected. */
-  station: { name: string; seenAt: Date } | null;
   earlyModelNotice: boolean;
   current: CameraBatch | null;
   candidates: PreparationBatch[];
@@ -84,37 +128,17 @@ export type CameraStatus = {
 };
 
 const ACTIVE_WINDOW_MS = 60_000;
-/**
- * A waiting station asks for the current batch every 20 s, and the app records a token's use at
- * most once a minute, so a station counts as connected for two minutes after its last check-in.
- */
-export const STATION_WINDOW_MS = 120_000;
 
 export async function cameraStatus(now: Date = new Date()): Promise<CameraStatus> {
-  const [latest, current, candidates, settings, token] = await Promise.all([
+  const [latest, current, candidates, settings] = await Promise.all([
     findLatestScan(),
     resolveCameraBatch(),
     listBatchesAtPreparation(),
     getCvSettings(),
-    findLatestUsedCameraToken(),
   ]);
   const recent = latest && now.getTime() - latest.createdAt.getTime() <= ACTIVE_WINDOW_MS;
-  // The simulator never checks in between scans; a token whose last scan was simulated is not a
-  // station, so its recent use doesn't read as "waiting".
-  const stationSeen =
-    token?.lastUsedAt &&
-    now.getTime() - token.lastUsedAt.getTime() <= STATION_WINDOW_MS &&
-    token.scans[0]?.source !== "SIMULATOR"
-      ? { name: token.name, seenAt: token.lastUsedAt }
-      : null;
   return {
-    state: recent
-      ? latest.source === "SIMULATOR"
-        ? "simulator"
-        : "camera"
-      : stationSeen
-        ? "waiting"
-        : "not_connected",
+    state: recent ? (latest.source === "SIMULATOR" ? "simulator" : "capturing") : "idle",
     lastScan: latest
       ? {
           id: latest.id,
@@ -124,7 +148,6 @@ export async function cameraStatus(now: Date = new Date()): Promise<CameraStatus
           modelVersion: latest.modelVersion,
         }
       : null,
-    station: stationSeen,
     earlyModelNotice: settings?.earlyModelNotice ?? true,
     current,
     candidates,

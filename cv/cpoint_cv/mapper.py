@@ -1,6 +1,6 @@
 """Turns what the model saw into the app's ``detections`` shape. Pure, no model imports.
 
-The station reports, the app decides (D-011): nothing here applies PASS/REWORK/REJECT
+The model reports, the app decides (D-011): nothing here applies PASS/REWORK/REJECT
 thresholds. The confidence floor only drops noise.
 """
 

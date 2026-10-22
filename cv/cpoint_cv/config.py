@@ -1,11 +1,10 @@
-"""Station settings from a TOML file, with a few environment overrides.
+"""Model toolkit settings from a TOML file, with a few environment overrides.
 
-Every value the station uses (model file, image size, device, confidence floor, class renames,
-the preview's thresholds and defect types, the app's address, retries, the camera and the
-station's folders) lives here or in the file, never in the code. The device token is the one
-setting that is never in this file: it comes from ``CV_DEVICE_TOKEN`` (env.py).
-Lookup order for the file: ``--config``, then ``CPOINT_CV_CONFIG``, then ``cv/config.toml``,
-then ``cv/config.example.toml``.
+Every value ``predict``, ``evaluate`` and ``export-onnx`` use (model file, image size, device,
+confidence floor, class renames, the preview's thresholds and defect types) lives here or in the
+file, never in the code. Lookup order for the file: ``--config``, then ``CPOINT_CV_CONFIG``,
+then ``cv/config.toml``, then ``cv/config.example.toml``. Other sections (the retired station's
+``[server]``, ``[station]``, ``[camera]`` and ``[window]``) are ignored.
 """
 
 from __future__ import annotations
@@ -28,16 +27,7 @@ ENV_OVERRIDES = {
     "CPOINT_CV_MODEL_DEVICE": ("model", "device"),
     "CPOINT_CV_MODEL_IMGSZ": ("model", "imgsz"),
     "CPOINT_CV_CONFIDENCE_FLOOR": ("mapper", "confidence_floor"),
-    "CV_BASE_URL": ("server", "base_url"),  # the simulator's name, so one .env serves both
-    # An IP camera's address may hold its password, so it can live in cv/.env instead.
-    "CPOINT_CV_CAMERA_URL": ("camera", "url"),
 }
-
-# The app's ScanSource values a camera station may send (prisma/schema.prisma).
-STATION_SOURCES = ("WEBCAM", "DEDICATED_CAMERA")
-# How OpenCV opens a numbered camera on Windows: its default (Media Foundation), or DirectShow,
-# which some virtual cameras (DroidCam, OBS) only offer.
-CAMERA_BACKENDS = ("default", "dshow")
 
 
 class ConfigError(ValueError):
@@ -54,65 +44,10 @@ class ModelConfig:
 
 
 @dataclass(frozen=True)
-class ServerConfig:
-    base_url: str = "http://localhost:3000"
-    timeout_seconds: float = 30.0
-    attempts: int = 4
-    backoff_seconds: float = 1.0
-    max_backoff_seconds: float = 15.0
-
-
-@dataclass(frozen=True)
-class StationConfig:
-    spool_dir: Path
-    failed_dir: Path
-    log_dir: Path
-    scan_source: str = "WEBCAM"
-    jpeg_quality: int = 90
-    interval_seconds: float = 3.0
-    no_batch_wait_seconds: float = 5.0
-    # While waiting for Space, ask the app for the batch this often (D-054). 0 turns it off.
-    check_in_seconds: float = 20.0
-
-
-@dataclass(frozen=True)
-class CameraConfig:
-    index: int = 0
-    width: int = 1920
-    height: int = 1080
-    warmup_frames: int = 5
-    # An IP camera's stream (rtsp://, http:// or https://). When set, it's used instead of index.
-    url: str | None = None
-    # "default" or "dshow" (DirectShow), for numbered cameras only (D-062).
-    backend: str = "default"
-
-    @property
-    def device(self) -> int | str:
-        return self.url or self.index
-
-
-@dataclass(frozen=True)
-class WindowConfig:
-    """The station window's live preview (D-060). Captures always run at [model] imgsz."""
-
-    preview_imgsz: int = 960
-    preview_max_fps: float = 4.0
-
-
-def _default_station() -> StationConfig:
-    out = CV_DIR / "out"
-    return StationConfig(out / "spool", out / "failed", out / "logs")
-
-
-@dataclass(frozen=True)
 class Config:
     model: ModelConfig
     mapper: MapperConfig = field(default_factory=MapperConfig)
     preview: PreviewConfig = field(default_factory=PreviewConfig)
-    server: ServerConfig = field(default_factory=ServerConfig)
-    station: StationConfig = field(default_factory=_default_station)
-    camera: CameraConfig = field(default_factory=CameraConfig)
-    window: WindowConfig = field(default_factory=WindowConfig)
     source_file: Path | None = None
 
 
@@ -167,8 +102,7 @@ def parse_config(
 ) -> Config:
     """Validate raw settings. Relative model paths are taken from ``base_dir``."""
     merged: dict[str, dict[str, Any]] = {
-        name: dict(_section(data, name))
-        for name in ("model", "mapper", "preview", "server", "station", "camera", "window")
+        name: dict(_section(data, name)) for name in ("model", "mapper", "preview")
     }
     for var, (section, key) in ENV_OVERRIDES.items():
         if env and env.get(var, "").strip():
@@ -246,110 +180,7 @@ def parse_config(
             "Leave a type out to go by confidence."
         )
 
-    def folder(key: str, default: str) -> Path:
-        raw = merged["station"].get(key, default)
-        if not isinstance(raw, str) or not raw.strip():
-            raise ConfigError(f'[station] {key} must be a folder path, e.g. "{default}".')
-        p = Path(raw.strip())
-        return p if p.is_absolute() else (base_dir / p).resolve()
-
-    sv = merged["server"]
-    base_url = str(sv.get("base_url", "http://localhost:3000")).strip().rstrip("/")
-    if not base_url.startswith(("http://", "https://")):
-        raise ConfigError(
-            f'[server] base_url must start with http:// or https://, e.g. "http://localhost:3000"; '
-            f"got {base_url!r}."
-        )
-    backoff = _number("server", "backoff_seconds", sv.get("backoff_seconds", 1.0), low=0, high=60)
-    max_backoff = _number(
-        "server", "max_backoff_seconds", sv.get("max_backoff_seconds", 15.0), low=0, high=600
-    )
-    if max_backoff < backoff:
-        raise ConfigError("[server] max_backoff_seconds can't be below backoff_seconds.")
-    server = ServerConfig(
-        base_url=base_url,
-        timeout_seconds=_number(
-            "server", "timeout_seconds", sv.get("timeout_seconds", 30.0), low=1, high=300
-        ),
-        attempts=_whole("server", "attempts", sv.get("attempts", 4), low=1, high=10),
-        backoff_seconds=backoff,
-        max_backoff_seconds=max_backoff,
-    )
-
-    st = merged["station"]
-    scan_source = str(st.get("scan_source", "WEBCAM")).strip()
-    if scan_source not in STATION_SOURCES:
-        raise ConfigError(
-            f"[station] scan_source must be {' or '.join(STATION_SOURCES)}; got {scan_source!r}."
-        )
-    station = StationConfig(
-        spool_dir=folder("spool_dir", "out/spool"),
-        failed_dir=folder("failed_dir", "out/failed"),
-        log_dir=folder("log_dir", "out/logs"),
-        scan_source=scan_source,
-        jpeg_quality=_whole(
-            "station", "jpeg_quality", st.get("jpeg_quality", 90), low=50, high=100
-        ),
-        interval_seconds=_number(
-            "station", "interval_seconds", st.get("interval_seconds", 3.0), low=0, high=3600
-        ),
-        no_batch_wait_seconds=_number(
-            "station",
-            "no_batch_wait_seconds",
-            st.get("no_batch_wait_seconds", 5.0),
-            low=1,
-            high=600,
-        ),
-        check_in_seconds=_number(
-            "station", "check_in_seconds", st.get("check_in_seconds", 20.0), low=0, high=60
-        ),
-    )
-
-    cm = merged["camera"]
-    url = cm.get("url")
-    if url is not None:
-        if not isinstance(url, str):
-            raise ConfigError('[camera] url must be text, e.g. "rtsp://192.168.1.50:554/stream1".')
-        url = url.strip() or None
-    if url and not url.lower().startswith(("rtsp://", "http://", "https://")):
-        raise ConfigError(
-            "[camera] url must start with rtsp://, http:// or https://, "
-            'e.g. "rtsp://192.168.1.50:554/stream1". Leave it empty to use [camera] index.'
-        )
-    backend = str(cm.get("backend", "default")).strip().lower()
-    if backend not in CAMERA_BACKENDS:
-        raise ConfigError(
-            f'[camera] backend must be "default" or "dshow" (DirectShow); got {backend!r}.'
-        )
-    camera = CameraConfig(
-        url=url,
-        backend=backend,
-        index=_whole("camera", "index", cm.get("index", 0), low=0, high=99),
-        width=_whole("camera", "width", cm.get("width", 1920), low=160, high=8192),
-        height=_whole("camera", "height", cm.get("height", 1080), low=120, high=8192),
-        warmup_frames=_whole("camera", "warmup_frames", cm.get("warmup_frames", 5), low=0, high=60),
-    )
-
-    wv = merged["window"]
-    preview_imgsz = _whole(
-        "window", "preview_imgsz", wv.get("preview_imgsz", 960), low=160, high=4096
-    )
-    if preview_imgsz % 32:
-        raise ConfigError(
-            f"[window] preview_imgsz must be a multiple of 32, e.g. 960; got {preview_imgsz}."
-        )
-    window = WindowConfig(
-        preview_imgsz=preview_imgsz,
-        preview_max_fps=_number(
-            "window", "preview_max_fps", wv.get("preview_max_fps", 4.0), low=0.5, high=30
-        ),
-    )
-
     return Config(
-        server=server,
-        station=station,
-        camera=camera,
-        window=window,
         model=ModelConfig(
             path=path if path.is_absolute() else (base_dir / path).resolve(),
             name=name.strip(),

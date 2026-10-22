@@ -55,7 +55,7 @@ describe("thresholds", () => {
   it("refuses rework at or above reject, and out-of-range values", () => {
     expect(validateThresholds({ rejectAtOrAbove: 0.8, reworkAtOrAbove: 0.8 })[0]).toMatchObject({
       path: ["reworkAtOrAbove"],
-      message: "Rework must start below Reject (80%).",
+      message: "Fixable must start below Reject (80%).",
     });
     expect(validateThresholds({ rejectAtOrAbove: 0, reworkAtOrAbove: 0.5 })[0].path).toEqual([
       "rejectAtOrAbove",

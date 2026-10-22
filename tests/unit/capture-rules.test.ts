@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  FLOOR_VERDICT,
   cameraProblemFor,
   cameraProblemMessage,
   isAppleMobile,
   isPhoneOrTablet,
-  secureAddress,
   sendFailureMessage,
   shouldRetry,
   spaceCaptures,
@@ -44,13 +44,13 @@ describe("camera problems", () => {
     expect(cameraProblemFor(name)).toBe(problem);
   });
 
-  const context = { appleMobile: false, secureUrl: "https://192.168.1.20:3443/camera/capture" };
+  const context = { appleMobile: false };
 
-  it("points an insecure page at the HTTPS address", () => {
-    expect(secureAddress({ hostname: "192.168.1.20", pathname: "/camera/capture" })).toBe(
-      "https://192.168.1.20:3443/camera/capture",
-    );
-    expect(cameraProblemMessage("insecure", context).fix).toContain(context.secureUrl);
+  it("sends an insecure page to the site's https:// link or localhost, with no port to type", () => {
+    const { fix } = cameraProblemMessage("insecure", context);
+    expect(fix).toContain("https://");
+    expect(fix).toContain("localhost");
+    expect(fix).not.toMatch(/3443|certificate/);
   });
 
   it("gives the iPhone's own steps when the camera is refused", () => {
@@ -88,5 +88,19 @@ describe("sending", () => {
     expect(spaceCaptures({ tagName: "button" })).toBe(false);
     expect(spaceCaptures({ tagName: "SELECT" })).toBe(false);
     expect(spaceCaptures({ tagName: "DIV", isContentEditable: true })).toBe(false);
+  });
+});
+
+describe("Floor view verdicts (D-074)", () => {
+  it("names every verdict with the system's words and the bin it goes to", () => {
+    expect(FLOOR_VERDICT.PASS).toEqual({ word: "Pass", next: "Goes on to cutting" });
+    expect(FLOOR_VERDICT.REWORK).toEqual({ word: "Fixable", next: "To the Repair Station" });
+    expect(FLOOR_VERDICT.REJECT).toEqual({ word: "Reject", next: "To salvage" });
+    expect(FLOOR_VERDICT.NEEDS_REVIEW.word).toBe("Needs review");
+  });
+
+  it("never says Rework or Hold on the floor", () => {
+    const words = Object.values(FLOOR_VERDICT).flatMap((v) => [v.word, v.next]);
+    expect(words.join(" ")).not.toMatch(/rework|hold/i);
   });
 });

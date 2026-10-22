@@ -13,12 +13,15 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar
-        sections={navigationFor(user.role)}
-        user={{ name: user.name, email: user.email, roleLabel: ROLE_LABELS[user.role] }}
-        signOutAction={signOutAction}
-      />
-      <main className="min-w-0 flex-1 px-4 py-6 lg:px-10 lg:py-8">
+      {/* Printing (a claim sheet, Phase 20) leaves the navigation out. */}
+      <div className="contents print:hidden">
+        <Sidebar
+          sections={navigationFor(user)}
+          user={{ name: user.name, email: user.email, roleLabel: ROLE_LABELS[user.role] }}
+          signOutAction={signOutAction}
+        />
+      </div>
+      <main className="min-w-0 flex-1 px-4 py-6 lg:px-10 lg:py-8 print:p-0">
         <QueryProvider>
           <div className="flex flex-col gap-8">{children}</div>
         </QueryProvider>

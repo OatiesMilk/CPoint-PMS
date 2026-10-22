@@ -1,12 +1,11 @@
-# Camera station settings. Copy to cv/config.toml (git-ignored) and edit there.
-# Environment overrides: CPOINT_CV_MODEL_PATH, CPOINT_CV_MODEL_DEVICE, CPOINT_CV_MODEL_IMGSZ,
-# CPOINT_CV_CONFIDENCE_FLOOR, CV_BASE_URL. CPOINT_CV_CONFIG points at another config file.
-# The device token is never in this file: set CV_DEVICE_TOKEN in cv/.env or the environment.
+# Model toolkit settings (predict, evaluate, export-onnx). Copy to cv/config.toml (git-ignored)
+# and edit there. Environment overrides: CPOINT_CV_MODEL_PATH, CPOINT_CV_MODEL_DEVICE,
+# CPOINT_CV_MODEL_IMGSZ, CPOINT_CV_CONFIDENCE_FLOOR. CPOINT_CV_CONFIG points at another file.
 
 [model]
 # Relative to this file's folder. Model files are never committed (D-049).
 path = "models/yolo-v1.pt"
-# modelVersion sent with each scan = name + the first 8 hex digits of the file's SHA-256.
+# modelVersion = name + the first 8 hex digits of the file's SHA-256.
 name = "yolo-v1"
 # The size the model was trained at.
 imgsz = 1536
@@ -16,22 +15,23 @@ device = "cpu"
 sha256 = "1d729fb0358d3140d5491d4124e2173ec228e42875e06a31a69f4530d83f157b"
 
 [mapper]
-# Detections below this confidence are dropped as noise before anything is sent.
-# This is not the app's PASS threshold: the app decides verdicts (D-011).
+# Detections below this confidence are dropped as noise. export-onnx copies this into the
+# JSON beside the model, so the Capture page uses the same floor. This is not the app's PASS
+# threshold: the app decides verdicts (D-011).
 confidence_floor = 0.25
 # At most 50, the app's limit per scan. The strongest are kept.
 max_detections = 50
 # Two boxes of the same class overlapping this much (intersection over union, 0 to 1) are one
-# defect the model reported twice: only the more confident is sent. 0 sends every box.
+# defect the model reported twice: only the more confident is kept. 0 keeps every box.
 overlap_iou = 0.7
 
 [mapper.rename]
-# Optional: send a model class under another key, e.g.
+# Optional: report a model class under another key, e.g.
 # crease = "wrinkle"
 
 [preview]
-# Only for the verdict preview that predict prints. Copy these from Admin > Settings so the
-# preview matches the app. The station never sends or applies a verdict.
+# Only for the verdict preview that predict and evaluate print. Copy these from Admin > Settings
+# so the preview matches the app. The app decides the real verdict.
 reject_at_or_above = 0.90
 rework_at_or_above = 0.60
 # Defect types as they are in Settings once the yolo-v1 classes are set up (cv/README.md,
@@ -49,55 +49,3 @@ cut = "REJECT"
 hole = "REJECT"
 scratch = "REWORK"
 
-[server]
-# The app's address. CV_BASE_URL in cv/.env or the environment wins over this.
-base_url = "http://localhost:3000"
-# Seconds to wait for each answer.
-timeout_seconds = 30
-# Tries per scan when the network or the app fails (5xx), waiting 1 s, 2 s, 4 s, ... between
-# them (up to max_backoff_seconds). Retrying is safe: each scan carries its captureId (D-051).
-# After the last try the scan stays in the spool and is sent later, in order.
-attempts = 4
-backoff_seconds = 1
-max_backoff_seconds = 15
-
-[station]
-# The source the app records: "WEBCAM" or "DEDICATED_CAMERA". Folder replay sends this too.
-scan_source = "WEBCAM"
-# JPEG quality for camera frames (50 to 100). Lowered automatically if a frame passes 10 MB.
-jpeg_quality = 90
-# Seconds between images in folder replay (run folder <dir> --interval overrides it).
-interval_seconds = 3
-# How often to ask again while no batch is at Preparation.
-no_batch_wait_seconds = 5
-# While waiting for Space, the station asks the app for the batch this often, so the Camera page
-# shows it as connected between captures and a batch change is announced (D-054). 0 turns it off.
-check_in_seconds = 20
-# Folders, relative to this file's folder. Captures wait in spool_dir until the app has them;
-# failed_dir keeps captures the app refused, each with reason.txt; log_dir has one JSON line per
-# event, per day.
-spool_dir = "out/spool"
-failed_dir = "out/failed"
-log_dir = "out/logs"
-
-[camera]
-# OpenCV camera number: 0 is the first (often the laptop's built-in camera).
-index = 0
-# Or an IP camera on the network, used instead of index, e.g. "rtsp://192.168.1.50:554/stream1".
-# If the address holds a password, put it in cv/.env as CPOINT_CV_CAMERA_URL=... instead.
-url = ""
-# Requested resolution. The camera may pick the nearest it supports; doctor shows what it gives.
-width = 1920
-height = 1080
-# Frames read and dropped when the camera opens, so exposure settles before the first capture.
-warmup_frames = 5
-# How Windows opens a numbered camera: "default" (Media Foundation) or "dshow" (DirectShow).
-# Try "dshow" when a virtual camera such as DroidCam or OBS gives no picture. Not used for url.
-backend = "default"
-
-[window]
-# The station window (python -m cpoint_cv window). Its live preview runs the model at this
-# smaller size, at most preview_max_fps times a second, so the window stays smooth. A capture
-# always runs at [model] imgsz. The preview never sends anything; the app decides (D-060).
-preview_imgsz = 960
-preview_max_fps = 4

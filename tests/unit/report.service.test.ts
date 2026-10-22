@@ -7,8 +7,6 @@ const model = {
   dailyProduction: vi.fn(),
   defectBreakdown: vi.fn(),
   verdictMatrix: vi.fn(),
-  stageDurations: vi.fn(),
-  openStageWaits: vi.fn(),
 };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/report.model", () => model);
@@ -41,11 +39,6 @@ beforeEach(() => {
     { ai: "REJECT", final: "REWORK", count: 1 },
     { ai: "NEEDS_REVIEW", final: null, count: 1 },
   ]);
-  model.stageDurations.mockResolvedValue([
-    { stage: "UPPER_MAKING", visits: 4, medianMs: 7_200_000, avgMs: 8_000_000 },
-    { stage: "SOLEING", visits: 3, medianMs: 3_600_000, avgMs: 3_600_000 },
-  ]);
-  model.openStageWaits.mockResolvedValue([{ stage: "UPPER_MAKING", batches: 2, longestMs: 99 }]);
   model.dailyProduction.mockResolvedValue([{ day: "2026-10-01", started: 2, completed: 1 }]);
 });
 
@@ -96,21 +89,11 @@ describe("qualityReport", () => {
   });
 });
 
-describe("productionReport", () => {
-  it("lists every stage in line order with now-waits, and names the bottleneck", async () => {
-    const r = await svc.productionReport(range, now);
-    expect(r.stages.map((s) => s.stage)).toEqual([
-      "PREPARATION",
-      "UPPER_MAKING",
-      "SOLEING",
-      "FINISHING",
-    ]);
-    expect(r.stages[1]).toMatchObject({ visits: 4, inStageNow: 2, longestWaitMs: 99 });
-    expect(r.stages[0]).toMatchObject({ visits: 0, medianMs: null });
-    expect(r.bottleneck).toBe("UPPER_MAKING");
+describe("rollFlow (D-082)", () => {
+  it("fills every day with rolls started and finished", async () => {
+    const r = await svc.rollFlow(range);
+    expect(r.days.map((d) => d.day)).toEqual(["2026-10-01", "2026-10-02", "2026-10-03"]);
     expect(r.totals).toEqual({ started: 2, completed: 1 });
-    const keys = keysDeep(r);
-    for (const k of PERSON_KEYS) expect(keys.has(k)).toBe(false);
   });
 });
 
@@ -121,10 +104,5 @@ describe("CSV", () => {
     const lines = csv.trim().split("\r\n");
     expect(lines).toHaveLength(4);
     expect(lines[2]).toBe("2026-10-02,10,5,2,2,1,1,87.5,1,0");
-  });
-
-  it("stages CSV marks the bottleneck and gives hours", async () => {
-    const csv = await svc.stagesCsv(range);
-    expect(csv).toContain("Upper Making,4,2.00,2.22,2,0.00,yes");
   });
 });

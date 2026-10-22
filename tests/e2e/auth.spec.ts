@@ -16,28 +16,35 @@ test("health endpoint reports app and database up", async ({ request }) => {
 const EXPECTED_NAV = {
   manager: [
     "Overview",
+    "Production",
+    "Attendance",
     "Batches",
     "Inventory",
     "Procurement",
     "Camera",
+    "Capture",
     "Scans",
     "Review queue",
-    "Rework",
+    "Repair Station",
     "Salvage",
     "Reports",
   ],
   inspector: [
     "Overview",
+    "Production",
     "Batches",
     "Camera",
+    "Capture",
     "Scans",
     "Review queue",
-    "Rework",
+    "Repair Station",
     "Salvage",
     "Reports",
   ],
   admin: [
     "Overview",
+    "Production",
+    "Attendance",
     "Batches",
     "Inventory",
     "Procurement",
@@ -51,13 +58,28 @@ const EXPECTED_NAV = {
   constructor: ["Home", "Material requests"],
 } as const;
 
+/** Whether this account may capture at the camera, read from the database the app uses. */
+async function canCapture(email: string): Promise<boolean> {
+  const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    const { rows } = await db.query('SELECT "canCapture" FROM users WHERE email = $1', [email]);
+    return rows[0]?.canCapture === true;
+  } finally {
+    await db.end();
+  }
+}
+
 for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
   const account = ACCOUNTS[role];
   test(`${role} signs in, lands on their home and sees only their nav`, async ({ page }) => {
     await page.goto("/login");
     await signIn(page, account.email);
     await expect(page).toHaveURL(account.home);
-    expect(await navLabels(page)).toEqual(EXPECTED_NAV[role]);
+    // A constructor allowed to capture also gets Capture (D-075); the dev data may allow the demo one.
+    const expected: string[] = [...EXPECTED_NAV[role]];
+    if (role === "constructor" && (await canCapture(account.email))) expected.push("Capture");
+    expect(await navLabels(page)).toEqual(expected);
   });
 }
 
@@ -106,7 +128,8 @@ test("sign out returns to login and protects pages again", async ({ page }) => {
   await page.goto("/login");
   await signIn(page, ACCOUNTS.admin.email);
   await expect(page).toHaveURL(ACCOUNTS.admin.home);
-  await page.getByRole("button", { name: /Demo System Admin/ }).click();
+  // The account menu is named "<the account's name> System Admin"; the name can be changed.
+  await page.getByRole("button", { name: /System Admin$/ }).click();
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL("/login?reason=signed-out");
   await expect(page.getByText("You signed out.")).toBeVisible();

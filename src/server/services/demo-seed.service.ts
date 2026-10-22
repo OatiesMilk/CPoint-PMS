@@ -1,6 +1,7 @@
-import type { Role, Stage } from "@/lib/domain";
+import type { Role } from "@/lib/domain";
 import { formatCalendarDate, manilaToday } from "@/lib/format";
 import { formatQuantity } from "@/lib/inventory-rules";
+import { DEFAULT_SCHEDULE, slotsFor } from "@/lib/production-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
   renderLeatherImage,
@@ -10,19 +11,23 @@ import {
   type Detection,
   type Random,
 } from "@/server/lib/leather-scan";
+import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import { logger } from "@/server/lib/logger";
 import { renderReceiptImage, renderReceiptPdf } from "@/server/lib/receipt-sample";
 import { countBatches, listOpenBatches } from "@/server/models/batch.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
 import { findLiveOutcomes } from "@/server/models/outcome.model";
 import {
+  ensureSupplier,
   listActiveShoeTypes,
   listActiveSuppliers,
   listDefectTypes,
 } from "@/server/models/reference-data.model";
 import { findUserByEmail } from "@/server/models/user.model";
 import { createDeviceToken } from "./api-token.service";
+import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
 import { cancelBatch, createBatch, transitionBatchStage } from "./batch.service";
+import { saveCheckIn, saveQuotas } from "./production.service";
 import { createItem, recordMovement } from "./inventory.service";
 import { moveReworkTicket } from "./rework.service";
 import { assignSalvage, discardSalvage } from "./salvage.service";
@@ -61,18 +66,21 @@ export function mulberry32(seed: number): Random {
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
 
-/** Hours per stage visit. Upper Making is the bottleneck, as the client described (survey). */
-export const STAGE_HOURS: Record<Stage, [number, number]> = {
-  PREPARATION: [2, 3],
-  UPPER_MAKING: [6, 9],
-  SOLEING: [4, 6],
-  FINISHING: [1, 2],
-};
+/** Hours a roll spends at Preparation, from start to Finish roll (D-082). */
+export const PREPARATION_HOURS: [number, number] = [2, 3];
 
-export function stageDurationMs(stage: Stage, random: Random): number {
-  const [lo, hi] = STAGE_HOURS[stage];
+export function preparationMs(random: Random): number {
+  const [lo, hi] = PREPARATION_HOURS;
   return (lo + random() * (hi - lo)) * HOUR;
 }
+
+/**
+ * Demo output per Shoe Constructor present per hour, and the daily quotas (Phase 23). Chosen so
+ * a day with one constructor absent still makes the quota and a day with two or more absent
+ * doesn't, which lines the shortfalls up with the seeded absences (D-081).
+ */
+export const DEMO_RATE = { school: 0.9, topsider: 0.45 } as const;
+export const DEMO_QUOTA = { school: 85, topsider: 43 } as const;
 
 /** Demo materials (also used by bootstrap when only demo users are on). */
 export const DEMO_INVENTORY = [
@@ -119,7 +127,15 @@ export const DEMO_INVENTORY = [
 ] as const;
 
 export type DemoSeedResult =
-  | { seeded: true; batches: number; scans: number; requests: number; ms: number }
+  | {
+      seeded: true;
+      batches: number;
+      scans: number;
+      requests: number;
+      attendanceDays: number;
+      checkIns: number;
+      ms: number;
+    }
   | { seeded: false; reason: string };
 
 type Actor = { id: string; role: Role };
@@ -144,6 +160,8 @@ export async function seedDemoWeek(
   ]);
   if (!fm || !qi || !admin)
     return { seeded: false, reason: "demo users are missing (set SEED_DEMO_USERS=true)" };
+  // Three leather suppliers, so Supplier quality has something to compare (Phase 20).
+  for (const supplier of DEMO_SUPPLIERS) await ensureSupplier(supplier);
   const [shoeTypes, suppliers, defectTypes] = await Promise.all([
     listActiveShoeTypes(),
     listActiveSuppliers(),
@@ -197,7 +215,7 @@ export async function seedDemoWeek(
   const token = await createDeviceToken({ name: "Demo camera (seed)" }, admin);
   const device = { id: token.id };
 
-  // ── batches: two a working day (Mon–Sat), each replayed stage by stage ──
+  // ── rolls: two a working day (Mon–Sat), each started, scanned at Preparation and finished ──
   const workingDays: string[] = [];
   for (let d = firstDay; d <= today; d = addDays(d, 1)) {
     if (new Date(`${d}T00:00:00Z`).getUTCDay() !== 0) workingDays.push(d);
@@ -222,13 +240,15 @@ export async function seedDemoWeek(
       const shoeType = school ? shoeTypes[0] : (shoeTypes[1] ?? shoeTypes[0]);
       const created = at(day, startHour - between(0.5, 1));
       if (!past(created)) continue;
+      // Rolls rotate between the suppliers; the first demo supplier's leather has more defects.
+      const supplier = suppliers.length > 0 ? suppliers[index % suppliers.length] : undefined;
+      const worseLeather = supplier?.name === DEMO_SUPPLIERS[0].name;
       const batch = await createBatch(
         {
           rollCode: `LR-${day.slice(2).replaceAll("-", "")}-${String(index).padStart(2, "0")}`,
           shoeTypeId: shoeType.id,
-          supplierId: suppliers[0]?.id,
+          supplierId: supplier?.id,
           receivedAt: addDays(day, -1),
-          targetQuotaPairs: Math.round(between(100, 160)),
           notes: undefined,
           rollItemId: itemIds.get(school ? "LR-001" : "LR-002"),
         },
@@ -240,9 +260,8 @@ export async function seedDemoWeek(
           {
             rollCode: `LR-${day.slice(2).replaceAll("-", "")}-${String(index).padStart(2, "0")}`,
             shoeTypeId: shoeType.id,
-            supplierId: suppliers[0]?.id,
+            supplierId: supplier?.id,
             receivedAt: addDays(day, -1),
-            targetQuotaPairs: Math.round(between(100, 160)),
             notes: undefined,
             rollItemId: undefined,
           },
@@ -261,7 +280,7 @@ export async function seedDemoWeek(
       );
 
       // Preparation: the camera checks each section before cutting.
-      const prep = stageDurationMs("PREPARATION", random);
+      const prep = preparationMs(random);
       const sections = Math.round(between(20, 30));
       const sectionAt = (i: number) => plus(t, ((i + 0.5) * prep) / sections);
       let captured = 0;
@@ -270,6 +289,8 @@ export async function seedDemoWeek(
         const ts = sectionAt(i);
         if (!past(ts)) break;
         let detections: Detection[] = scenario(random, classes);
+        // Worse leather: a clean section gets a second chance to show a defect.
+        if (worseLeather && detections.length === 0) detections = scenario(random, classes);
         const keepPending = newest && i >= captured - 2;
         if (keepPending)
           detections = [{ classKey: UNKNOWN_CLASS, confidence: 0.82, box: randomBox(random) }];
@@ -295,57 +316,21 @@ export async function seedDemoWeek(
       }
       t = plus(t, prep);
 
-      // The rest of the line. One batch goes back from Sole-ing to redo stitching.
-      const route: {
-        action: "advance" | "move_back" | "complete";
-        from: Stage;
-        reason?: string;
-      }[] = [
-        { action: "advance", from: "PREPARATION" },
-        { action: "advance", from: "UPPER_MAKING" },
-        ...(index === 4
-          ? [
-              {
-                action: "move_back" as const,
-                from: "SOLEING" as Stage,
-                reason: "Two pairs had loose stitching; redo before soling.",
-              },
-              { action: "advance" as const, from: "UPPER_MAKING" as Stage },
-            ]
-          : []),
-        { action: "advance", from: "SOLEING" },
-        { action: "complete", from: "FINISHING" },
-      ];
-      for (const step of route) {
-        if (!past(t)) break;
+      // The roll is used up: Finish roll (D-082). What the line used for it (thread, cement,
+      // nails) is taken from stock the same afternoon, so the ledger still moves. The newest roll
+      // stays at Preparation, so the camera has a roll to feed and its page offers Finish roll.
+      if (past(t) && !newest) {
         await transitionBatchStage(
           batch.id,
-          { action: step.action, expectedStage: step.from, reason: step.reason },
+          { action: "finish", expectedStage: "PREPARATION" },
           fm,
           t,
         );
-        const next: Stage | null =
-          step.action === "complete"
-            ? null
-            : step.action === "move_back"
-              ? "UPPER_MAKING"
-              : ((
-                  {
-                    PREPARATION: "UPPER_MAKING",
-                    UPPER_MAKING: "SOLEING",
-                    SOLEING: "FINISHING",
-                  } as const
-                )[step.from as "PREPARATION" | "UPPER_MAKING" | "SOLEING"] ?? null);
-        if (next === "UPPER_MAKING" && step.action === "advance")
-          await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE), batch.id);
-        if (next === "SOLEING") {
-          await stock("AD-001", "OUT", 0.5, "Soling", plus(t, 10 * MINUTE), batch.id);
-          await stock("NL-001", "OUT", 1, "Soling", plus(t, 15 * MINUTE), batch.id);
-        }
-        if (next === null) break;
-        t = plus(t, step.action === "move_back" ? 2 * HOUR : stageDurationMs(next, random));
+        await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE), batch.id);
+        await stock("AD-001", "OUT", 0.5, "Soling", plus(t, 20 * MINUTE), batch.id);
+        await stock("NL-001", "OUT", 1, "Soling", plus(t, 25 * MINUTE), batch.id);
       }
-      logger.info({ batch: batch.code }, "Demo week: batch replayed");
+      logger.info({ batch: batch.code }, "Demo week: roll replayed");
     }
   }
 
@@ -359,7 +344,6 @@ export async function seedDemoWeek(
         shoeTypeId: shoeTypes[0].id,
         supplierId: suppliers[0]?.id,
         receivedAt: cancelDay,
-        targetQuotaPairs: 80,
         notes: undefined,
         rollItemId: itemIds.get("LR-001"),
       },
@@ -386,7 +370,6 @@ export async function seedDemoWeek(
         shoeTypeId: shoeTypes[0].id,
         supplierId: suppliers[0]?.id,
         receivedAt: today,
-        targetQuotaPairs: 120,
         notes: "For tomorrow's first shift.",
         rollItemId: undefined,
       },
@@ -439,15 +422,143 @@ export async function seedDemoWeek(
   // ── purchase requests (D-029): the constructor asks, the Floor Manager decides ──
   const requests = await seedRequests();
 
+  // ── attendance (D-077, D-081): the past working days, taken by the Floor Manager ──
+  const attendanceDays = await seedAttendance();
+
+  // ── production (Phase 23): quotas, and the QI's check-ins through the real service ──
+  const checkIns = await seedProduction();
+
   const result: DemoSeedResult = {
     seeded: true,
     batches,
     scans,
     requests,
+    attendanceDays,
+    checkIns,
     ms: Date.now() - started,
   };
   logger.info(result, "Demo week seeded");
   return result;
+
+  /**
+   * A week of attendance through the real service (D-077, D-081): the demo week's working days
+   * before today (up to six),
+   * saved by the Floor Manager at 07:50 that morning, with a few constructors absent on some days
+   * (none, 1, 5, none, 3, 2, oldest first) so Phase 23's shortfalls have something to line up
+   * with. Today is left "Not taken" so the demo starts with Take attendance. The office roles are
+   * marked present. Who is absent is drawn from the seed, never the same person every time.
+   */
+  async function seedAttendance(): Promise<number> {
+    const ABSENT = [0, 1, 5, 0, 3, 2];
+    const days = workingDays.filter((d) => d < today).slice(-ABSENT.length);
+    const pattern = ABSENT.slice(ABSENT.length - days.length);
+    let saved = 0;
+    for (const [i, day] of days.entries()) {
+      const when = at(day, 7 + 50 / 60);
+      if (!past(when)) continue;
+      const view = await getAttendanceDay(day, fm!, when);
+      const constructors = view.roster.filter((p) => p.role === "SHOE_CONSTRUCTOR");
+      if (constructors.length === 0) continue;
+      const absent = new Set<string>();
+      while (absent.size < Math.min(pattern[i], constructors.length))
+        absent.add(pick(constructors).id);
+      await saveAttendanceDay(
+        day,
+        {
+          expectedUpdatedAt: view.updatedAt,
+          marks: view.roster.map((p) => ({ userId: p.id, present: !absent.has(p.id) })),
+        },
+        fm!,
+        when,
+      );
+      saved += 1;
+    }
+    return saved;
+  }
+
+  /**
+   * Production progression through the real services (Phase 23, D-083 to D-086):
+   *  - the Floor Manager sets a quota per shoe type on the first morning of the week (a first
+   *    quota applies from that day, Dylan 5A);
+   *  - the QI enters every check-in of the default schedule (12:00, 16:00, 17:00) a few minutes
+   *    after its time, with one entered 50 minutes late and one (a 17:00) missed on a full day;
+   *  - pairs follow the constructors present (DEMO_RATE), so the days with 2, 3 and 5 absent end
+   *    below quota and the others meet it. A day without attendance counts everyone on the roster.
+   * Today: check-ins older than 30 minutes are entered; a newer one is left Due.
+   */
+  async function seedProduction(): Promise<number> {
+    const types = shoeTypes.slice(0, 2);
+    if (types.length === 0) return 0;
+    const school = types[0];
+    const top = types[1];
+    await saveQuotas(
+      {
+        quotas: [
+          { shoeTypeId: school.id, pairs: DEMO_QUOTA.school, suggestedPairs: null },
+          ...(top
+            ? [{ shoeTypeId: top.id, pairs: DEMO_QUOTA.topsider, suggestedPairs: null }]
+            : []),
+        ],
+      },
+      fm!,
+      at(firstDay, 7),
+    );
+    const views = new Map<string, number>();
+    for (const day of workingDays) {
+      const view = await getAttendanceDay(day, fm!, at(day, 12));
+      views.set(
+        day,
+        view.workforce.taken
+          ? view.workforce.constructorsPresent
+          : view.workforce.constructorsOnRoster,
+      );
+    }
+    // The missed 17:00 goes on a day with everyone in (it still makes the quota); the late one on
+    // another day that makes it, so neither adds a short day of its own.
+    const pastDays = workingDays.filter((d) => d < today);
+    const most = Math.max(0, ...pastDays.map((d) => views.get(d) ?? 0));
+    const missedDay = pastDays.find((d) => views.get(d) === most);
+    const lateDay =
+      pastDays.find((d) => d !== missedDay && (views.get(d) ?? 0) >= most - 1) ?? missedDay;
+    let entered = 0;
+    for (const day of workingDays) {
+      const slots = slotsFor(DEFAULT_SCHEDULE, day);
+      const present = views.get(day) ?? 0;
+      for (const [i, slot] of slots.entries()) {
+        const hours =
+          (slot.at.getTime() - (i === 0 ? at(day, 8) : slots[i - 1].at).getTime()) / HOUR;
+        if (day === missedDay && slot.time === "17:00") continue;
+        const late = day === lateDay && slot.time === "12:00";
+        const when = plus(slot.at, (late ? 50 : 4 + Math.floor(random() * 8)) * MINUTE);
+        if (day === today && when.getTime() > now.getTime() - 30 * MINUTE) continue;
+        if (!past(when)) continue;
+        // 0 or 1 more School Shoes now and then; never fewer, so the full days stay on quota.
+        const jitter = Math.round(random());
+        const counts = [
+          {
+            shoeTypeId: school.id,
+            pairs: Math.max(0, Math.round(present * hours * DEMO_RATE.school) + jitter),
+          },
+          ...(top
+            ? [{ shoeTypeId: top.id, pairs: Math.round(present * hours * DEMO_RATE.topsider) }]
+            : []),
+        ];
+        // Any other active shoe type gets a 0, as the QI would enter.
+        for (const t of shoeTypes.slice(2)) counts.push({ shoeTypeId: t.id, pairs: 0 });
+        await saveCheckIn(
+          {
+            slotAt: slot.at.toISOString(),
+            counts,
+            notes: late ? "Counted after the lunch break." : undefined,
+          },
+          qi!,
+          when,
+        );
+        entered += 1;
+      }
+    }
+    return entered;
+  }
 
   /**
    * Requests through the real services, covering every state (D-029, D-039, D-041 to D-045):

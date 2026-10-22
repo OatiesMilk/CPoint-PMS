@@ -1,175 +1,155 @@
 import { describe, expect, it } from "vitest";
 import type { BatchStatus, Stage } from "@/lib/domain";
 import {
+  EXPECTED_PIECES_PER_ROLL,
   availableActions,
+  finishHint,
   openRepairsNote,
-  nextStage,
   planCancel,
   planTransition,
-  previousStage,
-  stageDurations,
-  type TransitionAction,
+  rollStatusLabel,
+  startedBeforeRolls,
+  transitionLabel,
 } from "@/lib/stage-machine";
+
+// The roll lifecycle (D-082): Planned → Start → At Preparation → Finish roll → Finished.
 
 const state = (status: BatchStatus, currentStage: Stage = "PREPARATION") => ({
   status,
   currentStage,
 });
 
-describe("stage order", () => {
-  it("moves one stage at a time in factory order", () => {
-    expect(nextStage("PREPARATION")).toBe("UPPER_MAKING");
-    expect(nextStage("UPPER_MAKING")).toBe("SOLEING");
-    expect(nextStage("SOLEING")).toBe("FINISHING");
-    expect(nextStage("FINISHING")).toBeNull();
-    expect(previousStage("PREPARATION")).toBeNull();
-    expect(previousStage("FINISHING")).toBe("SOLEING");
-  });
-});
-
-describe("planTransition", () => {
-  it("starts a planned batch at Preparation and opens its first log", () => {
-    expect(planTransition(state("PLANNED"), "start")).toEqual({
+describe("start", () => {
+  it("puts a planned roll at Preparation and opens its log", () => {
+    const r = planTransition(state("PLANNED"), "start");
+    expect(r).toEqual({
       ok: true,
       plan: {
         next: { status: "IN_PROGRESS", currentStage: "PREPARATION" },
         opensStage: "PREPARATION",
         closesOpenLog: false,
-        isRollback: false,
       },
     });
   });
 
-  it("can't start twice", () => {
-    expect(planTransition(state("IN_PROGRESS"), "start")).toMatchObject({ ok: false });
-  });
-
-  it("can't advance, complete or move back before production starts", () => {
-    for (const action of ["advance", "complete", "move_back"] as TransitionAction[]) {
-      expect(planTransition(state("PLANNED"), action)).toEqual({
-        ok: false,
-        reason: "Start production first.",
-      });
-    }
-  });
-
-  it("advances only to the next stage (no skipping)", () => {
-    const result = planTransition(state("IN_PROGRESS", "UPPER_MAKING"), "advance");
-    expect(result).toMatchObject({
-      ok: true,
-      plan: { next: { currentStage: "SOLEING" }, closesOpenLog: true, isRollback: false },
-    });
-  });
-
-  it("can't advance past Finishing; completing is the only way out", () => {
-    expect(planTransition(state("IN_PROGRESS", "FINISHING"), "advance")).toMatchObject({
+  it("refuses a roll that already started, finished or was cancelled", () => {
+    expect(planTransition(state("IN_PROGRESS"), "start")).toEqual({
       ok: false,
+      reason: "This roll has already started.",
     });
-    expect(planTransition(state("IN_PROGRESS", "FINISHING"), "complete")).toMatchObject({
+    expect(planTransition(state("COMPLETED"), "start")).toEqual({
+      ok: false,
+      reason: "This roll is already finished.",
+    });
+    expect(planTransition(state("CANCELLED"), "start")).toEqual({
+      ok: false,
+      reason: "This roll was cancelled.",
+    });
+  });
+});
+
+describe("finish", () => {
+  it("finishes a roll at Preparation and closes its log", () => {
+    const r = planTransition(state("IN_PROGRESS"), "finish");
+    expect(r).toEqual({
       ok: true,
       plan: {
-        next: { status: "COMPLETED", currentStage: "FINISHING" },
+        next: { status: "COMPLETED", currentStage: "PREPARATION" },
         opensStage: null,
         closesOpenLog: true,
       },
     });
   });
 
-  it("completes only from Finishing", () => {
-    for (const stage of ["PREPARATION", "UPPER_MAKING", "SOLEING"] as Stage[]) {
-      expect(planTransition(state("IN_PROGRESS", stage), "complete")).toMatchObject({ ok: false });
-    }
+  it("finishes a batch started before rolls were tracked, keeping the stage it reached", () => {
+    const r = planTransition(state("IN_PROGRESS", "SOLEING"), "finish");
+    expect(r.ok && r.plan.next).toEqual({ status: "COMPLETED", currentStage: "SOLEING" });
   });
 
-  it("moves back one stage as a rollback, never before Preparation", () => {
-    expect(planTransition(state("IN_PROGRESS", "SOLEING"), "move_back")).toMatchObject({
-      ok: true,
-      plan: {
-        next: { currentStage: "UPPER_MAKING" },
-        opensStage: "UPPER_MAKING",
-        isRollback: true,
-      },
-    });
-    expect(planTransition(state("IN_PROGRESS", "PREPARATION"), "move_back")).toMatchObject({
+  it("refuses a planned, finished or cancelled roll", () => {
+    expect(planTransition(state("PLANNED"), "finish")).toEqual({
       ok: false,
+      reason: "Start the roll first.",
     });
-  });
-
-  it("refuses every transition on completed and cancelled batches", () => {
-    for (const status of ["COMPLETED", "CANCELLED"] as BatchStatus[]) {
-      for (const action of ["start", "advance", "complete", "move_back"] as TransitionAction[]) {
-        expect(planTransition(state(status, "FINISHING"), action)).toMatchObject({ ok: false });
-      }
-      expect(planCancel(state(status))).toMatchObject({ ok: false });
-    }
+    expect(planTransition(state("COMPLETED"), "finish")).toEqual({
+      ok: false,
+      reason: "This roll is already finished.",
+    });
+    expect(planTransition(state("CANCELLED"), "finish")).toEqual({
+      ok: false,
+      reason: "This roll was cancelled.",
+    });
   });
 });
 
-describe("planCancel", () => {
-  it("closes the open log only when production had started", () => {
-    expect(planCancel(state("PLANNED"))).toMatchObject({
-      ok: true,
-      plan: { next: { status: "CANCELLED" }, closesOpenLog: false },
-    });
-    expect(planCancel(state("IN_PROGRESS", "SOLEING"))).toMatchObject({
-      ok: true,
-      plan: { next: { status: "CANCELLED", currentStage: "SOLEING" }, closesOpenLog: true },
+describe("cancel", () => {
+  it("cancels a planned roll without a log to close, and a started one closing it", () => {
+    const planned = planCancel(state("PLANNED"));
+    const started = planCancel(state("IN_PROGRESS"));
+    expect(planned.ok && planned.plan.closesOpenLog).toBe(false);
+    expect(started.ok && started.plan.closesOpenLog).toBe(true);
+  });
+
+  it("refuses a finished roll", () => {
+    expect(planCancel(state("COMPLETED"))).toEqual({
+      ok: false,
+      reason: "This roll is already finished.",
     });
   });
 });
 
 describe("availableActions", () => {
-  it("lets a planned batch start, cancel, edit and change shoe type only", () => {
+  it("offers start, edit, cancel and a shoe type change on a planned roll", () => {
     const a = availableActions(state("PLANNED"));
-    expect(a.start.allowed && a.cancel.allowed && a.edit.allowed && a.changeShoeType.allowed).toBe(
-      true,
-    );
-    expect(a.advance.allowed || a.complete.allowed || a.moveBack.allowed).toBe(false);
+    expect(a.start.allowed).toBe(true);
+    expect(a.finish.allowed).toBe(false);
+    expect(a.cancel.allowed).toBe(true);
+    expect(a.changeShoeType.allowed).toBe(true);
   });
 
-  it("locks the shoe type once production starts, with the reason", () => {
-    expect(availableActions(state("IN_PROGRESS")).changeShoeType).toEqual({
+  it("offers finish but not start on a roll at Preparation, with the shoe type fixed", () => {
+    const a = availableActions(state("IN_PROGRESS"));
+    expect(a.start.allowed).toBe(false);
+    expect(a.finish.allowed).toBe(true);
+    expect(a.changeShoeType).toEqual({
       allowed: false,
-      reason: "The shoe type is fixed once production starts.",
+      reason: "The shoe type is fixed once the roll has started.",
     });
   });
 
-  it("allows nothing on a completed batch", () => {
-    const a = availableActions(state("COMPLETED", "FINISHING"));
+  it("offers nothing on a finished roll", () => {
+    const a = availableActions(state("COMPLETED"));
     expect(Object.values(a).every((x) => !x.allowed)).toBe(true);
   });
 });
 
-describe("stageDurations", () => {
-  const t = (h: number) => new Date(Date.UTC(2026, 9, 2, h));
-
-  it("sums repeat visits after a move back and counts the open log up to now", () => {
-    const totals = stageDurations(
-      [
-        { stage: "PREPARATION", startedAt: t(0), endedAt: t(2) },
-        { stage: "UPPER_MAKING", startedAt: t(2), endedAt: t(5) },
-        { stage: "PREPARATION", startedAt: t(5), endedAt: t(6) }, // moved back
-        { stage: "UPPER_MAKING", startedAt: t(6), endedAt: null }, // open
-      ],
-      t(10),
-    );
-    expect(totals).toEqual({
-      PREPARATION: 3 * 3_600_000,
-      UPPER_MAKING: 7 * 3_600_000,
-      SOLEING: 0,
-      FINISHING: 0,
-    });
+describe("labels and hints", () => {
+  it("reads Planned, At Preparation, Finished and Cancelled", () => {
+    expect(rollStatusLabel(state("PLANNED"))).toBe("Planned");
+    expect(rollStatusLabel(state("IN_PROGRESS"))).toBe("At Preparation");
+    expect(rollStatusLabel(state("COMPLETED", "FINISHING"))).toBe("Finished");
+    expect(rollStatusLabel(state("CANCELLED"))).toBe("Cancelled");
   });
-});
 
-describe("completion with open repairs (D-022)", () => {
-  it("never blocks Complete; the confirm dialog explains the In repair tag", () => {
-    expect(
-      availableActions({ status: "IN_PROGRESS", currentStage: "FINISHING" }).complete.allowed,
-    ).toBe(true);
-    expect(openRepairsNote(2)).toBe(
-      "2 sections are still at the repair station. The batch will be tagged In repair, and they count as usable once repaired on the Rework board.",
+  it("says when a batch started before rolls were tracked", () => {
+    expect(startedBeforeRolls(state("IN_PROGRESS", "UPPER_MAKING"))).toBe(true);
+    expect(startedBeforeRolls(state("IN_PROGRESS"))).toBe(false);
+    expect(startedBeforeRolls(state("COMPLETED", "FINISHING"))).toBe(false);
+    expect(rollStatusLabel(state("IN_PROGRESS", "FINISHING"))).toBe(
+      "Started before rolls were tracked",
     );
-    expect(openRepairsNote(1)).toContain("1 section is still");
+  });
+
+  it("suggests finishing once the scans reach the expected pieces", () => {
+    expect(finishHint(EXPECTED_PIECES_PER_ROLL - 1)).toBeNull();
+    expect(finishHint(EXPECTED_PIECES_PER_ROLL)).toBe("All 10 pieces scanned. Finish this roll?");
+    expect(finishHint(12)).toBe("12 pieces scanned, 10 expected. Finish this roll?");
+  });
+
+  it("names the buttons and the open repairs", () => {
+    expect(transitionLabel("start")).toBe("Start roll");
+    expect(transitionLabel("finish")).toBe("Finish roll");
+    expect(openRepairsNote(1)).toContain("1 section is still to be cleaned or cut around");
+    expect(openRepairsNote(2)).toContain("they count as usable");
   });
 });

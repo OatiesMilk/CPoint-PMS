@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LoaderCircle, Pencil, RefreshCw, Undo2 } from "lucide-react";
+import { CircleCheck, LoaderCircle, Pencil, Play, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -17,14 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { STAGE_LABELS, type Stage } from "@/lib/domain";
-import {
-  nextStage,
-  openRepairsNote,
-  transitionLabel,
-  type BatchActions,
-  type TransitionAction,
-} from "@/lib/stage-machine";
+import type { Stage } from "@/lib/domain";
+import { EXPECTED_PIECES_PER_ROLL, openRepairsNote, type BatchActions } from "@/lib/stage-machine";
 import { cancelBatchAction, transitionBatchAction, type ActionResult } from "../actions";
 
 type Props = {
@@ -32,13 +26,30 @@ type Props = {
   code: string;
   currentStage: Stage;
   actions: BatchActions;
-  /** Sections still at the repair station; completing is allowed and tags the batch (D-022). */
+  /** Sections still at the repair station; finishing is allowed and tags the roll (D-022). */
   openRepairs: number;
+  /** Sections scanned so far and those still waiting for the QI's decision. */
+  scanned: number;
+  pendingReview: number;
+  /** Start, edit and cancel (batch:manage, the Floor Manager). */
+  canManage: boolean;
+  /** Finish roll (batch:finish, the Floor Manager and the QI). */
+  canFinish: boolean;
 };
 
-type DialogKind = "complete" | "move_back" | "cancel" | null;
+type DialogKind = "finish" | "cancel" | null;
 
-export function BatchActionsBar({ id, code, currentStage, actions, openRepairs }: Props) {
+export function BatchActionsBar({
+  id,
+  code,
+  currentStage,
+  actions,
+  openRepairs,
+  scanned,
+  pendingReview,
+  canManage,
+  canFinish,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [dialog, setDialog] = useState<DialogKind>(null);
@@ -47,13 +58,11 @@ export function BatchActionsBar({ id, code, currentStage, actions, openRepairs }
   const [stale, setStale] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const primary: TransitionAction | null = actions.start.allowed
-    ? "start"
-    : actions.advance.allowed
-      ? "advance"
-      : actions.complete.allowed
-        ? "complete"
-        : null;
+  const showStart = canManage && actions.start.allowed;
+  const showFinish = canFinish && actions.finish.allowed;
+  const showEdit = canManage && actions.edit.allowed;
+  const showCancel = canManage && actions.cancel.allowed;
+  if (!showStart && !showFinish && !showEdit && !showCancel) return null;
 
   function handle(result: ActionResult, success: string) {
     if (result.ok) {
@@ -75,41 +84,26 @@ export function BatchActionsBar({ id, code, currentStage, actions, openRepairs }
     setError(result.error);
   }
 
-  function run(action: TransitionAction, withReason?: string) {
+  function run(action: "start" | "finish") {
     setError(null);
     setStale(null);
-    const success =
-      action === "start"
-        ? `${code}: production started at Preparation.`
-        : action === "complete"
-          ? `${code} completed.`
-          : action === "advance"
-            ? `${code} moved to ${STAGE_LABELS[nextStage(currentStage) ?? currentStage]}.`
-            : `${code} moved back.`;
     startTransition(async () => {
       handle(
-        await transitionBatchAction(id, {
-          action,
-          expectedStage: currentStage,
-          reason: withReason,
-        }),
-        success,
+        await transitionBatchAction(id, { action, expectedStage: currentStage }),
+        action === "start"
+          ? `${code} started. The camera feeds it while it is the oldest roll at Preparation.`
+          : `${code} finished.`,
       );
     });
   }
 
-  function submitReason(kind: "move_back" | "cancel") {
+  function submitCancel() {
     const trimmed = reason.trim();
     if (trimmed.length < 3) {
-      setReasonError(
-        kind === "cancel"
-          ? "Enter a reason for cancelling the batch (at least 3 characters)."
-          : "Enter a reason for moving the batch back (at least 3 characters).",
-      );
+      setReasonError("Enter a reason for cancelling the roll (at least 3 characters).");
       return;
     }
     setReasonError(null);
-    if (kind === "move_back") return run("move_back", trimmed);
     startTransition(async () => {
       handle(
         await cancelBatchAction(id, { reason: trimmed, expectedStage: currentStage }),
@@ -118,33 +112,31 @@ export function BatchActionsBar({ id, code, currentStage, actions, openRepairs }
     });
   }
 
-  function openDialog(kind: DialogKind) {
-    setReason("");
-    setReasonError(null);
-    setDialog(kind);
-  }
-
   const spinner = pending ? <LoaderCircle aria-hidden className="animate-spin" /> : null;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        {primary && (
+        {showStart && (
+          <Button disabled={pending} onClick={() => run("start")}>
+            {dialog === null && spinner}
+            <Play aria-hidden />
+            Start roll
+          </Button>
+        )}
+        {showFinish && (
           <Button
             disabled={pending}
-            onClick={() => (primary === "complete" ? openDialog("complete") : run(primary))}
+            onClick={() => {
+              setError(null);
+              setDialog("finish");
+            }}
           >
-            {dialog === null && spinner}
-            {transitionLabel(primary, currentStage)}
+            <CircleCheck aria-hidden />
+            Finish roll…
           </Button>
         )}
-        {actions.moveBack.allowed && (
-          <Button variant="secondary" disabled={pending} onClick={() => openDialog("move_back")}>
-            <Undo2 aria-hidden />
-            Move back…
-          </Button>
-        )}
-        {actions.edit.allowed && (
+        {showEdit && (
           <Button asChild variant="ghost">
             <Link href={`/batches/${id}/edit`}>
               <Pencil aria-hidden />
@@ -152,14 +144,18 @@ export function BatchActionsBar({ id, code, currentStage, actions, openRepairs }
             </Link>
           </Button>
         )}
-        {actions.cancel.allowed && (
+        {showCancel && (
           <Button
             variant="destructive"
             disabled={pending}
             className="ml-6"
-            onClick={() => openDialog("cancel")}
+            onClick={() => {
+              setReason("");
+              setReasonError(null);
+              setDialog("cancel");
+            }}
           >
-            Cancel batch…
+            Cancel roll…
           </Button>
         )}
       </div>
@@ -183,88 +179,81 @@ export function BatchActionsBar({ id, code, currentStage, actions, openRepairs }
       )}
       {error && <Alert tone="danger">{error}</Alert>}
 
-      <Dialog open={dialog === "complete"} onOpenChange={(open) => !open && setDialog(null)}>
+      <Dialog open={dialog === "finish"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
-          <DialogTitle>Complete {code}?</DialogTitle>
+          <DialogTitle>Finish {code}?</DialogTitle>
           <DialogDescription>
-            This closes Finishing and marks the batch as completed. It can’t be moved back
-            afterwards.
+            Do this when the roll is used up. {scanned} section{scanned === 1 ? " was" : "s were"}{" "}
+            scanned ({EXPECTED_PIECES_PER_ROLL} expected). The camera moves on to the next roll at
+            Preparation, and this one can’t be restarted.
           </DialogDescription>
           {openRepairs > 0 && <Alert tone="info">{openRepairsNote(openRepairs)}</Alert>}
+          {pendingReview > 0 && (
+            <Alert tone="info">
+              {pendingReview} scan{pendingReview === 1 ? " is" : "s are"} still waiting for the
+              Quality Inspector’s decision. {pendingReview === 1 ? "It stays" : "They stay"} in the
+              review queue.
+            </Alert>
+          )}
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="ghost">Not yet</Button>
             </DialogClose>
-            <Button disabled={pending} onClick={() => run("complete")}>
+            <Button disabled={pending} onClick={() => run("finish")}>
               {spinner}
-              Complete batch
+              Finish roll
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {(["move_back", "cancel"] as const).map((kind) => (
-        <Dialog key={kind} open={dialog === kind} onOpenChange={(open) => !open && setDialog(null)}>
-          <DialogContent>
-            <DialogTitle>
-              {kind === "cancel"
-                ? `Cancel ${code}?`
-                : `Move ${code} back to ${transitionLabel("move_back", currentStage).replace("Move back to ", "")}?`}
-            </DialogTitle>
-            <DialogDescription>
-              {kind === "cancel"
-                ? "The batch stops here and can’t be restarted. Its stage history is kept."
-                : "The current stage closes and the previous one reopens. The reason is kept in the timeline."}
-            </DialogDescription>
-            <form
-              className="flex flex-col gap-1.5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitReason(kind);
+      <Dialog open={dialog === "cancel"} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent>
+          <DialogTitle>Cancel {code}?</DialogTitle>
+          <DialogDescription>
+            The roll stops here and can’t be restarted. A planned roll goes back on the shelf. Its
+            history is kept.
+          </DialogDescription>
+          <form
+            className="flex flex-col gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitCancel();
+            }}
+          >
+            <Label htmlFor="cancel-reason">Reason</Label>
+            <Textarea
+              id="cancel-reason"
+              rows={3}
+              value={reason}
+              autoFocus
+              aria-invalid={!!reasonError}
+              aria-describedby={reasonError ? "cancel-reason-error" : undefined}
+              placeholder="e.g. Roll returned to the supplier"
+              onChange={(e) => {
+                setReason(e.target.value);
+                if (reasonError && e.target.value.trim().length >= 3) setReasonError(null);
               }}
-            >
-              <Label htmlFor={`${kind}-reason`}>Reason</Label>
-              <Textarea
-                id={`${kind}-reason`}
-                rows={3}
-                value={reason}
-                autoFocus
-                aria-invalid={!!reasonError}
-                aria-describedby={reasonError ? `${kind}-reason-error` : undefined}
-                placeholder={
-                  kind === "cancel"
-                    ? "e.g. Roll returned to the supplier"
-                    : "e.g. Stitching redone on 40 pairs"
-                }
-                onChange={(e) => {
-                  setReason(e.target.value);
-                  if (reasonError && e.target.value.trim().length >= 3) setReasonError(null);
-                }}
-              />
-              {reasonError && (
-                <p id={`${kind}-reason-error`} className="text-sm text-reject">
-                  {reasonError}
-                </p>
-              )}
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button type="button" variant="ghost">
-                    {kind === "cancel" ? "Keep batch" : "Don’t move"}
-                  </Button>
-                </DialogClose>
-                <Button
-                  type="submit"
-                  variant={kind === "cancel" ? "destructive" : "primary"}
-                  disabled={pending}
-                >
-                  {spinner}
-                  {kind === "cancel" ? "Cancel batch" : "Move back"}
+            />
+            {reasonError && (
+              <p id="cancel-reason-error" className="text-sm text-reject">
+                {reasonError}
+              </p>
+            )}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="ghost">
+                  Keep roll
                 </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-      ))}
+              </DialogClose>
+              <Button type="submit" variant="destructive" disabled={pending}>
+                {spinner}
+                Cancel roll
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

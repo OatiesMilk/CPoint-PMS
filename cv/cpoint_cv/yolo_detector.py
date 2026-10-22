@@ -4,15 +4,10 @@ It loads the model once, warms it up once, and reports each detection as the mod
 with its normalized centre box. For the segment task, Ultralytics already gives a box for each
 mask (``Results.boxes``); the mask outline (``Results.masks.xyn``) is kept for overlays only, so
 the app's contract stays boxes only (gap 3).
-
-The station window shares one loaded model between its live preview (``detect_frame`` at a smaller
-size) and its captures (``detect`` at ``[model] imgsz``). A lock keeps them from running at the
-same time, so the GPU only ever holds one model and one image (D-060).
 """
 
 from __future__ import annotations
 
-import threading
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -42,7 +37,6 @@ class YoloDetector:
 
         self._config = config
         self._floor = confidence_floor
-        self._lock = threading.Lock()
         try:
             self._model: Any = YOLO(str(config.path), task="segment")
         except Exception as error:  # ultralytics raises many types; say which file failed
@@ -58,16 +52,15 @@ class YoloDetector:
     def task(self) -> str:
         return str(getattr(self._model, "task", "unknown"))
 
-    def _predict(self, source: Any, imgsz: int | None = None) -> Any:
+    def _predict(self, source: Any) -> Any:
         try:
-            with self._lock:
-                return self._model.predict(
-                    source=source,
-                    imgsz=imgsz or self._config.imgsz,
-                    device=self._config.device,
-                    conf=self._floor,
-                    verbose=False,
-                )
+            return self._model.predict(
+                source=source,
+                imgsz=self._config.imgsz,
+                device=self._config.device,
+                conf=self._floor,
+                verbose=False,
+            )
         except Exception as error:
             if "cuda" in str(error).lower() and self._config.device != "cpu":
                 raise ModelError(
@@ -83,12 +76,8 @@ class YoloDetector:
         self._predict(blank)
 
     def detect(self, image: Path) -> DetectorOutput:
-        """A capture: the image file at the model's full size."""
+        """The image file at the model's full size."""
         return self._read(self._predict(str(image))[0])
-
-    def detect_frame(self, frame: Any, imgsz: int) -> DetectorOutput:
-        """The window's live preview: an OpenCV frame (BGR array) at ``imgsz``."""
-        return self._read(self._predict(frame, imgsz)[0])
 
     @staticmethod
     def _read(result: Any) -> DetectorOutput:

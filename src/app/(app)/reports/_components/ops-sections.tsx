@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Check, Hourglass } from "lucide-react";
+import { ArrowRight, Check, FileText, Hourglass, TriangleAlert } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -29,13 +30,13 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
   );
 }
 
-const STEPS = ["Waiting", "Being repaired", "Repaired"] as const;
+const STEPS = ["Waiting", "Being handled", "Done"] as const;
 
 /** Where a section is in its repair: three steps, the current one marked in words and style. */
 function RepairProgress({ status }: { status: "OPEN" | "IN_PROGRESS" }) {
   const current = status === "OPEN" ? 0 : 1;
   return (
-    <ol className="flex items-center gap-1 text-xs" aria-label="Repair progress">
+    <ol className="flex items-center gap-1 text-xs" aria-label="Progress on the board">
       {STEPS.map((step, i) => (
         <li
           key={step}
@@ -57,17 +58,17 @@ function RepairProgress({ status }: { status: "OPEN" | "IN_PROGRESS" }) {
 
 const REPAIR_ROWS = 10;
 
-/** Sections at the repair station right now and how far each has got. Same for FM and QI. */
+/** Sections at the Repair Station right now and how far each has got. Same for FM and QI. */
 export function RepairStationCard({ repairs, days }: { repairs: RepairStation; days: number }) {
   return (
     <Card data-testid="repair-station">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle>Repair station</CardTitle>
+            <CardTitle>Repair Station</CardTitle>
             <CardDescription>
-              Leather sections that need rework, with how far each has got. Updated live, not by the
-              range.
+              Fixable leather sections being cleaned or cut around, with how far each has got.
+              Updated live, not by the range.
             </CardDescription>
           </div>
           <SectionLink href="/rework">Open the board</SectionLink>
@@ -87,30 +88,30 @@ export function RepairStationCard({ repairs, days }: { repairs: RepairStation; d
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Being repaired</dt>
+            <dt className="text-muted-foreground">Being handled</dt>
             <dd className="text-2xl font-semibold tabular-nums" data-testid="repairs-active">
               {repairs.beingRepaired}
             </dd>
           </div>
           <div>
             <dt className="text-muted-foreground">
-              Repaired, last {days === 1 ? "day" : `${days} days`}
+              Done, last {days === 1 ? "day" : `${days} days`}
             </dt>
             <dd className="text-2xl font-semibold tabular-nums">{repairs.doneInRange}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Typical time to repair</dt>
+            <dt className="text-muted-foreground">Typical time to handle</dt>
             <dd className="text-2xl font-semibold tabular-nums">
               {repairs.medianTurnaroundMs === null
                 ? "—"
                 : formatDuration(repairs.medianTurnaroundMs)}
             </dd>
-            <dd className="text-xs text-muted-foreground">from found to repaired</dd>
+            <dd className="text-xs text-muted-foreground">from found to done</dd>
           </div>
         </dl>
         {repairs.total === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nothing is at the repair station. Sections the camera marks for rework appear here.
+            Nothing to clean or cut around. Sections the camera marks Fixable appear here.
           </p>
         ) : (
           <>
@@ -143,7 +144,7 @@ export function RepairStationCard({ repairs, days }: { repairs: RepairStation; d
                     <TableCell numeric>
                       {r.status === "OPEN"
                         ? `waiting ${formatDuration(r.waitingMs)}`
-                        : `repairing ${formatDuration(r.repairingMs ?? 0)}`}
+                        : `being handled ${formatDuration(r.repairingMs ?? 0)}`}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -318,62 +319,144 @@ export function ProcurementFlowCard({ p }: { p: OperationsReport["procurement"] 
   );
 }
 
-/** Leather quality by supplier, from the camera's final verdicts (suppliers, not people). */
-export function SupplierCard({
+/**
+ * Supplier quality (Phase 20): how each supplier's leather scanned at Preparation, worst first, and
+ * the rolls with the most rejects, each with a claim sheet. Grouped by supplier and roll, never by
+ * person (D-008).
+ */
+export function SupplierQualityCard({
   suppliers,
+  rolls,
   lineProblemShare,
+  rangeQuery,
 }: {
   suppliers: OperationsReport["suppliers"];
+  rolls: OperationsReport["rejectedRolls"];
   lineProblemShare: number | null;
+  /** `from=…&to=…`, so the CSVs cover the range on screen. */
+  rangeQuery: string;
 }) {
   return (
-    <Card id="suppliers" data-testid="suppliers">
+    <Card id="supplier-quality" data-testid="supplier-quality">
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Suppliers</CardTitle>
+            <CardTitle>Supplier quality</CardTitle>
             <CardDescription>
-              How each supplier’s leather scanned in this range. “Needed work” is rework plus
-              reject.
+              Sections scanned at Preparation in this range, grouped by the supplier of each roll.
+              Use it as evidence when raising a claim.
               {lineProblemShare !== null &&
-                ` Across all suppliers: ${formatPercent(lineProblemShare)}.`}
+                ` Across all suppliers, ${formatPercent(lineProblemShare)} were Fixable or rejected.`}
             </CardDescription>
           </div>
-          <SectionLink href="/api/v1/reports/suppliers.csv">CSV</SectionLink>
+          <div className="flex flex-wrap gap-3">
+            <SectionLink href={`/api/v1/reports/suppliers.csv?${rangeQuery}`}>
+              Suppliers CSV
+            </SectionLink>
+            <SectionLink href={`/api/v1/reports/supplier-rolls.csv?${rangeQuery}`}>
+              Rolls CSV
+            </SectionLink>
+          </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-6">
         {suppliers.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No sections were scanned in this range, so there is nothing to compare yet.
           </p>
         ) : (
-          <Table>
+          <Table data-testid="supplier-table">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Supplier</TableHead>
-                <TableHead numeric>Batches</TableHead>
+                <TableHead numeric>Rolls</TableHead>
                 <TableHead numeric>Sections</TableHead>
-                <TableHead numeric>Pass</TableHead>
-                <TableHead numeric>Needed work</TableHead>
+                <TableHead numeric>Fixable</TableHead>
+                <TableHead numeric>Reject</TableHead>
+                <TableHead>Top defect</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {suppliers.map((s) => (
                 <TableRow key={s.id ?? "none"}>
-                  <TableCell className="font-medium">{s.supplier}</TableCell>
-                  <TableCell numeric>{s.batches}</TableCell>
-                  <TableCell numeric>{s.sections}</TableCell>
-                  <TableCell numeric>{formatPercent(s.cleanShare)}</TableCell>
-                  <TableCell numeric>
-                    {formatPercent(s.problemShare)}
-                    <span className="text-muted-foreground"> ({s.rework + s.reject})</span>
+                  <TableCell className="font-medium">
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {s.supplier}
+                      {s.high && (
+                        <Badge
+                          tone="danger"
+                          title="Fixable and rejected sections are well above the other suppliers'."
+                        >
+                          <TriangleAlert aria-hidden />
+                          High
+                        </Badge>
+                      )}
+                    </span>
                   </TableCell>
+                  <TableCell numeric>{s.rolls}</TableCell>
+                  <TableCell numeric>{s.sections}</TableCell>
+                  <TableCell numeric>{formatPercent(s.reworkShare)}</TableCell>
+                  <TableCell numeric>{formatPercent(s.rejectShare)}</TableCell>
+                  <TableCell>{s.topDefect ?? "None"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
+
+        <div className="flex flex-col gap-2">
+          <h3 className="font-semibold">Rolls with the most rejects</h3>
+          {rolls.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No roll had a rejected section in this range.
+            </p>
+          ) : (
+            <Table data-testid="rejected-rolls">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Roll · batch</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead numeric>Rejected</TableHead>
+                  <TableHead>Defects</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Claim sheet</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rolls.map((r) => (
+                  <TableRow key={r.batchId}>
+                    <TableCell className="font-mono whitespace-nowrap">
+                      {r.rollCode} · {r.batchCode}
+                    </TableCell>
+                    <TableCell>{r.supplier}</TableCell>
+                    <TableCell numeric className="whitespace-nowrap">
+                      {r.rejected} of {r.sections}
+                    </TableCell>
+                    <TableCell>
+                      {r.defects.map((d) => `${d.label} ${d.sections}`).join(" · ") || "None"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild size="sm" variant="secondary">
+                        <Link
+                          href={`/reports/claims/${r.batchId}`}
+                          aria-label={`Claim sheet for roll ${r.rollCode}, batch ${r.batchCode}`}
+                        >
+                          <FileText aria-hidden />
+                          Claim sheet
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Grouped by supplier and roll only, never by person. A claim sheet lists the roll, its
+          rejected sections and their photos, ready to save as PDF.
+        </p>
       </CardContent>
     </Card>
   );

@@ -40,6 +40,16 @@ const topDefect = {
   select: { confidence: true, rawClassKey: true, defectType: { select: { label: true } } },
 } satisfies Prisma.Scan$detectionsArgs;
 
+/** Every detection, strongest first, with how its type is handled (clean or cut around, D-070). */
+const reworkDetections = {
+  orderBy: { confidence: "desc" },
+  select: {
+    confidence: true,
+    rawClassKey: true,
+    defectType: { select: { label: true, handling: true } },
+  },
+} satisfies Prisma.Scan$detectionsArgs;
+
 const reworkSelect = {
   id: true,
   status: true,
@@ -54,7 +64,7 @@ const reworkSelect = {
       sequence: true,
       imagePath: true,
       batch: { select: { id: true, code: true, status: true } },
-      detections: topDefect,
+      detections: reworkDetections,
     },
   },
 } satisfies Prisma.ReworkTicketSelect;

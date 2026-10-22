@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { VerdictBadge } from "@/components/features/verdict-badge";
+import { VerdictBadge, verdictLabel } from "@/components/features/verdict-badge";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +23,7 @@ import { decideScanAction } from "../actions";
 
 const CHOICES = [
   { verdict: "PASS", hint: "Goes on to cutting." },
-  { verdict: "REWORK", hint: "Sent to the repair station." },
+  { verdict: "REWORK", hint: "Goes to the Repair Station to be cleaned or cut around." },
   { verdict: "REJECT", hint: "Pulled out and kept as salvage." },
 ] as const;
 type Choice = (typeof CHOICES)[number]["verdict"];
@@ -93,7 +93,7 @@ export function DecisionPanel({ scanId, label, finalVerdict }: Props) {
       });
       if (result.ok) {
         toast.success(
-          `${label}: ${choice === "PASS" ? "passed" : choice === "REWORK" ? "sent to rework" : "rejected"}.`,
+          `${label}: ${choice === "PASS" ? "passed" : choice === "REWORK" ? "marked Fixable" : "rejected"}.`,
         );
         setOpen(false);
         setChoice(null);
@@ -171,9 +171,9 @@ export function DecisionPanel({ scanId, label, finalVerdict }: Props) {
           <DialogContent>
             <DialogTitle>Override {label}?</DialogTitle>
             <DialogDescription>
-              The camera decided <strong>{finalVerdict?.toLowerCase().replace("_", " ")}</strong>.
-              Your decision and reason are recorded, and the repair or salvage record is updated to
-              match.
+              The camera decided <strong>{finalVerdict && verdictLabel(finalVerdict)}</strong>. Your
+              decision and reason are recorded, and the section moves to match: onto or off the
+              Repair Station board, or into or out of Salvage.
             </DialogDescription>
             <form
               onSubmit={(e) => {

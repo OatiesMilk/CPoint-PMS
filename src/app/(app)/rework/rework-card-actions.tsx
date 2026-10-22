@@ -11,8 +11,8 @@ import { moveReworkAction } from "./actions";
 
 const PRIMARY: Partial<Record<ReworkStatus, ReworkMove>> = { OPEN: "start", IN_PROGRESS: "done" };
 const DONE_TOAST: Record<ReworkMove, string> = {
-  start: "repair started",
-  done: "marked repaired. It now counts as usable.",
+  start: "started",
+  done: "marked done. It now counts as usable.",
   reopen: "reopened",
   unstart: "back to waiting",
 };

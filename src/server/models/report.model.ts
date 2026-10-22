@@ -1,4 +1,4 @@
-import type { Stage, Verdict } from "@/generated/prisma/enums";
+import type { Verdict } from "@/generated/prisma/enums";
 import { type Db, defaultDb } from "./db";
 
 // Report queries (D-025). Aggregates per Manila day, stage or defect type only: no query here
@@ -147,48 +147,4 @@ export async function verdictMatrix(range: Range, db: Db = defaultDb()) {
       AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
     GROUP BY 1, 2`;
   return rows.map((r) => ({ ai: r.ai, final: r.final, count: n(r.count) }));
-}
-
-/** Completed stage visits ending in the range: count, median and average duration (ms). */
-export async function stageDurations(range: Range, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<
-    {
-      stage: Stage;
-      visits: bigint;
-      medianMs: number | null;
-      p90Ms: number | null;
-      avgMs: number | null;
-    }[]
-  >`
-    SELECT l.stage, count(*) AS visits,
-      percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM l."endedAt" - l."startedAt")) * 1000 AS "medianMs",
-      percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM l."endedAt" - l."startedAt")) * 1000 AS "p90Ms",
-      avg(extract(epoch FROM l."endedAt" - l."startedAt")) * 1000 AS "avgMs"
-    FROM batch_stage_logs l
-    WHERE l."endedAt" IS NOT NULL
-      AND l."endedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND l."endedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-    GROUP BY 1`;
-  return rows.map((r) => ({
-    stage: r.stage,
-    visits: n(r.visits),
-    medianMs: r.medianMs === null ? null : Number(r.medianMs),
-    p90Ms: r.p90Ms === null ? null : Number(r.p90Ms),
-    avgMs: r.avgMs === null ? null : Number(r.avgMs),
-  }));
-}
-
-/** Batches in progress per stage right now, and the longest wait (ms). */
-export async function openStageWaits(now: Date, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<{ stage: Stage; batches: bigint; longestMs: number }[]>`
-    SELECT l.stage, count(*) AS batches,
-      max(extract(epoch FROM (${iso(now)}::timestamptz AT TIME ZONE 'UTC') - l."startedAt")) * 1000 AS "longestMs"
-    FROM batch_stage_logs l JOIN batches b ON b.id = l."batchId"
-    WHERE l."endedAt" IS NULL AND b.status = 'IN_PROGRESS'
-    GROUP BY 1`;
-  return rows.map((r) => ({
-    stage: r.stage,
-    batches: n(r.batches),
-    longestMs: Number(r.longestMs),
-  }));
 }

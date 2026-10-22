@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { BATCH_STATUS_LABELS, STAGE_LABELS, STAGE_ORDER, type BatchStatus } from "@/lib/domain";
+import { BATCH_STATUS_LABELS, type BatchStatus } from "@/lib/domain";
 
 const STATUSES = Object.keys(BATCH_STATUS_LABELS) as BatchStatus[];
 
@@ -64,21 +64,6 @@ export function BatchFilters({ shoeTypes }: { shoeTypes: { id: string; name: str
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {BATCH_STATUS_LABELS[s]}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="flex w-44 flex-col gap-1.5">
-        <Label htmlFor="filter-stage">Stage</Label>
-        <Select
-          id="filter-stage"
-          value={params.get("stage") ?? ""}
-          onChange={(e) => update("stage", e.target.value)}
-        >
-          <option value="">All stages</option>
-          {STAGE_ORDER.map((s) => (
-            <option key={s} value={s}>
-              {STAGE_LABELS[s]}
             </option>
           ))}
         </Select>

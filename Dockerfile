@@ -49,12 +49,12 @@ RUN apt-get update \
  && useradd --system --uid 1001 --gid nodejs --no-create-home nextjs
 WORKDIR /app
 # The camera model is mounted at /app/models (docker-compose.yml), never built in (D-049, D-064).
-# A certificate mounted at /app/certs turns on HTTPS on HTTPS_PORT (D-065).
+# HTTPS comes from the Cloudflare Tunnel in front of the app, not from the container (D-076).
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
-    HTTPS_PORT=3443 \
+\
     UPLOADS_DIR=/app/storage/uploads \
     CV_MODEL_PATH=/app/models/yolo-v1.onnx
 
@@ -63,11 +63,10 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=build --chown=nextjs:nodejs /app/public ./public
 COPY --from=migrator --chown=nextjs:nodejs /migrate ./migrate
 COPY --chown=nextjs:nodejs docker/entrypoint.sh ./entrypoint.sh
-COPY --chown=nextjs:nodejs docker/https.mjs ./https.mjs
 RUN mkdir -p /app/storage/uploads && chown -R nextjs:nodejs /app/storage && chmod +x ./entrypoint.sh
 
 USER nextjs
-EXPOSE 3000 3443
+EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
 

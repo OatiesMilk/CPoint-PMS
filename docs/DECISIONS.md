@@ -148,7 +148,7 @@ means there's no second toolchain in the image, and a fresh factory install is u
 - The full schema for all phases is in the first migration, and later phases add migrations only
   when requirements change.
 
-### D-019 · 2026-10-02 · Accepted — Batch lifecycle and concurrency rules
+### D-019 · 2026-10-02 · Lifecycle superseded by D-082 (concurrency rules kept) — Batch lifecycle and concurrency rules
 
 **Decision:**
 
@@ -333,7 +333,7 @@ There is no email in the factory setup, so password handover is in person.
 "sign out everywhere" if CPoint wants it later. Phase 7 reports can rely on thresholds and defect
 types being data that admins change.
 
-### D-025 · 2026-10-03 · Accepted — Report metrics, chart colours, and server-side sign-out
+### D-025 · 2026-10-03 · Stage metrics superseded by D-087 — Report metrics, chart colours, and server-side sign-out
 
 **Context:** Phase 7 summarizes production and quality. The client wants a daily summary,
 cares about the bottleneck stages, and doesn't want anyone singled out (D-008). Separately, the
@@ -1185,7 +1185,7 @@ service in Docker would be a third container (D-003).
 **Consequences:** the station and the Capture page give the same detections for the same photo.
 A new model needs `export-onnx` and an app restart as well as the station's config.
 
-### D-065 · 2026-10-19 · Accepted — HTTPS on the LAN: an mkcert certificate served by a small listener inside the `app` container
+### D-065 · 2026-10-19 · Superseded by D-076 — HTTPS on the LAN: an mkcert certificate served by a small listener inside the `app` container
 
 **Context:** browsers open the camera only on `localhost` or a trusted HTTPS address, and the
 iPhone's Safari must use the page.
@@ -1246,3 +1246,243 @@ phone or tablet, otherwise `WEBCAM`. No migration.
 - The Docker image drops sharp's musl (Alpine) build after `next build`: the image is Debian
   (D-064) and Next's server trace brought both. 854 → 826 MB. The migrator's Prisma CLI (about
   250 MB, with Studio and `prisma dev`) is left whole: trimming it would break on a Prisma upgrade.
+
+### D-069 · 2026-10-20 · Accepted — The camera station app is retired; capture happens on the website (supersedes D-059 to D-063, amends D-048, D-050, D-054)
+
+**Decision (Dylan, 2026-10-20, Phase 20):**
+
+- The Capture page (D-064 to D-067) does what the station did, with no other app, so the
+  **CPoint Camera** window, its `.cmd` launcher and `shortcut` (D-059 to D-063) are removed, and so
+  is the station runtime that only it and `run` used: `run`, `doctor`, the spool and the
+  transport. `cv/` stays as the **model toolkit**: `predict`, `evaluate` and `export-onnx` (the
+  website's model comes from it), plus `npm run cv:parity`.
+- The device-token scan API (`POST /api/v1/scans`), API tokens and `captureId` retries stay: the
+  simulator and the demo use them. `DEDICATED_CAMERA` stays in the enum so old scans still show.
+- The Camera page drops the station check-in (D-054): its states are **Capture page active**
+  (or "Scans arriving" when a device token sends), **Simulator active** and **No recent captures**.
+- Capture page: **no "check before starting" button**. The window needed one for Python packages,
+  the GPU, the token and the PC clock; none of those exist on the website, and the page already
+  checks the camera, the model and the batch with a specific message for each.
+
+### D-070 · 2026-10-20 · Accepted — "Rework" reads **Fixable**; the board is **Cut around or clean**; each defect type says how
+
+**Decision (Dylan, 2026-10-20, Phase 20):**
+
+- The camera checks raw leather sections before cutting, so nothing is reworked. Users now read
+  the verdict as **Fixable** (badges, filters, charts, Settings, reports and CSV headers), and the
+  board at `/rework` is **Cut around or clean** with **To handle**, **Being handled** and **Done,
+  usable**. "Repair station", "In repair" and "Repairs done" became "Cut around or clean", "Being
+  handled" and "Cleaned or cut around".
+- Internal names stay (`REWORK`, `ReworkTicket`, `rework:manage`, `/rework`, audit actions
+  `rework.*`, the `rework` field in report JSON): renaming them would touch the database, the API
+  and every test for no user-visible gain.
+- New data on each defect type: `handling`, **Clean before cutting** or **Cut around the marked
+  area** (the default), set under Settings → Defect types → "When Fixable". Migration
+  `defect_handling` sets `dirt` to Clean. A section is cleaned only when every defect found on it
+  is cleaned; anything else, or a class the app doesn't know, is cut around. Done cards read
+  "Cleaned, usable" or "Cut around, usable".
+
+### D-071 · 2026-10-20 · Accepted — Component tracking is out of scope
+
+**Decision (Dylan, 2026-10-20, Phase 20):** per-component tracking in Upper Making is no longer
+part of the system. The `/components` "coming soon" page, the Settings → Components tab,
+`/api/v1/component-types` and the `component_types` table are removed (migration
+`drop_component_types`; the table only held optional names and nothing pointed to it). The open
+question about components per shoe type is closed.
+
+### D-072 · 2026-10-20 · Accepted — Supplier quality on the Operations report, with a printable claim sheet per roll
+
+**Decision (Dylan, 2026-10-20, Phase 20):**
+
+- Reports → Operations has **Supplier quality**: per supplier, the rolls (distinct roll codes; one
+  batch is cut from one roll), sections, Fixable %, Reject % and the top defect (each Fixable or
+  rejected section's strongest detection), worst first. **High** marks a supplier by the same rule
+  as the attention item (`supplierIsHigh`: at least 30 sections and 10 points above the line).
+- **Rolls with the most rejects** lists the five worst rolls in the range with "Rejected N of M"
+  and the main defects. Each has a **Claim sheet**: `/reports/claims/[batchId]`, a page with the
+  roll, supplier, counts and every rejected section with its photo and defects, and **Save as
+  PDF** through the browser's print dialog (no PDF library). The navigation is left out of print.
+- Floor Manager only (`report:production`), like the rest of Operations. Grouped by supplier and
+  roll, never by person (D-008): the claim sheet names no one who captured or decided a section.
+- `suppliers.csv` gains rolls, Fixable %, Reject %, top defect and High; new `supplier-rolls.csv`.
+- The demo week adds two demo suppliers (Marikina Leather, Bulacan Hides) and rotates rolls between
+  the three; Marikina's leather shows more defects. `demo:reset` keeps them.
+
+### D-073 · 2026-10-20 · Accepted — The Fixable board is named Repair Station
+
+**Decision (Dylan, 2026-10-20, Phase 21):** CPoint's factory already calls the station the
+**Repair Station**, so the nav, the page and every place that names the board use that name
+(replacing "Cut around or clean" from D-070). The page explains what happens there with no
+"nothing is repaired" line, which Dylan found confusing: "Clean the section or cut around the
+defect." The cards keep **Clean before cutting** / **Cut around the marked area**, the columns
+keep To handle / Being handled / Done, usable, and the verdict stays **Fixable**. `/rework` and
+the internal names stay (D-070).
+
+### D-074 · 2026-10-20 · Accepted — Floor view: a full-screen verdict for the operator at the fixed camera
+
+**Decision (Dylan, 2026-10-20, Phase 21):** the station operator has no desk screen, only a
+monitor facing them. **Floor view** is a full-screen mode of the Capture page: the same live
+preview (no live boxes, D-066), "Next scan goes to …" in large text, and after each capture a
+thick coloured frame plus a band with the verdict word, icon, section number and where the piece
+goes: Pass (green, on to cutting), Fixable (orange, the Repair Station), Reject (red, salvage),
+Needs review (blue, set aside for the QI). The verdict stays **until the next capture**; no
+sounds (Dylan). Esc leaves; it's remembered per browser. Space on the station's keyboard captures (Dylan chose no foot pedal, 2026-10-20).
+Monitor first rather than an LED tower light (no extra hardware or driver); the bins are taped
+by colour and word (`docs/STATION_SETUP.md`).
+
+### D-075 · 2026-10-20 · Accepted — Allowed Shoe Constructors may capture
+
+**Decision (Dylan, 2026-10-20, Phase 21):** the person feeding the camera is a Shoe Constructor.
+Sharing a QI login would record every scan under that QI, so each constructor has a **"Can
+capture at the camera"** switch (`User.canCapture`, migration `user_can_capture`), set by the
+**Floor Manager** (Camera → Camera operators) or the **System Admin** (Users → More actions), like
+the leather-roll switch (D-031). `canCaptureFor` (QI and FM always; a constructor only when
+allowed; never the Admin) guards the Capture page, the capture API, `batches/current` and the
+nav. An allowed constructor gets Capture and its Floor view and sees the verdict and section, not
+Scans or Reports. Audited as `camera.capture_access.grant/revoke`; their scans' audit rows name
+them (`origin: "website"`).
+
+### D-076 · 2026-10-20 · Accepted — HTTPS through a Cloudflare Tunnel; mkcert removed
+
+**Decision (Dylan, 2026-10-20, Phase 21):** supersedes D-065. Other devices reach the site
+through a **Cloudflare Tunnel** (free): a quick tunnel for staging, a named tunnel with a domain
+for the real setup. It gives a trusted `https://` address, so the camera works on any device with
+no certificate to install. `cloudflared` runs on the server PC, not as a container (still two,
+D-003). Removed: `docker/https.mjs`, the entrypoint's HTTPS branch, `HTTPS_PORT` and port 3443,
+the `certs` mount, `npm run dev:https` and the README's mkcert and iPhone certificate steps. The
+"secure address" message points to the tunnel or localhost. `/certs/` stays git-ignored so an old
+key is never committed. Vercel and Cloudflare Pages don't fit as hosts (native ONNX Runtime,
+files on disk); a cloud VM running the same compose stays an option for a public demo.
+
+### D-077 · 2026-10-21 · Accepted — Attendance is a one-day log book within D-008
+
+**Decision (Dylan, 2026-10-21, Phase 22; brief `docs/prompts/production-progression.md`):**
+Production → **Attendance** (`/attendance`) records who came in each day: one row per saved day
+(`AttendanceDay`, the Manila date, unique) and one present-or-absent mark per person on that day's
+roster (`AttendanceMark`), migration `attendance`. Present or absent only: no half days, late
+arrivals, hours or absence reasons (Dylan: 3A). The page shows **one day at a time**; nothing in
+the app shows a person's history, absence count, percentage or streak, and no API returns one. A
+mark's user link cascades on a hard delete (only tests and `demo:reset` delete users; the app
+deactivates, D-024). Audited as `attendance.take` / `attendance.update` with the counts before and
+after and who changed.
+
+### D-078 · 2026-10-21 · Accepted — The roster is every active user on that day
+
+**Decision (Dylan, 2026-10-21, Phase 22: 1A):** a day's roster is every active user created by the
+end of that Manila day, plus anyone already marked on it, so a later deactivation never rewrites a
+past day. Each person shows their role as the "what they do" badge; Shoe Constructors are listed
+first. Factory workers without an account are out of scope: the Admin creates accounts for
+constructors who never sign in. **Open question for CPoint:** do all constructors have accounts?
+
+### D-079 · 2026-10-21 · Accepted — The Floor Manager takes attendance for today and 7 days back
+
+**Decision (Dylan, 2026-10-21, Phase 22: 2A):** `attendance:manage` → Floor Manager;
+`attendance:read` → Floor Manager and System Admin (read-only). The QI and constructors don't see
+the page. Today and the 7 days before can be saved; earlier days are locked and the future is
+refused, each with one sentence why. A day starts "Not taken"; **Mark everyone present** then untick
+the absent, and **Save attendance (N changes)** saves the whole roster (anyone not sent is saved
+absent). A save sends the `updatedAt` it loaded; a mismatch is `409 STALE` ("Someone else saved
+this day's attendance. Refresh to see it."). Leaving with unsaved ticks asks first.
+
+### D-080 · 2026-10-21 · Accepted — `workforceFor` is the only worker count
+
+**Decision (Phase 22):** `workforceFor` (`src/lib/attendance-rules.ts`) gives `{ taken,
+constructorsPresent, constructorsOnRoster, othersPresent }`. Only Shoe Constructors count as
+workers; other roles are ticked but counted apart. A day never saved is "Not taken", never 0.
+Phase 23's check-ins read it; any figure divided by people is a line average for a day and never
+carries a name (D-008).
+
+### D-081 · 2026-10-21 · Accepted — Twelve demo Shoe Constructors and a week of attendance
+
+**Decision (Phase 22, brief assumption 13):** with `SEED_DEMO_USERS=true`, the bootstrap also
+creates 12 demo Shoe Constructors (`DEMO_CONSTRUCTORS`, e.g. `ana.cruz@cpoint.local`) with random
+passwords nobody sees, dated 30 days back so they are on every demo-week day. The demo week takes
+attendance for its working days before today through the real service (absences 1, 5, 0, 3, 2 on
+the five days before a Saturday); today is left "Not taken". `demo:reset` keeps the demo
+constructors and removes all attendance with the rest of the test data.
+
+### D-082 · 2026-10-21 · Accepted — A batch is one leather roll: Start roll, then Finish roll
+
+**Decision (Dylan, 2026-10-21, Phase 23: 1A; supersedes D-019's lifecycle):** a batch no longer
+travels through Upper Making, Sole-ing and Finishing. **Planned** → **Start roll** (Preparation,
+where the camera scans its sections) → **Finish roll** → **Finished**; Cancel stays (reason
+required). `POST /api/v1/batches/{id}/stages` takes `start` (`batch:manage`, the Floor Manager)
+and `finish` (new `batch:finish`, the Floor Manager and the QI) only; the old moves get a 422 that
+says so. Finishing closes the open `BatchStageLog` row, is a conditional update (`409 STALE`,
+D-019's concurrency rule stays) and is allowed with sections at the Repair Station (D-022). It is
+never automatic: when the scans reach the expected 10 pieces (`EXPECTED_PIECES_PER_ROLL`, an
+ASSUMPTION Phase 24 moves onto the roll item) the batch and Capture pages say "All 10 pieces
+scanned. Finish this roll?". Statuses read Planned, At Preparation, Finished, Cancelled. No data
+migration: old batches keep their stage history (the batch page's **History**); one still past
+Preparation reads "Started before rolls were tracked" and can be finished. `Stage`,
+`currentStage` and `targetQuotaPairs` stay in the schema; the target quota left the form. The
+camera's rule (the oldest roll at Preparation, D-020) is unchanged; `409 BATCH_MOVED` now says
+"This roll was finished".
+
+### D-083 · 2026-10-21 · Accepted — The check-in schedule: every 4 hours by default, changes from tomorrow
+
+**Decision (Dylan, 2026-10-21, Phase 23: 2B):** `ProductionSchedule` (shift start and end in
+Manila, an interval of 1 to 4 hours, the working days). Check-ins fall at each interval from the
+start plus one at the shift end when it is off the grid: the bootstrap default 08:00 to 17:00
+every 4 hours, Monday to Saturday, gives **12:00, 16:00 and 17:00** (the survey's morning, lunch
+and afternoon walks). A change applies **from tomorrow**, so a day's check-ins never shift; every
+version is kept (`effectiveFrom`). The default has no author and `demo:reset` keeps it.
+
+### D-084 · 2026-10-21 · Accepted — The Quality Inspector enters each check-in; Late after 30 minutes
+
+**Decision (Dylan, 2026-10-21, Phase 23: 3B, overriding the brief's "the FM too"):**
+`production:checkin` → **Quality Inspector only**; the Floor Manager and the Admin read. A
+check-in counts the **pairs that left Finishing since the previous one**, per active shoe type
+(whole numbers, at most 2,000 each), with optional notes. It opens at its time and stays open to the
+end of the Manila day; more than 30 minutes past its time it reads **Late** (ASSUMPTION constant);
+a day over with nothing entered reads **Missed**. A slot takes one entry (`@@unique([day, slotAt])`,
+a second is `409 STALE` naming who entered it and when). The QI may **correct** a check-in the same
+day with a reason (at least 5 characters); the audit keeps both counts. The constructors present are
+read from attendance when it is saved and kept on the row, so a later attendance edit shows as
+"Attendance changed after this check-in". Attendance not taken never blocks a check-in. No
+notifications: the due check-in shows on the QI home. A day without a QI on shift stays Missed;
+tell CPoint.
+
+### D-085 · 2026-10-21 · Accepted — The daily quota is per shoe type for the whole line, with a suggestion
+
+**Decision (Dylan, 2026-10-21, Phase 23: 4A, 5A):** `DailyQuota` per shoe type, in pairs, set by
+the Floor Manager (`production:plan`) under Production → **Schedule and quota**. A change applies
+from tomorrow; a shoe type's **first** quota applies from today, so a new system isn't a day
+without one. The page **suggests** a quota from the last **10 full working days** (every check-in
+entered; at least 3 needed): average pairs per check-in × check-ins a day, and beside it the line
+average per Shoe Constructor present × the constructors on today's roster. **Use suggestion** fills
+the field; the FM can type any other number; the suggestion is stored with the quota. No quota per
+person.
+
+### D-086 · 2026-10-21 · Accepted — A short day gets one sentence from the day's numbers, never a name
+
+**Decision (Phase 23, within D-008):** a finished day below quota gets one sentence:
+"Below quota by 18 pairs. 5 of 16 Shoe Constructors were absent." / "... with everyone present." /
+"... Attendance wasn't taken that day." Production rows are per check-in, day or shoe type; "pairs
+per constructor" is the day's total ÷ constructors present, a line average. The only name on a
+check-in is who entered or corrected it (an audit fact, never totalled). Day rows start at the
+first check-in ever entered, so days before the system was used aren't "missed".
+
+### D-087 · 2026-10-21 · Accepted — Production replaces stage monitoring (supersedes the stage parts of D-025 and D-033)
+
+**Decision (Phase 23):** gone: the Floor Manager home's Batches by stage card; Operations' On the
+floor now, Flow and Time in each stage sections; the bottleneck and stuck-batch attention items;
+`stages.csv`; the batch list's stage filter and time in stage. In their place: **Today's
+production** on the FM home, **Next check-in** on the QI home, Production → **Production**
+(`/production`), and on Operations a **Production** section (pairs per day per shoe type against
+the quota, constructors present, shortfall sentences, a chart), KPI tiles **Pairs made**, **Of
+quota**, **Rolls finished** and **Rolls at Preparation**, the attention item "3 of the last 5
+working days were below quota", and `production.csv` (one row per day and shoe type). The daily
+summary and `operations.csv` count rolls started and finished.
+
+### D-088 · 2026-10-22 · Accepted — The Floor Manager covers check-ins on a day no Quality Inspector is present
+
+**Decision (Dylan, 2026-10-22, amends D-084's 3B):** the Floor Manager may enter and correct a
+day's check-ins **only when that day's attendance is taken and no Quality Inspector is marked
+present**. With a QI present, or attendance not taken yet, they can't, and the page, the API
+(`403`) and the server action say why in one sentence ("A Quality Inspector is present today, so
+they enter the check-ins." / "Take today's attendance first. You can enter check-ins only when it
+shows no Quality Inspector present."). The QI can always enter. One function decides
+(`mayEnterCheckIns` in `permissions.ts`); attendance answers yes or no for the role
+(`qualityInspectorPresent`), never a count or a name (D-008). A covering entry is saved under the
+Floor Manager's name and its audit row carries `coveringForQualityInspector: true`.

@@ -1,8 +1,7 @@
 """Overlay images for the team's review: each detection's mask outline and box with its label.
 
-``draw_boxes`` is shared with the station window's live preview, so the preview shows the boxes
-exactly as ``predict --save-overlay`` does. The colours are one per class, never the verdict
-colours: a box is what the model saw, not the app's decision (D-060).
+Written by ``predict --save-overlay``. The colours are one per class, never the verdict colours:
+a box is what the model saw, not the app's decision (D-060).
 """
 
 from __future__ import annotations

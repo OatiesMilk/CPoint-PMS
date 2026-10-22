@@ -1,16 +1,23 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { ScrollRegion } from "./scroll-region";
 
 // Dense data table (DESIGN.md → Hierarchy rules): one row height, numbers right-aligned via `numeric`.
-export function Table({ className, ...props }: React.ComponentProps<"table">) {
+// A table wider than its card scrolls inside it, and that scroll box takes keyboard focus (axe
+// scrollable-region-focusable). `label` names it for screen readers; the default is "Table".
+export function Table({
+  className,
+  label = "Table",
+  ...props
+}: React.ComponentProps<"table"> & { label?: string }) {
   return (
-    <div className="relative max-w-full min-w-0 overflow-x-auto rounded-lg border bg-card shadow-1">
+    <ScrollRegion label={label} className="rounded-lg border bg-card shadow-1">
       <table
         data-slot="table"
         className={cn("w-full border-collapse text-sm", className)}
         {...props}
       />
-    </div>
+    </ScrollRegion>
   );
 }
 

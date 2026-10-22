@@ -3,7 +3,15 @@ import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { ACCOUNTS, navLabels, signIn } from "./helpers";
-import { adminApi, createBatch, inspectorApi, managerApi, sampleJpeg, withDb } from "./cv-helpers";
+import {
+  adminApi,
+  createBatch,
+  inspectorApi,
+  makeConstructor,
+  managerApi,
+  sampleJpeg,
+  withDb,
+} from "./cv-helpers";
 
 // The Capture page (Phase 18). The model files are git-ignored, so CI has none: the tests that need
 // a real capture run only where `python -m cpoint_cv export-onnx` has been run (Dylan's laptop).
@@ -142,5 +150,82 @@ test.describe("Capture page", () => {
     expect(await navLabels(page)).not.toContain("Capture");
     await page.goto("/camera/capture");
     await expect(page).toHaveURL(/\/forbidden/);
+  });
+});
+
+test.describe("Floor view (D-074)", () => {
+  test("fills the screen with the live camera, shows the verdict until the next capture, and Esc leaves", async ({
+    browser,
+    page,
+  }) => {
+    await createBatch(await managerApi(browser));
+    await page.goto("/login");
+    await signIn(page, ACCOUNTS.inspector.email);
+    await expect(page).toHaveURL(ACCOUNTS.inspector.home);
+    await page.goto("/camera/capture");
+    await page.getByRole("button", { name: "Floor view" }).click();
+
+    const floor = page.getByRole("region", { name: "Floor view" });
+    await expect(floor).toBeVisible();
+    await expect(floor.getByText(/Next scan goes to/)).toBeVisible();
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+
+    if (hasModel) {
+      await expect(floor.getByLabel("Live camera picture")).toBeVisible();
+      await page.keyboard.press("Space"); // the station's capture key
+      const band = floor.getByRole("status").filter({ hasText: /Section #\d+/ });
+      await expect(band).toContainText(/Pass|Fixable|Reject|Needs review/, { timeout: 30_000 });
+    } else {
+      await expect(floor.getByRole("alert")).toContainText("Capture is off.");
+    }
+
+    // Remembered on this browser: a reload opens straight into Floor view.
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Floor view" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("heading", { name: "Capture", level: 1 })).toBeVisible();
+  });
+});
+
+test.describe("constructors at the camera (D-075)", () => {
+  test("a constructor can't capture until allowed, then gets Capture and the capture API", async ({
+    browser,
+    page,
+  }) => {
+    const sc = await makeConstructor(false);
+    await page.goto("/login");
+    await signIn(page, sc.email);
+    await expect(page).toHaveURL(ACCOUNTS.constructor.home);
+    expect(await navLabels(page)).not.toContain("Capture");
+    await page.goto("/camera/capture");
+    await expect(page).toHaveURL(/\/forbidden/);
+    expect((await capture(page.request, randomUUID())).status()).toBe(403);
+
+    // The Floor Manager allows them on the Camera page.
+    const fm = await browser.newPage();
+    await fm.goto("/login");
+    await signIn(fm, ACCOUNTS.manager.email);
+    await expect(fm).toHaveURL(ACCOUNTS.manager.home);
+    await fm.goto("/camera");
+    await fm.getByLabel("Find a Shoe Constructor").fill(sc.email);
+    const row = fm.getByRole("row").filter({ hasText: sc.email });
+    await row.getByRole("button", { name: "Allow capturing" }).click();
+    await expect(row).toContainText("Can capture");
+    await fm.close();
+
+    await page.goto(ACCOUNTS.constructor.home);
+    expect(await navLabels(page)).toContain("Capture");
+    await page.getByRole("link", { name: "Open Capture" }).click();
+    await expect(page.getByRole("heading", { name: "Capture", level: 1 })).toBeVisible();
+    // Allowed now: the API answers with the scan, or 503 when this machine has no model files.
+    await createBatch(await managerApi(browser));
+    expect([201, 503]).toContain((await capture(page.request, randomUUID())).status());
+    // Still no Scans or Reports for them.
+    await page.goto("/scans");
+    await expect(page).toHaveURL(/\/forbidden/);
+    await withDb((db) => db.query(`UPDATE users SET "isActive" = false WHERE id = $1`, [sc.id]));
   });
 });

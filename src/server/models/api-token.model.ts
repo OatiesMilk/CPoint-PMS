@@ -51,20 +51,3 @@ export function touchApiToken(id: string, at: Date, db: Db = defaultDb()) {
     data: { lastUsedAt: at },
   });
 }
-
-/**
- * The camera token used most recently (not revoked), with the source of its last scan, so the
- * Camera page can tell a station waiting between captures from a finished simulator run (D-054).
- */
-export function findLatestUsedCameraToken(db: Db = defaultDb()) {
-  return db.apiToken.findFirst({
-    where: { revokedAt: null, scopes: { has: "scans:create" }, lastUsedAt: { not: null } },
-    orderBy: { lastUsedAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      lastUsedAt: true,
-      scans: { orderBy: { createdAt: "desc" }, take: 1, select: { source: true } },
-    },
-  });
-}

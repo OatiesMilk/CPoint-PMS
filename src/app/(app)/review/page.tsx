@@ -68,8 +68,8 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
         title="Review queue"
         description={
           canReview
-            ? "Scans the camera couldn’t decide, and today’s Rework and Reject calls."
-            : "Scans the camera couldn’t decide wait here for a Quality Inspector. Today’s Rework and Reject calls are below."
+            ? "Scans the camera couldn’t decide, and today’s Fixable and Reject calls."
+            : "Scans the camera couldn’t decide wait here for a Quality Inspector. Today’s Fixable and Reject calls are below."
         }
       />
 
@@ -158,7 +158,7 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
       <section aria-labelledby="auto-heading" className="flex flex-col gap-3">
         <div>
           <h2 id="auto-heading" className="text-xl font-semibold">
-            Today’s automatic Rework and Reject{" "}
+            Today’s automatic Fixable and Reject{" "}
             <span className="text-muted-foreground tabular-nums">({todayAuto.total})</span>
           </h2>
           <p className="text-muted-foreground">
@@ -167,7 +167,7 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
         </div>
         {todayAuto.total === 0 ? (
           <p className="rounded-lg border border-dashed px-5 py-8 text-muted-foreground">
-            No Rework or Reject calls today yet.
+            No Fixable or Reject calls today yet.
           </p>
         ) : (
           <div className="flex flex-col gap-3">

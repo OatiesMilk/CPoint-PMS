@@ -1,8 +1,7 @@
 import { manilaToday } from "./format";
-import type { Stage } from "./domain";
 
 /**
- * Report rules (D-025), pure and client-safe. Every report is an aggregate per day, stage, defect
+ * Report rules (D-025), pure and client-safe. Every report is an aggregate per day, shoe type, defect
  * type or batch, never per person (D-008). Days are Manila calendar days (UTC+8, no DST).
  */
 
@@ -98,18 +97,6 @@ export function fillDays<T extends { day: string }>(
  */
 export function agreementRate(c: { agreed: number; aiDecided: number }): number | null {
   return c.aiDecided > 0 ? c.agreed / c.aiDecided : null;
-}
-
-/** The stage with the highest median time, or null if no stage has data. Ties keep line order. */
-export function pickBottleneck(
-  stages: { stage: Stage; medianMs: number | null; visits: number }[],
-): Stage | null {
-  let best: { stage: Stage; medianMs: number } | null = null;
-  for (const s of stages) {
-    if (s.medianMs === null || s.visits === 0) continue;
-    if (!best || s.medianMs > best.medianMs) best = { stage: s.stage, medianMs: s.medianMs };
-  }
-  return best?.stage ?? null;
 }
 
 // ───────────── CSV ─────────────

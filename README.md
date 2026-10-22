@@ -6,9 +6,10 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
 - **Batches:** each one is a leather roll. A batch moves through **Preparation → Upper Making →
   Sole-ing → Finishing**, and the system records who moved it and when.
 - **Camera checkpoint:** a computer-vision camera at Preparation checks each leather section
-  before it is cut and calls it **Pass / Rework / Reject**. Unknown defects go to the Quality
+  before it is cut and calls it **Pass / Fixable / Reject**. Unknown defects go to the Quality
   Inspector to decide. A person can override the camera's automatic calls.
-- **Rework and salvage:** reworked sections go to the repair station board. Rejected leather is
+- **Repair Station and salvage:** Fixable sections go to the **Repair Station** board, where each
+  is cleaned or has its defect cut around before cutting (D-070, D-073). Rejected leather is
   kept as salvage for another batch rather than thrown away.
 - **Inventory:** leather rolls and supplies are tracked through an audited ledger, with low-stock
   alerts.
@@ -17,8 +18,13 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
   Floor Manager approves or rejects each item of a request, guided by the stock on hand, records
   the order with a supplier and an expected date, then records each delivery with a photo or PDF
   of the receipt. Only what actually arrived is added to inventory, and a late order is flagged.
-- **Reports:** daily totals, defects by type, how often people kept the camera's call, and time
-  per stage (the bottleneck), with CSV for Excel. Nothing is ranked per person.
+- **Production:** the Quality Inspector counts the pairs finished at each check-in (every 4 hours
+  by default), per shoe type. The Floor Manager sets the schedule and a daily quota (with a
+  suggestion from recent days) and sees each day against it, with the Shoe Constructors present
+  from attendance and one sentence for every short day. A batch is one leather roll: started at
+  Preparation and finished when it is used up.
+- **Reports:** production against the quota, daily totals, defects by type, how often people kept
+  the camera's call, supplier quality, with CSV for Excel. Nothing is ranked per person.
 
 ![Floor Manager home with a demo week loaded](docs/screenshots/floor-manager-home.png)
 
@@ -82,8 +88,9 @@ Compose v2) and this folder. No Node.js needed.
    minute. Refresh the home page after about 30 seconds. It runs only while the database has no
    batches, so restarts never add a second week.
 
-The Capture page (scanning from the browser) also needs the model files in `cv/models/` and,
-for phones, a certificate in `certs/`: see [Capture from the website](#capture-from-the-website).
+The Capture page (scanning from the browser) also needs the model files in `cv/models/`: see
+[Capture from the website](#capture-from-the-website). Other devices reach the site through a
+Cloudflare Tunnel (same section).
 
 `docker compose ps` shows both services as `healthy` once ready, and
 `docker compose logs -f app` shows the logs. Stop with `docker compose down`. Add `-v` only to
@@ -98,12 +105,16 @@ for phones, a certificate in `certs/`: see [Capture from the website](#capture-f
 `DEMO_USER_PASSWORD`, including `admin@cpoint.local`. `BOOTSTRAP_ADMIN_PASSWORD` is used only
 when there is no admin account yet, as on a real install with demo users off.
 
-| Role              | Email                      | Lands on             | Does                                                                             |
-| ----------------- | -------------------------- | -------------------- | -------------------------------------------------------------------------------- |
-| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Batches, stages, rework, salvage, inventory, purchase request decisions, reports |
-| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Decides flagged scans (review queue), overrides, rework, quality reports         |
-| System Admin      | `admin@cpoint.local`       | `/admin`             | Users, thresholds, defect types, tokens, audit, who can request materials        |
-| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | Sends purchase requests (the demo one may also request leather rolls)            |
+| Role              | Email                      | Lands on             | Does                                                                                  |
+| ----------------- | -------------------------- | -------------------- | ------------------------------------------------------------------------------------- |
+| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Schedule and quota, attendance, rolls, rework, salvage, inventory, requests, reports  |
+| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Enters production check-ins, decides flagged scans, overrides, rework, finishes rolls |
+| System Admin      | `admin@cpoint.local`       | `/admin`             | Users, thresholds, defect types, tokens, audit, who can request materials             |
+| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | Sends purchase requests (the demo one may also request leather rolls)                 |
+
+Twelve more **demo Shoe Constructors** (Ana Cruz, Ben Santos and others, `@cpoint.local`) are
+created with them so Attendance has a believable roster. They have random passwords and never sign
+in (D-081).
 
 ## Demo script
 
@@ -112,40 +123,55 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 
 ### 1. Floor Manager (4 min)
 
-1. **Home** (`manager@cpoint.local`): batches by stage, with **Upper Making** marked as the
-   longest wait. Also today's inspection split, open repairs, low stock (Contact cement), the
-   daily summary, and **purchase requests** waiting for a decision (one urgent).
-2. **Batches → B-2026-0011:** the stage stepper and timeline (who moved it, when, and how long
-   each stage took). The **Yield** card shows usable sections = passed + repaired, and how many
-   went to the repair station and to salvage.
+1. **Home** (`manager@cpoint.local`): **Today's production** (pairs per shoe type against the
+   daily quota, the next check-in), the **Attendance** card (today is "Not taken yet"), today's
+   inspection split, sections to clean or cut around, low stock (Contact cement), the daily
+   summary, and **purchase requests** waiting for a decision (one urgent).
+2. **Production:** today's check-ins (12:00, 16:00, 17:00) and the **Recent days** chart and
+   table: three days fell short, each with its sentence, "Below quota by 18 pairs. 3 of 12 Shoe
+   Constructors were absent." Nothing names a person. **Schedule and quota** shows the suggested
+   quota from the last full days; **Use suggestion** fills it in.
+3. **Batches → the newest roll:** it is still at Preparation with "All 10 pieces scanned. Finish
+   this roll?". The **Yield** card shows usable sections = passed + cleaned or cut around, and how
+   many are still being handled and went to salvage. **Finish roll** ends it; the camera moves on
+   to the next roll.
 
    ![Batch detail](docs/screenshots/batch-detail.png)
 
-3. **New batch:** register a roll (it can be taken from inventory), then **Start production**.
-   The batch is now at Preparation, so the camera's scans go to it.
-4. **Camera:** shows which batch is receiving scans. To show live scans, run the simulator from a
+4. **Attendance** (Production → Attendance): **Mark everyone present**, untick two people, and
+   **Save attendance**. The summary reads "10 of 12 Shoe Constructors present"; the home card
+   follows. **Previous day** shows the demo week's days, a few with absences. It is a one-day log
+   book: no per-person history or counts anywhere (D-008, D-077).
+5. **New batch:** register a roll (it can be taken from inventory), then **Start roll**. It is
+   now at Preparation, so the camera's scans go to it.
+6. **Camera:** shows which batch is receiving scans. To show live scans, run the simulator from a
    development checkout (see [Camera and simulator](#camera-and-simulator)). They appear on the
    home page within seconds.
-5. **Rework board:** Waiting → Being repaired → Repaired. Each step is one click, with undo.
-6. **Salvage:** rejected sections are kept. **Use in batch** assigns one to another open batch;
+7. **Repair Station:** To handle → Being handled → Done, usable. Each card says what the
+   section needs (Clean before cutting, or Cut around the marked area). Each step is one click,
+   with undo.
+8. **Salvage:** rejected sections are kept. **Use in batch** assigns one to another open batch;
    **Discard** needs a reason.
-7. **Inventory → Contact cement:** the ledger. Stock changes only through recorded movements
+9. **Inventory → Contact cement:** the ledger. Stock changes only through recorded movements
    (deliveries, use, counts), and undo is a reversal entry, never an edit.
-8. **Reports:** the scans-per-day chart, defects by type, camera call vs final verdict, and time
-   in each stage, where Upper Making is the **bottleneck**. Download **Daily CSV** and open it in
-   Excel.
+10. **Reports → Operations:** pairs made and the share of quota, the **Production** section with
+    the same short days, and "3 of the last 5 working days were below quota" under what needs
+    attention. Download **Production CSV** and open it in Excel.
+11. **Reports → Operations → Supplier quality:** each supplier's rolls, Fixable % and Reject %, with
+    **High** on the worst. Under **Rolls with the most rejects**, open a **Claim sheet** and
+    **Save as PDF** to show the evidence for a supplier claim (D-072).
 
 ### 2. Quality Inspector (3 min)
 
 1. **Review queue** (`inspector@cpoint.local`): two scans with an unknown defect class
-   ("scratch") wait for a person. Decide one: **Pass / Rework / Reject**.
+   ("scratch") wait for a person. Decide one: **Pass / Fixable / Reject**.
 
    ![Review queue](docs/screenshots/review-queue.png)
 
    Only the Quality Inspector decides these (D-028). The Floor Manager sees the same queue, but
    read-only: "Waiting for a Quality Inspector".
 
-2. Open one of **today's automatic Rework and Reject** calls. The image shows the camera's box
+2. Open one of **today's automatic Fixable and Reject** calls. The image shows the camera's box
    and confidence. **Override decision…** asks for a reason, and the scan then shows both calls
    (the camera's is struck through).
 
@@ -199,7 +225,7 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 
 ### 4. System Admin (2 min)
 
-1. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Rework from 60%,
+1. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Fixable from 60%,
    with a preview of what the camera will decide. Changes apply to new scans only. Old scans keep
    the thresholds they were decided with.
 
@@ -214,14 +240,14 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 ### Talking points
 
 - **The decision rule (D-011):** the highest confidence among known defects decides. ≥ 90% →
-  Reject, 60–89% → Rework, below 60% → Pass. An unknown class always goes to a person. The
+  Reject, 60–89% → Fixable, below 60% → Pass. An unknown class always goes to a person. The
   thresholds are data the admin can change.
 - **People stay in charge:** the camera's calls can be overridden with a reason, and the reports
   show how often that happens. Flagged scans are the Quality Inspector's to decide (D-028).
 - **Requests close the loop with stock:** an approved request, once received, posts the delivery
   into the inventory ledger. Nobody orders twice: Inventory marks items already requested.
 - **No per-person rankings or scores** anywhere (from the client survey). Reports aggregate by
-  day, stage and defect only.
+  day, shoe type and defect only; a short day is explained by how many were absent, never who.
 - **Nothing is deleted:** stock moves through a ledger, rejected leather becomes salvage, and
   every change is in the audit log.
 
@@ -494,9 +520,14 @@ With demo users on, it also adds five demo inventory items the first time.
 **The demo week** (`SEED_DEMO_WEEK=true` or `npm run demo:seed`) replays the last six working
 days through the real services:
 
-- 14 batches across all stages, with realistic stage times (Upper Making is the slowest);
+- 14 rolls, each started at Preparation, scanned and finished (the newest is still at
+  Preparation for the camera);
 - about 290 scans with images;
-- overrides, repairs, salvage, deliveries and stock use, plus two scans left for review.
+- overrides, repairs, salvage, deliveries and stock use, plus two scans left for review;
+- attendance for the working days before today, taken by the Floor Manager, with a few
+  constructors absent on some days (today is left for you to take);
+- a daily quota per shoe type and the Quality Inspector's check-ins at 12:00, 16:00 and 17:00
+  (one late, one missed); the three days with two or more absent end below quota.
 
 It uses a fixed random seed, so it shows the same shape every time. It never runs on a database
 that already has batches.
@@ -522,7 +553,7 @@ checkout:
 
 ```bash
 npm run cv:token -- --name "Simulator"   # prints a token once; put it in .env as CV_DEVICE_TOKEN
-# start a batch (Batches → New batch → Start production), then:
+# start a roll (Batches → New batch → Start roll), then:
 npm run cv:simulate -- --count 20 --interval 3
 ```
 
@@ -532,25 +563,24 @@ token there under **Admin → API tokens**.
 Scans go to the batch chosen on the **Camera** page, or to the batch that has been at Preparation
 the longest. They show up live on the Floor Manager and Quality Inspector homes.
 
-The real model runs in the **camera station**, a Python process in [`cv/`](cv/README.md) on the
-camera machine (outside Docker, D-048). With a device token in `cv/.env`, `python -m cpoint_cv
-run webcam` captures one section per Space press, runs the YOLO model and sends the scan;
-`run folder <dir>` replays photos for a demo without a camera, and `doctor` checks the setup.
-Scans that can't be sent wait on disk and go out later, in order (D-050, D-051). For yolo-v1, add
-the `crease` and `scratch` defect types in Settings first (D-052, [`cv/README.md`](cv/README.md)).
+The real model runs in the app itself, on the **Capture** page (see
+[Capture from the website](#capture-from-the-website)). The camera station app and its `run` and
+`doctor` commands were retired in Phase 20 (D-069). [`cv/`](cv/README.md) is now the model
+toolkit: `predict` and `evaluate` try the model on photos, and `export-onnx` makes the files the
+app runs. For yolo-v1, add the `crease` and `scratch` defect types in Settings first (D-052).
 The model file lives in `cv/models/` and is never committed (D-049); see
 [`cv/MODEL_CARD.md`](cv/MODEL_CARD.md).
 
 ## Capture from the website
 
-The **Capture** page (Quality → Capture, for the Quality Inspector and the Floor Manager) does the
-camera station's job in the browser: it shows the live camera, **Capture** (or Space) sends the
-frame on screen, and the app runs the model itself and shows its verdict. No second application
-(Phase 18, D-064 to D-067). The Python station stays as the option for a dedicated camera.
+The **Capture** page (Quality → Capture, for the Quality Inspector, the Floor Manager and the
+Shoe Constructors allowed to capture, D-075) does the camera's job in the browser: it shows the live camera, **Capture** (or Space) sends the frame on
+screen, and the app runs the model itself and shows its verdict. No second application (Phase 18,
+D-064 to D-067). It is the only way to capture since the station app was retired (D-069).
 
-Every teammate does steps 1–2 once on their own machine. Steps 3–5 are only for opening the page
-from **another device** (a phone or a second PC); the machine that runs the app can skip them and
-use `http://localhost:3000/camera/capture`.
+Every teammate does steps 1–2 once on their own machine. The machine that runs the app can then
+use `http://localhost:3000/camera/capture`. Step 4 is for opening the site from **another device**
+(the station PC at Preparation, or a teammate's laptop).
 
 ### 1. Get the model files
 
@@ -559,7 +589,7 @@ The model is never in Git (D-049). The app needs two files in `cv/models/`:
 
 - **ask Dylan for both files** (shared privately, not through GitHub) and copy them into
   `cv/models/`; or
-- **make them yourself** from `yolo-v1.pt`, once the station is set up ([`cv/README.md`](cv/README.md),
+- **make them yourself** from `yolo-v1.pt`, once `cv/.venv` is set up ([`cv/README.md`](cv/README.md),
   "Set up"):
 
   ```bash
@@ -579,112 +609,98 @@ run `npm run demo:reset -- --yes` (**it deletes test data**: batches, scans and 
 accounts stay) or add the two types by hand under Admin → Settings → Defect types
 ([`cv/README.md`](cv/README.md), "Defect types for yolo-v1").
 
-Now the page works on this machine: start a batch (Batches → New batch → Start production), sign
+Now the page works on this machine: start a roll (Batches → New batch → Start roll), sign
 in as `inspector@cpoint.local` and open `http://localhost:3000/camera/capture`.
 
-### 3. Make an HTTPS certificate for your machine (other devices only)
+### 3. Floor view at the station
 
-Browsers only open the camera on `localhost` or a **trusted HTTPS** address.
-[mkcert](https://github.com/FiloSottile/mkcert) makes a small certificate authority on your
-machine and a certificate for its address. Each teammate makes their own; never share them.
+At the fixed camera there's no one at a desk: an operator places each leather piece and looks up
+at a monitor. **Floor view** (the button next to Capture, D-074) fills the screen with the live
+camera and "Next scan goes to …". After each capture a thick coloured frame and a large band show
+the verdict, the section number and where the piece goes:
 
-1. Install mkcert, then **open a new terminal** so it's found:
-   - Windows: `winget install FiloSottile.mkcert`
-   - macOS: `brew install mkcert`
-   - Linux: see the mkcert page (`libnss3-tools` first)
-2. Create the authority and trust it on this machine (Windows asks once; click **Yes**):
+| Verdict      | Colour | Where it goes                       |
+| ------------ | ------ | ----------------------------------- |
+| Pass         | Green  | On to cutting                       |
+| Fixable      | Orange | The Repair Station                  |
+| Reject       | Red    | Salvage                             |
+| Needs review | Blue   | Set aside for the Quality Inspector |
+
+It stays until the next capture. Esc leaves; the browser remembers the choice, so the station PC
+opens straight into it (press F11 for full screen then). **Space** on the station's keyboard
+captures. The full station setup (device, camera, monitor, keyboard, bins) is in
+[`docs/STATION_SETUP.md`](docs/STATION_SETUP.md).
+
+The operator is usually a Shoe Constructor: the Floor Manager allows them on the Camera page
+(**Camera operators**), or the System Admin under Users (More actions → **Allow capturing at the
+camera**). Their scans are recorded under their own name. They see the verdict and section, not
+Scans or Reports.
+
+### 4. Reach the site with Cloudflare Tunnel (other devices)
+
+Browsers only open the camera on `localhost` or an **HTTPS** address. A Cloudflare Tunnel gives the
+app a real `https://` address with a trusted certificate, so any device's browser allows the
+camera with no setup on that device (D-076). The tunnel runs on the server PC itself, next to
+Docker, not as a third container. It's free.
+
+1. Install `cloudflared` on the server PC: Windows `winget install Cloudflare.cloudflared`,
+   macOS `brew install cloudflared` (Linux: see Cloudflare's downloads page).
+2. **Staging / trying it out (quick tunnel, no account):** with the app running, run
 
    ```bash
-   mkcert -install
+   cloudflared tunnel --url http://localhost:3000
    ```
 
-3. Find this machine's LAN address: `ipconfig` on Windows (the Wi-Fi adapter's IPv4 address,
-   e.g. `192.168.254.104`), `ipconfig getifaddr en0` on macOS. On an iPhone's hotspot it's a
-   `172.20.10.x` address.
-4. In the repository folder, make the certificate for that address:
+   It prints an address like `https://<random-words>.trycloudflare.com`. Open
+   `…/camera/capture` there on the station PC. The address changes every time it restarts.
+   With `npm run dev` instead of Docker, add that host to `DEV_ORIGINS` in `.env` first.
 
-   ```bash
-   mkcert -cert-file certs/cert.pem -key-file certs/key.pem localhost 127.0.0.1 <your IP>
-   ```
+3. **The real setup (named tunnel):** a free Cloudflare account and a domain added to Cloudflare
+   give a fixed address (e.g. `https://pms.<your-domain>`) that survives restarts. Follow
+   Cloudflare's "Create a tunnel" guide and point it at `http://localhost:3000`.
 
-`certs/` is git-ignored and never enters the Docker image. If your address changes (another
-network), run step 4 again with the new address and restart the app.
+Before you share a tunnel address, remember the site is public:
 
-### 4. Trust it on the phone (once per phone)
+- revoke any device token that was ever pasted somewhere (Admin → API tokens) and make a new one;
+- use strong values for `BOOTSTRAP_ADMIN_PASSWORD` and `DEMO_USER_PASSWORD`, or turn demo users
+  off.
 
-`mkcert -CAROOT` prints the folder with **`rootCA.pem`**. Send only that file to the phone. Never
-send `rootCA-key.pem`.
-
-**iPhone:**
-
-1. AirDrop or email `rootCA.pem` to the iPhone. If it lands in the Files app, long-press it →
-   **Rename** to `rootCA.crt` (Files only previews a `.pem`), then tap it. iOS says
-   "Profile Downloaded".
-2. Settings → General → **VPN & Device Management** → the mkcert profile → **Install** (passcode).
-3. Settings → General → About → **Certificate Trust Settings** → turn on the mkcert root. This
-   step is easy to miss, and Safari still refuses without it.
-
-**Android:** copy `rootCA.pem` to the phone, rename it `rootCA.crt`, then Settings → Security →
-Encryption & credentials → Install a certificate → **CA certificate**. Menu names vary by maker.
-
-**Another PC:** double-click `rootCA.pem` (rename to `.crt` if Windows won't open it) → Install
-Certificate → Local Machine → **Trusted Root Certification Authorities**.
-
-### 5. Start the app with HTTPS and open the page
-
-The phone must be on the **same Wi-Fi** as the machine. If Windows Firewall asks about Node.js or
-Docker, allow **Private networks**.
-
-- **Development:** stop `npm run dev` first (Ctrl+C), add `DEV_ORIGINS=<your IP>` to `.env`, then:
-
-  ```bash
-  npm run dev:https
-  ```
-
-  Open `https://<your IP>:3000/camera/capture` on the phone (HTTPS on the same port 3000).
-
-- **Docker:** `docker compose up --build -d`, then `https://<your IP>:3443/camera/capture`.
-  `http://...:3000` keeps working for everything except the camera.
-
-Sign in as `inspector@cpoint.local` (or the Floor Manager) and tap **Allow** for the camera. On a
-phone the page uses the back camera; pick another under **Camera**. Scans from the page are
-recorded as `PHONE` or `WEBCAM` and name no person (D-008); the audit log records who captured.
+If the factory's internet drops, the tunnel and the station's capture stop with it. The server PC
+itself keeps working at `http://localhost:3000`.
 
 ### If it doesn't work
 
-| What you see                                              | What to do                                                                                                    |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| "The camera only works on a secure address."              | You opened `http://` on another device. Use the `https://` address from step 5                                |
-| Safari says the connection isn't private                  | Step 4.3 (Certificate Trust Settings) isn't on, or your IP changed since step 3.4: make the certificate again |
-| The page loads on the phone but nothing reacts (dev only) | `DEV_ORIGINS` in `.env` is missing or isn't your current IP. Fix it and restart `npm run dev:https`           |
-| "The camera model isn't installed on the server."         | Step 1: both files in `cv/models/`, then restart the app                                                      |
-| "This browser isn't allowed to use the camera."           | Follow the steps on the page (iPhone: Settings → Apps → Safari → Camera → Allow), then Try again              |
-| "Another app is using this camera."                       | Close DroidCam, the camera station window or a video call, then Try again                                     |
-| The phone can't reach the address at all                  | Same Wi-Fi? Firewall allowed? Try `http://<your IP>:3000` first to check the network                          |
-| Capture is off: "until a batch is at Preparation"         | Start a batch as the Floor Manager                                                                            |
+| What you see                                                    | What to do                                                                                  |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| "The camera only works on a secure address."                    | You opened `http://<an IP>` on another device. Use the tunnel's `https://` address (step 4) |
+| The page loads through the tunnel but nothing reacts (dev only) | Add the tunnel's host to `DEV_ORIGINS` in `.env` and restart `npm run dev`                  |
+| "The camera model isn't installed on the server."               | Step 1: both files in `cv/models/`, then restart the app                                    |
+| "This browser isn't allowed to use the camera."                 | Click the camera icon in the address bar → Allow, then Try again                            |
+| "Another app is using this camera."                             | Close DroidCam or a video call, then Try again                                              |
+| Capture is off: "until a batch is at Preparation"               | The Floor Manager starts a batch                                                            |
+| A constructor sees "You don’t have access to that page"         | The Floor Manager allows them under Camera → Camera operators                               |
 
 ## Scripts
 
-| Command                     | What it does                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------- |
-| `npm run dev`               | Dev server with hot reload                                                      |
-| `npm run check`             | lint + typecheck + unit tests + build (run before pushing)                      |
-| `npm run clean`             | Delete `.next` and `tsconfig.tsbuildinfo` (the next build makes them again)     |
-| `npm run lint`              | ESLint, including the MVC layer import rules                                    |
-| `npm run typecheck`         | Generate route types, then `tsc --noEmit`                                       |
-| `npm run test`              | Unit tests (Vitest)                                                             |
-| `npm run test:e2e`          | Browser tests (Playwright + axe). Needs `npm run build` and the database        |
-| `npm run format`            | Prettier                                                                        |
-| `npm run db:up` / `db:down` | Start/stop PostgreSQL in Docker                                                 |
-| `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`                 |
-| `npm run db:deploy`         | Apply pending migrations                                                        |
-| `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)            |
-| `npm run demo:seed`         | Seed a past week of production (only when there are no batches)                 |
-| `npm run cv:token`          | Create a camera device token (printed once)                                     |
-| `npm run cv:simulate`       | Send simulated camera scans (`--count`, `--interval`, `--batch`)                |
-| `npm run cv:parity`         | Run the app's ONNX model on photos; `--compare` checks it against the station   |
-| `npm run dev:https`         | Dev server over HTTPS on the LAN (needs `certs/`, see Capture from the website) |
-| `npm run db:studio`         | Browse the database in Prisma Studio                                            |
+| Command                     | What it does                                                                |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `npm run dev`               | Dev server with hot reload                                                  |
+| `npm run check`             | lint + typecheck + unit tests + build (run before pushing)                  |
+| `npm run clean`             | Delete `.next` and `tsconfig.tsbuildinfo` (the next build makes them again) |
+| `npm run lint`              | ESLint, including the MVC layer import rules                                |
+| `npm run typecheck`         | Generate route types, then `tsc --noEmit`                                   |
+| `npm run test`              | Unit tests (Vitest)                                                         |
+| `npm run test:e2e`          | Browser tests (Playwright + axe). Needs `npm run build` and the database    |
+| `npm run format`            | Prettier                                                                    |
+| `npm run db:up` / `db:down` | Start/stop PostgreSQL in Docker                                             |
+| `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`             |
+| `npm run db:deploy`         | Apply pending migrations                                                    |
+| `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)        |
+| `npm run demo:seed`         | Seed a past week of production (only when there are no batches)             |
+| `npm run cv:token`          | Create a camera device token (printed once)                                 |
+| `npm run cv:simulate`       | Send simulated camera scans (`--count`, `--interval`, `--batch`)            |
+| `npm run cv:parity`         | Run the app's ONNX model on photos; `--compare` checks it against `predict` |
+| `npm run db:studio`         | Browse the database in Prisma Studio                                        |
 
 First time running e2e: `npx playwright install chromium`. If Chromium is already installed
 elsewhere, set `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome` instead. To test the Docker stack, set
@@ -697,7 +713,7 @@ installed and built, all of it git-ignored and safe to re-create:
 
 | Folder         | Size       | What it is                                       | To get it back                   |
 | -------------- | ---------- | ------------------------------------------------ | -------------------------------- |
-| `cv/.venv`     | about 5 GB | the camera station's Python (torch is 4.5 GB)    | `cv/README.md`, "Set up"         |
+| `cv/.venv`     | about 5 GB | the model toolkit's Python (torch is 4.5 GB)     | `cv/README.md`, "Set up"         |
 | `.next`        | 0.5–2.5 GB | build output; `.next/dev` grows while `dev` runs | `npm run build` or `npm run dev` |
 | `node_modules` | about 1 GB | npm packages                                     | `npm ci`                         |
 
@@ -705,24 +721,23 @@ installed and built, all of it git-ignored and safe to re-create:
   installs and builds and fills cloud storage. Use a plain folder such as `C:\dev\CPoint-PMS`.
 - **`npm run clean`** when `.next` passes a gigabyte or a build acts stale. Stop `npm run dev`
   first.
-- Only the camera PC needs `cv/.venv`. The website's Capture page runs the model in the app and
-  needs only the files in `cv/models` (D-064). A PC without a GPU can install the CPU build of
+- Only the PC that makes or checks the model needs `cv/.venv`. The website's Capture page runs
+  the model in the app and needs only the files in `cv/models` (D-064). A PC without a GPU can install the CPU build of
   torch instead of the CUDA one (smaller, about 3× slower per scan).
 - `onnxruntime-node` in `node_modules` carries Windows, macOS and Linux builds (about 290 MB). npm
   can't skip them; the Docker image keeps only the Linux one (`next.config.ts`).
-- Also safe to delete: `test-results/`, `playwright-report/`, `cv/out/` (except `cv/out/spool/`
-  and `cv/out/failed/`, which hold scans not yet sent) and `qa/reports/artifacts/`. Never delete
+- Also safe to delete: `test-results/`, `playwright-report/`, `cv/out/` and
+  `qa/reports/artifacts/`. Never delete
   `storage/` by hand: its files belong to scans and deliveries in the database (`npm run
 demo:reset` cleans both together).
 - **Moving a working copy:** copy it without the generated folders, then re-install. A venv can't
-  be moved (its scripts hold the old path), so make a new one, and run
-  `python -m cpoint_cv shortcut` again for the desktop shortcut:
+  be moved (its scripts hold the old path), so make a new one:
 
   ```cmd
   robocopy "C:\old\path\CPoint-PMS" "C:\dev\CPoint-PMS" /E /XD node_modules .next .venv
   ```
 
-  `.env`, `certs/`, `cv/models/` and `cv/config.toml` are git-ignored, so copy rather than
+  `.env`, `cv/models/` and `cv/config.toml` are git-ignored, so copy rather than
   re-clone. The database is in Docker's `cpoint-pms_pgdata` volume, which the new folder reuses.
 
 - **Docker** keeps old images and build cache outside the folder (`docker system df`).
@@ -738,7 +753,7 @@ src/
     api/v1/**/route.ts ROUTES: one-line files that hand off to a controller
   server/
     controllers/       CONTROLLER: parse/validate request → call service → shape response
-    services/          business rules (decision engine, stage flow, ledger, reports, demo seed)
+    services/          business rules (decision engine, roll lifecycle, production, ledger, reports, demo seed)
     models/            MODEL: data access; the only layer that imports Prisma
     validators/        Zod schemas shared by API and forms
     policies/          who can do what (role × permission), page and API guards

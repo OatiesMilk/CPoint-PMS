@@ -2,7 +2,7 @@
  * Intent brief (ui-craft §1)
  * Who:   the System Admin, rarely, often after a model retrain or a new supplier.
  * What:  adjust what the camera decides (thresholds, defect classes) and the lists people pick
- *        from (shoe types, suppliers, components).
+ *        from (shoe types, suppliers).
  * Worst: a threshold change misread, or a new defect class silently piling up in review. The
  *        threshold form spells out the resulting bands; unknown classes are listed with counts.
  */
@@ -11,7 +11,6 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { CircleHelp, Info } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
-import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatManilaDateTime } from "@/lib/format";
@@ -33,7 +32,6 @@ const TABS = [
   { id: "defects", label: "Defect types" },
   { id: "shoes", label: "Shoe types" },
   { id: "suppliers", label: "Suppliers" },
-  { id: "components", label: "Components" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -41,8 +39,14 @@ const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 
 const ACTION_LABEL: Record<string, string> = {
   "": "By confidence",
-  REWORK: "Rework when found",
+  REWORK: "Fixable when found",
   REJECT: "Reject when found",
+};
+
+/** How a Fixable section of the type is made usable (D-070). Cut around is the default. */
+const HANDLING_LABEL: Record<string, string> = {
+  CUT_AROUND: "Cut around the marked area",
+  CLEAN: "Clean before cutting",
 };
 
 export default async function SettingsPage({ searchParams }: PageProps<"/admin/settings">) {
@@ -82,7 +86,6 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
       {tab === "defects" && <DefectsTab add={add} />}
       {tab === "shoes" && <ShoesTab />}
       {tab === "suppliers" && <SuppliersTab />}
-      {tab === "components" && <ComponentsTab />}
     </>
   );
 }
@@ -93,7 +96,7 @@ async function ThresholdsTab() {
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
         Each defect the camera finds gives a result, and the worst one decides the section. A defect
-        type set to Rework or Reject when found always gives that; the others go by the model’s
+        type set to Fixable or Reject when found always gives that; the others go by the model’s
         confidence. Last changed {formatManilaDateTime(t.updatedAt)}.
       </p>
       <ThresholdsForm
@@ -112,6 +115,7 @@ async function DefectsTab({ add }: { add?: string }) {
     { key: "label", label: "Label" },
     { key: "key", label: "Class key", mono: true },
     { key: "action", label: "When found" },
+    { key: "handling", label: "When Fixable" },
     { key: "description", label: "Description" },
     { key: "sortOrder", label: "Order", numeric: true },
   ];
@@ -134,7 +138,15 @@ async function DefectsTab({ add }: { add?: string }) {
         { value: "REWORK", label: ACTION_LABEL.REWORK },
         { value: "REJECT", label: ACTION_LABEL.REJECT },
       ],
-      hint: "The model’s confidence says how sure it is a defect is there, not how bad it is. Choose Rework or Reject to decide by the type instead.",
+      hint: "The model’s confidence says how sure it is a defect is there, not how bad it is. Choose Fixable or Reject to decide by the type instead.",
+    },
+    {
+      name: "handling",
+      label: "When Fixable",
+      type: "select",
+      placeholder: HANDLING_LABEL.CUT_AROUND,
+      options: [{ value: "CLEAN", label: HANDLING_LABEL.CLEAN }],
+      hint: "What the person at the board does with a Fixable section of this type before cutting.",
     },
     { name: "description", label: "Description", type: "textarea", optional: true },
     {
@@ -203,12 +215,15 @@ async function DefectsTab({ add }: { add?: string }) {
             key: str(r.key),
             label: str(r.label),
             action: str(r.action),
+            // Cut around is the select's blank option, so only Clean is stored as a value here.
+            handling: r.handling === "CLEAN" ? "CLEAN" : "",
             description: str(r.description),
             sortOrder: str(r.sortOrder),
           },
           cells: {
             label: str(r.label),
             action: ACTION_LABEL[str(r.action)] ?? str(r.action),
+            handling: HANDLING_LABEL[str(r.handling)] ?? HANDLING_LABEL.CUT_AROUND,
             key: str(r.key),
             description: str(r.description),
             sortOrder: str(r.sortOrder),
@@ -279,57 +294,5 @@ async function SuppliersTab() {
         return { id: r.id, isActive: r.isActive, values: v, cells: v };
       })}
     />
-  );
-}
-
-async function ComponentsTab() {
-  const [rows, shoes] = await Promise.all([
-    listReferenceRows("componentType"),
-    listReferenceRows("shoeType"),
-  ]);
-  return (
-    <div className="flex flex-col gap-4">
-      <Alert tone="info">
-        Per-component tracking in Upper Making is coming later. List the components here so it’s
-        ready.{" "}
-        <Link href="/components" className="underline underline-offset-4">
-          What’s planned
-        </Link>
-      </Alert>
-      <ReferenceManager
-        kind="componentType"
-        noun="component"
-        columns={[
-          { key: "name", label: "Component" },
-          { key: "shoeType", label: "Shoe type" },
-          { key: "sortOrder", label: "Order", numeric: true },
-        ]}
-        fields={[
-          { name: "name", label: "Name", placeholder: "e.g. Vamp, Quarter, Tongue" },
-          {
-            name: "shoeTypeId",
-            label: "Shoe type",
-            type: "select",
-            optional: true,
-            placeholder: "All shoe types",
-            options: shoes
-              .filter((s) => s.isActive)
-              .map((s) => ({ value: s.id, label: str(s.name) })),
-          },
-          { name: "sortOrder", label: "Order", type: "number", optional: true },
-        ]}
-        emptyText="No components yet. The number per shoe type is still to be confirmed with CPoint."
-        rows={rows.map((r): Row => ({
-          id: r.id,
-          isActive: r.isActive,
-          values: { name: str(r.name), shoeTypeId: str(r.shoeTypeId), sortOrder: str(r.sortOrder) },
-          cells: {
-            name: str(r.name),
-            shoeType: str((r.shoeType as { name?: string } | null)?.name) || "All",
-            sortOrder: str(r.sortOrder),
-          },
-        }))}
-      />
-    </div>
   );
 }

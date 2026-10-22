@@ -6,7 +6,7 @@ export type Verdict = "PASS" | "REWORK" | "REJECT" | "NEEDS_REVIEW";
 // Color never carries meaning alone: every verdict has an icon and a label.
 const styles: Record<Verdict, { label: string; className: string; Icon: typeof CircleCheck }> = {
   PASS: { label: "Pass", className: "bg-pass-soft text-pass", Icon: CircleCheck },
-  REWORK: { label: "Rework", className: "bg-rework-soft text-rework", Icon: Wrench },
+  REWORK: { label: "Fixable", className: "bg-rework-soft text-rework", Icon: Wrench },
   REJECT: { label: "Reject", className: "bg-reject-soft text-reject", Icon: CircleX },
   NEEDS_REVIEW: {
     label: "Needs review",
@@ -14,6 +14,11 @@ const styles: Record<Verdict, { label: string; className: string; Icon: typeof C
     Icon: CircleHelp,
   },
 };
+
+/** The word a user sees for a verdict (REWORK reads "Fixable", D-070). */
+export function verdictLabel(verdict: Verdict) {
+  return styles[verdict].label;
+}
 
 export function VerdictBadge({ verdict, className }: { verdict: Verdict; className?: string }) {
   const { label, className: tone, Icon } = styles[verdict];

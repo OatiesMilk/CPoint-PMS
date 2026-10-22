@@ -95,7 +95,7 @@ export type IngestFields = z.infer<typeof ingestFieldsSchema>;
 /** Human decision on a scan: resolve a NEEDS_REVIEW scan or override an automatic one. */
 export const decisionSchema = z.object({
   verdict: z.enum(["PASS", "REWORK", "REJECT"], {
-    error: "Choose a verdict for this section: Pass, Rework or Reject.",
+    error: "Choose a verdict for this section: Pass, Fixable or Reject.",
   }),
   reason: z.preprocess(
     blankToUndefined,
@@ -147,3 +147,8 @@ export const captureFieldsSchema = ingestFieldsSchema
   });
 
 export type CaptureFields = z.infer<typeof captureFieldsSchema>;
+
+/** PUT /api/v1/camera/operators/{userId}: may this constructor capture (D-075)? */
+export const cameraOperatorSchema = z.object({
+  canCapture: z.boolean({ error: OUT_OF_DATE }),
+});

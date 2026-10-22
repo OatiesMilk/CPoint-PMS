@@ -1,6 +1,7 @@
 import { CircleCheck, CircleDashed, CircleSlash, LoaderCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { BATCH_STATUS_LABELS, type BatchStatus } from "@/lib/domain";
+import type { BatchStatus, Stage } from "@/lib/domain";
+import { rollStatusLabel } from "@/lib/stage-machine";
 
 const STYLE = {
   PLANNED: { tone: "neutral", Icon: CircleDashed },
@@ -9,12 +10,22 @@ const STYLE = {
   CANCELLED: { tone: "neutral", Icon: CircleSlash },
 } as const;
 
-export function BatchStatusBadge({ status }: { status: BatchStatus }) {
+/**
+ * Planned, At Preparation, Finished or Cancelled (D-082). A batch started before rolls were tracked
+ * and still past Preparation says so.
+ */
+export function BatchStatusBadge({
+  status,
+  currentStage = "PREPARATION",
+}: {
+  status: BatchStatus;
+  currentStage?: Stage;
+}) {
   const { tone, Icon } = STYLE[status];
   return (
     <Badge tone={tone}>
       <Icon aria-hidden />
-      {BATCH_STATUS_LABELS[status]}
+      {rollStatusLabel({ status, currentStage })}
     </Badge>
   );
 }

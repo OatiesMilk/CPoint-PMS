@@ -11,6 +11,14 @@ import { Label } from "@/components/ui/label";
 import { describeThresholds, validateThresholds } from "@/lib/admin-rules";
 import { saveThresholdsAction } from "./actions";
 
+type FieldKey = "rejectPercent" | "reworkPercent" | "foundPercent";
+const FIELD_KEYS: FieldKey[] = ["rejectPercent", "reworkPercent", "foundPercent"];
+const FIELD_FOR = {
+  rejectAtOrAbove: "rejectPercent",
+  reworkAtOrAbove: "reworkPercent",
+  foundAtOrAbove: "foundPercent",
+} as const satisfies Record<string, FieldKey>;
+
 /**
  * The two decision thresholds (D-011), edited as percentages with a live description of the
  * resulting bands, so the admin sees what a change means before saving.
@@ -30,53 +38,70 @@ export function ThresholdsForm({
     foundPercent: String(Math.round(found * 1000) / 10),
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const r = Number(values.rejectPercent) / 100;
   const w = Number(values.reworkPercent) / 100;
   const f = Number(values.foundPercent) / 100;
+  const blank = values.rejectPercent.trim() === "" || values.reworkPercent.trim() === "";
   const valid =
-    values.rejectPercent !== "" &&
-    values.reworkPercent !== "" &&
-    validateThresholds({ rejectAtOrAbove: r, reworkAtOrAbove: w }).length === 0;
+    !blank && validateThresholds({ rejectAtOrAbove: r, reworkAtOrAbove: w }).length === 0;
+
+  // The server's own checks, shown under the field they name once it has been left (validate on
+  // blur, then live while it is wrong). A server error for a field wins until that field changes.
+  const checked: Partial<Record<FieldKey, string>> = {};
+  for (const e of validateThresholds({ rejectAtOrAbove: r, reworkAtOrAbove: w, foundAtOrAbove: f }))
+    checked[FIELD_FOR[e.path[0]]] ??= e.message;
+  for (const key of FIELD_KEYS)
+    if (values[key].trim() === "") checked[key] = "Enter a percentage between 0 and 100.";
+  const shown = (key: FieldKey): string | undefined => {
+    if (errors[key]) return errors[key];
+    // Fixable below Reject is one rule, so leaving either field can show it on the Fixable field.
+    const seen = touched[key] || (key === "reworkPercent" && touched.rejectPercent);
+    return seen ? checked[key] : undefined;
+  };
   const bands = valid ? describeThresholds({ rejectAtOrAbove: r, reworkAtOrAbove: w }) : null;
   const changed =
     Math.abs(r - reject) > 1e-9 || Math.abs(w - rework) > 1e-9 || Math.abs(f - found) > 1e-9;
 
-  const field = (
-    key: "rejectPercent" | "reworkPercent" | "foundPercent",
-    label: string,
-    hint: string,
-  ) => (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={key}>{label}</Label>
-      <div className="relative w-40">
-        <Input
-          id={key}
-          inputMode="decimal"
-          autoComplete="off"
-          className="pr-8"
-          value={values[key]}
-          aria-invalid={!!errors[key]}
-          aria-describedby={errors[key] ? `${key}-error` : `${key}-hint`}
-          onChange={(e) => setValues({ ...values, [key]: e.target.value })}
-        />
-        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-          %
-        </span>
+  const field = (key: FieldKey, label: string, hint: string) => {
+    const error = shown(key);
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={key}>{label}</Label>
+        <div className="relative w-40">
+          <Input
+            id={key}
+            inputMode="decimal"
+            autoComplete="off"
+            className="pr-8"
+            value={values[key]}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${key}-error` : `${key}-hint`}
+            onChange={(e) => {
+              setValues({ ...values, [key]: e.target.value });
+              if (errors[key]) setErrors(({ [key]: _changed, ...rest }) => rest);
+            }}
+            onBlur={() => setTouched((t) => ({ ...t, [key]: true }))}
+          />
+          <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+            %
+          </span>
+        </div>
+        {error ? (
+          <p id={`${key}-error`} className="text-sm text-reject">
+            {error}
+          </p>
+        ) : (
+          <p id={`${key}-hint`} className="text-sm text-muted-foreground">
+            {hint}
+          </p>
+        )}
       </div>
-      {errors[key] ? (
-        <p id={`${key}-error`} className="text-sm text-reject">
-          {errors[key]}
-        </p>
-      ) : (
-        <p id={`${key}-hint`} className="text-sm text-muted-foreground">
-          {hint}
-        </p>
-      )}
-    </div>
-  );
+    );
+  };
 
   return (
     <form
@@ -86,6 +111,7 @@ export function ThresholdsForm({
         e.preventDefault();
         const form = e.currentTarget;
         setFormError(null);
+        setTouched({ rejectPercent: true, reworkPercent: true, foundPercent: true });
         startTransition(async () => {
           const result = await saveThresholdsAction(values);
           if (result.ok) {
@@ -105,12 +131,12 @@ export function ThresholdsForm({
           "Reject at or above",
           "The camera’s confidence for any active defect.",
         )}
-        {field("reworkPercent", "Rework at or above", "Must be lower than Reject.")}
+        {field("reworkPercent", "Fixable at or above", "Must be lower than Reject.")}
       </div>
       {field(
         "foundPercent",
         "A defect counts as found at",
-        "Only for defect types set to Rework or Reject when found (Defect types tab).",
+        "Only for defect types set to Fixable or Reject when found (Defect types tab).",
       )}
 
       <div className="rounded-lg border bg-card p-4" aria-live="polite">
@@ -125,7 +151,7 @@ export function ThresholdsForm({
             </li>
             <li className="flex items-center gap-2">
               <Wrench aria-hidden className="size-4 text-rework" />
-              <span className="w-20 font-medium">Rework</span> {bands.rework}
+              <span className="w-20 font-medium">Fixable</span> {bands.rework}
             </li>
             <li className="flex items-center gap-2">
               <CircleCheck aria-hidden className="size-4 text-pass" />
@@ -134,11 +160,13 @@ export function ThresholdsForm({
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Enter two values between 0 and 100, with Rework below Reject.
+            {blank
+              ? "Enter two values between 0 and 100, with Fixable below Reject."
+              : "Fix the value marked above to see what the camera will decide."}
           </p>
         )}
         <p className="mt-3 text-sm text-muted-foreground">
-          A defect type set to Rework or Reject when found gets that result from{" "}
+          A defect type set to Fixable or Reject when found gets that result from{" "}
           {values.foundPercent || "…"}% confidence, however sure the model is above it. An unknown
           defect class always goes to the review queue. Scans already taken keep the rules they were
           decided with.

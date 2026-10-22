@@ -1,25 +1,16 @@
-import { STAGE_LABELS, STAGE_ORDER, type Stage, type Verdict } from "@/lib/domain";
-import {
-  agreementRate,
-  fillDays,
-  parseRange,
-  pickBottleneck,
-  toCsv,
-  type ReportRange,
-} from "@/lib/report-rules";
+import type { Verdict } from "@/lib/domain";
+import { agreementRate, fillDays, parseRange, toCsv, type ReportRange } from "@/lib/report-rules";
 import {
   dailyProduction,
   dailyRepairsDone,
   dailyScanStats,
   defectBreakdown,
-  openStageWaits,
-  stageDurations,
   verdictMatrix,
   type DailyScanRow,
   type DefectRow,
 } from "@/server/models/report.model";
 
-// Reports (D-025): aggregates per Manila day, defect type, stage or batch. Nothing here carries a
+// Reports (D-025): aggregates per Manila day, defect type or batch. Nothing here carries a
 // user id, name or email (D-008); tests/unit/report.service.test.ts checks that.
 
 export type DailyRow = DailyScanRow & { repairsDone: number; agreement: number | null };
@@ -96,37 +87,12 @@ export async function qualityReport(range: ReportRange) {
 
 export type QualityReport = Awaited<ReturnType<typeof qualityReport>>;
 
-export async function productionReport(range: ReportRange, now: Date = new Date()) {
-  const [durations, waits, production] = await Promise.all([
-    stageDurations(range),
-    openStageWaits(now),
-    dailyProduction(range),
-  ]);
-  const stages = STAGE_ORDER.map((stage: Stage) => {
-    const d = durations.find((x) => x.stage === stage);
-    const w = waits.find((x) => x.stage === stage);
-    return {
-      stage,
-      label: STAGE_LABELS[stage],
-      visits: d?.visits ?? 0,
-      medianMs: d?.medianMs ?? null,
-      p90Ms: d?.p90Ms ?? null,
-      avgMs: d?.avgMs ?? null,
-      inStageNow: w?.batches ?? 0,
-      longestWaitMs: w?.longestMs ?? null,
-    };
-  });
+/** Rolls started and finished per Manila day (D-082), for the Operations daily summary. */
+export async function rollFlow(range: ReportRange) {
+  const production = await dailyProduction(range);
   const days = fillDays(production, range, (day) => ({ day, started: 0, completed: 0 }));
-  return {
-    range: { from: range.from, to: range.to, days: range.days },
-    stages,
-    bottleneck: pickBottleneck(stages),
-    days,
-    totals: { started: sum(days, "started"), completed: sum(days, "completed") },
-  };
+  return { days, totals: { started: sum(days, "started"), completed: sum(days, "completed") } };
 }
-
-export type ProductionReport = Awaited<ReturnType<typeof productionReport>>;
 
 // ───────────── home cards ─────────────
 
@@ -165,7 +131,6 @@ export async function agreementSummary(now: Date = new Date()) {
 // ───────────── CSV ─────────────
 
 const pct = (v: number | null) => (v === null ? "" : (Math.round(v * 1000) / 10).toFixed(1));
-const hours = (ms: number | null) => (ms === null ? "" : (ms / 3_600_000).toFixed(2));
 
 export async function dailyCsv(range: ReportRange) {
   const r = await qualityReport(range);
@@ -173,13 +138,13 @@ export async function dailyCsv(range: ReportRange) {
     { header: "Date (Manila)", value: (d) => d.day },
     { header: "Scanned", value: (d) => d.scanned },
     { header: "Pass", value: (d) => d.pass },
-    { header: "Rework", value: (d) => d.rework },
+    { header: "Fixable", value: (d) => d.rework },
     { header: "Reject", value: (d) => d.reject },
     { header: "Pending review", value: (d) => d.pending },
     { header: "Overridden", value: (d) => d.overridden },
     { header: "AI agreement %", value: (d) => pct(d.agreement) },
     { header: "Resolved by a person (unknown class)", value: (d) => d.personResolved },
-    { header: "Repairs done", value: (d) => d.repairsDone },
+    { header: "Cleaned or cut around", value: (d) => d.repairsDone },
   ]);
 }
 
@@ -191,21 +156,8 @@ export async function defectsCsv(range: ReportRange) {
     { header: "Known type", value: (d) => (d.known ? "yes" : "no") },
     { header: "Scans", value: (d) => d.scans },
     { header: "Final Pass", value: (d) => d.pass },
-    { header: "Final Rework", value: (d) => d.rework },
+    { header: "Final Fixable", value: (d) => d.rework },
     { header: "Final Reject", value: (d) => d.reject },
     { header: "Pending review", value: (d) => d.pending },
-  ]);
-}
-
-export async function stagesCsv(range: ReportRange) {
-  const r = await productionReport(range);
-  return toCsv(r.stages, [
-    { header: "Stage", value: (s) => s.label },
-    { header: "Visits completed", value: (s) => s.visits },
-    { header: "Median hours", value: (s) => hours(s.medianMs) },
-    { header: "Average hours", value: (s) => hours(s.avgMs) },
-    { header: "Batches in stage now", value: (s) => s.inStageNow },
-    { header: "Longest current wait (hours)", value: (s) => hours(s.longestWaitMs) },
-    { header: "Bottleneck", value: (s) => (s.stage === r.bottleneck ? "yes" : "") },
   ]);
 }

@@ -93,22 +93,39 @@ for (const [role, account] of Object.entries(ACCOUNTS)) {
 }
 
 test("Floor Manager journey: register a roll as a batch, start it, receive stock, read the report", async ({
+  browser,
   page,
 }) => {
+  // Its own stock item, so the journey doesn't depend on the demo inventory being there.
+  const api = await managerApi(browser);
+  // Item codes are at most 20 characters, and the reorder level is required.
+  const sku = `SMK-${String(Date.now()).slice(-8)}`;
+  const created = await api.post("/api/v1/inventory", {
+    data: {
+      sku,
+      name: `Smoke cement ${sku}`,
+      category: "ADHESIVE",
+      unit: "can",
+      reorderLevel: 0,
+      openingStock: 2,
+    },
+  });
+  expect(created.status()).toBe(201);
+
   await signInAs(page, ACCOUNTS.manager);
   await page.goto("/batches/new");
   await page.getByLabel("Roll code").fill(`SMOKE-${Date.now()}`);
   await page.getByLabel("Shoe type").selectOption({ index: 1 });
   await page.getByRole("button", { name: "Create batch" }).click();
   await expect(page).toHaveURL(/\/batches\/[0-9a-f-]{36}$/);
-  await page.getByRole("button", { name: "Start production" }).click();
-  await expect(page.locator("header").getByText("In progress", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Start roll" }).click();
+  await expect(page.locator("header").getByText("At Preparation", { exact: true })).toBeVisible();
   await expectAccessible(page);
 
   // Searched, not browsed: earlier e2e runs add items that push it past page 1.
-  await page.goto("/inventory?q=Contact%20cement");
+  await page.goto(`/inventory?q=${sku}`);
   await page
-    .getByRole("link", { name: /Contact cement/ })
+    .getByRole("link", { name: new RegExp(sku) })
     .first()
     .click();
   await page.getByRole("button", { name: "Receive stock" }).click();
@@ -140,15 +157,15 @@ test("Quality Inspector journey: settle a review-queue scan, then repair a secti
   await expect(page).toHaveURL(/\/scans\/[0-9a-f-]{36}$/);
   await expectAccessible(page);
   await page.goto(`/rework?batch=${batch.code}`);
-  await page.getByRole("button", { name: "Start repair" }).click();
+  await page.getByRole("button", { name: "Start", exact: true }).click();
   await page
-    .getByRole("region", { name: "Being repaired" })
-    .getByRole("button", { name: "Mark repaired" })
+    .getByRole("region", { name: "Being handled" })
+    .getByRole("button", { name: "Mark done" })
     .click();
   await expect(
     page
-      .getByRole("region", { name: "Repaired, last 7 days" })
-      .getByRole("listitem", { name: `${batch.code} · #2` }),
+      .getByRole("region", { name: "Done, usable" })
+      .getByRole("listitem", { name: `${batch.code} · section #2` }),
   ).toBeVisible();
 });
 

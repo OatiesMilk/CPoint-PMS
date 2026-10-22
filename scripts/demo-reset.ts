@@ -5,9 +5,9 @@
  *   npm run demo:reset -- --yes     resets, then seeds a fresh demo week
  *   npm run demo:reset -- --yes --no-demo-week
  *
- * Works on the database in .env and the files under UPLOADS_DIR. Back the database up first
- * (cv/README.md, "Demo script"). Refuses to run with NODE_ENV=production. Keeps the device token
- * in CV_DEVICE_TOKEN (.env or cv/.env), so the camera station and the simulator keep working.
+ * Works on the database in .env and the files under UPLOADS_DIR. Back the database up
+ * first. Refuses to run with NODE_ENV=production. Keeps the device token in CV_DEVICE_TOKEN (.env,
+ * or an old cv/.env from before the station was retired, D-069), so the simulator keeps working.
  */
 import "dotenv/config";
 import { readFileSync } from "node:fs";
@@ -40,6 +40,10 @@ const LABELS: Record<string, string> = {
   shoeTypes: "shoe types tests added",
   suppliers: "suppliers tests added",
   defectTypes: "defect types tests added",
+  attendanceDays: "days of attendance (the demo week adds its own)",
+  checkIns: "production check-ins (the demo week adds its own)",
+  quotas: "daily quotas (the demo week sets its own)",
+  schedules: "check-in schedules people saved (the default stays)",
 };
 
 async function main() {
@@ -70,7 +74,7 @@ async function main() {
   if (result.demoWeek)
     console.log(
       result.demoWeek.seeded
-        ? `Seeded a fresh demo week: ${result.demoWeek.batches} batches, ${result.demoWeek.scans} scans, ${result.demoWeek.requests} purchase requests.`
+        ? `Seeded a fresh demo week: ${result.demoWeek.batches} batches, ${result.demoWeek.scans} scans, ${result.demoWeek.requests} purchase requests, ${result.demoWeek.attendanceDays} days of attendance.`
         : `The demo week wasn't seeded: ${result.demoWeek.reason}.`,
     );
 }

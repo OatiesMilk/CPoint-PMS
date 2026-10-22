@@ -5,9 +5,12 @@ import { Badge } from "@/components/ui/badge";
 export function InRepairBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <Badge tone="warning" title={`${count} section${count === 1 ? "" : "s"} still being repaired`}>
+    <Badge
+      tone="warning"
+      title={`${count} section${count === 1 ? "" : "s"} still being cleaned or cut around`}
+    >
       <Wrench aria-hidden />
-      In repair · {count}
+      Being handled · {count}
     </Badge>
   );
 }

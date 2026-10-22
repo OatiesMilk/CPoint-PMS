@@ -32,13 +32,24 @@ import {
 } from "@/server/validators/procurement.validator";
 import { decisionSchema, ingestFieldsSchema } from "@/server/validators/scan.validator";
 import {
-  componentTypeSchema,
   defectTypeCreateSchema,
   referenceActiveSchema,
   shoeTypeSchema,
   supplierSchema,
   thresholdsSchema,
 } from "@/server/validators/settings.validator";
+import {
+  attendanceDaySchema,
+  saveAttendanceSchema,
+} from "@/server/validators/attendance.validator";
+import {
+  checkInSchema,
+  correctionSchema,
+  pairsSchema,
+  quotaPairsSchema,
+  quotasSchema,
+  scheduleSchema,
+} from "@/server/validators/production.validator";
 import { createTokenSchema } from "@/server/validators/token.validator";
 import { userActiveSchema, userFormSchema } from "@/server/validators/user.validator";
 
@@ -99,24 +110,20 @@ const CASES: [string, ZodType, unknown[]][] = [
         shoeTypeId: "nope",
         supplierId: "nope",
         receivedAt: "2999-01-01",
-        targetQuotaPairs: "1.5",
         notes: long(501),
         rollItemId: "nope",
       },
-      { rollCode: "R1", shoeTypeId: "nope", receivedAt: "soon", targetQuotaPairs: "abc" },
-      { rollCode: "R1", shoeTypeId: "nope", receivedAt: "2026-01-01", targetQuotaPairs: "0" },
-      { rollCode: "R1", shoeTypeId: "nope", receivedAt: "2026-01-01", targetQuotaPairs: "999999" },
+      { rollCode: "R1", shoeTypeId: "nope", receivedAt: "soon" },
     ],
   ],
   [
-    "batch stage move",
+    "roll start or finish",
     transitionSchema,
     [
       {},
       { action: "fly", expectedStage: "MOON" },
+      { action: "advance", expectedStage: "PREPARATION" },
       { action: "move_back", expectedStage: "PREPARATION" },
-      { action: "move_back", expectedStage: "PREPARATION", reason: "x" },
-      { action: "advance", expectedStage: "PREPARATION", reason: long(301) },
     ],
   ],
   [
@@ -346,11 +353,6 @@ const CASES: [string, ZodType, unknown[]][] = [
       { name: long(81), contactPerson: long(81), phone: long(31), notes: long(301) },
     ],
   ],
-  [
-    "component type",
-    componentTypeSchema,
-    [{}, { name: "x", shoeTypeId: "nope" }, { name: long(61), sortOrder: "9999" }],
-  ],
   ["reference active", referenceActiveSchema, [{}, { isActive: 1 }]],
   ["API token", createTokenSchema, [{}, { name: "" }, { name: "ab" }, { name: long(61) }]],
   [
@@ -364,6 +366,49 @@ const CASES: [string, ZodType, unknown[]][] = [
     ],
   ],
   ["user active", userActiveSchema, [{}, { isActive: "no" }]],
+  [
+    "production check-in",
+    checkInSchema,
+    [
+      {},
+      { slotAt: "noon", counts: "x" },
+      { slotAt: "2026-10-21T04:00:00.000Z", counts: [{ shoeTypeId: "x" }] },
+    ],
+  ],
+  [
+    "production correction",
+    correctionSchema,
+    [{}, { expectedUpdatedAt: "x", counts: [], reason: "oops" }],
+  ],
+  [
+    "production schedule",
+    scheduleSchema,
+    [
+      {},
+      { shiftStart: "8am", shiftEnd: "25:00", intervalMinutes: 90, workingDays: [] },
+      { shiftStart: "17:00", shiftEnd: "08:00", intervalMinutes: 240, workingDays: [1] },
+    ],
+  ],
+  ["production quotas", quotasSchema, [{}, { quotas: [] }, { quotas: [{ shoeTypeId: "x" }] }]],
+  ["check-in pairs", pairsSchema("School Shoes", "10:00"), ["", "abc", "-1", "2.5", "2001"]],
+  ["daily quota", quotaPairsSchema("Topsider"), ["", "0", "1.5", "60000"]],
+  ["attendance day", attendanceDaySchema, ["", "2026-02-30", "21/10/2026", 5]],
+  [
+    "attendance save",
+    saveAttendanceSchema,
+    [
+      {},
+      { expectedUpdatedAt: "yesterday", marks: [] },
+      { expectedUpdatedAt: null, marks: [{ userId: "nope", present: "yes" }] },
+      {
+        expectedUpdatedAt: null,
+        marks: [
+          { userId: "0192f000-0000-7000-8000-000000000001", present: true },
+          { userId: "0192f000-0000-7000-8000-000000000001", present: false },
+        ],
+      },
+    ],
+  ],
 ];
 
 describe("validator messages are specific (D-038)", () => {
@@ -500,5 +545,89 @@ describe("form-level messages (D-038)", () => {
       expect(result.error).toContain("Material request couldn't be saved");
       expect(result.error).toContain("Nothing was changed");
     }
+  });
+});
+
+describe("attendance messages (D-038, D-079)", () => {
+  it("asks for a real date", () => {
+    expect(messages(attendanceDaySchema, "2026-02-30")).toEqual([
+      "Pick a real date, like 2026-10-21.",
+    ]);
+  });
+
+  it("says when the same person is sent twice", () => {
+    const id = "0192f000-0000-7000-8000-000000000001";
+    expect(
+      messages(saveAttendanceSchema, {
+        expectedUpdatedAt: null,
+        marks: [
+          { userId: id, present: true },
+          { userId: id, present: false },
+        ],
+      }),
+    ).toEqual(["The same person is in the list twice. Refresh the page and save again."]);
+  });
+
+  it("refuses an empty list", () => {
+    expect(messages(saveAttendanceSchema, { expectedUpdatedAt: null, marks: [] })).toEqual([
+      "There's nobody on the list to save. Refresh the page.",
+    ]);
+  });
+});
+
+describe("production messages (D-038, Phase 23)", () => {
+  it("names the shoe type and the check-in for a count", () => {
+    const schema = pairsSchema("School Shoes", "10:00");
+    const whole =
+      "Enter the School Shoes finished since 10:00 as a whole number, like 24. Enter 0 if none.";
+    expect(messages(schema, "")).toEqual([whole]);
+    expect(messages(schema, "2.5")).toEqual([whole]);
+    expect(messages(schema, "-3")).toEqual([whole]);
+    expect(messages(schema, "2001")).toEqual([
+      "School Shoes can't be more than 2,000 pairs in one check-in. Check the number.",
+    ]);
+    expect(schema.parse("0")).toBe(0);
+    expect(schema.parse(" 24 ")).toBe(24);
+  });
+
+  it("names the shoe type for a quota", () => {
+    expect(messages(quotaPairsSchema("Topsider"), "0")).toEqual([
+      "Enter the daily quota for Topsider as a whole number of pairs, at least 1.",
+    ]);
+  });
+
+  it("checks the schedule", () => {
+    expect(
+      messages(scheduleSchema, {
+        shiftStart: "17:00",
+        shiftEnd: "08:00",
+        intervalMinutes: 240,
+        workingDays: [1],
+      }),
+    ).toEqual(["Shift end must be after shift start."]);
+    expect(
+      messages(scheduleSchema, {
+        shiftStart: "08:00",
+        shiftEnd: "17:00",
+        intervalMinutes: 90,
+        workingDays: [],
+      }),
+    ).toEqual(["Pick an interval of 1, 2, 3 or 4 hours.", "Pick at least one working day."]);
+  });
+
+  it("asks for a reason to correct", () => {
+    expect(
+      messages(correctionSchema, {
+        expectedUpdatedAt: "2026-10-21T04:00:00.000Z",
+        counts: [],
+        reason: "oops",
+      }),
+    ).toEqual(["Say why you're correcting this check-in, at least 5 characters."]);
+  });
+
+  it("refuses the old stage moves with one sentence", () => {
+    expect(messages(transitionSchema, { action: "advance", expectedStage: "PREPARATION" })).toEqual(
+      ["Choose start or finish. A roll no longer moves through stages."],
+    );
   });
 });

@@ -61,33 +61,39 @@ answer within 2 s):
 
 ## Batches (`/api/v1/batches`)
 
-A batch is one leather roll (D-005). Reads need `batch:read` (Floor Manager, Quality Inspector,
-System Admin). Writes need `batch:manage` (Floor Manager). All writes are audited.
+A batch is one leather roll (D-005, D-082). Reads need `batch:read` (Floor Manager, Quality
+Inspector, System Admin). Writes need `batch:manage` (Floor Manager), except **finish**, which needs
+`batch:finish` (Floor Manager, Quality Inspector). All writes are audited.
 
-| Method & path                      | Body                                                | Returns                                                                          |
-| ---------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `GET /api/v1/batches`              | query: `status`, `stage`, `shoeTypeId`, `q`, `page` | `{ data: Batch[], meta: { total, page, pageCount } }`, 15 per page, newest first |
-| `POST /api/v1/batches`             | `BatchForm`                                         | `201 { data: Batch }`, status `PLANNED`                                          |
-| `GET /api/v1/batches/{id}`         | —                                                   | `{ data: { batch, actions, durations } }`                                        |
-| `PATCH /api/v1/batches/{id}`       | `BatchForm`                                         | `{ data: Batch }`                                                                |
-| `POST /api/v1/batches/{id}/stages` | `{ action, expectedStage, reason? }`                | `{ data: { code, status, currentStage } }`                                       |
-| `POST /api/v1/batches/{id}/cancel` | `{ reason, expectedStage? }`                        | `{ data: { code, status, currentStage } }`                                       |
+| Method & path                      | Body                                             | Returns                                                                          |
+| ---------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `GET /api/v1/batches`              | query: `status`, `shoeTypeId`, `q`, `page`       | `{ data: Batch[], meta: { total, page, pageCount } }`, 15 per page, newest first |
+| `POST /api/v1/batches`             | `BatchForm`                                      | `201 { data: Batch }`, status `PLANNED`                                          |
+| `GET /api/v1/batches/{id}`         | —                                                | `{ data: { batch, actions, openRepairs, rollFromInventory } }`                   |
+| `PATCH /api/v1/batches/{id}`       | `BatchForm`                                      | `{ data: Batch }`                                                                |
+| `POST /api/v1/batches/{id}/stages` | `{ action: "start" \| "finish", expectedStage }` | `{ data: { code, status, currentStage } }`                                       |
+| `POST /api/v1/batches/{id}/cancel` | `{ reason, expectedStage? }`                     | `{ data: { code, status, currentStage } }`                                       |
 
 **`BatchForm`**: `rollCode` (1–50 chars), `shoeTypeId` (uuid), `supplierId?` (uuid),
-`receivedAt` (`YYYY-MM-DD`, not in the future in Manila time), `targetQuotaPairs?` (1–100,000),
-`notes?` (≤ 500), `rollItemId?` (create only: a leather-roll inventory item; one roll is recorded as
+`receivedAt` (`YYYY-MM-DD`, not in the future in Manila time), `notes?` (≤ 500), `rollItemId?` (create only: a leather-roll inventory item; one roll is recorded as
 used for the batch in the same transaction, or `422` on `rollItemId` if none is left). The shoe
-type can't change once production has started. Cancelling a **planned** batch returns its roll.
+type can't change once the roll has started. Cancelling a **planned** batch returns its roll.
+`targetQuotaPairs` is no longer taken (Phase 23: the daily quota replaced it); old values stay in
+the table.
 
-**Stage actions:** `start` (PLANNED → Preparation), `advance` (next stage; no skipping),
-`complete` (only from Finishing), and `move_back` (previous stage; `reason` required, 3–300 chars).
-`expectedStage` is the stage the caller last saw:
+**Roll actions (D-082):** `start` (Planned → At Preparation, `batch:manage`) and `finish` (At
+Preparation, or an older batch still past it → Finished, `batch:finish`). Finishing is allowed with
+sections at the Repair Station. `expectedStage` is the stage the caller last saw:
 
-- If the batch has moved since, the answer is `409 { error: { code: "STALE" } }`. Reload and retry.
-- A move the rules don't allow returns `409 CONFLICT`, with the reason in `message`.
+- `advance`, `move_back` or `complete` → `422` "Choose start or finish. A roll no longer moves
+  through stages."
+- If the batch has changed since, `409 { error: { code: "STALE" } }` "This roll was already changed
+  by someone else. Refresh to see where it is now."
+- A move the rules don't allow → `409 CONFLICT` ("This roll is already finished.", "Start the roll
+  first.", "This roll was cancelled.").
 
-`durations` in the detail response is milliseconds spent per stage, counting repeat visits and
-the open stage up to now.
+`GET /api/v1/batches/current` (the camera's next roll) also returns `scanned`, the sections scanned
+so far, for the "All 10 pieces scanned. Finish this roll?" hint.
 
 ## Camera ingestion (device token)
 
@@ -95,8 +101,8 @@ A camera machine (the YOLO service, a phone/webcam client, or `npm run cv:simula
 capture to the system. It authenticates with a **device token** created by a System Admin under
 **API tokens**: `Authorization: Bearer cpt_…`. The token is shown once and stored only as a hash.
 A revoked, expired or unknown token gets `401`; a token without the `scans:create` scope gets `403`.
-The camera station in `cv/` (`python -m cpoint_cv run`, D-050) is the real client; see
-`cv/README.md`.
+Real captures come from the website's Capture page (`POST /api/v1/scans/capture`, below); the
+camera station app was retired in Phase 20 (D-069). The simulator is the token client now.
 
 ### `POST /api/v1/scans`
 
@@ -133,8 +139,9 @@ for invalid fields (`details` names each one).
 ### `POST /api/v1/scans/capture` (the website's Capture page, Phase 18)
 
 The Capture page (`/camera/capture`) sends the frame on screen here. It uses the **signed-in
-session**, not a device token, and needs `camera:capture` (Floor Manager and Quality Inspector,
-D-066). The app runs the model itself (ONNX Runtime, D-064) and then decides exactly as for
+session**, not a device token, and needs someone who may capture: the Floor Manager and the
+Quality Inspector (`camera:capture`, D-066), or a Shoe Constructor the Floor Manager or System
+Admin allowed (`canCapture`, D-075). The app runs the model itself (ONNX Runtime, D-064) and then decides exactly as for
 `POST /api/v1/scans`: the same `ingestScan`, decision engine and outcome rows.
 
 `multipart/form-data`:
@@ -155,10 +162,10 @@ There is no `detections` or `modelVersion` field: the server produces both.
 | Status | `code`                    | When                                                                                       |
 | ------ | ------------------------- | ------------------------------------------------------------------------------------------ |
 | `401`  | `UNAUTHENTICATED`         | Not signed in                                                                              |
-| `403`  | `FORBIDDEN`               | The role hasn't `camera:capture` (System Admin, Shoe Constructor)                          |
+| `403`  | `FORBIDDEN`               | Not allowed to capture (System Admin, or a Shoe Constructor without `canCapture`)          |
 | `409`  | `NO_BATCH_AT_PREPARATION` | No batch is at Preparation                                                                 |
 | `409`  | `BATCH_MOVED`             | The batch shown has left Preparation. `details.current` is the batch the next scan goes to |
-| `409`  | `CONFLICT`                | The `captureId` was already used by a camera station                                       |
+| `409`  | `CONFLICT`                | The `captureId` was already used by a device-token scan                                    |
 | `413`  | `PAYLOAD_TOO_LARGE`       | Over 10 MB                                                                                 |
 | `422`  | `VALIDATION_FAILED`       | A field is wrong; `message` names it                                                       |
 | `503`  | `MODEL_UNAVAILABLE`       | The model files aren't on the server (the message says where to put them)                  |
@@ -171,15 +178,20 @@ The scan stores no person (D-008): `deviceTokenId` is null for a website scan, a
 The single Preparation camera feeds **the batch picked on the Camera page**. If none is picked, or
 it has left Preparation, it feeds **the batch that has been at Preparation the longest** (D-020).
 Call this before capturing to show the operator where scans will go. It accepts a device token or
-a signed-in session.
+a signed-in session with `camera:view` or capture rights (an allowed constructor, D-075).
+
+### Who may capture: `PUT /api/v1/camera/operators/{userId}`
+
+`camera:operators` (Floor Manager, System Admin). Body `{ "canCapture": true | false }` for an
+active Shoe Constructor (D-075). `200 { "data": { "id", "canCapture" } }`; `404` for an unknown
+person, `409` for anyone who isn't an active Shoe Constructor. Audited as
+`camera.capture_access.grant` / `.revoke`. Applies on the person's next request.
 
 `200 { "data": { "batchId", "batchCode", "rollCode", "shoeType", "selection": "selected" | "oldest", "stageStartedAt" } }`,
 or `404 NO_BATCH_AT_PREPARATION`.
 
-**It doubles as the station's check-in (D-054).** A waiting camera station calls it every 20 s.
-Any use of a device token is recorded (at most once a minute), and the Camera page shows
-**Station connected** while a camera token that isn't the simulator's was used in the last two
-minutes. There is no separate heartbeat endpoint.
+Any use of a device token is recorded (at most once a minute, shown under API tokens). The
+station check-in that used it (D-054) was retired with the station app in Phase 20 (D-069).
 
 **How a scan is decided (D-011, D-053).** Each detection of an active defect type gives a result
 and the worst decides: a type with a **When found** action (`REWORK` or `REJECT`) gives it from
@@ -212,7 +224,8 @@ and the worst decides: a type with a **When found** action (`REWORK` or `REJECT`
 
 ## Rework and salvage (session)
 
-Every REWORK verdict opens a **repair ticket**; every REJECT keeps the section as **salvage**
+Every REWORK verdict (shown as **Fixable**, D-070) opens a ticket on the **Repair Station**
+board (D-073); every REJECT keeps the section as **salvage**
 (D-007). These endpoints move them along. Each takes `expectedStatus` (what the caller last saw)
 and answers `409 STALE` if it changed. All moves are audited.
 
@@ -225,13 +238,15 @@ and answers `409 STALE` if it changed. All moves are audited.
 | `POST /api/v1/salvage/{id}/unassign` | `salvage:manage` | `{ expectedStatus }`, only while the receiving batch is open                                       |
 | `POST /api/v1/salvage/{id}/discard`  | `salvage:manage` | `{ reason, expectedStatus }`; final                                                                |
 
-**Repairs:**
+**Repair Station (the "rework" endpoints, D-070, D-073):**
 
 - **Flow:** `start` (OPEN → IN_PROGRESS) and `done` (IN_PROGRESS → DONE). Each can be undone one
   step: `unstart` (IN_PROGRESS → OPEN) and `reopen` (DONE → IN_PROGRESS).
-- **Usable count:** a repaired section counts as usable in its batch (usable = passed + repaired).
+- **What it needs:** each card carries `handling`, `CLEAN` or `CUT_AROUND`, from its defect
+  types' "When Fixable" setting: `CLEAN` only when every defect on the section is cleaned.
+- **Usable count:** a done section counts as usable in its batch (usable = passed + done).
 - **Closing a batch:** a batch can be completed while repairs are open (D-022). Its repairs stay
-  workable, and `GET /api/v1/batches` rows carry `openRepairs` for the "In repair" tag. Only a
+  workable, and `GET /api/v1/batches` rows carry `openRepairs` for the "Being handled" tag. Only a
   cancelled batch freezes its repairs (`409`): cancelling cancels the unfinished ones.
 
 ## Inventory (session)
@@ -379,15 +394,14 @@ duplicate email is `422` on `email`.
 
 **Settings**
 
-| Method & path                        | Body                                                                                                  |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `GET / PUT /api/v1/settings/cv`      | `{ rejectPercent, reworkPercent, foundPercent? }`, e.g. `90`, `60`, `50`; rework below reject (D-053) |
-| `GET /api/v1/defect-types/unknown`   | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }`        |
-| `GET / POST /api/v1/defect-types`    | `{ key, label, action?, description?, sortOrder? }` (key fixed; `action` REWORK or REJECT, D-053)     |
-| `GET / POST /api/v1/shoe-types`      | `{ code, name, sortOrder? }`                                                                          |
-| `GET / POST /api/v1/suppliers`       | `{ name, contactPerson?, phone?, notes? }`                                                            |
-| `GET / POST /api/v1/component-types` | `{ name, shoeTypeId?, sortOrder? }`                                                                   |
-| `PATCH /api/v1/<list>/{id}`          | the same fields, or `{ isActive }`. There are no deletes.                                             |
+| Method & path                      | Body                                                                                                                                                             |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET / PUT /api/v1/settings/cv`    | `{ rejectPercent, reworkPercent, foundPercent? }`, e.g. `90`, `60`, `50`; rework below reject (D-053)                                                            |
+| `GET /api/v1/defect-types/unknown` | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }`                                                                   |
+| `GET / POST /api/v1/defect-types`  | `{ key, label, action?, handling?, description?, sortOrder? }` (key fixed; `action` REWORK or REJECT, D-053; `handling` CLEAN or CUT_AROUND, the default, D-070) |
+| `GET / POST /api/v1/shoe-types`    | `{ code, name, sortOrder? }`                                                                                                                                     |
+| `GET / POST /api/v1/suppliers`     | `{ name, contactPerson?, phone?, notes? }`                                                                                                                       |
+| `PATCH /api/v1/<list>/{id}`        | the same fields, or `{ isActive }`. There are no deletes.                                                                                                        |
 
 New thresholds apply to new scans only; each scan keeps its `thresholdsSnapshot`.
 
@@ -395,24 +409,94 @@ New thresholds apply to new scans only; each scan keeps its `thresholdsSnapshot`
 (`from`/`to` are Manila calendar days) → `{ entries, total, page, pageCount }`, newest first, 15
 per page. Each entry carries the changed fields as `diff: [{ key, before, after }]`.
 
+## Attendance (session, Phase 22)
+
+A one-day log book of who came in (D-077). Every response is one day for the whole line; nothing
+returns a person's history, absence count or streak (D-008). Days are Manila calendar days.
+
+| Method & path                  | Permission          | Body / query                                          | Returns               |
+| ------------------------------ | ------------------- | ----------------------------------------------------- | --------------------- |
+| `GET /api/v1/attendance?day=`  | `attendance:read`   | `day` = `YYYY-MM-DD`, default today                   | the day (below)       |
+| `PUT /api/v1/attendance/{day}` | `attendance:manage` | `{ expectedUpdatedAt, marks: [{ userId, present }] }` | the saved day (below) |
+
+The day: `{ day, today, taken, updatedAt, takenAt, takenBy, editable, lockedReason, workforce:
+{ taken, constructorsPresent, constructorsOnRoster, othersPresent }, summary, roster: [{ id, name,
+email, role, present }] }`. `workforce` is the system's only worker count (D-080): only Shoe
+Constructors count as workers, and a day never saved is `taken: false` with null counts, never 0.
+
+- **Roster** (D-078): every active user created by the end of that day, plus anyone already marked
+  on it. Shoe Constructors first, then by role and name.
+- **Saving** (D-079): the Floor Manager only, today and the 7 days before. Send the `updatedAt`
+  you loaded (`null` for a day never saved); anyone on the roster you leave out is saved absent.
+  One transaction with one audit row (`attendance.take` or `attendance.update`: present and
+  absent counts before and after, and who changed).
+- **Errors:** `422` "Pick a real date, like 2026-10-21." or "The same person is in the list
+  twice…"; `403` for anyone but the Floor Manager; `409 STALE` "Someone else saved this day's
+  attendance. Refresh to see it."; `409 CONFLICT` "Days more than 7 days ago are locked.",
+  "Attendance can't be taken for a future day." or "Someone in this list isn't on the roster for
+  21 Oct. Refresh the list."
+
+## Production (session, Phase 23)
+
+Production progression (D-083 to D-087): the check-in schedule, the daily quota per shoe type and
+the Quality Inspector's counts. Everything is per check-in, day or shoe type for the whole line
+(D-008); the only name is who entered or corrected a check-in. Days are Manila calendar days.
+
+| Method & path                             | Permission           | Body / query                                                     |
+| ----------------------------------------- | -------------------- | ---------------------------------------------------------------- |
+| `GET /api/v1/production/today`            | `production:read`    | —                                                                |
+| `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                             |
+| `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, counts: [{ shoeTypeId, pairs }], notes? }`            |
+| `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, counts: [{ shoeTypeId, pairs }], reason }` |
+| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }`         |
+| `PUT /api/v1/production/quotas`           | `production:plan`    | `{ quotas: [{ shoeTypeId, pairs, suggestedPairs? }] }`           |
+
+`production:read` is the Floor Manager, the Quality Inspector and the System Admin;
+`production:checkin` the Quality Inspector, and the Floor Manager **only on a day attendance shows no
+Quality Inspector present** (D-088; otherwise `403` with the reason); `production:plan` the Floor
+Manager.
+
+- **today** → `{ day, schedule, workingDay, rows: [{ slotAt, time, since, state, lateBy, checkIn }],
+shoeTypes, progress: [{ shoeTypeId, name, pairs, quota, share, pace }], next, late, missed,
+workforce, shortfall, canEnter }`. `state` is `UPCOMING`, `DUE`, `LATE` (more than 30 minutes
+  past), `ENTERED` or `MISSED`. `checkIn` carries the counts, `constructorsPresent` read at save,
+  `attendanceChanged`, notes and any correction.
+- **days** → `{ shoeTypes: [{ id, label }], days: [{ day, checkIns, entered, missed, full, byType:
+[{ shoeTypeId, label, pairs, quota }], pairs, quota, share, attendanceTaken, constructorsPresent,
+constructorsOnRoster, pairsPerConstructor, shortfall }] }`, from the first day a check-in was ever
+  entered. `pairsPerConstructor` is a line average for the day.
+- **check-ins:** every active shoe type needs a whole number from 0 to 2,000. The slot must be on
+  that day's schedule and open (from its time to midnight Manila). Errors: `422` keyed
+  `counts.<shoeTypeId>` ("Enter the School Shoes finished since 10:00 as a whole number, like 24.
+  Enter 0 if none."); `409 CONFLICT` "The 14:00 check-in isn't open yet. You can enter it from
+  14:00." or "The check-in for Mon, 20 Oct closed at midnight. …"; `409 STALE` "Lea Santos already
+  entered the 12:00 check-in at 12:04. Refresh to see it."
+- **corrections:** the same Manila day only, `reason` 5–300 characters; the audit row keeps both
+  counts. `409 STALE` when it changed since it was loaded.
+- **schedule:** times `HH:mm`, shift end after start, an interval of 60, 120, 180 or 240 minutes,
+  at least one ISO weekday. Always applies from tomorrow.
+- **quotas:** `pairs` 1–50,000 per shoe type. A shoe type's first quota applies from today, a change
+  from tomorrow; a value equal to the one already set for that day is skipped. Returns `{ saved }`.
+
 ## Reports (session)
 
-Aggregates per Manila day, defect type or stage, never per person (D-025, D-008). Range params:
+Aggregates per Manila day, shoe type, defect type or batch, never per person (D-025, D-008). Range params:
 `?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
 default is the last 14 days, at most 92, and never past today.
 
-| Method & path                        | Permission          | Returns                                                                                             |
-| ------------------------------------ | ------------------- | --------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/reports/quality`        | `report:quality`    | `{ range, totals, days[], defects[], matrix[] }`                                                    |
-| `GET /api/v1/reports/production`     | `report:production` | `{ range, stages[], bottleneck, days[], totals }` (stage times in ms)                               |
-| `GET /api/v1/reports/daily.csv`      | `report:quality`    | one row per day: scanned, verdicts, pending, overridden, agreement %, repairs                       |
-| `GET /api/v1/reports/defects.csv`    | `report:quality`    | one row per defect type (by each scan's top detection), by final verdict                            |
-| `GET /api/v1/reports/stages.csv`     | `report:production` | per stage: visits, median/average hours, in stage now, bottleneck                                   |
-| `GET /api/v1/reports/operations`     | `report:production` | `{ kpis, attention[], flow, days[], repairs, stock, procurement, suppliers[], checkpoint }` (D-033) |
-| `GET /api/v1/reports/repairs`        | `report:quality`    | `{ waiting, beingRepaired, doneInRange, medianTurnaroundMs, rows[] }` repair station now            |
-| `GET /api/v1/reports/operations.csv` | `report:production` | one row per day: batches started and completed, scans by verdict, repairs done                      |
-| `GET /api/v1/reports/stock.csv`      | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                 |
-| `GET /api/v1/reports/suppliers.csv`  | `report:production` | per supplier: batches, sections, verdict counts, pass %, rework + reject %                          |
+| Method & path                            | Permission          | Returns                                                                                                                           |
+| ---------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals, days[], defects[], matrix[] }`                                                                                  |
+| `GET /api/v1/reports/production`         | `report:production` | `{ shoeTypes[], days[], totals: { pairs, share, daysBelow, daysWithQuota } }` (Phase 23)                                          |
+| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: scanned, verdicts, pending, overridden, agreement %, repairs                                                     |
+| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection), by final verdict                                                          |
+| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day and shoe type: pairs, quota, % of quota, check-ins, constructors present, line average, shortfall                 |
+| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], repairs, stock, procurement, suppliers[], rejectedRolls[], checkpoint }` (D-033, D-072) |
+| `GET /api/v1/reports/repairs`            | `report:quality`    | `{ waiting, beingRepaired, doneInRange, medianTurnaroundMs, rows[] }` repair station now                                          |
+| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, scans by verdict, repairs done                                                       |
+| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                                               |
+| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, batches, sections, verdict counts, pass %, Fixable %, reject %, top defect, High (D-072)                     |
+| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, batch, supplier, sections, rejected, main defects (D-072)                              |
 
 - **Verdicts** count the **final** verdict.
 - **AI agreement** = scans the AI decided whose final verdict is the same / scans the AI decided

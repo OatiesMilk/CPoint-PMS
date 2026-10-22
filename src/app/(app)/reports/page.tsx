@@ -4,9 +4,9 @@
  *        Inspector, who needs the inspection numbers (Quality). Desktop, end of shift or all day.
  * What:  Floor Manager: what is happening on the floor in these days and right now, and what is
  *        wrong. Quality Inspector: how the checkpoint before cutting did, and the repair station.
- * Worst: a problem hidden under averages (a stuck batch, an empty shelf), a number read as
+ * Worst: a problem hidden under averages (a short day, an empty shelf), a number read as
  *        something else, or anyone singled out. Every figure says what it counts; everything is
- *        per day, stage, batch, item, supplier or defect type, never per person (D-008, D-033).
+ *        per day, shoe type, batch, item, supplier or defect type, never per person (D-008, D-033).
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -54,7 +54,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
       ? [
           { href: `/api/v1/reports/operations.csv?${qs}`, label: "Operations CSV" },
           { href: `/api/v1/reports/stock.csv?${qs}`, label: "Stock CSV" },
-          { href: `/api/v1/reports/stages.csv?${qs}`, label: "Stages CSV" },
+          { href: `/api/v1/reports/production.csv?${qs}`, label: "Production CSV" },
         ]
       : [
           { href: `/api/v1/reports/daily.csv?${qs}`, label: "Daily CSV" },
@@ -68,7 +68,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         description={
           view === "operations"
             ? "What is happening on the floor, and what needs attention. Never per person."
-            : "The checkpoint before cutting, and the repair station. Never per person."
+            : "The checkpoint before cutting, and the Repair Station. Never per person."
         }
         actions={
           <div className="flex flex-wrap gap-2">

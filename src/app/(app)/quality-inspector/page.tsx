@@ -1,7 +1,8 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   the Quality Inspector, at a desk next to the line, through the whole shift.
- * What:  verify the camera's decisions and settle the ones it can't make.
+ * What:  verify the camera's decisions and settle the ones it can't make; count the pairs
+ *        finished at each production check-in (D-084).
  * Worst: a wrong automatic Reject or Pass goes unchecked. Pending reviews are the primary action.
  */
 import type { Metadata } from "next";
@@ -10,10 +11,12 @@ import { connection } from "next/server";
 import { Aperture, ArrowRight, CircleHelp, ListChecks, UserCheck } from "lucide-react";
 import { AgreementCard, DefectsTodayCard } from "@/components/features/reports/home-cards";
 import { PageHeader } from "@/components/features/page-header";
+import { NextCheckInCard } from "@/components/features/production/production-cards";
 import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/server/policies/guard";
+import { productionToday } from "@/server/services/production.service";
 import { agreementSummary, defectsToday } from "@/server/services/report.service";
 import { inspectorSummary } from "@/server/services/scan-query.service";
 
@@ -22,10 +25,11 @@ export const metadata: Metadata = { title: "Overview" };
 export default async function QualityInspectorHome() {
   const user = await requireRole("QUALITY_INSPECTOR");
   await connection();
-  const [summary, defects, agreement] = await Promise.all([
+  const [summary, defects, agreement, production] = await Promise.all([
     inspectorSummary(),
     defectsToday(),
     agreementSummary(),
+    productionToday(user),
   ]);
 
   const tiles = [
@@ -37,7 +41,7 @@ export default async function QualityInspectorHome() {
       Icon: CircleHelp,
     },
     {
-      label: "Rework and Reject today",
+      label: "Fixable and Reject today",
       value: summary.todayAuto,
       hint: "Automatic calls you can spot-check.",
       href: "/review",
@@ -98,6 +102,7 @@ export default async function QualityInspectorHome() {
         ))}
         <LatestScansWidget className="xl:col-span-2" />
         <div className="flex flex-col gap-4">
+          <NextCheckInCard today={production} />
           <DefectsTodayCard defects={defects} />
           <AgreementCard {...agreement} />
         </div>

@@ -16,14 +16,11 @@ afterEach(() => vi.useRealTimers());
 
 describe("batchFormSchema", () => {
   it("trims text and turns blank optional fields into undefined", () => {
-    expect(
-      batchFormSchema.parse({ ...base, supplierId: "", targetQuotaPairs: "", notes: "  " }),
-    ).toEqual({
+    expect(batchFormSchema.parse({ ...base, supplierId: "", notes: "  " })).toEqual({
       rollCode: "ROLL-1",
       shoeTypeId: base.shoeTypeId,
       receivedAt: "2026-10-01",
       supplierId: undefined,
-      targetQuotaPairs: undefined,
       notes: undefined,
     });
   });
@@ -36,31 +33,27 @@ describe("batchFormSchema", () => {
     );
   });
 
-  it.each([
-    ["0", "The target quota must be at least 1 pair."],
-    ["2.5", "Enter the target quota as a whole number of pairs, like 120."],
-    ["100001", "The target quota can't be more than 100,000 pairs. Check the number."],
-  ])("rejects quota %s", (quota, message) => {
-    const result = batchFormSchema.safeParse({ ...base, targetQuotaPairs: quota });
-    expect(result.error?.issues[0].message).toBe(message);
-  });
-
-  it("coerces a numeric quota from a form string", () => {
-    expect(batchFormSchema.parse({ ...base, targetQuotaPairs: "480" }).targetQuotaPairs).toBe(480);
+  it("ignores the old target quota (Phase 23: the daily quota replaced it)", () => {
+    expect(batchFormSchema.parse({ ...base, targetQuotaPairs: "480" })).not.toHaveProperty(
+      "targetQuotaPairs",
+    );
   });
 });
 
-describe("transitionSchema", () => {
-  it("requires a reason only when moving back", () => {
+describe("transitionSchema (D-082)", () => {
+  it("takes start and finish only", () => {
     expect(
-      transitionSchema.safeParse({ action: "advance", expectedStage: "SOLEING" }).success,
+      transitionSchema.safeParse({ action: "start", expectedStage: "PREPARATION" }).success,
     ).toBe(true);
-    const result = transitionSchema.safeParse({
-      action: "move_back",
-      expectedStage: "SOLEING",
-      reason: " ",
-    });
-    expect(result.error?.issues[0].path).toEqual(["reason"]);
+    expect(transitionSchema.safeParse({ action: "finish", expectedStage: "SOLEING" }).success).toBe(
+      true,
+    );
+    for (const action of ["advance", "move_back", "complete"]) {
+      const result = transitionSchema.safeParse({ action, expectedStage: "PREPARATION" });
+      expect(result.error?.issues[0].message).toBe(
+        "Choose start or finish. A roll no longer moves through stages.",
+      );
+    }
   });
 });
 
@@ -70,7 +63,6 @@ describe("batchListQuerySchema", () => {
       batchListQuerySchema.parse({ status: "NOPE", stage: "SOLEING", page: "-3", shoeTypeId: "x" }),
     ).toEqual({
       status: undefined,
-      stage: "SOLEING",
       page: undefined,
       shoeTypeId: undefined,
     });

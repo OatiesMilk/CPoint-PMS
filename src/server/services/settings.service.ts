@@ -106,19 +106,16 @@ const AUDIT_PREFIX: Record<ReferenceKind, string> = {
   defectType: "defect_type",
   shoeType: "shoe_type",
   supplier: "supplier",
-  componentType: "component_type",
 };
 const ENTITY: Record<ReferenceKind, string> = {
   defectType: "DefectType",
   shoeType: "ShoeType",
   supplier: "Supplier",
-  componentType: "ComponentType",
 };
 const WHAT: Record<ReferenceKind, string> = {
   defectType: "This defect type",
   shoeType: "This shoe type",
   supplier: "This supplier",
-  componentType: "This component type",
 };
 /** Fields that must be unique per kind, with the message for a clash. */
 const UNIQUE: Record<ReferenceKind, { field: string; message: (v: string) => string }[]> = {
@@ -130,7 +127,6 @@ const UNIQUE: Record<ReferenceKind, { field: string; message: (v: string) => str
     { field: "name", message: (v) => `"${v}" is already a shoe type.` },
   ],
   supplier: [{ field: "name", message: (v) => `"${v}" is already a supplier.` }],
-  componentType: [],
 };
 
 export function listReferenceRows(kind: ReferenceKind): Promise<ReferenceRow[]> {
@@ -167,7 +163,6 @@ function toColumns(kind: ReferenceKind, values: Record<string, unknown>) {
     defectType: ["description", "action"],
     shoeType: [],
     supplier: ["contactPerson", "phone", "notes"],
-    componentType: ["shoeTypeId"],
   };
   const out: Record<string, unknown> = { ...values };
   for (const key of nullable[kind]) out[key] = values[key] ?? null;
@@ -219,7 +214,7 @@ export async function updateReferenceRow(
 }
 
 /**
- * No deletes: batches, scans and components reference these rows. An inactive one disappears
+ * No deletes: batches and scans reference these rows. An inactive one disappears
  * from pickers (and an inactive defect type is ignored by the decision engine, D-011).
  */
 export async function setReferenceActive(

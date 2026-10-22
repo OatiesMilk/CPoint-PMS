@@ -8,9 +8,13 @@ import type { PurchaseAction } from "@/lib/procurement-rules";
 export const PERMISSIONS = {
   "batch:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "batch:manage": ["FLOOR_MANAGER"],
+  // Finish a roll once it is used up (D-082). Start, edit and cancel stay with batch:manage.
+  "batch:finish": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
   "camera:view": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "camera:manage": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // choose the batch the camera feeds
-  "camera:capture": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // scan from the Capture page (D-066)
+  // Scan from the Capture page (D-066). A Shoe Constructor also needs canCapture (canCaptureFor).
+  "camera:capture": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
+  "camera:operators": ["FLOOR_MANAGER", "SYSTEM_ADMIN"], // which constructors may capture (D-075)
   "scan:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "scan:decide": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // override the camera's automatic calls
   "scan:review": ["QUALITY_INSPECTOR"], // decide scans the camera flagged (D-028)
@@ -34,6 +38,15 @@ export const PERMISSIONS = {
   "procurement:decide": ["FLOOR_MANAGER"], // decide items, order, record deliveries, close short
   "procurement:remark": ["FLOOR_MANAGER", "SHOE_CONSTRUCTOR"], // constructors: own requests only
   "procurement:designate": ["FLOOR_MANAGER", "SYSTEM_ADMIN"], // who may request leather rolls
+  // Attendance, a one-day log book (D-077): the Floor Manager takes it, the Admin views it.
+  "attendance:read": ["FLOOR_MANAGER", "SYSTEM_ADMIN"],
+  "attendance:manage": ["FLOOR_MANAGER"],
+  // Production progression (D-083 to D-086): the QI counts pairs at each check-in, the Floor
+  // Manager sets the schedule and the quota, and the Admin views. The Floor Manager may enter a
+  // check-in only on a day no Quality Inspector is present (D-088): mayEnterCheckIns decides.
+  "production:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
+  "production:checkin": ["QUALITY_INSPECTOR", "FLOOR_MANAGER"],
+  "production:plan": ["FLOOR_MANAGER"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
@@ -62,6 +75,16 @@ type Requester = { role: Role; canRequestLeatherRolls: boolean };
 export function canRequestLeatherRollsFor(user: Requester): boolean {
   if (!can(user.role, "procurement:request")) return false;
   return user.role === "FLOOR_MANAGER" || user.canRequestLeatherRolls;
+}
+
+/**
+ * May this person capture at the camera (D-075)? The QI and the Floor Manager always can; a Shoe
+ * Constructor only when the Floor Manager or the System Admin has allowed it (the station
+ * operator). The Capture page, the capture API, the current-batch API and the nav all ask this.
+ */
+export function canCaptureFor(user: { role: Role; canCapture: boolean }): boolean {
+  if (can(user.role, "camera:capture")) return true;
+  return user.role === "SHOE_CONSTRUCTOR" && user.canCapture;
 }
 
 /**
@@ -96,4 +119,24 @@ export function mayCopyRequest(
 ): boolean {
   if (!can(user.role, "procurement:request") || request.requestedById !== user.id) return false;
   return request.status === "REJECTED" || request.status === "CANCELLED";
+}
+
+/**
+ * May this person enter or correct today's check-ins (D-084, D-088)? The Quality Inspector always
+ * can. The Floor Manager only when today's attendance is taken and no Quality Inspector is marked
+ * present (`qiPresent === false`); unknown attendance (`null`) isn't enough. The page, the
+ * actions, the API and the service all ask this one function.
+ */
+export function mayEnterCheckIns(role: Role, qiPresent: boolean | null): boolean {
+  if (role === "QUALITY_INSPECTOR") return true;
+  return role === "FLOOR_MANAGER" && qiPresent === false;
+}
+
+/** Why the Floor Manager can't enter today's check-ins, in one sentence; null when they can. */
+export function checkInCoverReason(role: Role, qiPresent: boolean | null): string | null {
+  if (mayEnterCheckIns(role, qiPresent)) return null;
+  if (role !== "FLOOR_MANAGER") return "The Quality Inspector enters the count at each check-in.";
+  if (qiPresent === null)
+    return "Take today's attendance first. You can enter check-ins only when it shows no Quality Inspector present.";
+  return "A Quality Inspector is present today, so they enter the check-ins.";
 }

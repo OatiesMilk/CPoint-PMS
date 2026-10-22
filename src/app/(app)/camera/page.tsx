@@ -1,15 +1,15 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   Floor Manager / Quality Inspector setting up or checking the Preparation camera.
- * What:  know whether the camera station is connected, which batch its scans go to, which model
- *        judged the last section, and how to connect the station.
+ * What:  know whether sections are being captured, which batch the scans go to, which model
+ *        judged the last section, and where to capture from.
  * Worst: scans landing in the wrong roll's batch, or an early model's verdicts trusted blindly.
  *        The target batch is the biggest thing on the page; the early-model notice sits beside it.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { Aperture, Camera, CircleDot, Cpu, PlugZap, Radio } from "lucide-react";
+import { Aperture, Camera, CircleDot, Cpu, PauseCircle } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -20,18 +20,22 @@ import { readSnapshot } from "@/lib/decision-engine";
 import { formatDuration, formatManilaDateTime } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
-import { cameraStatus, type CameraStatus } from "@/server/services/camera.service";
+import {
+  cameraStatus,
+  listCameraOperators,
+  type CameraStatus,
+} from "@/server/services/camera.service";
 import { getScanDetail } from "@/server/services/scan-query.service";
 import { ScanImage } from "@/components/features/scans/scan-image";
 import { ActiveBatchForm } from "./active-batch-form";
+import { OperatorsPanel } from "./operators-panel";
 
 export const metadata: Metadata = { title: "Camera" };
 
 const STATE = {
-  not_connected: { label: "Not connected", tone: "neutral", Icon: PlugZap },
-  waiting: { label: "Station connected", tone: "success", Icon: Radio },
+  idle: { label: "No recent captures", tone: "neutral", Icon: PauseCircle },
   simulator: { label: "Simulator active", tone: "info", Icon: Cpu },
-  camera: { label: "Camera station active", tone: "success", Icon: CircleDot },
+  capturing: { label: "Capture page active", tone: "success", Icon: CircleDot },
 } as const;
 
 const ago = (now: Date, at: Date) => formatDuration(now.getTime() - at.getTime());
@@ -39,25 +43,17 @@ const ago = (now: Date, at: Date) => formatDuration(now.getTime() - at.getTime()
 /** One sentence on what the camera is doing right now, specific to each state. */
 function stateText(status: CameraStatus, now: Date): string {
   const last = status.lastScan;
-  // A scan with no device token came from this website's Capture page (Phase 18).
-  const from = last?.device
-    ? ` from “${last.device}”`
-    : last && last.source !== "SIMULATOR"
-      ? " from the Capture page"
-      : "";
   switch (status.state) {
-    case "camera":
+    case "capturing":
       return last?.device
-        ? `The camera station is sending scans. Last scan ${ago(now, last.at)} ago${from}.`
+        ? `Scans are arriving with the device token “${last.device}”. Last scan ${ago(now, last.at)} ago.`
         : `Sections are being captured on the Capture page. Last scan ${ago(now, last!.at)} ago.`;
     case "simulator":
       return `Scans are coming from the simulator, not a camera. Last scan ${ago(now, last!.at)} ago.`;
-    case "waiting":
-      return `“${status.station!.name}” is connected and waiting for the next section. It last checked in ${ago(now, status.station!.seenAt)} ago.`;
-    case "not_connected":
+    case "idle":
       return last
-        ? `No camera station has checked in for 2 minutes. The last scan came ${ago(now, last.at)} ago${from}.`
-        : "Nothing has captured yet. Use the Capture page, or connect the camera station with the steps below.";
+        ? `Nothing captured in the last minute. The last scan came ${ago(now, last.at)} ago.`
+        : "Nothing has been captured yet. Open the Capture page to check the first section.";
   }
 }
 
@@ -67,13 +63,14 @@ export default async function CameraPage() {
   const now = new Date();
   const status = await cameraStatus(now);
   const last = status.lastScan ? await getScanDetail(status.lastScan.id) : null;
-  // A recent scan with no device token was captured on the Capture page, not by the station.
+  // A recent scan sent with a device token (not the simulator) didn't come from the Capture page.
   const state =
-    status.state === "camera" && !status.lastScan?.device
-      ? { ...STATE.camera, label: "Capture page active" }
+    status.state === "capturing" && status.lastScan?.device
+      ? { ...STATE.capturing, label: "Scans arriving" }
       : STATE[status.state];
   const canManage = can(user.role, "camera:manage");
   const canCapture = can(user.role, "camera:capture");
+  const operators = can(user.role, "camera:operators") ? await listCameraOperators() : null;
   const lastModel = modelName(status.lastScan?.modelVersion);
   const fromSimulator = status.lastScan?.source === "SIMULATOR";
   const snapshot = last ? readSnapshot(last.thresholdsSnapshot) : null;
@@ -82,7 +79,7 @@ export default async function CameraPage() {
     <>
       <PageHeader
         title="Camera"
-        description="The Preparation camera station checks each leather section before cutting."
+        description="The camera at Preparation checks each leather section before cutting."
         actions={
           <>
             <Badge tone={state.tone}>
@@ -131,9 +128,8 @@ export default async function CameraPage() {
               <Camera aria-hidden className="size-10 text-muted-foreground" />
               <p className="font-medium">No captures yet</p>
               <p className="max-w-sm text-muted-foreground">
-                {status.state === "waiting"
-                  ? "The station is connected. Press Space at the station to capture the first section."
-                  : "The last section captured, on the Capture page or at the station, shows here with every defect marked on it."}
+                The last section captured on the Capture page shows here with every defect marked on
+                it.
               </p>
             </div>
           )}
@@ -165,7 +161,7 @@ export default async function CameraPage() {
                 </div>
               ) : (
                 <p className="rounded-md bg-rework-soft p-3 text-sm">
-                  No batch is at Preparation, so the station waits and won’t capture.{" "}
+                  No batch is at Preparation, so Capture stays off.{" "}
                   <Link href="/batches?status=PLANNED" className="underline underline-offset-4">
                     Start a batch
                   </Link>{" "}
@@ -216,7 +212,7 @@ export default async function CameraPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex flex-col gap-1 text-sm">
-                <p className="font-medium">From this website (no other app)</p>
+                <p className="font-medium">From the Capture page</p>
                 <p>
                   Open{" "}
                   {canCapture ? (
@@ -226,39 +222,24 @@ export default async function CameraPage() {
                   ) : (
                     <strong>Capture</strong>
                   )}{" "}
-                  on the PC at Preparation, or on a phone. On another computer or a phone it needs
-                  the secure address (https, port 3443; see “Capture from the website” in the
-                  README).
+                  on the PC at Preparation, with the fixed camera. Use <strong>Floor view</strong>{" "}
+                  there for a monitor facing the operator. On another computer, open the site
+                  through its https:// link (the Cloudflare Tunnel; see the README).
                 </p>
               </div>
-              <p className="text-sm font-medium">With the camera station (a dedicated camera)</p>
-              <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
-                <li>
-                  A System Admin creates a device token under <strong>API tokens</strong>.
-                </li>
-                <li>
-                  On the station PC, put it in <code className="font-mono">cv/.env</code> as{" "}
-                  <code className="font-mono">CV_DEVICE_TOKEN</code>.
-                </li>
-                <li>
-                  Open <strong>CPoint Camera</strong> from the desktop (once, make the shortcut with{" "}
-                  <code className="font-mono">python -m cpoint_cv shortcut</code>).
-                </li>
-                <li>
-                  Press <strong>Check this machine</strong>, fix anything it marks, then{" "}
-                  <strong>Start</strong> and press <strong>Capture</strong> for each section (see{" "}
-                  <code className="font-mono">cv/README.md</code>
-                  ).
-                </li>
-                <li>
-                  No camera yet? Run <code className="font-mono">npm run cv:simulate</code> to send
-                  realistic test scans.
-                </li>
-              </ol>
+              <div className="flex flex-col gap-1 text-sm">
+                <p className="font-medium">No camera yet?</p>
+                <p>
+                  Run <code className="font-mono">npm run cv:simulate</code> to send realistic test
+                  scans with a device token (see the README).
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {operators && <OperatorsPanel people={operators} />}
     </>
   );
 }

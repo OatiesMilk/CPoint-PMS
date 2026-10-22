@@ -12,7 +12,7 @@ export default function ReworkError({
   return (
     <div className="flex max-w-xl flex-col gap-4 py-10">
       <Alert tone="danger">
-        <strong className="font-semibold">Couldn’t load the rework board.</strong>
+        <strong className="font-semibold">Couldn’t load the Repair Station board.</strong>
         <span>
           Nothing was changed. This is usually a brief connection problem with the database.
         </span>

@@ -1,9 +1,11 @@
 import { ROLE_HOME, type Role } from "@/lib/domain";
 import { requestLabelsFor } from "@/lib/procurement-rules";
-import { can, type Permission } from "./permissions";
+import { can, canCaptureFor, type Permission } from "./permissions";
 
 export type NavIcon =
   | "overview"
+  | "production"
+  | "attendance"
   | "batches"
   | "camera"
   | "capture"
@@ -35,6 +37,18 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
   {
     title: "Production",
     items: [
+      {
+        label: "Production",
+        href: "/production",
+        icon: "production",
+        permission: "production:read",
+      },
+      {
+        label: "Attendance",
+        href: "/attendance",
+        icon: "attendance",
+        permission: "attendance:read",
+      },
       { label: "Batches", href: "/batches", icon: "batches", permission: "batch:read" },
       {
         label: "Inventory",
@@ -67,7 +81,12 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         icon: "review",
         permission: "scan:decide",
       },
-      { label: "Rework", href: "/rework", icon: "rework", permission: "rework:manage" },
+      {
+        label: "Repair Station",
+        href: "/rework",
+        icon: "rework",
+        permission: "rework:manage",
+      },
       { label: "Salvage", href: "/salvage", icon: "salvage", permission: "salvage:read" },
     ],
   },
@@ -108,8 +127,16 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
   },
 ];
 
-/** The sidebar for a role: its home first, then every section it has at least one permission in. */
-export function navigationFor(role: Role): NavSection[] {
+/**
+ * The sidebar for a person: their home first, then every section they have at least one permission
+ * in. Capture also follows the per-person switch for constructors (D-075).
+ */
+export function navigationFor(user: { role: Role; canCapture?: boolean }): NavSection[] {
+  const role = user.role;
+  const allowed = (item: { href: string; permission: Permission }) =>
+    item.href === "/camera/capture"
+      ? canCaptureFor({ role, canCapture: !!user.canCapture })
+      : can(role, item.permission);
   const home: NavSection = {
     title: null,
     items: [
@@ -123,7 +150,7 @@ export function navigationFor(role: Role): NavSection[] {
   const sections = SECTIONS.map((section) => ({
     title: section.title,
     items: section.items
-      .filter((item) => can(role, item.permission))
+      .filter(allowed)
       // Constructors see "Material requests"; the same page is "Procurement" for the rest (D-035).
       .map(({ label, href, icon, phase }) => ({
         label: href === "/procurement" ? requestLabelsFor(role).nav : label,

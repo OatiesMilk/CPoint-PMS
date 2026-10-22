@@ -26,6 +26,8 @@ export type SessionUser = {
   mustChangePassword: boolean;
   /** May request leather rolls (D-031). Read from the database on every request, like the role. */
   canRequestLeatherRolls: boolean;
+  /** May capture at the camera (D-075). Read from the database on every request, like the role. */
+  canCapture: boolean;
 };
 
 export type SignInResult =
@@ -44,6 +46,7 @@ function toSessionUser(user: User): SessionUser {
     role: user.role,
     mustChangePassword: user.mustChangePassword,
     canRequestLeatherRolls: user.canRequestLeatherRolls,
+    canCapture: user.canCapture,
   };
 }
 

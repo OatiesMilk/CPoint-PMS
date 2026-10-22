@@ -4,23 +4,12 @@ import {
   compare,
   daysOfCover,
   describeChange,
-  findStuckBatches,
   paretoShares,
-  stageShares,
   type AttentionInput,
-  type OpenBatch,
 } from "@/lib/ops-rules";
 import { parseRange, previousRange } from "@/lib/report-rules";
 
 const H = 3_600_000;
-const batch = (code: string, stage: OpenBatch["stage"], hours: number): OpenBatch => ({
-  id: code,
-  code,
-  shoeType: "School Shoe",
-  stage,
-  inStageMs: hours * H,
-  openRepairs: 0,
-});
 
 describe("compare / describeChange", () => {
   it("computes the change and says it in words", () => {
@@ -43,43 +32,6 @@ describe("previousRange", () => {
     const now = new Date("2026-10-08T04:00:00.000Z");
     const prev = previousRange(parseRange({ preset: "7d" }, now), now);
     expect(prev).toMatchObject({ from: "2026-09-25", to: "2026-10-01", days: 7 });
-  });
-});
-
-describe("findStuckBatches", () => {
-  const stages = [
-    { stage: "UPPER_MAKING" as const, visits: 5, medianMs: 4 * H },
-    { stage: "SOLEING" as const, visits: 2, medianMs: 1 * H }, // too few visits to trust
-  ];
-
-  it("flags batches past 1.5x the stage median, longest first", () => {
-    const stuck = findStuckBatches(
-      [batch("A", "UPPER_MAKING", 5), batch("B", "UPPER_MAKING", 7), batch("C", "UPPER_MAKING", 6)],
-      stages,
-    );
-    expect(stuck.map((b) => b.code)).toEqual(["B"]);
-  });
-
-  it("ignores stages without enough visits and very short waits", () => {
-    expect(findStuckBatches([batch("D", "SOLEING", 50)], stages)).toEqual([]);
-    expect(
-      findStuckBatches(
-        [batch("E", "UPPER_MAKING", 0.5)],
-        [{ stage: "UPPER_MAKING", visits: 9, medianMs: 0.1 * H }],
-      ),
-    ).toEqual([]);
-  });
-});
-
-describe("stageShares", () => {
-  it("splits the line's time by stage median", () => {
-    const shares = stageShares([
-      { stage: "PREPARATION", medianMs: 1 * H },
-      { stage: "UPPER_MAKING", medianMs: 3 * H },
-      { stage: "SOLEING", medianMs: null },
-    ]);
-    expect(shares.get("UPPER_MAKING")).toBe(0.75);
-    expect(shares.get("SOLEING")).toBeNull();
   });
 });
 
@@ -107,9 +59,7 @@ describe("paretoShares", () => {
 
 describe("buildAttention", () => {
   const quiet: AttentionInput = {
-    stages: [],
-    bottleneck: null,
-    stuck: [],
+    belowQuota: null,
     repairs: { waitingOverDay: 0, open: 0, oldestWaitingMs: null },
     stock: { out: 0, low: 0, shortCover: [] },
     requests: { highPending: 0, pending: 0, oldestPendingMs: null, lateAwaitingDelivery: 0 },
@@ -125,11 +75,7 @@ describe("buildAttention", () => {
   it("orders by severity and names what is wrong", () => {
     const items = buildAttention({
       ...quiet,
-      stages: [
-        { stage: "UPPER_MAKING", visits: 5, medianMs: 4 * H, inStageNow: 2, longestWaitMs: 9 * H },
-      ],
-      bottleneck: "UPPER_MAKING",
-      stuck: [batch("B-1", "UPPER_MAKING", 9)],
+      belowQuota: { below: 3, of: 5 },
       stock: { out: 1, low: 2, shortCover: [{ item: "Thread", days: 1.2 }] },
       flaggedScans: 3,
     });
@@ -137,13 +83,14 @@ describe("buildAttention", () => {
       "stock-out",
       "stock-low",
       "stock-cover",
-      "bottleneck",
-      "stuck",
+      "below-quota",
       "flagged",
     ]);
     expect(items[0].severity).toBe("critical");
-    expect(items.find((i) => i.id === "bottleneck")?.title).toBe("Upper Making is the bottleneck");
-    expect(items.find((i) => i.id === "stuck")?.detail).toContain("B-1");
+    expect(items.find((i) => i.id === "below-quota")).toMatchObject({
+      title: "3 of the last 5 working days were below quota",
+      href: "/production",
+    });
   });
 
   it("flags a supplier only with enough sections and a clear gap", () => {
@@ -166,5 +113,16 @@ describe("buildAttention", () => {
       requests: { highPending: 1, pending: 3, oldestPendingMs: 100 * H, lateAwaitingDelivery: 1 },
     });
     expect(items.map((i) => i.id)).toEqual(["requests-high", "requests-late"]);
+  });
+});
+
+describe("supplierIsHigh (Phase 20)", () => {
+  it("needs enough sections and a clear gap above the line", async () => {
+    const { supplierIsHigh } = await import("@/lib/ops-rules");
+    expect(supplierIsHigh({ sections: 60, problemShare: 0.4 }, 0.2)).toBe(true);
+    expect(supplierIsHigh({ sections: 10, problemShare: 0.9 }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ sections: 80, problemShare: 0.25 }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ sections: 80, problemShare: null }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ sections: 80, problemShare: 0.9 }, null)).toBe(false);
   });
 });

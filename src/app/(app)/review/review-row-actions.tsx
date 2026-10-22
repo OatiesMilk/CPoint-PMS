@@ -16,7 +16,7 @@ export function ReviewRowActions({ scanId, label }: { scanId: string; label: str
       const result = await decideScanAction(scanId, { verdict, expectedFinalVerdict: null });
       if (result.ok)
         toast.success(
-          `${label}: ${verdict === "PASS" ? "passed" : verdict === "REWORK" ? "sent to rework" : "rejected"}.`,
+          `${label}: ${verdict === "PASS" ? "passed" : verdict === "REWORK" ? "marked Fixable" : "rejected"}.`,
         );
       else setError(result.error);
     });
@@ -29,7 +29,7 @@ export function ReviewRowActions({ scanId, label }: { scanId: string; label: str
           Pass
         </Button>
         <Button size="sm" variant="secondary" disabled={pending} onClick={() => decide("REWORK")}>
-          Rework
+          Fixable
         </Button>
         <Button size="sm" variant="destructive" disabled={pending} onClick={() => decide("REJECT")}>
           Reject

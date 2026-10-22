@@ -1,9 +1,10 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Floor Manager moving a roll through the line; QI and Admin checking where it is.
- * What:  see where this batch is and how long each stage took; move it on with one click.
- * Worst: moving the wrong batch or skipping a stage. One primary action, no skipping,
- *        moving back needs a reason, cancel and complete are confirmed.
+ * Who:   the Floor Manager starting and finishing leather rolls; the QI finishing one at the
+ *        camera; the Admin checking.
+ * What:  see what this roll gave at Preparation and finish it when it is used up (D-082).
+ * Worst: finishing the wrong roll, so the camera feeds the next one too early. Finish is
+ *        confirmed with the scan count; cancel needs a reason.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -12,7 +13,6 @@ import { connection } from "next/server";
 import { ArrowLeft, CornerUpLeft } from "lucide-react";
 import { BatchStatusBadge } from "@/components/features/batches/batch-status-badge";
 import { InRepairBadge } from "@/components/features/batches/in-repair-badge";
-import { StageProgress } from "@/components/features/batches/stage-progress";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { STAGE_LABELS } from "@/lib/domain";
 import { formatCalendarDate, formatDuration, formatManilaDateTime } from "@/lib/format";
+import { finishHint, startedBeforeRolls } from "@/lib/stage-machine";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { getBatchDetail } from "@/server/services/batch.service";
@@ -41,9 +42,12 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
   if (!isBatchId(id)) notFound();
   const detail = await getBatchDetail(id);
   if (!detail) notFound();
-  const { batch, actions, openRepairs, rollFromInventory, durations, now } = detail;
+  const { batch, actions, openRepairs, rollFromInventory, now } = detail;
   const y = await batchYield(batch.id);
   const canManage = can(user.role, "batch:manage");
+  const canFinish = can(user.role, "batch:finish");
+  const hint = batch.status === "IN_PROGRESS" ? finishHint(y.scanned) : null;
+  const legacy = startedBeforeRolls(batch);
 
   return (
     <>
@@ -62,7 +66,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
           <div>
             <div className="flex items-center gap-3">
               <h1 className="font-mono text-3xl font-semibold tracking-tight">{batch.code}</h1>
-              <BatchStatusBadge status={batch.status} />
+              <BatchStatusBadge status={batch.status} currentStage={batch.currentStage} />
               <InRepairBadge count={openRepairs} />
             </div>
             <p className="mt-1 text-lg text-muted-foreground">
@@ -70,44 +74,48 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
             </p>
           </div>
         </div>
-        {canManage && (
-          <BatchActionsBar
-            id={batch.id}
-            code={batch.code}
-            currentStage={batch.currentStage}
-            actions={actions}
-            openRepairs={openRepairs}
-          />
+        {hint && (
+          <Alert tone="info" data-testid="finish-hint">
+            {hint}
+            {!canFinish && " Ask the Floor Manager or the Quality Inspector to finish it."}
+          </Alert>
         )}
+        {legacy && (
+          <Alert tone="info">
+            This batch started before rolls were tracked and is still at{" "}
+            {STAGE_LABELS[batch.currentStage]}. Finish it when its shoes are done; production is now
+            counted at the check-ins.
+          </Alert>
+        )}
+        <BatchActionsBar
+          id={batch.id}
+          code={batch.code}
+          currentStage={batch.currentStage}
+          actions={actions}
+          openRepairs={openRepairs}
+          scanned={y.scanned}
+          pendingReview={y.pendingReview}
+          canManage={canManage}
+          canFinish={canFinish}
+        />
         {batch.status === "CANCELLED" && batch.cancelledReason && (
           <Alert tone="info">Cancelled: {batch.cancelledReason}</Alert>
         )}
       </header>
 
-      <section aria-labelledby="progress-heading" className="flex flex-col gap-4">
-        <h2 id="progress-heading" className="text-xl font-semibold">
-          Progress
-        </h2>
-        {batch.status === "PLANNED" ? (
-          <p className="text-muted-foreground">
-            Production hasn’t started.{" "}
-            {canManage ? "Start it when the roll goes to the cutting table." : ""}
-          </p>
-        ) : null}
-        <StageProgress
-          status={batch.status}
-          currentStage={batch.currentStage}
-          durations={durations}
-        />
-      </section>
+      {batch.status === "PLANNED" && (
+        <p className="text-muted-foreground">
+          This roll hasn’t started. {canManage ? "Start it when it goes to the cutting table." : ""}
+        </p>
+      )}
 
       <section aria-labelledby="timeline-heading" className="flex flex-col gap-4">
         <h2 id="timeline-heading" className="text-xl font-semibold">
-          Stage timeline
+          History
         </h2>
         {batch.stageLogs.length === 0 ? (
           <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
-            Nothing yet. Each stage this batch passes through will be listed here with its times.
+            Nothing yet. When the roll starts, its time at Preparation is listed here.
           </p>
         ) : (
           <Table>
@@ -117,7 +125,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
                 <TableHead>Started</TableHead>
                 <TableHead>Ended</TableHead>
                 <TableHead numeric>Duration</TableHead>
-                <TableHead>Moved by</TableHead>
+                <TableHead>Started by</TableHead>
                 <TableHead>Note</TableHead>
               </TableRow>
             </TableHeader>
@@ -197,12 +205,6 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
                 ],
                 ["Date received", formatCalendarDate(batch.receivedAt)],
                 [
-                  "Target quota",
-                  batch.targetQuotaPairs
-                    ? `${batch.targetQuotaPairs.toLocaleString("en-PH")} pairs`
-                    : "Not set",
-                ],
-                [
                   "Registered",
                   `${formatManilaDateTime(batch.createdAt)} by ${batch.createdBy.name}`,
                 ],
@@ -253,7 +255,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   {[
                     [
-                      "At repair station",
+                      "Being cleaned or cut around",
                       y.reworkOpen + y.reworkInProgress,
                       `/rework?batch=${batch.code}`,
                       "yield-repair",

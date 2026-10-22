@@ -7,21 +7,50 @@ const report = {
   dailyProduction: vi.fn(),
   defectBreakdown: vi.fn(),
   verdictMatrix: vi.fn(),
-  stageDurations: vi.fn(),
-  openStageWaits: vi.fn(),
 };
 const ops = {
-  leadTimes: vi.fn(),
-  openBatches: vi.fn(),
   procurementFlow: vi.fn(),
   repairQueue: vi.fn(),
   repairTurnaround: vi.fn(),
   stockPosition: vi.fn(),
   supplierQuality: vi.fn(),
+  supplierDefects: vi.fn(),
+  rollsWithMostRejects: vi.fn(),
+  findClaimBatch: vi.fn(),
+  countBatchVerdicts: vi.fn(),
 };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/report.model", () => report);
 vi.mock("@/server/models/ops-report.model", () => ops);
+const productionDay = (
+  day: string,
+  pairs: number,
+  quota: number | null,
+  shortfall: string | null,
+) => ({
+  day,
+  checkIns: 3,
+  entered: 3,
+  missed: 0,
+  full: true,
+  byType: [{ shoeTypeId: "st1", label: "School Shoe", pairs, quota }],
+  pairs,
+  quota,
+  share: quota ? pairs / quota : null,
+  attendanceTaken: true,
+  constructorsPresent: 10,
+  constructorsOnRoster: 12,
+  pairsPerConstructor: pairs / 10,
+  shortfall,
+});
+const production = {
+  productionReport: vi.fn(),
+  recentProductionDays: vi.fn(),
+};
+vi.mock("@/server/services/production.service", () => production);
+vi.mock("@/server/models/batch.model", () => ({
+  countRollsByStatus: vi.fn(async () => ({ atPreparation: 2, planned: 1 })),
+}));
 
 const svc = await import("@/server/services/ops-report.service");
 const now = new Date("2026-10-08T04:00:00.000Z");
@@ -59,33 +88,38 @@ beforeEach(() => {
     },
   ]);
   report.verdictMatrix.mockResolvedValue([]);
-  report.stageDurations.mockResolvedValue([
-    { stage: "UPPER_MAKING", visits: 6, medianMs: 4 * H, p90Ms: 8 * H, avgMs: 5 * H },
-    { stage: "SOLEING", visits: 6, medianMs: 2 * H, p90Ms: 3 * H, avgMs: 2 * H },
-  ]);
-  report.openStageWaits.mockResolvedValue([
-    { stage: "UPPER_MAKING", batches: 2, longestMs: 9 * H },
-  ]);
   report.dailyProduction.mockResolvedValue([{ day: "2026-10-06", started: 3, completed: 2 }]);
-  ops.leadTimes.mockResolvedValue({ batches: 2, medianMs: 20 * H, avgMs: 21 * H });
-  ops.openBatches.mockResolvedValue([
-    {
-      id: "b1",
-      code: "B-1",
-      shoeType: "School Shoe",
-      stage: "UPPER_MAKING",
-      inStageMs: 9 * H,
-      openRepairs: 1,
-    },
-    {
-      id: "b2",
-      code: "B-2",
-      shoeType: "Topsider",
-      stage: "UPPER_MAKING",
-      inStageMs: 2 * H,
-      openRepairs: 0,
-    },
-  ]);
+  production.productionReport.mockImplementation(async (r: { from: string }) =>
+    r.from === "2026-10-02"
+      ? {
+          shoeTypes: [{ id: "st1", label: "School Shoe" }],
+          days: [
+            productionDay(
+              "2026-10-06",
+              70,
+              85,
+              "Below quota by 15 pairs. 2 of 12 Shoe Constructors were absent.",
+            ),
+            productionDay("2026-10-07", 90, 85, null),
+          ],
+          totals: { pairs: 160, share: 160 / 170, daysBelow: 1, daysWithQuota: 2 },
+        }
+      : {
+          shoeTypes: [],
+          days: [],
+          totals: { pairs: 100, share: 0.5, daysBelow: 0, daysWithQuota: 0 },
+        },
+  );
+  production.recentProductionDays.mockResolvedValue({
+    shoeTypes: [{ id: "st1", label: "School Shoe" }],
+    days: [
+      productionDay("2026-10-02", 70, 85, "x"),
+      productionDay("2026-10-03", 70, 85, "x"),
+      productionDay("2026-10-05", 90, 85, null),
+      productionDay("2026-10-06", 70, 85, "x"),
+      productionDay("2026-10-07", 90, 85, null),
+    ],
+  });
   ops.repairQueue.mockResolvedValue([
     {
       id: "r1",
@@ -158,8 +192,44 @@ beforeEach(() => {
     medianReceiveMs: 48 * H,
   });
   ops.supplierQuality.mockResolvedValue([
-    { id: "s1", name: "Tannery A", batches: 2, scanned: 40, pass: 20, rework: 10, reject: 10 },
-    { id: "s2", name: "Tannery B", batches: 1, scanned: 10, pass: 10, rework: 0, reject: 0 },
+    {
+      id: "s2",
+      name: "Tannery B",
+      batches: 1,
+      rolls: 1,
+      scanned: 10,
+      pass: 10,
+      rework: 0,
+      reject: 0,
+    },
+    {
+      id: "s1",
+      name: "Tannery A",
+      batches: 2,
+      rolls: 2,
+      scanned: 40,
+      pass: 20,
+      rework: 10,
+      reject: 10,
+    },
+  ]);
+  ops.supplierDefects.mockResolvedValue([
+    { groupId: "s1", label: "Hole", sections: 12 },
+    { groupId: "s1", label: "Cut", sections: 8 },
+  ]);
+  ops.rollsWithMostRejects.mockResolvedValue([
+    {
+      batchId: "b9",
+      batchCode: "B-2026-0009",
+      rollCode: "R-0412",
+      supplier: "Tannery A",
+      sections: 40,
+      rejected: 6,
+      defects: [
+        { label: "Hole", sections: 4 },
+        { label: "Cut", sections: 2 },
+      ],
+    },
   ]);
 });
 
@@ -209,19 +279,18 @@ describe("repairStation", () => {
 });
 
 describe("operationsReport", () => {
-  it("puts the flow, bottleneck and late batches together", async () => {
+  it("puts production against the quota and the rolls together (Phase 23)", async () => {
     const r = await svc.operationsReport(range, now);
-    expect(r.flow.bottleneck).toBe("UPPER_MAKING");
-    const upper = r.flow.lanes.find((l) => l.stage === "UPPER_MAKING")!;
-    expect(upper.batches.map((b) => [b.code, b.stuck])).toEqual([
-      ["B-1", true],
-      ["B-2", false],
-    ]);
-    expect(upper.p90Ms).toBe(8 * H);
-    expect(r.kpis.wip).toBe(2);
+    expect(r.kpis.pairs).toMatchObject({ value: 160, previous: 100 });
+    expect(r.kpis.pairs.change).toBeCloseTo(0.6);
+    expect(r.kpis.ofQuota.value).toBeCloseTo(160 / 170);
+    expect(r.kpis.rollsFinished.value).toBe(2);
+    expect(r.kpis.rollsAtPreparation).toBe(2);
     expect(r.kpis.repairsOpen).toBe(2);
-    expect(r.kpis.completed.value).toBe(2);
+    expect(r.production.days).toHaveLength(2);
     expect(r.days).toHaveLength(7);
+    expect(r.days.find((d) => d.day === "2026-10-06")).toMatchObject({ started: 3, completed: 2 });
+    expect(r).not.toHaveProperty("flow");
   });
 
   it("works out stock level and days of cover", async () => {
@@ -233,25 +302,73 @@ describe("operationsReport", () => {
     expect(stock.all.map((i) => i.level)).toEqual(["OUT", "OK", "OK"]);
   });
 
-  it("rates suppliers by the share that needed work", async () => {
+  it("rates suppliers worst first, with rolls, shares, top defect and the High flag", async () => {
     const r = await svc.operationsReport(range, now);
     expect(r.suppliers[0]).toMatchObject({
       supplier: "Tannery A",
+      rolls: 2,
       problemShare: 0.5,
       cleanShare: 0.5,
+      reworkShare: 0.25,
+      rejectShare: 0.25,
+      topDefect: "Hole",
+      high: true, // 50% against 40% for the line, over 40 sections
     });
-    expect(r.suppliers[1].problemShare).toBe(0);
+    expect(r.suppliers[1]).toMatchObject({ problemShare: 0, topDefect: null, high: false });
     expect(r.lineProblemShare).toBeCloseTo(0.4); // 20 of 50 decided
+    expect(r.rejectedRolls[0]).toMatchObject({ rollCode: "R-0412", rejected: 6 });
+    expect(ops.rollsWithMostRejects).toHaveBeenCalledWith(range, 5);
+  });
+
+  it("builds a claim sheet per roll, with no person on it (D-008)", async () => {
+    ops.findClaimBatch.mockResolvedValue({
+      id: "b9",
+      code: "B-2026-0009",
+      rollCode: "R-0412",
+      receivedAt: new Date("2026-10-01T00:00:00Z"),
+      shoeType: { name: "School Shoe" },
+      supplier: { name: "Tannery A", contactPerson: null, phone: null },
+      scans: [
+        {
+          id: "sc1",
+          sequence: 3,
+          capturedAt: new Date("2026-10-02T01:00:00Z"),
+          imagePath: "a.jpg",
+          isOverride: false,
+          detections: [{ confidence: 0.94, rawClassKey: "hole", defectType: { label: "Hole" } }],
+        },
+      ],
+    });
+    ops.countBatchVerdicts.mockResolvedValue([
+      { finalVerdict: "PASS", _count: { _all: 30 } },
+      { finalVerdict: "REJECT", _count: { _all: 6 } },
+      { finalVerdict: null, _count: { _all: 1 } },
+    ]);
+    const sheet = await svc.claimSheet("b9");
+    expect(sheet).toMatchObject({
+      rollCode: "R-0412",
+      receivedAt: "2026-10-01",
+      totals: { sections: 37, pass: 30, rework: 0, reject: 6, pending: 1 },
+      rejected: [{ sequence: 3, hasImage: true, defects: [{ label: "Hole", confidence: 0.94 }] }],
+    });
+    const keys = keysDeep(sheet);
+    for (const k of ["userId", "user", "email", "decidedBy", "decidedById", "createdBy"])
+      expect(keys.has(k)).toBe(false);
+    ops.findClaimBatch.mockResolvedValue(null);
+    expect(await svc.claimSheet("nope")).toBeNull();
   });
 
   it("lists what needs attention, most urgent first", async () => {
     const r = await svc.operationsReport(range, now);
     const ids = r.attention.map((a) => a.id);
     expect(ids[0]).toBe("stock-out");
+    expect(r.attention.find((a) => a.id === "below-quota")?.title).toBe(
+      "3 of the last 5 working days were below quota",
+    );
+    expect(ids).not.toContain("bottleneck");
     expect(ids).toEqual(
       expect.arrayContaining([
-        "bottleneck",
-        "stuck",
+        "below-quota",
         "repairs-waiting",
         "requests-high",
         "supplier",
@@ -278,7 +395,7 @@ describe("CSV", () => {
   it("operations CSV has one row per day", async () => {
     const lines = (await svc.operationsCsv(range)).trim().split("\r\n");
     expect(lines).toHaveLength(8);
-    expect(lines[0]).toContain("Batches started,Batches completed");
+    expect(lines[0]).toContain("Rolls started,Rolls finished");
     expect(lines.find((l) => l.startsWith("2026-10-06"))).toBe("2026-10-06,3,2,0,0,0,0,0");
   });
 
@@ -291,6 +408,6 @@ describe("CSV", () => {
 
   it("suppliers CSV gives percentages", async () => {
     const csv = await svc.suppliersCsv(range);
-    expect(csv).toContain("Tannery A,2,40,20,10,10,50.0,50.0");
+    expect(csv).toContain("Tannery A,2,2,40,20,10,10,50.0,25.0,25.0,50.0,Hole,yes");
   });
 });

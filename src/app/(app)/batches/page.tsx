@@ -21,8 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { STAGE_LABELS } from "@/lib/domain";
-import { formatCalendarDate, formatDuration } from "@/lib/format";
+import { formatCalendarDate } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { getBatchFormOptions, listBatches } from "@/server/services/batch.service";
@@ -35,7 +34,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
   const user = await requirePermission("batch:read");
   await connection();
   const query = batchListQuerySchema.parse(await searchParams);
-  const filtered = Boolean(query.status || query.stage || query.shoeTypeId || query.q);
+  const filtered = Boolean(query.status || query.shoeTypeId || query.q);
   const [{ rows, total, page, pageCount }, { shoeTypes }] = await Promise.all([
     listBatches(query, query.page ?? 1),
     getBatchFormOptions(),
@@ -54,7 +53,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
     <>
       <PageHeader
         title="Batches"
-        description="One batch per leather roll, from Preparation to Finishing."
+        description="One batch per leather roll. Start it at Preparation, where the camera checks each section, and finish it when the roll is used up."
         actions={
           canManage && (
             <Button asChild>
@@ -74,7 +73,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
           <h2 className="text-xl font-semibold">No batches yet</h2>
           <p className="max-w-md text-muted-foreground">
             {canManage
-              ? "Register the first leather roll to start tracking it through the line."
+              ? "Register the first leather roll. Start it when it goes to the cutting table."
               : "The Floor Manager registers each leather roll as a batch. They'll appear here."}
           </p>
           {canManage && (
@@ -87,7 +86,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-16 text-center">
           <h2 className="text-xl font-semibold">No batches match these filters</h2>
           <p className="text-muted-foreground">
-            Try a different stage or status, or clear the filters.
+            Try a different status or shoe type, or clear the filters.
           </p>
           <Button asChild variant="secondary" className="mt-2">
             <Link href="/batches">Clear filters</Link>
@@ -95,16 +94,14 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <Table>
+          <Table label="Batches">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Batch</TableHead>
                 <TableHead>Roll code</TableHead>
                 <TableHead>Shoe type</TableHead>
-                <TableHead>Stage</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Received</TableHead>
-                <TableHead numeric>Target (pairs)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -122,29 +119,12 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                     <TableCell className="font-mono">{b.rollCode}</TableCell>
                     <TableCell>{b.shoeType.name}</TableCell>
                     <TableCell>
-                      {b.status === "IN_PROGRESS" ? (
-                        <span>
-                          {STAGE_LABELS[b.currentStage]}
-                          {b.timeInStageMs !== null && (
-                            <span className="ml-2 text-muted-foreground">
-                              {formatDuration(b.timeInStageMs)}
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <BatchStatusBadge status={b.status} />
+                        <BatchStatusBadge status={b.status} currentStage={b.currentStage} />
                         <InRepairBadge count={b.openRepairs} />
                       </div>
                     </TableCell>
                     <TableCell>{formatCalendarDate(b.receivedAt)}</TableCell>
-                    <TableCell numeric>
-                      {b.targetQuotaPairs?.toLocaleString("en-PH") ?? "—"}
-                    </TableCell>
                   </TableRow>
                 );
               })}

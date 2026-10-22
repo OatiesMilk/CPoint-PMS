@@ -99,7 +99,14 @@ describe("reference data", () => {
     await svc.createReferenceRow("defectType", { key: "Scratch", label: "Scratch" }, admin);
     expect(refs.insertReference).toHaveBeenCalledWith(
       "defectType",
-      { key: "scratch", label: "Scratch", description: null, action: null, sortOrder: 0 },
+      {
+        key: "scratch",
+        label: "Scratch",
+        description: null,
+        action: null,
+        handling: "CUT_AROUND",
+        sortOrder: 0,
+      },
       "tx",
     );
     refs.findReferenceByField.mockResolvedValueOnce({ id: "other" });

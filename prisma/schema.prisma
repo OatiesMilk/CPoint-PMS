@@ -52,6 +52,13 @@ enum DefectAction {
   REJECT
 }
 
+/// How a Fixable section of a type is made usable before cutting (Phase 20, D-070). Data, set per
+/// defect type in Settings.
+enum DefectHandling {
+  CLEAN
+  CUT_AROUND
+}
+
 enum ScanSource {
   SIMULATOR
   PHONE
@@ -129,6 +136,9 @@ model User {
   /// May ask for leather rolls in purchase requests. Shoe Constructors only (D-031); every
   /// constructor can request the other materials.
   canRequestLeatherRolls Boolean   @default(false)
+  /// May capture at the camera (the Capture page and its Floor view). Shoe Constructors only;
+  /// the QI and the Floor Manager always can (D-075).
+  canCapture             Boolean   @default(false)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -151,6 +161,12 @@ model User {
   purchaseRemarks     PurchaseRequestRemark[]
   purchaseDeliveries  PurchaseDelivery[]
   purchaseAttachments PurchaseAttachment[]
+  attendanceTaken     AttendanceDay[]         @relation("AttendanceTakenBy")
+  attendanceMarks     AttendanceMark[]
+  schedulesSet        ProductionSchedule[]
+  quotasSet           DailyQuota[]
+  checkInsEntered     ProductionCheckIn[]     @relation("CheckInEnteredBy")
+  checkInsCorrected   ProductionCheckIn[]     @relation("CheckInCorrectedBy")
 
   @@index([role, isActive])
   @@map("users")
@@ -224,8 +240,9 @@ model ShoeType {
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  batches        Batch[]
-  componentTypes ComponentType[]
+  batches Batch[]
+  quotas  DailyQuota[]
+  counts  ProductionCount[]
 
   @@map("shoe_types")
 }
@@ -245,30 +262,19 @@ model Supplier {
   @@map("suppliers")
 }
 
-model ComponentType {
-  id         String  @id @default(uuid(7)) @db.Uuid
-  shoeTypeId String? @db.Uuid
-  name       String
-  isActive   Boolean @default(true)
-  sortOrder  Int     @default(0)
-
-  shoeType ShoeType? @relation(fields: [shoeTypeId], references: [id])
-
-  @@index([shoeTypeId])
-  @@map("component_types")
-}
-
 model DefectType {
-  id          String   @id @default(uuid(7)) @db.Uuid
-  key         String   @unique // YOLO class key: "cut", "hole", "abrasion", "dirt"
+  id          String         @id @default(uuid(7)) @db.Uuid
+  key         String         @unique // YOLO class key: "cut", "hole", "abrasion", "dirt"
   label       String
   description String?
-  isActive    Boolean  @default(true) // inactive types are ignored by the decision engine
+  isActive    Boolean        @default(true) // inactive types are ignored by the decision engine
   /// Rework or Reject once found (confidence ≥ CvSettings.foundAtOrAbove); null = by confidence (D-053)
   action      DefectAction?
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  /// Clean the section, or cut around the defect, when it's Fixable (D-070)
+  handling    DefectHandling @default(CUT_AROUND)
+  sortOrder   Int            @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   detections Detection[]
 
@@ -276,17 +282,17 @@ model DefectType {
 }
 
 model CvSettings {
-  id              Int      @id @default(1)
-  rejectAtOrAbove Float    @default(0.9)
-  reworkAtOrAbove Float    @default(0.6)
+  id               Int      @id @default(1)
+  rejectAtOrAbove  Float    @default(0.9)
+  reworkAtOrAbove  Float    @default(0.6)
   /// A detection of a type with an action counts as found from this confidence (D-053).
-  foundAtOrAbove  Float    @default(0.5)
+  foundAtOrAbove   Float    @default(0.5)
   /// Show the early-model notice on the Camera page (D-055).
-  earlyModelNotice Boolean @default(true)
+  earlyModelNotice Boolean  @default(true)
   /// The batch the single Preparation camera feeds (D-020). Null = oldest batch at Preparation.
-  activeBatchId   String?  @db.Uuid
-  updatedById     String?  @db.Uuid
-  updatedAt       DateTime @updatedAt
+  activeBatchId    String?  @db.Uuid
+  updatedById      String?  @db.Uuid
+  updatedAt        DateTime @updatedAt
 
   activeBatch Batch? @relation("CameraActiveBatch", fields: [activeBatchId], references: [id], onDelete: SetNull)
   updatedBy   User?  @relation(fields: [updatedById], references: [id], onDelete: SetNull)
@@ -695,4 +701,117 @@ model PurchaseRequestRemark {
   @@index([requestId, createdAt])
   @@index([authorId])
   @@map("purchase_request_remarks")
+}
+
+// ───────────── attendance (Phase 22, D-077 to D-081) ─────────────
+
+/// One day's attendance: a log book, never a score (D-008, D-077). A row exists only once the
+/// Floor Manager saved that day; `takenBy` and `takenAt` are the last save, the audit log has all.
+model AttendanceDay {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  day       DateTime @unique @db.Date // the Manila calendar date
+  takenById String   @db.Uuid
+  takenAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  takenBy User             @relation("AttendanceTakenBy", fields: [takenById], references: [id])
+  marks   AttendanceMark[]
+
+  @@index([takenById])
+  @@map("attendance_days")
+}
+
+/// Present or absent for one person on one day. One row per person on the roster when the day
+/// was saved; re-saving the day replaces them.
+model AttendanceMark {
+  id              String  @id @default(uuid(7)) @db.Uuid
+  attendanceDayId String  @db.Uuid
+  userId          String  @db.Uuid
+  present         Boolean
+
+  attendanceDay AttendanceDay @relation(fields: [attendanceDayId], references: [id], onDelete: Restrict)
+  // The app never deletes a user (it deactivates them, D-024); only tests and demo:reset do, and
+  // then the marks naming them go too, so a cleanup is never blocked by a saved day.
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([attendanceDayId, userId])
+  @@index([userId])
+  @@map("attendance_marks")
+}
+
+/// When the Quality Inspector counts finished pairs (D-083). The row in force on a day is the
+/// latest effectiveFrom on or before it; a change applies from the next day.
+model ProductionSchedule {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  shiftStart      String // "HH:mm", Manila
+  shiftEnd        String // "HH:mm", Manila
+  intervalMinutes Int // 60, 120, 180 or 240
+  workingDays     Int[] // ISO weekdays, 1 = Monday
+  effectiveFrom   DateTime @db.Date
+  createdById     String?  @db.Uuid // null for the bootstrap default
+  createdAt       DateTime @default(now())
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@index([effectiveFrom])
+  @@index([createdById])
+  @@map("production_schedules")
+}
+
+/// Pairs per shoe type per day for the whole line (D-085). Never per person (D-008).
+model DailyQuota {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  shoeTypeId     String   @db.Uuid
+  pairs          Int
+  suggestedPairs Int? // what the page suggested when it was set
+  effectiveFrom  DateTime @db.Date
+  createdById    String   @db.Uuid
+  createdAt      DateTime @default(now())
+
+  shoeType  ShoeType @relation(fields: [shoeTypeId], references: [id])
+  createdBy User     @relation(fields: [createdById], references: [id])
+
+  @@index([shoeTypeId, effectiveFrom])
+  @@index([createdById])
+  @@map("daily_quotas")
+}
+
+/// One scheduled count of the pairs finished since the previous check-in (D-084).
+model ProductionCheckIn {
+  id                   String    @id @default(uuid(7)) @db.Uuid
+  day                  DateTime  @db.Date // the Manila calendar date
+  slotAt               DateTime // the scheduled time
+  enteredAt            DateTime  @default(now())
+  enteredById          String    @db.Uuid
+  /// Shoe Constructors present when it was saved; null = attendance not taken (D-080).
+  constructorsPresent  Int?
+  constructorsOnRoster Int?
+  notes                String?
+  correctedAt          DateTime?
+  correctedById        String?   @db.Uuid
+  correctionReason     String?
+  updatedAt            DateTime  @updatedAt
+
+  enteredBy   User              @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
+  correctedBy User?             @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
+  counts      ProductionCount[]
+
+  @@unique([day, slotAt])
+  @@index([enteredById])
+  @@index([correctedById])
+  @@map("production_check_ins")
+}
+
+model ProductionCount {
+  id         String @id @default(uuid(7)) @db.Uuid
+  checkInId  String @db.Uuid
+  shoeTypeId String @db.Uuid
+  pairs      Int
+
+  checkIn  ProductionCheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  shoeType ShoeType          @relation(fields: [shoeTypeId], references: [id])
+
+  @@unique([checkInId, shoeTypeId])
+  @@index([shoeTypeId])
+  @@map("production_counts")
 }

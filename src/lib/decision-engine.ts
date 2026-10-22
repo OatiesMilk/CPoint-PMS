@@ -84,7 +84,7 @@ export function validateThresholds(t: Thresholds): string | null {
     return "Thresholds must be between 0 and 1 (e.g. 0.60 and 0.90).";
   }
   if (t.reworkAtOrAbove >= t.rejectAtOrAbove) {
-    return "The Rework threshold must be lower than the Reject threshold.";
+    return "The Fixable threshold must be lower than the Reject threshold.";
   }
   if (t.foundAtOrAbove !== undefined && !inRange(t.foundAtOrAbove)) {
     return "The found-at value must be between 0 and 1 (e.g. 0.50).";

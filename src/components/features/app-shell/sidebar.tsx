@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Aperture,
   Boxes,
+  CalendarCheck,
   Camera,
   ChartColumn,
   ChevronsUpDown,
@@ -24,6 +25,7 @@ import {
   Users,
   Wrench,
   type LucideIcon,
+  Gauge,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -40,6 +42,8 @@ import logo from "../../../../public/images/cpoint-logo.jpg";
 // Mirrors NavIcon / NavSection in src/server/policies/navigation.ts (components can't import server code).
 type NavIcon =
   | "overview"
+  | "production"
+  | "attendance"
   | "batches"
   | "camera"
   | "capture"
@@ -59,6 +63,8 @@ export type SidebarSection = { title: string | null; items: SidebarItem[] };
 
 const ICONS: Record<NavIcon, LucideIcon> = {
   overview: LayoutDashboard,
+  production: Gauge,
+  attendance: CalendarCheck,
   batches: Boxes,
   camera: Camera,
   capture: Aperture,

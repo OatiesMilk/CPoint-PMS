@@ -635,6 +635,8 @@ test("order, a short delivery with proof, then close short: only what arrived is
   browser,
   page,
 }) => {
+  // Long under a full parallel run (several sign-ins and password hashes): 30 s was too tight.
+  test.setTimeout(60_000);
   const fmApi = await managerApi(browser);
   const item = await createItem(fmApi, 1, "LEATHER_ROLL");
   const sc = await makeConstructor(true);

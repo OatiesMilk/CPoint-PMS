@@ -11,7 +11,13 @@ export function ensureShoeType(
 }
 
 export function ensureDefectType(
-  data: { key: string; label: string; description: string; sortOrder: number },
+  data: {
+    key: string;
+    label: string;
+    description: string;
+    sortOrder: number;
+    handling?: "CLEAN" | "CUT_AROUND";
+  },
   db: Db = defaultDb(),
 ) {
   return db.defectType.upsert({ where: { key: data.key }, create: data, update: {} });
@@ -54,20 +60,20 @@ export function findSupplier(id: string, db: Db = defaultDb()) {
 
 export function listDefectTypes(db: Db = defaultDb()) {
   return db.defectType.findMany({
-    select: { id: true, key: true, label: true, isActive: true, action: true },
+    select: { id: true, key: true, label: true, isActive: true, action: true, handling: true },
     orderBy: { sortOrder: "asc" },
   });
 }
 
 // ───────────── admin CRUD (D-024) ─────────────
 
-export type ReferenceKind = "defectType" | "shoeType" | "supplier" | "componentType";
+export type ReferenceKind = "defectType" | "shoeType" | "supplier";
 
 export type ReferenceRow = { id: string; isActive: boolean } & Record<string, unknown>;
 
-/** The four delegates share the calls used here; one cast keeps the services generic. */
+/** The three delegates share the calls used here; one cast keeps the services generic. */
 type RefDelegate = {
-  findMany(args: { orderBy: object[]; include?: object }): Promise<ReferenceRow[]>;
+  findMany(args: { orderBy: object[] }): Promise<ReferenceRow[]>;
   findUnique(args: { where: { id: string } }): Promise<ReferenceRow | null>;
   findFirst(args: { where: object; select: { id: true } }): Promise<{ id: string } | null>;
   create(args: { data: object }): Promise<ReferenceRow>;
@@ -79,7 +85,6 @@ function delegate(kind: ReferenceKind, db: Db): RefDelegate {
     defectType: db.defectType,
     shoeType: db.shoeType,
     supplier: db.supplier,
-    componentType: db.componentType,
   };
   return delegates[kind] as unknown as RefDelegate;
 }
@@ -88,15 +93,11 @@ const ORDER: Record<ReferenceKind, object[]> = {
   defectType: [{ sortOrder: "asc" }, { label: "asc" }],
   shoeType: [{ sortOrder: "asc" }, { name: "asc" }],
   supplier: [{ isActive: "desc" }, { name: "asc" }],
-  componentType: [{ sortOrder: "asc" }, { name: "asc" }],
 };
 
 /** Every row of a kind, active first where it matters, inactive ones included. */
 export function listReference(kind: ReferenceKind, db: Db = defaultDb()) {
-  return delegate(kind, db).findMany({
-    orderBy: ORDER[kind],
-    ...(kind === "componentType" ? { include: { shoeType: { select: { name: true } } } } : {}),
-  });
+  return delegate(kind, db).findMany({ orderBy: ORDER[kind] });
 }
 
 export function findReference(kind: ReferenceKind, id: string, db: Db = defaultDb()) {
@@ -168,4 +169,12 @@ export function updateModelNotice(
   db: Db = defaultDb(),
 ) {
   return db.cvSettings.update({ where: { id: 1 }, data });
+}
+
+/** Every shoe type, active first then by sort order, for production history (a type turned off later still shows its counts). */
+export function listAllShoeTypes(db: Db = defaultDb()) {
+  return db.shoeType.findMany({
+    select: { id: true, name: true, isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  });
 }

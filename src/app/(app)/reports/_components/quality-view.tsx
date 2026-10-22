@@ -19,7 +19,7 @@ import type { QualityReport } from "@/server/services/report.service";
 
 const VERDICT_LABEL = {
   PASS: "Pass",
-  REWORK: "Rework",
+  REWORK: "Fixable",
   REJECT: "Reject",
   NEEDS_REVIEW: "Needs review",
 };
@@ -60,7 +60,7 @@ export function QualityView({
             sub: `${t.pass} sections`,
           },
           {
-            label: "Rework",
+            label: "Fixable",
             value: formatPercent(share(t.rework, decided)),
             sub: `${t.rework} sections`,
           },
@@ -75,7 +75,7 @@ export function QualityView({
             sub: `${t.agreed} of ${t.aiDecided} calls kept`,
             testid: "total-agreement",
           },
-          { label: "Repairs done", value: t.repairsDone.toLocaleString("en-PH") },
+          { label: "Cleaned or cut around", value: t.repairsDone.toLocaleString("en-PH") },
         ].map((tile) => (
           <Card key={tile.label}>
             <CardHeader>
@@ -142,7 +142,7 @@ export function QualityView({
                       {defects.slice(0, DEFECT_ROWS).map((d) => (
                         <TableRow
                           key={d.key}
-                          title={`${d.pass} pass, ${d.rework} rework, ${d.reject} reject, ${d.pending} pending`}
+                          title={`${d.pass} pass, ${d.rework} fixable, ${d.reject} reject, ${d.pending} pending`}
                         >
                           <TableCell className="font-medium">
                             {d.known ? (
@@ -186,7 +186,7 @@ export function QualityView({
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Camera said</TableHead>
                       <TableHead numeric>Pass</TableHead>
-                      <TableHead numeric>Rework</TableHead>
+                      <TableHead numeric>Fixable</TableHead>
                       <TableHead numeric>Reject</TableHead>
                       <TableHead numeric>Pending</TableHead>
                     </TableRow>
@@ -235,12 +235,12 @@ export function QualityView({
                 <TableHead>Day</TableHead>
                 <TableHead numeric>Scanned</TableHead>
                 <TableHead numeric>Pass</TableHead>
-                <TableHead numeric>Rework</TableHead>
+                <TableHead numeric>Fixable</TableHead>
                 <TableHead numeric>Reject</TableHead>
                 <TableHead numeric>Pending</TableHead>
                 <TableHead numeric>Overridden</TableHead>
                 <TableHead numeric>AI agreement</TableHead>
-                <TableHead numeric>Repairs done</TableHead>
+                <TableHead numeric>Cleaned or cut around</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

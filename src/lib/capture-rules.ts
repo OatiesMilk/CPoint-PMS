@@ -4,9 +4,6 @@
  * message is unit-tested.
  */
 
-/** The HTTPS port the app container listens on when a certificate is mounted (D-065). */
-export const HTTPS_PORT = 3443;
-
 export type CameraProblem = "insecure" | "denied" | "no_camera" | "busy" | "unknown";
 
 /** A phone or tablet sends `PHONE` as the scan's source; anything else `WEBCAM`. */
@@ -39,20 +36,15 @@ export function cameraProblemFor(errorName: string | undefined): CameraProblem {
   }
 }
 
-/** The same page on the app's HTTPS port, for a browser on another computer or a phone. */
-export function secureAddress(location: { hostname: string; pathname: string }): string {
-  return `https://${location.hostname}:${HTTPS_PORT}${location.pathname}`;
-}
-
 export function cameraProblemMessage(
   problem: CameraProblem,
-  context: { appleMobile: boolean; secureUrl: string },
+  context: { appleMobile: boolean },
 ): { title: string; fix: string } {
   switch (problem) {
     case "insecure":
       return {
         title: "The camera only works on a secure address.",
-        fix: `Open ${context.secureUrl} instead, or use this page on the server PC at localhost. The first time on a phone, install the CPoint certificate (see “Capture from the website” in the README).`,
+        fix: "Open this site through its https:// link (the Cloudflare Tunnel address), or use this page on the server PC at localhost.",
       };
     case "denied":
       return {
@@ -69,7 +61,7 @@ export function cameraProblemMessage(
     case "busy":
       return {
         title: "Another app is using this camera.",
-        fix: "Close it (DroidCam, the camera station window or a video call), then press Try again.",
+        fix: "Close it (DroidCam or a video call), then press Try again.",
       };
     case "unknown":
       return {
@@ -100,6 +92,17 @@ export function spaceCaptures(target: { tagName?: string; isContentEditable?: bo
     (target.tagName ?? "").toUpperCase(),
   );
 }
+
+/** What the Floor view says for a verdict (D-074): the word and where the piece goes next. */
+export const FLOOR_VERDICT = {
+  PASS: { word: "Pass", next: "Goes on to cutting" },
+  REWORK: { word: "Fixable", next: "To the Repair Station" },
+  REJECT: { word: "Reject", next: "To salvage" },
+  NEEDS_REVIEW: { word: "Needs review", next: "Set aside for the Quality Inspector" },
+} as const satisfies Record<
+  "PASS" | "REWORK" | "REJECT" | "NEEDS_REVIEW",
+  { word: string; next: string }
+>;
 
 /** The line under a failed send, by what happened. */
 export function sendFailureMessage(status: number | "network", appMessage?: string): string {

@@ -23,7 +23,8 @@ vi.mock("@/server/lib/env", () => ({ getEnv: () => env }));
 vi.mock("@/server/lib/password", () => ({ hashPassword: async (p: string) => `hashed:${p}` }));
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 
-const { ensureAdmin, ensureDemoUsers } = await import("@/server/services/bootstrap.service");
+const { DEMO_CONSTRUCTORS, ensureAdmin, ensureDemoConstructors, ensureDemoUsers } =
+  await import("@/server/services/bootstrap.service");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -113,5 +114,29 @@ describe("ensureDemoUsers", () => {
       SYSTEM_ADMIN: false,
       SHOE_CONSTRUCTOR: true,
     });
+  });
+});
+
+describe("ensureDemoConstructors (D-081)", () => {
+  const now = new Date("2026-10-21T00:00:00Z");
+
+  it("is off unless SEED_DEMO_USERS is set", async () => {
+    expect(await ensureDemoConstructors(now)).toBe(0);
+    expect(users.createUser).not.toHaveBeenCalled();
+  });
+
+  it("creates the missing ones as Shoe Constructors, dated 30 days back, with unseen random passwords", async () => {
+    Object.assign(env, { SEED_DEMO_USERS: true, DEMO_USER_PASSWORD: "demo-pass" });
+    users.findUserByEmail.mockImplementation(async (email: string) =>
+      email === DEMO_CONSTRUCTORS[0].email ? { id: "existing" } : null,
+    );
+    expect(await ensureDemoConstructors(now)).toBe(DEMO_CONSTRUCTORS.length - 1);
+    const created = users.createUser.mock.calls.map(([data]) => data as Record<string, unknown>);
+    expect(new Set(created.map((d) => d.role))).toEqual(new Set(["SHOE_CONSTRUCTOR"]));
+    for (const data of created) {
+      expect(data.createdAt).toEqual(new Date("2026-09-21T00:00:00Z"));
+      expect(data.passwordHash).not.toBe("hashed:demo-pass");
+    }
+    expect(new Set(created.map((d) => d.passwordHash)).size).toBe(created.length);
   });
 });

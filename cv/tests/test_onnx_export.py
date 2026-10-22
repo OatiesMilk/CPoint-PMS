@@ -40,7 +40,7 @@ def test_export_writes_the_onnx_file_and_its_sidecar(tmp_path: Path) -> None:
     data = json.loads(info.read_text(encoding="utf-8"))
     weights_sha = hashlib.sha256(b"weights").hexdigest()
     assert data == {
-        # The weights' version, so scans from the station and the website read as one model.
+        # The weights' version, so predict and the website read as one model.
         "modelVersion": f"yolo-v1-{weights_sha[:8]}",
         "names": {"0": "crease", "1": "cut", "2": "hole", "3": "scratch"},
         "imgsz": 1536,

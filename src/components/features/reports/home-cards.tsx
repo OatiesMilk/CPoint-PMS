@@ -74,8 +74,8 @@ export function DailySummaryCard({ yesterday, today }: { yesterday: Day; today: 
   const rows: { label: string; value: (d: Day) => string }[] = [
     { label: "Scanned", value: (d) => String(d.scanned) },
     { label: "Rejected", value: (d) => String(d.reject) },
-    { label: "Sent to rework", value: (d) => String(d.rework) },
-    { label: "Repairs done", value: (d) => String(d.repairsDone) },
+    { label: "Marked Fixable", value: (d) => String(d.rework) },
+    { label: "Cleaned or cut around", value: (d) => String(d.repairsDone) },
     { label: "AI agreement", value: (d) => formatPercent(d.agreement) },
   ];
   return (

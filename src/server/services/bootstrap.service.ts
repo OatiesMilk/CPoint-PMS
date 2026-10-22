@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import { ensureDefaultSchedule } from "./production.service";
 import { ROLE_LABELS, type Role } from "@/lib/domain";
 import { getEnv } from "@/server/lib/env";
 import { logger } from "@/server/lib/logger";
@@ -32,7 +34,13 @@ export const REFERENCE_DATA = {
     },
     { key: "hole", label: "Hole", description: "Puncture or hole in the leather.", sortOrder: 2 },
     { key: "abrasion", label: "Abrasion", description: "Scuffed or worn grain.", sortOrder: 3 },
-    { key: "dirt", label: "Dirt", description: "Stain or dirt on the surface.", sortOrder: 4 },
+    {
+      key: "dirt",
+      label: "Dirt",
+      description: "Stain or dirt on the surface.",
+      sortOrder: 4,
+      handling: "CLEAN" as const, // cleaned before cutting, not cut around (D-070)
+    },
   ],
   cvSettings: { rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6 }, // D-011
   suppliers: [
@@ -47,13 +55,39 @@ export const DEMO_USERS: { email: string; role: Role }[] = [
   { email: "constructor@cpoint.local", role: "SHOE_CONSTRUCTOR" },
 ];
 
-/** Shoe types, defect types, CV thresholds and a sample supplier. Never overwrites existing rows. */
+/**
+ * The line's demo Shoe Constructors (D-081), so Attendance has a believable roster. They never
+ * sign in: each gets a random password nobody sees. Kept by `demo:reset`.
+ */
+export const DEMO_CONSTRUCTORS: { name: string; email: string }[] = [
+  { name: "Ana Cruz", email: "ana.cruz@cpoint.local" },
+  { name: "Ben Santos", email: "ben.santos@cpoint.local" },
+  { name: "Carlo Mendoza", email: "carlo.mendoza@cpoint.local" },
+  { name: "Daisy Ramos", email: "daisy.ramos@cpoint.local" },
+  { name: "Eric Villanueva", email: "eric.villanueva@cpoint.local" },
+  { name: "Faye Bautista", email: "faye.bautista@cpoint.local" },
+  { name: "Gino Aquino", email: "gino.aquino@cpoint.local" },
+  { name: "Hazel Garcia", email: "hazel.garcia@cpoint.local" },
+  { name: "Ivan Torres", email: "ivan.torres@cpoint.local" },
+  { name: "Joy Navarro", email: "joy.navarro@cpoint.local" },
+  { name: "Kevin Dela Cruz", email: "kevin.delacruz@cpoint.local" },
+  { name: "Lea Flores", email: "lea.flores@cpoint.local" },
+];
+
+/** How far back the demo constructors' accounts are dated, so they are on every demo-week day. */
+const DEMO_CONSTRUCTOR_AGE_DAYS = 30;
+
+/**
+ * Shoe types, defect types, CV thresholds, a sample supplier and the default check-in schedule
+ * (D-083). Never overwrites existing rows.
+ */
 export async function ensureReferenceData(): Promise<void> {
   await runInTransaction(async (tx) => {
     for (const shoeType of REFERENCE_DATA.shoeTypes) await ensureShoeType(shoeType, tx);
     for (const defectType of REFERENCE_DATA.defectTypes) await ensureDefectType(defectType, tx);
     for (const supplier of REFERENCE_DATA.suppliers) await ensureSupplier(supplier, tx);
     await ensureCvSettings(REFERENCE_DATA.cvSettings, tx);
+    await ensureDefaultSchedule(tx);
   });
 }
 
@@ -63,6 +97,7 @@ async function createUserWithAudit(input: {
   password: string;
   role: Role;
   canRequestLeatherRolls?: boolean;
+  createdAt?: Date;
 }): Promise<void> {
   const passwordHash = await hashPassword(input.password);
   await runInTransaction(async (tx) => {
@@ -73,6 +108,7 @@ async function createUserWithAudit(input: {
         passwordHash,
         role: input.role,
         canRequestLeatherRolls: input.canRequestLeatherRolls ?? false,
+        ...(input.createdAt ? { createdAt: input.createdAt } : {}),
       },
       tx,
     );
@@ -142,6 +178,28 @@ export async function ensureDemoUsers(): Promise<number> {
   return created;
 }
 
+/**
+ * The demo constructors (D-081), opt-in with the demo users. Only missing ones are created, with a
+ * random password and an account dated 30 days back; existing ones are never touched.
+ */
+export async function ensureDemoConstructors(now: Date = new Date()): Promise<number> {
+  if (!getEnv().SEED_DEMO_USERS) return 0;
+  const createdAt = new Date(now.getTime() - DEMO_CONSTRUCTOR_AGE_DAYS * 24 * 60 * 60 * 1000);
+  let created = 0;
+  for (const person of DEMO_CONSTRUCTORS) {
+    if (await findUserByEmail(person.email)) continue;
+    await createUserWithAudit({
+      ...person,
+      password: randomBytes(24).toString("base64url"),
+      role: "SHOE_CONSTRUCTOR",
+      createdAt,
+    });
+    created += 1;
+  }
+  if (created > 0) logger.info({ created }, "Created demo Shoe Constructors");
+  return created;
+}
+
 /** Opt-in with the demo users. Adds only the codes that don't exist yet; never touches stock. */
 export async function ensureDemoInventory(): Promise<number> {
   if (!getEnv().SEED_DEMO_USERS) return 0;
@@ -181,6 +239,7 @@ export async function ensureDemoWeek(): Promise<void> {
 export async function bootstrap(options: { demoWeekInBackground?: boolean } = {}): Promise<void> {
   await ensureReferenceData();
   await ensureDemoUsers();
+  await ensureDemoConstructors();
   const demoWeek = ensureDemoWeek().then(ensureDemoInventory);
   if (options.demoWeekInBackground) {
     demoWeek.catch((error) => logger.error({ err: error }, "Demo week failed"));

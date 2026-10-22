@@ -22,6 +22,8 @@ export type CreateUserData = {
   role: Role;
   mustChangePassword?: boolean;
   canRequestLeatherRolls?: boolean;
+  /** Only the demo constructors set this, so they are on the demo week's attendance (D-081). */
+  createdAt?: Date;
 };
 
 export function createUser(data: CreateUserData, db: Db = defaultDb()) {
@@ -60,6 +62,21 @@ export function findFirstActiveUserWithRole(role: Role, db: Db = defaultDb()) {
   return db.user.findFirst({ where: { role, isActive: true }, orderBy: { createdAt: "asc" } });
 }
 
+// ───────────── camera operators (D-075) ─────────────
+
+/** Active Shoe Constructors, for the "Can capture at the camera" switches. */
+export function listCameraOperatorCandidates(db: Db = defaultDb()) {
+  return db.user.findMany({
+    where: { role: "SHOE_CONSTRUCTOR", isActive: true },
+    select: { id: true, name: true, email: true, canCapture: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+export function setCanCapture(userId: string, canCapture: boolean, db: Db = defaultDb()) {
+  return db.user.update({ where: { id: userId }, data: { canCapture }, select: { id: true } });
+}
+
 // ───────────── admin (D-024) ─────────────
 
 const adminSelect = {
@@ -70,6 +87,7 @@ const adminSelect = {
   isActive: true,
   mustChangePassword: true,
   canRequestLeatherRolls: true,
+  canCapture: true,
   lockedUntil: true,
   lastLoginAt: true,
   createdAt: true,

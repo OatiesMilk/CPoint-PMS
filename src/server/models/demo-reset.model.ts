@@ -1,4 +1,4 @@
-import type { DefectAction } from "@/generated/prisma/client";
+import type { DefectAction, DefectHandling } from "@/generated/prisma/client";
 import { type Db, defaultDb } from "./db";
 
 /**
@@ -29,6 +29,10 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     shoeTypes,
     suppliers,
     defectTypes,
+    attendanceDays,
+    checkIns,
+    quotas,
+    schedules,
   ] = await Promise.all([
     db.user.count({ where: { email: notIn(keep.emails) } }),
     db.apiToken.count({ where: { tokenHash: notIn(keep.tokenHashes) } }),
@@ -41,6 +45,11 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.shoeType.count({ where: { code: notIn(keep.shoeTypeCodes) } }),
     db.supplier.count({ where: { name: notIn(keep.supplierNames) } }),
     db.defectType.count({ where: { key: notIn(keep.defectTypeKeys) } }),
+    db.attendanceDay.count(),
+    db.productionCheckIn.count(),
+    db.dailyQuota.count(),
+    // The bootstrap default (no author) is kept; schedules people saved go.
+    db.productionSchedule.count({ where: { createdById: { not: null } } }),
   ]);
   return {
     users,
@@ -54,6 +63,10 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     shoeTypes,
     suppliers,
     defectTypes,
+    attendanceDays,
+    checkIns,
+    quotas,
+    schedules,
   };
 }
 
@@ -82,19 +95,20 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   await db.batchStageLog.deleteMany();
   await db.batch.deleteMany();
   await db.batchSequence.deleteMany();
+  // Attendance (D-077): the marks, then the days, before any account goes.
+  await db.attendanceMark.deleteMany();
+  await db.attendanceDay.deleteMany();
+  // Production progression (Phase 23): check-ins (their counts cascade), quotas and the schedules
+  // people saved; the bootstrap default stays.
+  await db.productionCheckIn.deleteMany();
+  await db.dailyQuota.deleteMany();
+  await db.productionSchedule.deleteMany({ where: { createdById: { not: null } } });
   // History, then accounts and tokens nobody needs (their sessions go with them).
   await db.auditLog.deleteMany();
   await db.apiToken.deleteMany({ where: { tokenHash: notIn(keep.tokenHashes) } });
   await db.apiToken.updateMany({ data: { lastUsedAt: null } });
   await db.user.deleteMany({ where: { email: notIn(keep.emails) } });
-  // Reference rows tests added. Components of a removed shoe type go with it.
-  const goneShoeTypes = await db.shoeType.findMany({
-    where: { code: notIn(keep.shoeTypeCodes) },
-    select: { id: true },
-  });
-  await db.componentType.deleteMany({
-    where: { shoeTypeId: { in: goneShoeTypes.map((s) => s.id) } },
-  });
+  // Reference rows tests added.
   await db.shoeType.deleteMany({ where: { code: notIn(keep.shoeTypeCodes) } });
   await db.supplier.deleteMany({ where: { name: notIn(keep.supplierNames) } });
   await db.defectType.deleteMany({ where: { key: notIn(keep.defectTypeKeys) } });
@@ -109,6 +123,7 @@ export function upsertDefectTypeState(
     sortOrder: number;
     isActive: boolean;
     action: DefectAction | null;
+    handling: DefectHandling;
   },
   db: Db,
 ) {
@@ -116,7 +131,7 @@ export function upsertDefectTypeState(
   return db.defectType.upsert({
     where: { key },
     create: data,
-    update: { isActive: rest.isActive, action: rest.action },
+    update: { isActive: rest.isActive, action: rest.action, handling: rest.handling },
   });
 }
 
