@@ -45,11 +45,29 @@ configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 - When a module ships, remove its `phase` in `src/server/policies/navigation.ts` so the nav links it.
 - Never claim a check passed without running it. If you couldn't run it, say so.
 
+## Roles, CI fixes and the vault (D-089)
+
+- Claude is the main developer. Codex runs QA and **fixes failing GitHub CI checks** on PRs.
+  When CI fails, don't fix it: read the failing check and write
+  `qa/CODEX_PROMPT_CI_FIX_<branch>.md` from `qa/templates/ci-fix-prompt.md` (failing jobs, error
+  lines, suspected files, the gates to rerun), then give Dylan that prompt. You may review
+  Codex's fix afterwards. Full loop: `qa/README.md` → "CI fix loop".
+- **Vault first:** Dylan's Obsidian vault `C:\dev\capstone-obsidian` is the first lookup. Read its
+  `CLAUDE.md`, `Rules.md`, `Home.md`, `Inbox/CPoint commands and where to look.md` and the
+  phase's summary in `Notes/Phases/` before exploring the repo; open only the repo files they
+  point to or the task needs. Never guess what the vault or repo doesn't state.
+- **Record every change in the vault too:** at each milestone (plan, build, QA report, CI fix,
+  fix) add to today's `Daily/YYYY-MM-DD.md` (Did, Next, Questions, and one "Agent sessions" line
+  linking the brief, plan, handoff, prompt and report), and keep the phase's summary note in
+  `Notes/Phases/` current. Link repo docs as `[[CPoint-PMS/docs/…]]`; don't copy them.
+
 ## End of every session
 
 Run `/wrap-up` (or follow the documentation protocol in the master spec): update
 `docs/STATUS.md`, prepend to `docs/SESSION_LOG.md`, log decisions in `docs/DECISIONS.md`, tick
-`docs/ROADMAP.md`, commit and push the working branch. CI runs once the PR is open.
+`docs/ROADMAP.md`, and update the vault (Daily note and phase summary). Don't commit or push
+without Dylan's go: give him the exact git commands instead. CI runs once the PR is open; if it
+fails, write the Codex CI-fix prompt (above).
 
 ## Commands
 

@@ -41,6 +41,19 @@ Phases 0–9 are done (see `docs/ROADMAP.md`). For a new feature or a client cha
 Keep **one phase per session**. Long sessions get compacted and lose detail. A fresh session plus
 STATUS.md is more reliable.
 
+## Claude builds, Codex tests and fixes CI, the vault remembers (D-089)
+
+- **Claude** is the main developer. **Codex** runs the QA handoffs (`qa/README.md`) and applies
+  the fix when a GitHub CI check fails on a PR: Claude writes
+  `qa/CODEX_PROMPT_CI_FIX_<branch>.md` from `qa/templates/ci-fix-prompt.md`, Dylan pastes it into
+  Codex, Codex fixes and reports, Claude reviews. See `qa/README.md` → "CI fix loop".
+- **The vault** (`C:\dev\capstone-obsidian`) is every agent's first lookup: its `CLAUDE.md`,
+  `Rules.md`, `Home.md`, `Inbox/CPoint commands and where to look.md` and one short summary note
+  per phase in `Notes/Phases/` point to the one repo file that answers each question. That saves
+  tokens and stops agents guessing.
+- **Every change is recorded twice:** in the repo (wrap-up docs, or a `qa/reports/` file for
+  Codex) and in the vault's Daily note, including Codex's CI fixes.
+
 ## Recommended practices
 
 - **Plan mode first** (Shift+Tab, or say "plan first") for anything touching the schema, auth, or

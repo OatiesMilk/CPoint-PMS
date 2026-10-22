@@ -42,11 +42,37 @@ A second run on the same day adds a suffix: `2026-10-10-material-requests-run2.m
 
 ## Rules for Codex (tester)
 
-- Test only; do not change application code, tests, migrations or `.env`.
+- Test only; do not change application code, tests, migrations or `.env`. The one exception is a
+  CI fix (see "CI fix loop" below), where Codex changes only what makes the failing checks pass.
+- Read the vault first (`C:\dev\capstone-obsidian`: `CLAUDE.md`, `Rules.md`, `Inbox/CPoint
+commands and where to look.md`) to find files, and add one line to today's Daily note under
+  "Agent sessions" when you finish a run or a fix.
 - Run against the local app as described in the handoff. Never test against a shared or real
   database.
 - Record what you actually saw. If a scenario could not be run, mark it **BLOCKED** with the
   reason, never PASS.
+
+## CI fix loop: Codex fixes failing CI checks
+
+Claude is the main developer. When a GitHub CI check fails on a PR, **Codex applies the fix**,
+not Claude (D-089).
+
+```
+1. A CI check fails on the PR      → Dylan tells Claude (or Claude sees it on the PR)
+2. Claude reads the failing check  → writes qa/CODEX_PROMPT_CI_FIX_<branch>.md   (from templates/ci-fix-prompt.md)
+3. Dylan opens Codex on the branch → pastes that prompt
+4. Codex fixes + reruns the gates  → writes qa/reports/YYYY-MM-DD-ci-fix-<branch>.md and a vault Daily line
+5. Claude reviews the fix          → updates SESSION_LOG / STATUS and the vault, gives Dylan the git commands
+6. Dylan commits and pushes        → CI reruns; repeat from 1 until green
+```
+
+- `<branch>` has its slashes turned into hyphens: `feature/phases-20-23` →
+  `CODEX_PROMPT_CI_FIX_feature-phases-20-23.md`. A second round adds `_RUN2`.
+- The prompt names the PR, the failing job(s) and step, the exact error lines, the suspected files
+  and the gates to rerun. It never asks for new features.
+- Codex may change application code and tests **only** for a CI fix, and only what makes the
+  failing checks pass. It never skips, disables or loosens a test or a check.
+- Claude may review Codex's fix and point out problems in a new prompt; it doesn't rewrite the fix.
 
 ## Where Codex can run the browser
 
