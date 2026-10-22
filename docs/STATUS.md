@@ -57,8 +57,12 @@ Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Att
   - reference data and the first System Admin;
   - demo users and inventory when `SEED_DEMO_USERS=true`. The demo constructor is a designated
     leather-roll requester.
-- **Demo week** (D-026): `SEED_DEMO_WEEK=true` or `npm run demo:seed`.
-  - 14 batches and about 290 scans, two left for review;
+- **Demo week** (D-026, D-090): `SEED_DEMO_WEEK=true` or `npm run demo:seed`.
+  - 14 batches and about 120 scans (10 sections a roll, Capture page captures with model
+    `yolo-v1-1d729fb0`, no device token), two left for review;
+  - named demo accounts: Rodel Pascual (FM), Maricel Dizon (QI), Jerome Salazar (Admin), Noel
+    Manalo (constructor; orders leather and may capture); four demo suppliers;
+  - one past day the QI is absent: the FM captures and enters that day's check-ins (D-088);
   - nine purchase requests covering every state: received with proof, partly received (a photo
     and a PDF), ordered and late, ordered by the Floor Manager, approved in part and waiting to
     be ordered, pending (High), rejected, cancelled by the requester, and cancelled after
@@ -119,7 +123,8 @@ Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Att
   Fixable %, Reject %, top defect and **High** (same rule as the attention item), worst first;
   **Rolls with the most rejects** (top 5) each with a **Claim sheet** (`/reports/claims/[batchId]`,
   Save as PDF through print; FM only; no person named). `suppliers.csv` and `supplier-rolls.csv`.
-  The demo week spreads rolls over three suppliers (Marikina Leather has more defects).
+  The demo week spreads rolls over Marikina Leather Trading (more defects), Meycauayan Tannery and
+  JM Leather Supply (Divisoria) (D-090).
 - **Component tracking: removed** (Phase 20, D-071): no page, Settings tab, API or table
   (migration `drop_component_types`).
 - **"When found" actions (D-053):** a defect type can be Fixable or Reject when found (from "A
@@ -281,15 +286,18 @@ Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Att
 0. Phase 24 in a new
    session: "Read `docs/prompts/production-progression.md` and run Phase 24. Stop for my approval
    before writing code."
-1. Dylan, at the real station (`docs/STATION_SETUP.md`): a quick tunnel
+1. Dylan (D-090): commit the demo seed refresh (Codex QA **PASS**, 2026-10-22: D1 to D10, e2e 99
+   passed, 0 failed, 1 skipped; `qa/reports/2026-10-22-demo-seed-refresh.md`) with the git
+   commands from Claude; then back up and run `npm run demo:reset -- --yes` for the new demo week.
+2. Dylan, at the real station (`docs/STATION_SETUP.md`): a quick tunnel
    (`cloudflared tunnel --url http://localhost:3000`), a second laptop with the webcam, Floor view
    and the Space key; a leather piece that gives Fixable or Reject (F3, P18 S3); another app holding
    the webcam (P18 S18); R4 when a batch with an open Fixable section is completed. Revoke the
    "Simulator" token first (it was pasted in chat).
-2. Dylan: commit the D-089 docs on a new branch from the latest `main` (git commands from Claude)
+3. Dylan: commit the D-089 docs on a new branch from the latest `main` (git commands from Claude)
    and open the PR (D-032). If a CI check fails, Claude writes
    `qa/CODEX_PROMPT_CI_FIX_<branch>.md` for Codex.
-3. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
+4. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
    files; `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
 
 Later:

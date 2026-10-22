@@ -125,7 +125,7 @@ jobs:
           docker compose logs app | grep "Demo week seeded"
           # How much of the week has passed depends on the weekday CI runs on.
           test "$(q "select count(*) from batches")" -ge 10
-          test "$(q "select count(*) from scans")" -ge 150
+          test "$(q "select count(*) from scans")" -ge 40
           test "$(q "select count(*) from scans where status='PENDING_REVIEW'")" -ge 1
           # Production progression (Phase 23): the default schedule, a quota per shoe type, check-ins.
           test "$(q "select count(*) from production_schedules")" -eq 1

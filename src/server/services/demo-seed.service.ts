@@ -24,9 +24,9 @@ import {
   listDefectTypes,
 } from "@/server/models/reference-data.model";
 import { findUserByEmail } from "@/server/models/user.model";
-import { createDeviceToken } from "./api-token.service";
 import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
 import { cancelBatch, createBatch, transitionBatchStage } from "./batch.service";
+import { setCameraOperator } from "./camera.service";
 import { saveCheckIn, saveQuotas } from "./production.service";
 import { createItem, recordMovement } from "./inventory.service";
 import { moveReworkTicket } from "./rework.service";
@@ -46,10 +46,12 @@ import { decideScan } from "./scan-decision.service";
 import { ingestScan } from "./scan-ingest.service";
 
 /**
- * The demo week (D-026): replays a believable past week of production through the real services,
- * each with its own `now`, so stage logs, scans, repairs, salvage, the stock ledger and audit rows
- * all agree. Opt-in (SEED_DEMO_WEEK or `npm run demo:seed`), and only on a database with no
- * batches. The same seed gives the same week.
+ * The demo week (D-026, D-090): replays a small, believable past week of production through the
+ * real services, each with its own `now`, so rolls, scans, repairs, salvage, the stock ledger,
+ * requests, attendance, check-ins and audit rows all agree. Scans are Capture page captures (the
+ * website camera, D-069) by the QI, or by the Floor Manager on the day the QI is absent. Opt-in
+ * (SEED_DEMO_WEEK or `npm run demo:seed`), and only on a database with no batches. The same seed
+ * gives the same week.
  */
 
 /** Small, fast, seedable PRNG (mulberry32). */
@@ -68,6 +70,20 @@ const MINUTE = 60_000;
 
 /** Hours a roll spends at Preparation, from start to Finish roll (D-082). */
 export const PREPARATION_HOURS: [number, number] = [2, 3];
+
+/** Sections the camera checks per roll: about 10 pieces, as the Finish roll hint says (D-082). */
+export const SECTIONS_PER_ROLL = 10;
+
+/** The model the website camera runs (cv/MODEL_CARD.md), named on every demo scan. */
+export const DEMO_MODEL_VERSION = "yolo-v1-1d729fb0";
+
+/**
+ * Constructors absent on the demo week's working days before today, oldest first (D-081). On the
+ * fourth day (none absent) the Quality Inspector is absent instead, so the Floor Manager captures,
+ * and enters that day's check-ins (D-088).
+ */
+const ABSENT = [0, 1, 5, 0, 3, 2];
+const QI_ABSENT_INDEX = 3;
 
 export function preparationMs(random: Random): number {
   const [lo, hi] = PREPARATION_HOURS;
@@ -160,13 +176,18 @@ export async function seedDemoWeek(
   ]);
   if (!fm || !qi || !admin)
     return { seeded: false, reason: "demo users are missing (set SEED_DEMO_USERS=true)" };
-  // Three leather suppliers, so Supplier quality has something to compare (Phase 20).
+  // Three leather suppliers, so Supplier quality has something to compare (Phase 20, D-090).
   for (const supplier of DEMO_SUPPLIERS) await ensureSupplier(supplier);
-  const [shoeTypes, suppliers, defectTypes] = await Promise.all([
+  const [shoeTypes, activeSuppliers, defectTypes] = await Promise.all([
     listActiveShoeTypes(),
     listActiveSuppliers(),
     listDefectTypes(),
   ]);
+  // The demo's own suppliers, in their listed order (not the bootstrap's placeholder).
+  const demoSuppliers = DEMO_SUPPLIERS.flatMap((d) =>
+    activeSuppliers.filter((s) => s.name === d.name),
+  );
+  const suppliers = demoSuppliers.length > 0 ? demoSuppliers : activeSuppliers;
   if (shoeTypes.length === 0) return { seeded: false, reason: "no shoe types" };
   // The week's scans show the defect types active in Settings, as the camera's model would.
   const classes = defectTypes
@@ -212,14 +233,16 @@ export async function seedDemoWeek(
   await stock("TH-001", "IN", 10, "Delivery received", at(addDays(firstDay, 2), 14));
   await stock("AD-001", "IN", 3, "Delivery received", at(addDays(firstDay, 3), 14));
 
-  const token = await createDeviceToken({ name: "Demo camera (seed)" }, admin);
-  const device = { id: token.id };
-
   // ── rolls: two a working day (Mon–Sat), each started, scanned at Preparation and finished ──
   const workingDays: string[] = [];
   for (let d = firstDay; d <= today; d = addDays(d, 1)) {
     if (new Date(`${d}T00:00:00Z`).getUTCDay() !== 0) workingDays.push(d);
   }
+  // The days attendance is taken for, and the one the Quality Inspector is away (D-088).
+  const attendanceDays = workingDays.filter((d) => d < today).slice(-ABSENT.length);
+  const qiAwayDay: string | undefined =
+    attendanceDays[QI_ABSENT_INDEX - (ABSENT.length - attendanceDays.length)];
+  let qiMarkedAbsent = false;
   let batches = 0;
   let scans = 0;
   const salvage: { id: string; originBatchId: string; at: Date }[] = [];
@@ -240,8 +263,14 @@ export async function seedDemoWeek(
       const shoeType = school ? shoeTypes[0] : (shoeTypes[1] ?? shoeTypes[0]);
       const created = at(day, startHour - between(0.5, 1));
       if (!past(created)) continue;
-      // Rolls rotate between the suppliers; the first demo supplier's leather has more defects.
-      const supplier = suppliers.length > 0 ? suppliers[index % suppliers.length] : undefined;
+      // Rolls alternate between the two tanneries; every sixth comes from the fallback store. The
+      // first demo supplier's leather has more defects.
+      const supplier =
+        suppliers.length === 0
+          ? undefined
+          : index % 6 === 0 && suppliers.length > 2
+            ? suppliers[2]
+            : suppliers[index % Math.min(2, suppliers.length)];
       const worseLeather = supplier?.name === DEMO_SUPPLIERS[0].name;
       const batch = await createBatch(
         {
@@ -279,9 +308,10 @@ export async function seedDemoWeek(
         t,
       );
 
-      // Preparation: the camera checks each section before cutting.
+      // Preparation: the camera checks each section before cutting, from the Capture page.
       const prep = preparationMs(random);
-      const sections = Math.round(between(20, 30));
+      const sections = SECTIONS_PER_ROLL;
+      const capturer = day === qiAwayDay ? fm : qi;
       const sectionAt = (i: number) => plus(t, ((i + 0.5) * prep) / sections);
       let captured = 0;
       while (captured < sections && past(sectionAt(captured))) captured += 1;
@@ -303,16 +333,16 @@ export async function seedDemoWeek(
           {
             image: { bytes: new Uint8Array(image), type: { mime: "image/jpeg", ext: "jpg" } },
             detections,
-            source: "SIMULATOR",
-            modelVersion: "demo-seed",
+            source: "WEBCAM",
+            modelVersion: DEMO_MODEL_VERSION,
             capturedAt: ts,
             batchId: batch.id,
           },
-          device,
+          { kind: "website", userId: capturer.id },
           ts,
         );
         scans += 1;
-        await afterScan(result, ts, keepPending);
+        await afterScan(result, ts, day, keepPending);
       }
       t = plus(t, prep);
 
@@ -409,7 +439,7 @@ export async function seedDemoWeek(
           reason: pick([
             "Hole too large to cut around",
             "Grain damage across the whole section",
-            "Too small for any component",
+            "Too small to cut any shoe part",
           ]),
           expectedStatus: "AVAILABLE",
         },
@@ -423,7 +453,7 @@ export async function seedDemoWeek(
   const requests = await seedRequests();
 
   // ── attendance (D-077, D-081): the past working days, taken by the Floor Manager ──
-  const attendanceDays = await seedAttendance();
+  const attendanceSaved = await seedAttendance();
 
   // ── production (Phase 23): quotas, and the QI's check-ins through the real service ──
   const checkIns = await seedProduction();
@@ -433,7 +463,7 @@ export async function seedDemoWeek(
     batches,
     scans,
     requests,
-    attendanceDays,
+    attendanceDays: attendanceSaved,
     checkIns,
     ms: Date.now() - started,
   };
@@ -446,11 +476,11 @@ export async function seedDemoWeek(
    * saved by the Floor Manager at 07:50 that morning, with a few constructors absent on some days
    * (none, 1, 5, none, 3, 2, oldest first) so Phase 23's shortfalls have something to line up
    * with. Today is left "Not taken" so the demo starts with Take attendance. The office roles are
-   * marked present. Who is absent is drawn from the seed, never the same person every time.
+   * marked present, except the Quality Inspector on one day (D-088). Who is absent is drawn from
+   * the seed, never the same person every time.
    */
   async function seedAttendance(): Promise<number> {
-    const ABSENT = [0, 1, 5, 0, 3, 2];
-    const days = workingDays.filter((d) => d < today).slice(-ABSENT.length);
+    const days = attendanceDays;
     const pattern = ABSENT.slice(ABSENT.length - days.length);
     let saved = 0;
     for (const [i, day] of days.entries()) {
@@ -462,6 +492,10 @@ export async function seedDemoWeek(
       const absent = new Set<string>();
       while (absent.size < Math.min(pattern[i], constructors.length))
         absent.add(pick(constructors).id);
+      if (day === qiAwayDay && view.roster.some((p) => p.id === qi!.id)) {
+        absent.add(qi!.id);
+        qiMarkedAbsent = true;
+      }
       await saveAttendanceDay(
         day,
         {
@@ -481,7 +515,8 @@ export async function seedDemoWeek(
    *  - the Floor Manager sets a quota per shoe type on the first morning of the week (a first
    *    quota applies from that day, Dylan 5A);
    *  - the QI enters every check-in of the default schedule (12:00, 16:00, 17:00) a few minutes
-   *    after its time, with one entered 50 minutes late and one (a 17:00) missed on a full day;
+   *    after its time, with one entered 50 minutes late and one (a 17:00) missed on a full day; on
+   *    the day attendance shows the QI absent, the Floor Manager enters them (D-088);
    *  - pairs follow the constructors present (DEMO_RATE), so the days with 2, 3 and 5 absent end
    *    below quota and the others meet it. A day without attendance counts everyone on the roster.
    * Today: check-ins older than 30 minutes are entered; a newer one is left Due.
@@ -551,7 +586,7 @@ export async function seedDemoWeek(
             counts,
             notes: late ? "Counted after the lunch break." : undefined,
           },
-          qi!,
+          day === qiAwayDay && qiMarkedAbsent ? fm! : qi!,
           when,
         );
         entered += 1;
@@ -579,12 +614,16 @@ export async function seedDemoWeek(
     if (!found || !found.isActive) return 0;
     // Two of the requests are for leather rolls, which need the Floor Manager's OK (D-031).
     if (!found.canRequestLeatherRolls) await setRequester(found.id, true, fm!);
+    // He may also capture at the camera (D-075), as the Floor Manager allowed under Camera.
+    if (!found.canCapture) await setCameraOperator(found.id, true, fm!).catch(() => undefined);
     const sc = { id: found.id, role: found.role, canRequestLeatherRolls: true };
     const manager = { id: fm!.id, role: fm!.role, canRequestLeatherRolls: false };
     const item = (sku: string) => itemIds.get(sku);
     const beforeLast = workingDays[Math.max(0, workingDays.length - 2)];
     const day = (i: number) => workingDays[Math.min(i, workingDays.length - 1)];
-    const [supplierA, supplierB = supplierA] = suppliers;
+    // Leather from the first tannery; thread, tacks, cement and soles from the supplies shop.
+    const supplierA = suppliers[0];
+    const supplierB = suppliers[3] ?? suppliers[1] ?? supplierA;
     let made = 0;
 
     // Every step is queued with its time and run in time order, so request numbers, stock
@@ -946,14 +985,19 @@ export async function seedDemoWeek(
   async function afterScan(
     scan: { scanId: string; batchId: string; verdict: string },
     ts: Date,
+    day: string,
     keepPending = false,
   ) {
     let final: string | null = scan.verdict === "NEEDS_REVIEW" ? null : scan.verdict;
     let decidedAt = ts; // repairs and salvage can only follow the decision
-    const people: Actor[] = [qi!, fm!];
+    const qiAway = day === qiAwayDay;
+    const people: Actor[] = qiAway ? [fm!] : [qi!, fm!];
 
     if (scan.verdict === "NEEDS_REVIEW") {
-      const when = plus(ts, between(30, 120) * MINUTE);
+      // Only the QI decides flagged scans (D-028): on the day they're away, it waits for the next
+      // working morning.
+      const nextDay = workingDays[workingDays.indexOf(day) + 1] ?? addDays(day, 1);
+      const when = qiAway ? at(nextDay, 8 + between(0.25, 1)) : plus(ts, between(30, 120) * MINUTE);
       // Recent unknowns stay in the review queue, as on a real afternoon.
       if (!keepPending && when.getTime() < now.getTime() - 2 * HOUR) {
         const verdict = chance(0.7) ? "PASS" : "REWORK";

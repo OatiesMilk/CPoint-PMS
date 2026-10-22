@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { ensureDefaultSchedule } from "./production.service";
-import { ROLE_LABELS, type Role } from "@/lib/domain";
+import type { Role } from "@/lib/domain";
 import { getEnv } from "@/server/lib/env";
 import { logger } from "@/server/lib/logger";
 import { hashPassword } from "@/server/lib/password";
@@ -48,34 +48,39 @@ export const REFERENCE_DATA = {
   ],
 };
 
-export const DEMO_USERS: { email: string; role: Role }[] = [
-  { email: "manager@cpoint.local", role: "FLOOR_MANAGER" },
-  { email: "inspector@cpoint.local", role: "QUALITY_INSPECTOR" },
-  { email: "admin@cpoint.local", role: "SYSTEM_ADMIN" },
-  { email: "constructor@cpoint.local", role: "SHOE_CONSTRUCTOR" },
+/**
+ * One account per role for dev, CI and demos, with the names people see in timelines, remarks and
+ * the audit log (D-090). Sign-in uses the email; `demo:reset` puts these names back.
+ */
+export const DEMO_USERS: { email: string; name: string; role: Role }[] = [
+  { email: "manager@cpoint.local", name: "Rodel Pascual", role: "FLOOR_MANAGER" },
+  { email: "inspector@cpoint.local", name: "Maricel Dizon", role: "QUALITY_INSPECTOR" },
+  { email: "admin@cpoint.local", name: "Jerome Salazar", role: "SYSTEM_ADMIN" },
+  // Orders the leather rolls (survey: one staff member does) and may capture at the camera.
+  { email: "constructor@cpoint.local", name: "Noel Manalo", role: "SHOE_CONSTRUCTOR" },
 ];
 
 /**
- * The line's demo Shoe Constructors (D-081), so Attendance has a believable roster. They never
- * sign in: each gets a random password nobody sees. Kept by `demo:reset`.
+ * The line's demo Shoe Constructors (D-081, D-090), so Attendance has a believable roster. They
+ * never sign in: each gets a random password nobody sees. Kept by `demo:reset`.
  */
 export const DEMO_CONSTRUCTORS: { name: string; email: string }[] = [
-  { name: "Ana Cruz", email: "ana.cruz@cpoint.local" },
-  { name: "Ben Santos", email: "ben.santos@cpoint.local" },
-  { name: "Carlo Mendoza", email: "carlo.mendoza@cpoint.local" },
-  { name: "Daisy Ramos", email: "daisy.ramos@cpoint.local" },
-  { name: "Eric Villanueva", email: "eric.villanueva@cpoint.local" },
-  { name: "Faye Bautista", email: "faye.bautista@cpoint.local" },
-  { name: "Gino Aquino", email: "gino.aquino@cpoint.local" },
-  { name: "Hazel Garcia", email: "hazel.garcia@cpoint.local" },
-  { name: "Ivan Torres", email: "ivan.torres@cpoint.local" },
-  { name: "Joy Navarro", email: "joy.navarro@cpoint.local" },
-  { name: "Kevin Dela Cruz", email: "kevin.delacruz@cpoint.local" },
-  { name: "Lea Flores", email: "lea.flores@cpoint.local" },
+  { name: "Arnel Bautista", email: "arnel.bautista@cpoint.local" },
+  { name: "Jocelyn Reyes", email: "jocelyn.reyes@cpoint.local" },
+  { name: "Rommel Dela Cruz", email: "rommel.delacruz@cpoint.local" },
+  { name: "Edwin Santos", email: "edwin.santos@cpoint.local" },
+  { name: "Marites Villanueva", email: "marites.villanueva@cpoint.local" },
+  { name: "Ronaldo Aquino", email: "ronaldo.aquino@cpoint.local" },
+  { name: "Lorna Mendoza", email: "lorna.mendoza@cpoint.local" },
+  { name: "Jessie Tolentino", email: "jessie.tolentino@cpoint.local" },
+  { name: "Wilfredo Ramos", email: "wilfredo.ramos@cpoint.local" },
+  { name: "Analyn Garcia", email: "analyn.garcia@cpoint.local" },
+  { name: "Danilo Navarro", email: "danilo.navarro@cpoint.local" },
+  { name: "Cristina Soriano", email: "cristina.soriano@cpoint.local" },
 ];
 
-/** How far back the demo constructors' accounts are dated, so they are on every demo-week day. */
-const DEMO_CONSTRUCTOR_AGE_DAYS = 30;
+/** How far back the demo accounts are dated, so they are on every demo-week day. */
+const DEMO_ACCOUNT_AGE_DAYS = 30;
 
 /**
  * Shoe types, defect types, CV thresholds, a sample supplier and the default check-in schedule
@@ -152,8 +157,11 @@ export async function ensureAdmin(): Promise<AdminBootstrapResult> {
   return "created";
 }
 
-/** One account per role for dev, CI and demos. Opt-in; never resets an existing account. */
-export async function ensureDemoUsers(): Promise<number> {
+/**
+ * One account per role for dev, CI and demos. Opt-in; never resets an existing account. Dated
+ * back like the constructors, so the FM and QI are on the demo week's attendance (D-090).
+ */
+export async function ensureDemoUsers(now: Date = new Date()): Promise<number> {
   const { SEED_DEMO_USERS, DEMO_USER_PASSWORD } = getEnv();
   if (!SEED_DEMO_USERS) return 0;
   if (!DEMO_USER_PASSWORD) {
@@ -164,8 +172,9 @@ export async function ensureDemoUsers(): Promise<number> {
   for (const demo of DEMO_USERS) {
     if (await findUserByEmail(demo.email)) continue;
     await createUserWithAudit({
-      name: `Demo ${ROLE_LABELS[demo.role]}`,
+      name: demo.name,
       email: demo.email,
+      createdAt: new Date(now.getTime() - DEMO_ACCOUNT_AGE_DAYS * 24 * 60 * 60 * 1000),
       password: DEMO_USER_PASSWORD,
       role: demo.role,
       // The demo constructor can also request leather rolls (D-031). Set only when the account is
@@ -184,7 +193,7 @@ export async function ensureDemoUsers(): Promise<number> {
  */
 export async function ensureDemoConstructors(now: Date = new Date()): Promise<number> {
   if (!getEnv().SEED_DEMO_USERS) return 0;
-  const createdAt = new Date(now.getTime() - DEMO_CONSTRUCTOR_AGE_DAYS * 24 * 60 * 60 * 1000);
+  const createdAt = new Date(now.getTime() - DEMO_ACCOUNT_AGE_DAYS * 24 * 60 * 60 * 1000);
   let created = 0;
   for (const person of DEMO_CONSTRUCTORS) {
     if (await findUserByEmail(person.email)) continue;
