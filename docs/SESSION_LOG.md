@@ -14,6 +14,24 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-23 — Factory visit: the plan for Phases 24 to 31
+
+**Who:** Dylan (uncommitted, on top of `main`)
+**Summary:** Reviewed Dylan's notes from the 23 Oct factory visit against the system after Phase 23 and wrote the brief for eight phases (24 to 31). Dylan answered the build questions, the questions for CPoint and three follow-ups the same day; the answers are confirmed rules C-19 to C-41. No code changed.
+**Changed:**
+
+- `docs/prompts/factory-visit-changes.md` (new): confirmed rules kept apart from the assumptions (A-1 to A-26), the removals' impact, the D-entries each phase writes (from D-091), the eight phase briefs; the follow-ups F-1 to F-3 answered as C-39 to C-41.
+- `docs/CPOINT_VISIT_10232026.md` (Dylan's visit notes) added to the repo.
+- STATUS (next step, phase list, open questions, D-078 closed), ROADMAP (Phases 24 to 31 planned), and a note in `production-progression.md` that its Phase 24 is replaced.
+- The vault: the visit note in `Inbox/` with the answers, today's Daily note, the `Phases.md` row.
+
+**Gates:** Prettier on the brief ✅ · lint, typecheck, test, build not run (docs only) · e2e n/a · docker n/a
+**Decisions:** none yet; each phase records its own from D-091.
+**Follow-ups:**
+
+- Dylan: commit the plan and open the PR; book station time for Phase 30A.
+- Phase 24 in a new session.
+
 ## 2026-10-22 — Demo seed refresh
 
 **Who:** Dylan (uncommitted, on top of `main`)

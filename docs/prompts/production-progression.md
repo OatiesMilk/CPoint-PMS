@@ -8,6 +8,10 @@
 > Next session, say the same with Phase 23, then Phase 24. Attendance comes first because
 > production progression reads its worker count; materials come last because they are deducted
 > from the check-in counts.
+>
+> **Phase 24 below is replaced** by `docs/prompts/factory-visit-changes.md` (the 23 Oct 2026
+> factory visit): CPoint counts stock by hand, so nothing is deducted from the check-ins. It was
+> never built; don't run it. Phases 22 and 23 here stay as the record of what was built.
 
 ---
 

@@ -3,10 +3,11 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-22
-**Branch:** `main` now has Phases 20 to 23 (PR from `feature/phases-20-23`, merged by Dylan,
-including the CI fix `ad9ce6a`). The agent-workflow docs (D-089) are uncommitted, for a new branch
-from the latest `main` (Dylan commits; the team opens and merges the PR, D-032).
+**Last updated:** 2026-10-23
+**Branch:** `main` has Phases 20 to 23 (#15), the agent-workflow docs (D-089, #16) and the demo
+seed refresh (D-090, #17). The factory-visit plan (the visit notes, the brief and these doc
+updates) is uncommitted, for a new branch from the latest `main` (Dylan commits; the team opens and
+merges the PR, D-032).
 **Agent workflow (D-089):** Claude builds; Codex runs QA and fixes failing CI checks from
 `qa/CODEX_PROMPT_CI_FIX_<branch>.md` (`qa/README.md` → "CI fix loop"); every agent reads the
 Obsidian vault (`C:\dev\capstone-obsidian`) first and records each change there.
@@ -15,9 +16,11 @@ Obsidian vault (`C:\dev\capstone-obsidian`) first and records each change there.
 fault (wide tables were scroll boxes a keyboard couldn't reach), fixed with `ScrollRegion`. Plan:
 `docs/prompts/plans/phase-23-plan.md` (1A Finish roll, 2B every 4 hours, 3B the QI only enters
 check-ins, 4A 10 days, 5A a first quota from today). Follow-up 2026-10-22 (D-088): the Floor
-Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Attendance) passed QA. Phase 24
-(materials used) follows from `docs/prompts/production-progression.md`.
-**Overall:** 24 / 25 phases built
+Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Attendance) passed QA.
+**Next: Phases 24 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`), briefed
+in `docs/prompts/factory-visit-changes.md` with Dylan's answers of the same day (C-1 to C-41). They
+replace the old Phase 24 (materials used) of `production-progression.md`, which was never built.
+**Overall:** 24 phases built (0 to 23); 8 planned (24 to 31, Phase 30 in two parts)
 
 ## Phase progress
 
@@ -47,7 +50,16 @@ Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Att
       need Dylan)
 - [x] 22. Attendance (QA passed)
 - [x] 23. Production progression in place of stage monitoring (QA passed)
-- [ ] 24. Materials used, worked out from the check-ins
+- ~~24. Materials used, worked out from the check-ins~~ (replaced by the factory-visit plan;
+  CPoint counts stock by hand)
+- [ ] 24. Remove Material Requests and Procurement
+- [ ] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
+- [ ] 26. Capture on the constructors' own phones; rolls start and finish there
+- [ ] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
+- [ ] 28. Each role sees only its modules; demo sign-in and reset on the login page
+- [ ] 29. Inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
+- [ ] 30. The whole-roll check (A, with real rolls) and the return to the supplier (B)
+- [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
 
@@ -283,28 +295,25 @@ Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Att
 
 ## Next step (exact)
 
-0. Phase 24 in a new
-   session: "Read `docs/prompts/production-progression.md` and run Phase 24. Stop for my approval
-   before writing code."
-1. Dylan (D-090): commit the demo seed refresh (Codex QA **PASS**, 2026-10-22: D1 to D10, e2e 99
-   passed, 0 failed, 1 skipped; `qa/reports/2026-10-22-demo-seed-refresh.md`) with the git
-   commands from Claude; then back up and run `npm run demo:reset -- --yes` for the new demo week.
-2. Dylan, at the real station (`docs/STATION_SETUP.md`): a quick tunnel
-   (`cloudflared tunnel --url http://localhost:3000`), a second laptop with the webcam, Floor view
-   and the Space key; a leather piece that gives Fixable or Reject (F3, P18 S3); another app holding
-   the webcam (P18 S18); R4 when a batch with an open Fixable section is completed. Revoke the
-   "Simulator" token first (it was pasted in chat).
-3. Dylan: commit the D-089 docs on a new branch from the latest `main` (git commands from Claude)
-   and open the PR (D-032). If a CI check fails, Claude writes
-   `qa/CODEX_PROMPT_CI_FIX_<branch>.md` for Codex.
-4. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
+0. Dylan: commit the factory-visit plan on a new branch from the latest `main` (git commands from
+   Claude) and open the PR (D-032).
+1. Phase 24 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 24. Stop
+   for my approval before writing code." Don't run the old Phase 24 of `production-progression.md`.
+2. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
+   an A4 sheet). It can run any time after Phase 24.
+3. Dylan (D-090): back up, then `npm run demo:reset -- --yes` for the new demo week.
+4. Dylan, at the real station (`docs/STATION_SETUP.md`): the open device checks (F3, P18 S3, P18
+   S18, R4) change with Phases 25 and 26 (two outcomes, no Repair Station, the constructors'
+   phones), so they fit best with Phase 30A. Revoke the "Simulator" token first (it was pasted in
+   chat).
+5. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
    files; `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
 
 Later:
 
-- Apply CPoint's answers to the open questions below.
-- Optional for procurement: CSV export and monthly counts by status and category (never per
-  person).
+- Many open questions below close as Phases 24 to 31 land (procurement in 24; the review, repair,
+  thresholds and salvage ones in 25; the roll and capture ones in 26; the check-in ones in 27).
+  Each phase updates this list.
 
 ## Blockers
 
@@ -312,6 +321,16 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-10-23, the factory visit; brief C-1 to C-41): the five modules go, Pass or
+  Reject only and the camera's verdict is final, allowed constructors capture on their own phones,
+  a batch is a check-in interval that carries on after lunch, failed pairs are recorded, stock is
+  counted by hand with reminders on Wednesdays and Fridays, a cut from 3 inches is Not accepted, a
+  roll over 10% defects is marked Return to supplier and the FM decides. Each phase records its
+  D-entries.
+- Decided (Dylan, 2026-10-23, the follow-ups): a scratch has no length limit (C-39); lunch is the
+  only break (C-40); the daily quota counts only the pairs that passed inspection (C-41).
+- The brief's other ASSUMPTIONS (A-1 to A-26) are confirmed or changed in Step 1 of their phase and
+  added here when built.
 - Decided (D-082 to D-087, Dylan 2026-10-21): a batch ends with Finish roll; check-ins every 4
   hours (12:00, 16:00, 17:00); only the QI enters them; the suggestion averages 10 full days; a
   first quota applies today. Tell CPoint that stage monitoring is gone.
@@ -319,13 +338,13 @@ Later:
   present; with a QI present, or attendance not taken, only the QI can. Tell CPoint.
 - ASSUMPTION (D-084): Late starts 30 minutes after a check-in's time; a check-in can be entered
   until midnight and corrected the same day only.
-- ASSUMPTION (D-082): a roll gives about 10 pieces (the Finish hint); Phase 24 makes it per roll
-  item.
+- ASSUMPTION (D-082): a roll gives about 10 pieces (the Finish hint). Phase 26 removes the hint:
+  roll sizes vary and a section is a shot (C-33).
 - ASSUMPTION (D-083): Monday to Saturday are working days for production (D-037's urgency still
   counts Monday to Friday).
 
-- Open (D-078, Phase 22): **do all of CPoint's Shoe Constructors have accounts?** The roster is the
-  system's users; constructors without one need an account from the Admin (they never sign in).
+- Closed (D-078; Dylan, 2026-10-23, C-38): every Shoe Constructor gets an account from the System
+  Admin.
 - Decided (D-077 to D-079, Dylan 2026-10-21): attendance is present or absent only (no reasons),
   taken by the Floor Manager for today and 7 days back, viewed by the Admin. Tell CPoint it is a
   one-day log book with no per-person history.
