@@ -457,3 +457,25 @@ Asked by Dylan on 2026-10-21 (brief `docs/prompts/production-progression.md`). P
       Inspector is present
 - [x] Codex: run 1 FAIL (one fault, wide tables not keyboard-reachable), fixed; run 2 PASS (e2e
       99 passed, 0 failed, 1 skipped)
+
+## Phases 24 to 31 — What CPoint asked for on the 23 October 2026 factory visit
+
+Asked by CPoint on the factory visit (`docs/CPOINT_VISIT_10232026.md`); Dylan answered the
+questions the same day. Brief: `docs/prompts/factory-visit-changes.md` (confirmed rules C-1 to
+C-38, assumptions A-1 to A-26, each phase's **Done when**). It replaces the old Phase 24
+(materials used, worked out from the check-ins) of `docs/prompts/production-progression.md`, which
+was never built. Each phase gets its own criteria here when its plan is approved.
+
+- [ ] Phase 24: remove Material Requests and Procurement
+- [ ] Phase 25: Pass or Reject, a final verdict; remove the Review Queue, Repair Station and
+      Salvage
+- [ ] Phase 26: capture on the constructors' own phones; rolls start and finish there; Reports →
+      Rolls
+- [ ] Phase 27: batches are the check-in intervals (lunch break, on-screen notices, pairs finished
+      and failed, no shoe types)
+- [ ] Phase 28: each role sees only its modules; demo sign-in and reset on the login page
+- [ ] Phase 29: inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
+- [ ] Phase 30A: can the camera measure a whole roll? A check with real rolls (`cv/` only)
+- [ ] Phase 30B: cuts from 3 inches Not accepted; a roll over 10% defects marked Return to
+      supplier, the FM decides
+- [ ] Phase 31: the documentation and the paper's figures match the system
