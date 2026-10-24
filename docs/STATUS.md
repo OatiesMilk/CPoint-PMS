@@ -4,14 +4,17 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-24
-**Branch:** `main` has Phase 25 (#21, CI green). Uncommitted, for a new branch from the latest
-`main` (Dylan commits): the Phase 25 QA run 1 fixes and Codex's report.
+**Branch:** `main` has Phase 25 (#21) and the QA run 1 fixes (#22), CI green.
+`fix/phase-25-qa-run2` (pushed) has the run 2 test fixes; Dylan adds the run 3 report and these
+doc updates, then opens the PR.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 25, Pass or Reject (D-093, D-094). **Merged; QA run 1 FAIL, fixes
-ready for run 2** (report `qa/reports/2026-10-24-phase-25-pass-or-reject.md`, run 2 prompt
-`qa/CODEX_PROMPT_PHASE_25_RUN2.md`). Run 1: 22 of 24 scenarios, e2e 71 passed, 1 failed. No app
+**Current phase:** Phase 25, Pass or Reject (D-093, D-094). **QA PASSED** (run 3,
+`qa/reports/2026-10-24-phase-25-run3.md`: production spec 5 of 5 three times in a row, full e2e 75
+passed, 0 failed, 1 skipped). Run 2: R3 to R5 passed (Floor view's early Space,
+the CSV header, the 404s and reports); the D-088 check-in test matched old rows by a fixed note, and
+axe caught a save toast mid-fade. Run 1: 22 of 24 scenarios, e2e 71 passed, 1 failed. No app
 fault in the Pass or Reject rule, the removals, Settings or reports. Migration `pass_or_reject` is
 applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 **Then: Phases 26 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
@@ -50,7 +53,7 @@ applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
   CPoint counts stock by hand)
 - [x] 24. Remove Material Requests and Procurement (QA passed, 18 of 18)
 - [x] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
-      (merged; QA run 1 FAIL, fixes ready)
+      (QA passed, run 3)
 - [ ] 26. Capture on the constructors' own phones; rolls start and finish there
 - [ ] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
 - [ ] 28. Each role sees only its modules; demo sign-in and reset on the login page
@@ -217,6 +220,9 @@ applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
   - 519 unit tests pass (Vitest; 588 before Phase 25, the difference is the deleted review, repair
     and salvage tests; 716 before Phase 24), plus 81 model-toolkit tests (pytest; they also pass
     without OpenCV or torch, as in CI). 521 since the Phase 25 QA fixes.
+  - Phase 25 (Codex, 2026-10-24): runs 2 and 3 after the fixes. Run 2 FAIL, two test faults in
+    `production.spec.ts` (a fixed D-088 note; axe on a fading toast), fixed. Run 3 **PASS**: the
+    production spec 5 of 5 three times, e2e 75 passed, 0 failed, 1 skipped.
   - Phase 25 (Codex, 2026-10-24, run 1): FAIL, 22 of 24 scenarios, e2e 71 passed, 1 failed, 1
     skipped. Fixes: the Production check-in e2e test matched earlier runs' rows by a fixed note
     (now a note of its own per run); Space right after entering Floor view sent no picture with
@@ -296,18 +302,17 @@ applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 
 ## Next step (exact)
 
-1. Dylan: commit the Phase 25 QA fixes and Codex's report on a new branch from the latest `main`
-   (git commands in this session's reply) and open the PR (D-032).
-2. Codex: Phase 25 run 2 from `qa/CODEX_PROMPT_PHASE_25_RUN2.md`.
-3. Dylan: delete the two QA folders Codex couldn't remove
+1. Dylan: commit the run 3 report and the doc updates on `fix/phase-25-qa-run2` (git commands in
+   this session's reply), push and open the PR (D-032).
+2. Dylan: delete the two QA folders Codex couldn't remove
    (`%TEMP%\cpoint-qa-uploads-phase25-…`).
-4. After run 2 passes: back up, then `npm run demo:reset -- --yes` for a fresh demo week.
-5. Phase 26 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 26. Stop
+3. Back up the dev database, then `npm run demo:reset -- --yes` for a fresh demo week.
+4. Phase 26 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 26. Stop
    for my approval before writing code."
-6. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
+5. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
    an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the
    "Simulator" token first (it was pasted in chat).
-7. Optional (Dylan's call): delete the backups in `storage/backups/` and the old `certs/` files;
+6. Optional (Dylan's call): delete the backups in `storage/backups/` and the old `certs/` files;
    `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
 
 Later:

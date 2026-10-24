@@ -14,6 +14,20 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-24 — Phase 25: QA run 2 fixes
+
+- Codex run 2 (`qa/reports/2026-10-24-phase-25-run2.md`): FAIL. R3 to R5 passed; R1 and R2 failed
+  in `tests/e2e/production.spec.ts` only (e2e 72 passed, 1 failed, 1 skipped).
+- F1: the D-088 FM check-in test used the fixed note "E2E FM cover", which matched earlier runs'
+  rows (strict mode). Now a note per run, like the QI test.
+- F2: axe's `color-contrast` hit `li[data-index="0"] … [data-title]`, a Sonner save toast caught
+  in its 400 ms fade. The file's axe helper now waits for toasts to leave; the schedule test gets
+  60 s. No app change.
+- `npm run check` passed (521 unit tests, build). E2E not run by Claude. Run 3 prompt
+  `qa/CODEX_PROMPT_PHASE_25_RUN3.md`.
+- Codex run 3 (`qa/reports/2026-10-24-phase-25-run3.md`): **PASS**. The production spec passed 5
+  of 5 three times in a row; full e2e 75 passed, 0 failed, 1 skipped. Phase 25 QA is done.
+
 ## 2026-10-24 — Phase 25: CI fixes and QA run 1 fixes
 
 **Who:** Dylan (PR #21 merged; the run 1 fixes uncommitted on top of `main`)
