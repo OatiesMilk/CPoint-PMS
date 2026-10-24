@@ -49,14 +49,14 @@ export const REFERENCE_DATA = {
 };
 
 /**
- * One account per role for dev, CI and demos, with the names people see in timelines, remarks and
- * the audit log (D-090). Sign-in uses the email; `demo:reset` puts these names back.
+ * One account per role for dev, CI and demos, with the names people see in timelines and the audit
+ * log (D-090). Sign-in uses the email; `demo:reset` puts these names back.
  */
 export const DEMO_USERS: { email: string; name: string; role: Role }[] = [
   { email: "manager@cpoint.local", name: "Rodel Pascual", role: "FLOOR_MANAGER" },
   { email: "inspector@cpoint.local", name: "Maricel Dizon", role: "QUALITY_INSPECTOR" },
   { email: "admin@cpoint.local", name: "Jerome Salazar", role: "SYSTEM_ADMIN" },
-  // Orders the leather rolls (survey: one staff member does) and may capture at the camera.
+  // The demo week lets this constructor capture at the camera (D-075).
   { email: "constructor@cpoint.local", name: "Noel Manalo", role: "SHOE_CONSTRUCTOR" },
 ];
 
@@ -101,7 +101,6 @@ async function createUserWithAudit(input: {
   email: string;
   password: string;
   role: Role;
-  canRequestLeatherRolls?: boolean;
   createdAt?: Date;
 }): Promise<void> {
   const passwordHash = await hashPassword(input.password);
@@ -112,7 +111,6 @@ async function createUserWithAudit(input: {
         email: input.email.toLowerCase(),
         passwordHash,
         role: input.role,
-        canRequestLeatherRolls: input.canRequestLeatherRolls ?? false,
         ...(input.createdAt ? { createdAt: input.createdAt } : {}),
       },
       tx,
@@ -122,12 +120,7 @@ async function createUserWithAudit(input: {
       action: "user.create",
       entity: "User",
       entityId: user.id,
-      after: {
-        email: user.email,
-        role: user.role,
-        ...(input.canRequestLeatherRolls ? { canRequestLeatherRolls: true } : {}),
-        source: "bootstrap",
-      },
+      after: { email: user.email, role: user.role, source: "bootstrap" },
     });
   });
 }
@@ -177,9 +170,6 @@ export async function ensureDemoUsers(now: Date = new Date()): Promise<number> {
       createdAt: new Date(now.getTime() - DEMO_ACCOUNT_AGE_DAYS * 24 * 60 * 60 * 1000),
       password: DEMO_USER_PASSWORD,
       role: demo.role,
-      // The demo constructor can also request leather rolls (D-031). Set only when the account is
-      // created, so a Floor Manager who stops it isn't overridden on the next start.
-      canRequestLeatherRolls: demo.role === "SHOE_CONSTRUCTOR",
     });
     created += 1;
   }

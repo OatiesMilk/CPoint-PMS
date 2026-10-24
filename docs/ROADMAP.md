@@ -90,6 +90,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 
 ## Phase 9 — Procurement & review access
 
+> Procurement was **removed in Phase 24 (D-091)**. The review access (D-028) stays.
+
 - [x] Review access: only the Quality Inspector decides flagged scans, enforced in the service
       (403), Floor Manager read-only on the scan and in the queue (D-028)
 - [x] Purchase requests: schema, lifecycle (approve / reject with reason / cancel / receive into
@@ -121,6 +123,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 
 ## Phase 11 — Material requests: naming, remarks, urgency, specific messages
 
+> **Removed in Phase 24 (D-091).** Kept here as history.
+
 Brief: `docs/prompts/material-requests.md`, Phase 11. Phases 12 and 13 are in the same file.
 
 - [x] Naming (D-035): Shoe Constructors see **Material requests** (nav, titles, buttons, empty
@@ -144,6 +148,8 @@ Brief: `docs/prompts/material-requests.md`, Phase 11. Phases 12 and 13 are in th
 - [ ] Docker demo-week check not run in this session
 
 ## Phase 12 — Item-level decisions guided by stock
+
+> **Removed in Phase 24 (D-091).** Kept here as history.
 
 Brief: `docs/prompts/material-requests.md`, Phase 12.
 
@@ -173,6 +179,8 @@ Brief: `docs/prompts/material-requests.md`, Phase 12.
       decided item by item)
 
 ## Phase 13 — Ordering, delivery with proof, and the remaining gaps
+
+> **Removed in Phase 24 (D-091).** Kept here as history.
 
 Brief: `docs/prompts/material-requests.md`, Phase 13.
 
@@ -466,7 +474,7 @@ C-38, assumptions A-1 to A-26, each phase's **Done when**). It replaces the old 
 (materials used, worked out from the check-ins) of `docs/prompts/production-progression.md`, which
 was never built. Each phase gets its own criteria here when its plan is approved.
 
-- [ ] Phase 24: remove Material Requests and Procurement
+- [x] Phase 24: remove Material Requests and Procurement (built; QA pending)
 - [ ] Phase 25: Pass or Reject, a final verdict; remove the Review Queue, Repair Station and
       Salvage
 - [ ] Phase 26: capture on the constructors' own phones; rolls start and finish there; Reports →
@@ -479,3 +487,25 @@ was never built. Each phase gets its own criteria here when its plan is approved
 - [ ] Phase 30B: cuts from 3 inches Not accepted; a roll over 10% defects marked Return to
       supplier, the FM decides
 - [ ] Phase 31: the documentation and the paper's figures match the system
+
+## Phase 24 — Remove Material Requests and Procurement
+
+Brief: `docs/prompts/factory-visit-changes.md`, Phase 24. Plan: `docs/prompts/plans/phase-24-plan.md`.
+Decision: D-091.
+
+- [x] Migration `drop_procurement`: the eight purchase tables, both enums and
+      `users.canRequestLeatherRolls` are gone; stock movements stay with their reason text
+- [x] The pages, the 16 routes, the controller, service, model, validator, the rules and the
+      proof-file helpers, the feature components, the five permissions, the nav item and the label
+      map are deleted; `/procurement` and its API answer 404
+- [x] The leather-roll switch is gone (Users → More actions, the requesters tab, the session field)
+- [x] FM home without the Pending requests card; Inventory without the Requested badge or Request
+      button; the Operations report without a purchasing section or request attention items, and
+      `stock.csv` without "Open request"
+- [x] Constructor home: the Capture card for an allowed constructor, else "Ask the System Admin for
+      camera access." (until Phase 26)
+- [x] Bootstrap, the demo week and `demo:reset` without requests or the flag; the demo week keeps
+      its two deliveries as stock IN, so the shelf ends where it did
+- [x] Unit and e2e tests updated; the brief's removal check finds nothing
+- [ ] Codex QA: every role's nav, the 404s, Inventory, the FM home, Operations, `demo:reset` and
+      the demo week on a throwaway stack

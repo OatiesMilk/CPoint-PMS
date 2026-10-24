@@ -1177,8 +1177,10 @@ Dylan's standing rules. They override the master spec where they differ.
   changes, its ruff, mypy and pytest. **Never browser or e2e tests** (Playwright, axe), even where
   the master spec lists them: write or update the specs; Codex runs them. Paste the real output
   summaries. Never say a check passed without running it.
-- **CI fails on the PR:** don't fix it. Read the failing check and write
-  `qa/CODEX_PROMPT_CI_FIX_<branch>.md` from `qa/templates/ci-fix-prompt.md` for Dylan to give Codex.
+- **CI fails on the PR:** fix it yourself (D-092): read the failing check, fix it and rerun
+  `npm run check`. For an `e2e` or `docker` failure, also write
+  `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md` from `qa/templates/ci-recheck-prompt.md` for Dylan to
+  give Codex, which reruns that job and reports. Codex never applies a fix.
 - **QA handoff** after each phase: `qa/handoffs/YYYY-MM-DD-phase-N-<topic>.md` from
   `qa/templates/handoff.md` (what changed by role, files, the migration, the data to use, clickable
   scenarios with at least one negative per feature, every role's access, out of scope; a phone-width

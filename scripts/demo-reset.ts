@@ -33,7 +33,6 @@ const LABELS: Record<string, string> = {
   tokens: "device tokens",
   batches: "batches",
   scans: "scans",
-  requests: "purchase requests",
   inventoryItems: "inventory items (the demo ones come back with opening stock)",
   movements: "stock movements",
   auditLogs: "audit log rows",
@@ -60,7 +59,7 @@ async function main() {
   console.log(confirmed ? "Removing:" : "Would remove:");
   for (const [key, n] of Object.entries(counts))
     console.log(`  ${String(n).padStart(6)}  ${LABELS[key] ?? key}`);
-  console.log("  and every scan image and proof-of-delivery file under UPLOADS_DIR.");
+  console.log("  and the scan images and old proof-of-delivery files under UPLOADS_DIR.");
 
   if (!confirmed) {
     console.log("\nNothing changed. Back up the database, then run: npm run demo:reset -- --yes");
@@ -74,7 +73,7 @@ async function main() {
   if (result.demoWeek)
     console.log(
       result.demoWeek.seeded
-        ? `Seeded a fresh demo week: ${result.demoWeek.batches} batches, ${result.demoWeek.scans} scans, ${result.demoWeek.requests} purchase requests, ${result.demoWeek.attendanceDays} days of attendance.`
+        ? `Seeded a fresh demo week: ${result.demoWeek.batches} batches, ${result.demoWeek.scans} scans, ${result.demoWeek.attendanceDays} days of attendance.`
         : `The demo week wasn't seeded: ${result.demoWeek.reason}.`,
     );
 }

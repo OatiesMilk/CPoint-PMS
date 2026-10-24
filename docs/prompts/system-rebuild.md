@@ -227,43 +227,34 @@ history. Placeholder only. Add a `ComponentType` table and a
 <roles_and_modules>
 Seed one demo account per role (password from `.env`, documented in README).
 
-| Module                                                       | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor                 |
-| ------------------------------------------------------------ | -------------- | ----------------- | ------------------ | -------------------------------- |
-| Overview dashboard (role-specific)                           | ✅             | ✅                | ✅ (system health) | my requests                      |
-| Batches (rolls): list / create / edit / start / cancel       | ✅ full        | view              | view               | —                                |
-| Batches: Finish roll (Phase 23, D-082)                       | ✅             | ✅                | —                  | —                                |
-| Production: today, recent days (Phase 23, D-086)             | ✅             | ✅                | view               | —                                |
-| Production: enter and correct check-ins (D-084, D-088)       | no QI present  | ✅                | —                  | —                                |
-| Production: schedule and daily quota (D-083, D-085)          | ✅             | —                 | —                  | —                                |
-| Camera (CV placeholder page)                                 | ✅             | ✅                | ✅                 | —                                |
-| Capture page and Floor view (Phase 18, D-066; Phase 21)      | ✅             | ✅                | —                  | if allowed (D-075)               |
-| "Latest scans" widget (polls every 5s)                       | ✅ on overview | ✅ on overview    | —                  | —                                |
-| Recent decisions + override                                  | ✅             | ✅                | —                  | —                                |
-| Review queue: decide flagged scans (D-028)                   | view           | ✅                | —                  | —                                |
-| Scan history + detail (image + boxes)                        | ✅             | ✅                | view               | —                                |
-| Rework board                                                 | ✅             | ✅                | —                  | —                                |
-| Salvage                                                      | ✅             | view              | —                  | —                                |
-| Attendance: one day at a time (Phase 22, D-077 to D-079)     | ✅             | —                 | view               | —                                |
-| Inventory + movements                                        | ✅             | —                 | view               | —                                |
-| Reports: production vs quota, daily summary, defects, CSV    | ✅             | ✅ (quality only) | —                  | —                                |
-| Users (CRUD, deactivate, reset password)                     | —              | —                 | ✅                 | —                                |
-| Defect types, CV thresholds, shoe types, suppliers           | —              | —                 | ✅                 | —                                |
-| CV device API tokens (create / revoke, shown once)           | —              | —                 | ✅                 | —                                |
-| Audit log (filterable)                                       | —              | —                 | ✅                 | —                                |
-| Procurement: see requests (D-029)                            | ✅ all         | —                 | view all           | own                              |
-| Procurement: send / cancel own pending request (D-045)       | ✅             | —                 | —                  | ✅ (leather rolls: allowed ones) |
-| Procurement: copy own rejected or cancelled request (D-044)  | ✅             | —                 | —                  | ✅                               |
-| Procurement: approve / reject each item                      | ✅             | —                 | —                  | —                                |
-| Procurement: order, record deliveries, close short (D-041/2) | ✅             | —                 | —                  | —                                |
-| Procurement: cancel after approval, with a reason (D-043)    | ✅             | —                 | —                  | —                                |
-| Procurement: see proof-of-delivery files                     | ✅             | —                 | view               | own requests                     |
-| Procurement: remarks                                         | ✅             | —                 | —                  | own                              |
-| Procurement: choose who can request leather rolls (D-031)    | ✅             | —                 | ✅                 | —                                |
-| Constructor home: my open requests (or how to get access)    | —              | —                 | —                  | ✅                               |
+| Module                                                     | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor   |
+| ---------------------------------------------------------- | -------------- | ----------------- | ------------------ | ------------------ |
+| Overview dashboard (role-specific)                         | ✅             | ✅                | ✅ (system health) | my requests        |
+| Batches (rolls): list / create / edit / start / cancel     | ✅ full        | view              | view               | —                  |
+| Batches: Finish roll (Phase 23, D-082)                     | ✅             | ✅                | —                  | —                  |
+| Production: today, recent days (Phase 23, D-086)           | ✅             | ✅                | view               | —                  |
+| Production: enter and correct check-ins (D-084, D-088)     | no QI present  | ✅                | —                  | —                  |
+| Production: schedule and daily quota (D-083, D-085)        | ✅             | —                 | —                  | —                  |
+| Camera (CV placeholder page)                               | ✅             | ✅                | ✅                 | —                  |
+| Capture page and Floor view (Phase 18, D-066; Phase 21)    | ✅             | ✅                | —                  | if allowed (D-075) |
+| "Latest scans" widget (polls every 5s)                     | ✅ on overview | ✅ on overview    | —                  | —                  |
+| Recent decisions + override                                | ✅             | ✅                | —                  | —                  |
+| Review queue: decide flagged scans (D-028)                 | view           | ✅                | —                  | —                  |
+| Scan history + detail (image + boxes)                      | ✅             | ✅                | view               | —                  |
+| Rework board                                               | ✅             | ✅                | —                  | —                  |
+| Salvage                                                    | ✅             | view              | —                  | —                  |
+| Attendance: one day at a time (Phase 22, D-077 to D-079)   | ✅             | —                 | view               | —                  |
+| Inventory + movements                                      | ✅             | —                 | view               | —                  |
+| Reports: production vs quota, daily summary, defects, CSV  | ✅             | ✅ (quality only) | —                  | —                  |
+| Users (CRUD, deactivate, reset password)                   | —              | —                 | ✅                 | —                  |
+| Defect types, CV thresholds, shoe types, suppliers         | —              | —                 | ✅                 | —                  |
+| CV device API tokens (create / revoke, shown once)         | —              | —                 | ✅                 | —                  |
+| Audit log (filterable)                                     | —              | —                 | ✅                 | —                  |
+| Constructor home: Capture once allowed, else who grants it | —              | —                 | —                  | ✅                 |
 
 **Floor Manager overview:** today's production against the quota (Phase 23; replaced batches per
 stage), today's attendance, today's scans and pass/rework/reject split, open reworks, low-stock
-alerts, pending purchase requests, and Latest scans.
+alerts, and Latest scans.
 **Quality Inspector overview:** today's REWORK/REJECT decisions to verify, with override (the primary
 action), the flagged-scan count, the next production check-in (Phase 23), today's defect breakdown
 by type, AI agreement rate, and Latest scans.

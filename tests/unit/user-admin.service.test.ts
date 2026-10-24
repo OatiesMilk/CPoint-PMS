@@ -63,35 +63,23 @@ describe("createAccount", () => {
 });
 
 describe("account changes", () => {
-  it("ends leather-roll access when a Shoe Constructor gets another role (D-031)", async () => {
-    users.findUserById.mockResolvedValue(
-      account({ role: "SHOE_CONSTRUCTOR", canRequestLeatherRolls: true }),
-    );
+  it("saves the name, email and role, and audits just those (D-024)", async () => {
+    users.findUserById.mockResolvedValue(account({ role: "SHOE_CONSTRUCTOR" }));
     await svc.updateAccount(
       "u1",
-      { name: "Ivy", email: "ivy@cpoint.local", role: "QUALITY_INSPECTOR" },
+      { name: "Ivy B", email: "ivy@cpoint.local", role: "QUALITY_INSPECTOR" },
       admin,
     );
-    expect(users.updateUser.mock.calls[0][1]).toMatchObject({
+    expect(users.updateUser.mock.calls[0][1]).toEqual({
+      name: "Ivy B",
+      email: "ivy@cpoint.local",
       role: "QUALITY_INSPECTOR",
-      canRequestLeatherRolls: false,
     });
     expect(recordAudit.mock.calls[0][1]).toMatchObject({
-      before: { canRequestLeatherRolls: true },
-      after: { canRequestLeatherRolls: false },
+      action: "user.update",
+      before: { name: "Ivy", email: "ivy@cpoint.local", role: "SHOE_CONSTRUCTOR" },
+      after: { name: "Ivy B", email: "ivy@cpoint.local", role: "QUALITY_INSPECTOR" },
     });
-  });
-
-  it("leaves the flag alone when a constructor's other details change", async () => {
-    users.findUserById.mockResolvedValue(
-      account({ role: "SHOE_CONSTRUCTOR", canRequestLeatherRolls: true }),
-    );
-    await svc.updateAccount(
-      "u1",
-      { name: "Ivy B", email: "ivy@cpoint.local", role: "SHOE_CONSTRUCTOR" },
-      admin,
-    );
-    expect(users.updateUser.mock.calls[0][1]).not.toHaveProperty("canRequestLeatherRolls");
   });
 
   it("refuses deactivating the last active System Admin", async () => {

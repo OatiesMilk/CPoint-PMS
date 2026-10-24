@@ -13,13 +13,17 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Roles
 
 - **Claude** is the main software developer: plans, builds features, writes the docs, writes QA
-  handoffs and Codex prompts.
-- **Codex** does two jobs, each started by a prompt Dylan pastes:
+  handoffs and Codex prompts, and fixes every failure, failing GitHub CI checks included.
+- **Codex** tests and reports; it never applies a fix (D-092). Each run starts from a prompt Claude
+  writes and Dylan pastes:
   1. **QA runs:** browser and e2e tests from a handoff in `qa/handoffs/`, reported in
-     `qa/reports/`. Test only; no code changes.
-  2. **CI fixes:** when a GitHub CI check fails on a PR, Claude writes
-     `qa/CODEX_PROMPT_CI_FIX_<branch>.md` and Codex applies the fix (D-089). Change only what
-     makes the failing checks pass; never skip, disable or loosen a test or a check.
+     `qa/reports/`.
+  2. **CI re-checks:** after Claude fixes a failing `e2e` or `docker` CI job, Codex reruns it from
+     `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md` and reports the result.
+- Codex never changes application code, tests, migrations, config, `package.json` or `.env`, and
+  never skips, disables or loosens a test or a check. It writes only under `qa/reports/` (the
+  report and its artifacts) and its line in the vault's Daily note. Anything that fails goes in
+  the report for Claude to fix.
 - Neither agent creates branches, commits, pushes or PRs. Dylan does.
 
 ## Vault first
@@ -35,7 +39,7 @@ junctions.
 
 ## Record every change
 
-Every change, including a Codex CI fix, is written down in both places:
+Every change, and every Codex run, is written down in both places:
 
 - **Repo:** a report in `qa/reports/` (Codex) or the wrap-up docs (Claude: STATUS, SESSION_LOG,
   DECISIONS, ROADMAP).
@@ -45,4 +49,5 @@ Every change, including a Codex CI fix, is written down in both places:
 ## Project rules
 
 `CLAUDE.md` holds the project rules (MVC layering, guards, `runInTransaction` + `recordAudit`,
-defect types as data, Docker with two services). They apply to Codex's fixes too.
+defect types as data, Docker with two services). Claude follows them; Codex reports anything that
+breaks them.

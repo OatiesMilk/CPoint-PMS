@@ -4,23 +4,23 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-23
-**Branch:** `main` has Phases 20 to 23 (#15), the agent-workflow docs (D-089, #16) and the demo
-seed refresh (D-090, #17). The factory-visit plan (the visit notes, the brief and these doc
-updates) is uncommitted, for a new branch from the latest `main` (Dylan commits; the team opens and
-merges the PR, D-032).
-**Agent workflow (D-089):** Claude builds; Codex runs QA and fixes failing CI checks from
-`qa/CODEX_PROMPT_CI_FIX_<branch>.md` (`qa/README.md` → "CI fix loop"); every agent reads the
-Obsidian vault (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 23, Production progression in place of stage monitoring. **QA passed**
-(Codex run 2, 2026-10-22: R1 to R5; e2e 99 passed, 0 failed, 1 skipped). Run 1 failed on one
-fault (wide tables were scroll boxes a keyboard couldn't reach), fixed with `ScrollRegion`. Plan:
-`docs/prompts/plans/phase-23-plan.md` (1A Finish roll, 2B every 4 hours, 3B the QI only enters
-check-ins, 4A 10 days, 5A a first quota from today). Follow-up 2026-10-22 (D-088): the Floor
-Manager covers check-ins on a day no Quality Inspector is present. Phase 22 (Attendance) passed QA.
-**Next: Phases 24 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`), briefed
+**Branch:** `main` has Phases 20 to 23 (#15), the agent-workflow docs (D-089, #16), the demo seed
+refresh (D-090, #17) and the factory-visit plan (#18). Uncommitted, for a new branch from the
+latest `main` (Dylan commits; the team opens and merges the PR, D-032): the Phase 24 work and the
+Codex report-only docs (D-092).
+**Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
+included; Codex only tests and reports (the QA runs, and a rerun of an `e2e` or `docker` CI fix
+from `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md`, `qa/README.md` → "CI fix loop"); every agent reads
+the Obsidian vault (`C:\dev\capstone-obsidian`) first and records each change there.
+**Current phase:** Phase 24, Remove Material Requests and Procurement (D-091). **Built; QA
+pending** (handoff `qa/handoffs/2026-10-23-phase-24-remove-procurement.md`, prompt
+`qa/CODEX_PROMPT_PHASE_24.md`). Plan: `docs/prompts/plans/phase-24-plan.md`, approved as planned.
+The module is gone end to end (migration `drop_procurement`); Inventory, suppliers, the homes and
+the Operations report still work. Phase 23 (Production progression) passed QA on 2026-10-22.
+**Then: Phases 25 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`), briefed
 in `docs/prompts/factory-visit-changes.md` with Dylan's answers of the same day (C-1 to C-41). They
 replace the old Phase 24 (materials used) of `production-progression.md`, which was never built.
-**Overall:** 24 phases built (0 to 23); 8 planned (24 to 31, Phase 30 in two parts)
+**Overall:** 25 phases built (0 to 24); 7 planned (25 to 31, Phase 30 in two parts)
 
 ## Phase progress
 
@@ -33,11 +33,11 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 - [x] 6. Admin
 - [x] 7. Dashboards & reports
 - [x] 8. Hardening & demo
-- [x] 9. Procurement & review access
+- [x] 9. Procurement & review access (procurement removed in Phase 24, D-091)
 - [x] 10. Operations reports
-- [x] 11. Material requests: naming, remarks, urgency, specific messages
-- [x] 12. Item-level decisions guided by stock
-- [x] 13. Ordering, delivery with proof, and the remaining gaps
+- [x] 11. Material requests: naming, remarks, urgency, specific messages (removed in Phase 24)
+- [x] 12. Item-level decisions guided by stock (removed in Phase 24)
+- [x] 13. Ordering, delivery with proof, and the remaining gaps (removed in Phase 24)
 - [x] 14. Camera YOLO model: intake and the inference core
 - [x] 15. Camera station: capture, send, recover
 - [x] 16. Camera page, a small model check, clean data and the demo
@@ -52,7 +52,7 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 - [x] 23. Production progression in place of stage monitoring (QA passed)
 - ~~24. Materials used, worked out from the check-ins~~ (replaced by the factory-visit plan;
   CPoint counts stock by hand)
-- [ ] 24. Remove Material Requests and Procurement
+- [x] 24. Remove Material Requests and Procurement (built; QA pending)
 - [ ] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
 - [ ] 26. Capture on the constructors' own phones; rolls start and finish there
 - [ ] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
@@ -63,65 +63,32 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 
 ## What works right now
 
-- **Database:** 18 migrations (the latest is `production_progression`, D-082 to D-087, applied to
-  the dev database on 2026-10-21; before it `attendance`, D-077; before it `user_can_capture`, D-075; before it `defect_handling`, D-070, and `drop_component_types`, D-071). UUIDv7 ids (D-018).
+- **Database:** 19 migrations (the latest is `drop_procurement`, D-091; before it
+  `production_progression`, D-082 to D-087, applied to the dev database on 2026-10-21; before it `attendance`, D-077; before it `user_can_capture`, D-075; before it `defect_handling`, D-070, and `drop_component_types`, D-071). UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017):
   - reference data and the first System Admin;
-  - demo users and inventory when `SEED_DEMO_USERS=true`. The demo constructor is a designated
-    leather-roll requester.
+  - demo users and inventory when `SEED_DEMO_USERS=true`.
 - **Demo week** (D-026, D-090): `SEED_DEMO_WEEK=true` or `npm run demo:seed`.
   - 14 batches and about 120 scans (10 sections a roll, Capture page captures with model
     `yolo-v1-1d729fb0`, no device token), two left for review;
   - named demo accounts: Rodel Pascual (FM), Maricel Dizon (QI), Jerome Salazar (Admin), Noel
-    Manalo (constructor; orders leather and may capture); four demo suppliers;
+    Manalo (constructor; may capture); four demo suppliers;
   - one past day the QI is absent: the FM captures and enters that day's check-ins (D-088);
-  - nine purchase requests covering every state: received with proof, partly received (a photo
-    and a PDF), ordered and late, ordered by the Floor Manager, approved in part and waiting to
-    be ordered, pending (High), rejected, cancelled by the requester, and cancelled after
-    ordering. Proof files are generated samples.
-- **Sign-in & access** (D-016, D-024, D-025, D-031):
+  - two deliveries in the week as plain stock IN ("Delivery from …"); no requests (D-091).
+- **Sign-in & access** (D-016, D-024, D-025):
   - 12-hour sessions, lockout, a role × permission matrix, and server-side sign-out;
-  - the leather-roll flag is read fresh on every request.
+  - the Shoe Constructor has no permission in the matrix (D-091); the camera switch (D-075) is
+    read fresh on every request, and their home shows Capture or who grants it.
 - **Modules:**
   - batches as leather rolls (D-082: Start roll, Finish roll; the old stage moves are gone) and
     the camera with the decision engine (D-011, D-020);
   - **flagged scans are decided by the Quality Inspector only** (D-028, team-confirmed). The FM
     sees them read-only;
   - the Repair Station (the Fixable board, D-021, D-022, D-070, D-073) and salvage, the inventory ledger (D-023), admin (D-024), reports (D-025).
-- **Material requests / Procurement** (D-029, D-031, D-035 to D-045):
-  - constructors see "Material requests", the FM and Admin "Procurement" (one label map);
-  - every Shoe Constructor sends requests (1–10 items, with the stock snapshot, a required
-    needed-by date and an optional first remark); **leather rolls** only by constructors the FM
-    or Admin allows, also when typed;
-  - urgency (High / Medium / Low) is worked out from the needed-by date by working days, shown
-    as a badge, sorted and filterable; closed requests have none;
-  - the FM approves or rejects **each item** (a reason for every rejection), saved together; the
-    request is approved if at least one item is, rejected if every item is (D-039);
-  - each item shows the stock now and when requested; an item above 2× its reorder level is
-    flagged "Still in stock" and starts on Reject, a low one on Approve; the FM confirms every
-    item (D-040);
-  - the requester sees "1 of 2 items approved" and the reason on each rejected item;
-  - the FM marks an approved request **as ordered**: a supplier from Settings, an optional
-    reference, a required expected date; one order per request; nothing is sent to the supplier
-    (D-041);
-  - an ordered or partly received request past its expected date shows **Delivery late** (badge,
-    filter, home card);
-  - **Record delivery** takes a quantity per approved item (never more than outstanding), the
-    delivery date and at least one **proof file** (JPEG, PNG, WebP or PDF, checked by its bytes,
-    10 MB each); what arrived is posted as stock IN through the ledger; a short delivery leaves
-    the request **Partly received** (D-042);
-  - **Close short** ends a partly received request with a reason and keeps what never arrived;
-  - proof files are private (FM, Admin, the requester on their own request) and never deleted;
-  - the FM cancels an approved or ordered request **with a reason** until something arrives
-    (D-043);
-  - **Copy to a new request** on your own rejected or cancelled request; rejected items start
-    unticked with their reasons (D-044);
-  - the FM raises a request themselves (Procurement → New, or **Request** on a low inventory
-    item), marked "Raised by Floor Manager", and approves it (D-045);
-  - every request has a timeline and remarks;
-  - the FM home card (to decide, to order, late), an Inventory "Requested" badge and "My
-    requests" on the constructor home;
-  - who may request leather rolls is chosen by the FM (Procurement tab) or the Admin (Users).
+- **Material requests and Procurement: removed** (Phase 24, D-091): no page, API, permission,
+  table, leather-roll switch or seed row; `/procurement` answers 404. Stock movements that
+  deliveries posted stay with their reason text. The FM home, Inventory and Operations have no
+  request parts; `stock.csv` has no "Open request".
 - **Camera page (Phase 16, D-055; Phase 20, D-069):** badges **Capture page active** (or "Scans
   arriving" for a device token), **Simulator active** and **No recent captures**; a Model card with
   the last scan's `modelVersion` and an early-model notice (a Settings switch); "Ways to capture"
@@ -218,11 +185,12 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
     with the absences. `demo:reset` clears check-ins, quotas and saved schedules.
 - **Audit pattern:** every mutation runs `runInTransaction` + `recordAudit(tx, …)`.
 - **Pagination** (D-047): every list that can grow pages at 15 rows with one pager; Settings
-  and the leather-roll requesters have a Find box.
+  has a Find box.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 714 unit tests pass (Vitest; 646 before Phase 23), plus 81 model-toolkit tests (pytest; they also pass without
+  - 588 unit tests pass (Vitest; 716 before Phase 24, the difference is the deleted procurement
+    tests; 646 before Phase 23), plus 81 model-toolkit tests (pytest; they also pass without
     OpenCV or torch, as in CI).
   - Phase 20 (Codex, 2026-10-20, run 1, which also covered Phases 18 and 19): 56 of 69 passed, 4
     failed, 9 blocked; e2e 75 passed, 10 failed, 1 skipped (86). The app faults were old wording
@@ -295,24 +263,26 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 
 ## Next step (exact)
 
-0. Dylan: commit the factory-visit plan on a new branch from the latest `main` (git commands from
-   Claude) and open the PR (D-032).
-1. Phase 24 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 24. Stop
-   for my approval before writing code." Don't run the old Phase 24 of `production-progression.md`.
-2. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
-   an A4 sheet). It can run any time after Phase 24.
-3. Dylan (D-090): back up, then `npm run demo:reset -- --yes` for the new demo week.
-4. Dylan, at the real station (`docs/STATION_SETUP.md`): the open device checks (F3, P18 S3, P18
+0. Dylan: commit Phase 24 (and the D-092 workflow docs) on a new branch from the latest `main`
+   (git commands in the Phase 24 report) and open the PR (D-032).
+1. Codex: Phase 24 QA from `qa/CODEX_PROMPT_PHASE_24.md` (paste it into Codex).
+2. Phase 25 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 25. Stop
+   for my approval before writing code."
+3. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
+   an A4 sheet). It can run any time now.
+4. Dylan (D-090, D-091): back up, then `npm run demo:reset -- --yes` for the new demo week; it also
+   clears the old proof-of-delivery files.
+5. Dylan, at the real station (`docs/STATION_SETUP.md`): the open device checks (F3, P18 S3, P18
    S18, R4) change with Phases 25 and 26 (two outcomes, no Repair Station, the constructors'
    phones), so they fit best with Phase 30A. Revoke the "Simulator" token first (it was pasted in
    chat).
-5. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
+6. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
    files; `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
 
 Later:
 
-- Many open questions below close as Phases 24 to 31 land (procurement in 24; the review, repair,
-  thresholds and salvage ones in 25; the roll and capture ones in 26; the check-in ones in 27).
+- Many open questions below close as Phases 25 to 31 land (the procurement ones closed in 24; the
+  review, repair, thresholds and salvage ones in 25; the roll and capture ones in 26; the check-in ones in 27).
   Each phase updates this list.
 
 ## Blockers
@@ -340,8 +310,7 @@ Later:
   until midnight and corrected the same day only.
 - ASSUMPTION (D-082): a roll gives about 10 pieces (the Finish hint). Phase 26 removes the hint:
   roll sizes vary and a section is a shot (C-33).
-- ASSUMPTION (D-083): Monday to Saturday are working days for production (D-037's urgency still
-  counts Monday to Friday).
+- ASSUMPTION (D-083): Monday to Saturday are working days for production.
 
 - Closed (D-078; Dylan, 2026-10-23, C-38): every Shoe Constructor gets an account from the System
   Admin.
@@ -351,9 +320,8 @@ Later:
 - Decided (D-028, team-confirmed 2026-10-05): only the QI resolves flagged (NEEDS_REVIEW) scans;
   the FM can't. This differs from survey Q5 ("whoever is available"), so tell CPoint. If no QI is
   on shift, flagged scans wait.
-- Decided (D-031, team, 2026-10-05; survey Q14): every constructor can request materials, and only
-  the allowed one(s), usually whoever orders leather, can request leather rolls. The FM approves
-  all requests.
+- Closed, module removed (Phase 24, D-091): the material-request questions of D-029, D-031,
+  D-037, D-039, D-040, D-041, D-042, D-044, D-045 and survey Q14 (who orders leather rolls).
 - Decided (D-011, team-confirmed; D-053, Dylan 2026-10-19): a defect type set to Fixable or Reject
   "when found" gets that result from 50% confidence; other types: ≥ 90% → REJECT, 60–89% →
   REWORK, below 60% → PASS; an unknown class key → NEEDS_REVIEW. Confirm with CPoint which defect
@@ -363,22 +331,6 @@ Later:
   shifts. Confirm the shift length.
 - Decided (D-021/D-022, team-confirmed): salvage reused in a batch is shown separately, and a
   batch can be completed with repairs open ("In repair"). Still to confirm with CPoint.
-- Decided (D-041, D-042, D-045; Dylan 2026-10-13): one order per request; a proof file is
-  required for every delivery; the Floor Manager may approve their own request. Tell CPoint, and
-  confirm a receipt or delivery note is always on hand when goods arrive.
-- ASSUMPTION (D-029, D-044): requests aren't edited after they're sent (cancel, then copy to a new
-  one); an order isn't edited after it's marked.
-- ASSUMPTION (D-041): an expected delivery date can be up to 365 days ahead, and "late" starts the
-  day after it, counting calendar days (not working days).
-- ASSUMPTION (D-037, team 2026-10-10): urgency bands are High 0–3 working days or overdue,
-  Medium 4–7, Low 8 or more; working days are Monday to Friday; holidays aren't skipped. Confirm
-  all three with CPoint (does the factory work Saturdays?).
-- ASSUMPTION (D-040, team 2026-10-13): an item is "still well stocked" above 2× its reorder
-  level, and an item with no reorder level gets no stock guidance. Confirm the factor with CPoint.
-- Decided (D-039, team 2026-10-13): the FM decides every item of a request in one save; a request
-  can't be left half decided.
-- Open (survey Q14): who orders leather rolls. Today only the Floor Manager can mark a request
-  as ordered and record deliveries.
 - ASSUMPTION (D-026): the demo week's stage times match the survey.
 - Closed (D-071, Dylan 2026-10-20): component tracking is out of scope.
 - Decided (D-073 to D-076, Dylan 2026-10-20): the board is the Repair Station; Floor view with
@@ -427,8 +379,8 @@ Later:
 - Timezone: `Asia/Manila` for display; UTC for storage.
 - On Dylan's PC another project's Vite server often holds port 3000. Start this app with
   `PORT=3001` then (`npm run dev -- --port` doesn't work here).
-- Proof-of-delivery files are stored under `UPLOADS_DIR` (`./storage/uploads/pod/` locally, the
-  `uploads` volume in Docker), beside the scan images. Back them up with the database.
+- Proof-of-delivery files from before Phase 24 may remain under `UPLOADS_DIR/pod` (nothing reads
+  them since D-091); `demo:reset` removes them with the scan images.
 - Local `.env` needs `AUTH_SECRET`, `BOOTSTRAP_ADMIN_PASSWORD` and `DEMO_USER_PASSWORD`. With demo
   users on, `admin@cpoint.local` uses `DEMO_USER_PASSWORD`.
 - `npm audit`: 9 highs, all in dev tooling (the Prisma CLI and eslint-config-next, D-027);

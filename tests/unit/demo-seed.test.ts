@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { manilaToday } from "@/lib/format";
 
 const calls: { fn: string; batchId?: string; now: Date; classKeys?: string[]; by?: string }[] = [];
 let nextBatch = 0;
@@ -40,7 +39,8 @@ const svc = {
 const mocks = {
   countBatches: vi.fn(async () => 0),
   listOpenBatches: vi.fn(async () => []),
-  findInventoryItemBySku: vi.fn(async () => ({ id: "item" })),
+  // Each item is known by its code, so a movement shows which item it moved.
+  findInventoryItemBySku: vi.fn(async (sku: string) => ({ id: sku })),
   findLiveOutcomes: vi.fn(async () => ({ rework: null, salvage: null })),
   listActiveShoeTypes: vi.fn(async () => [
     { id: "st1", name: "School Shoe" },
@@ -56,7 +56,6 @@ const mocks = {
     id: email,
     role: email.startsWith("inspector") ? "QUALITY_INSPECTOR" : "FLOOR_MANAGER",
     isActive: true,
-    canRequestLeatherRolls: true,
   })),
 };
 
@@ -83,10 +82,8 @@ vi.mock("@/server/models/user.model", () => ({ findUserByEmail: mocks.findUserBy
 const setCameraOperator = vi.fn(async () => ({}));
 vi.mock("@/server/services/camera.service", () => ({ setCameraOperator }));
 vi.mock("@/server/services/batch.service", () => svc);
-vi.mock("@/server/services/inventory.service", () => ({
-  createItem: vi.fn(async () => ({ id: "item" })),
-  recordMovement: vi.fn(),
-}));
+const inventory = { createItem: vi.fn(async () => ({ id: "item" })), recordMovement: vi.fn() };
+vi.mock("@/server/services/inventory.service", () => inventory);
 vi.mock("@/server/services/rework.service", () => ({ moveReworkTicket: vi.fn() }));
 vi.mock("@/server/services/salvage.service", () => ({
   assignSalvage: vi.fn(),
@@ -94,54 +91,6 @@ vi.mock("@/server/services/salvage.service", () => ({
 }));
 const decideScan = vi.fn();
 vi.mock("@/server/services/scan-decision.service", () => ({ decideScan }));
-const procurement = {
-  createRequest: vi.fn(async (_values: unknown, _actor: unknown, now: Date) => {
-    calls.push({ fn: "request", batchId: "procurement", now });
-    return { id: `pr${calls.length}`, code: "PR", alreadyRequested: [] };
-  }),
-  actOnRequest: vi.fn(async (_id: string, _input: unknown, _actor: unknown, now: Date) => {
-    calls.push({ fn: "request", batchId: "procurement", now });
-  }),
-  decideRequest: vi.fn(async (_id: string, _input: unknown, _actor: unknown, now: Date) => {
-    calls.push({ fn: "request", batchId: "procurement", now });
-  }),
-  orderRequest: vi.fn(async (_id: string, _input: unknown, _actor: unknown, now: Date) => {
-    calls.push({ fn: "request", batchId: "procurement", now });
-  }),
-  recordDelivery: vi.fn(
-    async (_id: string, _input: unknown, _files: unknown, _actor: unknown, now: Date) => {
-      calls.push({ fn: "request", batchId: "procurement", now });
-    },
-  ),
-  // The request decided item by item: two lines, the second one for an item that isn't the thread.
-  getRequest: vi.fn(async () => ({
-    code: "MR-2026-0001",
-    lines: [
-      {
-        id: "line-a",
-        inventoryItemId: "not-the-thread",
-        decision: "APPROVED",
-        itemName: "Black cowhide (school shoes)",
-        unit: "roll",
-      },
-      {
-        id: "line-b",
-        inventoryItemId: "also-not-the-thread",
-        decision: "APPROVED",
-        itemName: "Shoe tacks, 12 mm",
-        unit: "box",
-      },
-    ],
-  })),
-  addRemark: vi.fn(),
-  setRequester: vi.fn(),
-};
-// Generated proof files: the real ones are drawn with sharp, which this test doesn't need.
-vi.mock("@/server/lib/receipt-sample", () => ({
-  renderReceiptImage: vi.fn(async () => Buffer.from([0xff, 0xd8, 0xff])),
-  renderReceiptPdf: vi.fn(() => Buffer.from("%PDF-1.4")),
-}));
-vi.mock("@/server/services/procurement.service", () => procurement);
 // Twelve demo constructors, as the bootstrap creates (D-081).
 const roster = [
   ...Array.from({ length: 12 }, (_, i) => ({ id: `c${i + 1}`, role: "SHOE_CONSTRUCTOR" })),
@@ -269,12 +218,11 @@ describe("seedDemoWeek", () => {
     expect(Math.max(...perRoll.values())).toBe(10);
     for (const [, origin] of svc.ingestScan.mock.calls)
       expect(origin).toMatchObject({ kind: "website" });
-    // The constructor who orders leather may also capture (D-075).
+    // The demo constructor may also capture (D-075).
     expect(setCameraOperator).toHaveBeenCalledWith("constructor@cpoint.local", true, {
       id: "manager@cpoint.local",
       role: "FLOOR_MANAGER",
       isActive: true,
-      canRequestLeatherRolls: true,
     });
   });
 
@@ -411,63 +359,31 @@ describe("seedDemoWeek", () => {
     expect(below).toEqual(["2026-09-29", "2026-10-01", "2026-10-02"]);
   });
 
-  it("sends purchase requests through the services, forward in time and never past now", async () => {
+  it("records the week's two later deliveries as plain stock IN, and nothing else (D-091)", async () => {
     const result = await seedDemoWeek({ now, seed: 1 });
-    expect(result).toMatchObject({ seeded: true, requests: 9 });
-    const times = calls.filter((c) => c.fn === "request").map((c) => c.now.getTime());
-    expect(times.length).toBeGreaterThan(5);
-    expect(Math.max(...times)).toBeLessThanOrEqual(now.getTime());
-    expect(
-      procurement.actOnRequest.mock.calls.map((c) => (c[1] as { action: string }).action),
-    ).toEqual(expect.arrayContaining(["approve", "reject", "cancel"]));
-    // Ordering and deliveries (D-041, D-042): every order names an active supplier and a date on
-    // or after the day it was placed; every delivery carries at least one proof file.
-    expect(procurement.orderRequest.mock.calls.length).toBeGreaterThanOrEqual(5);
-    for (const [, input, , when] of procurement.orderRequest.mock.calls as unknown as [
-      string,
-      { supplierId: string; expectedDeliveryOn: string },
-      unknown,
-      Date,
-    ][]) {
-      expect(input.supplierId).toBeTruthy();
-      expect(input.expectedDeliveryOn >= manilaToday(when)).toBe(true);
-    }
-    expect(procurement.recordDelivery).toHaveBeenCalledTimes(2);
-    const deliveries = procurement.recordDelivery.mock.calls as unknown as [
-      string,
-      { lines: { quantity: number }[]; note?: string },
-      { name: string }[],
-    ][];
-    expect(deliveries.map((d) => d[2].map((f) => f.name.split(".").pop()))).toEqual([
-      ["jpg"],
-      ["jpg", "pdf"],
+    expect(Object.keys(result).sort()).toEqual([
+      "attendanceDays",
+      "batches",
+      "checkIns",
+      "ms",
+      "scans",
+      "seeded",
     ]);
-    // The second one is short: two of the four rolls came.
-    expect(deliveries[1][1].lines.map((l) => l.quantity)).toEqual([2, 5]);
-    // One request is cancelled by the Floor Manager after it was ordered, with a reason (D-043),
-    // and one is raised by the Floor Manager (D-045).
-    expect(
-      procurement.actOnRequest.mock.calls.some(
-        (c) =>
-          (c[1] as { action: string; reason?: string }).action === "cancel" &&
-          !!(c[1] as { reason?: string }).reason,
-      ),
-    ).toBe(true);
-    expect(
-      procurement.createRequest.mock.calls.some(
-        (c) => (c[1] as { id: string }).id === "manager@cpoint.local",
-      ),
-    ).toBe(true);
-    // One request is decided item by item (D-039): every line gets a decision, with a note.
-    expect(procurement.decideRequest).toHaveBeenCalledTimes(1);
-    const decided = procurement.decideRequest.mock.calls[0][1] as {
-      note: string;
-      lines: { lineId: string; decision: string }[];
-    };
-    expect(decided.lines.map((l) => l.lineId)).toEqual(["line-a", "line-b"]);
-    expect(decided.lines.every((l) => l.decision === "APPROVED" || l.decision === "REJECTED")).toBe(
-      true,
-    );
-    expect(decided.note).toMatch(/order/i);
+    const movements = inventory.recordMovement.mock.calls as unknown as [
+      string,
+      { type: string; quantity: number; reason: string },
+      { id: string },
+      Date,
+    ][];
+    // This test has one supplier, named "Supplier"; the deliveries name it.
+    const later = movements
+      .filter(([, input]) => input.reason === "Delivery from Supplier")
+      .map(([sku, input, actor, when]) => [sku, input.type, input.quantity, actor.id, when]);
+    expect(later).toEqual([
+      ["TH-001", "IN", 4, "manager@cpoint.local", new Date("2026-09-29T06:00:00.000Z")],
+      ["NL-001", "IN", 5, "manager@cpoint.local", new Date("2026-09-29T06:00:00.000Z")],
+      ["LR-001", "IN", 2, "manager@cpoint.local", new Date("2026-10-01T03:00:00.000Z")],
+      ["NL-001", "IN", 5, "manager@cpoint.local", new Date("2026-10-01T03:00:00.000Z")],
+    ]);
   });
 });

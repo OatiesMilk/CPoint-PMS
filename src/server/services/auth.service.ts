@@ -24,8 +24,6 @@ export type SessionUser = {
   role: Role;
   /** Set by an admin reset or for a new account: the user must choose a password first (D-024). */
   mustChangePassword: boolean;
-  /** May request leather rolls (D-031). Read from the database on every request, like the role. */
-  canRequestLeatherRolls: boolean;
   /** May capture at the camera (D-075). Read from the database on every request, like the role. */
   canCapture: boolean;
 };
@@ -45,7 +43,6 @@ function toSessionUser(user: User): SessionUser {
     email: user.email,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
-    canRequestLeatherRolls: user.canRequestLeatherRolls,
     canCapture: user.canCapture,
   };
 }

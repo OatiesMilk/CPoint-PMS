@@ -77,13 +77,13 @@ export function AttentionList({ items, asOf }: { items: AttentionItem[]; asOf: s
       <CardHeader>
         <CardTitle>What needs attention</CardTitle>
         <CardDescription>
-          Problems found across the line, stock, purchasing and supply as of {asOf}.
+          Problems found across the line, stock and supply as of {asOf}.
         </CardDescription>
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nothing needs attention. No bottleneck, late batch, shortage or waiting request was
+            Nothing needs attention. No shortage, short day, waiting repair or supplier problem was
             found.
           </p>
         ) : (

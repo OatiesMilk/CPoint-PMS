@@ -9,7 +9,7 @@ import type { Metadata } from "next";
 import { MATCHING, TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { Aperture, CircleCheck, CircleSlash, LockKeyhole, ShoppingCart } from "lucide-react";
+import { Aperture, CircleCheck, CircleSlash, LockKeyhole } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -101,12 +101,6 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         {ROLE_LABELS[u.role]}
-                        {u.canRequestLeatherRolls && (
-                          <Badge tone="neutral">
-                            <ShoppingCart aria-hidden />
-                            Leather rolls
-                          </Badge>
-                        )}
                         {u.canCapture && (
                           <Badge tone="neutral">
                             <Aperture aria-hidden />

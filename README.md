@@ -13,11 +13,6 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
   kept as salvage for another batch rather than thrown away.
 - **Inventory:** leather rolls and supplies are tracked through an audited ledger, with low-stock
   alerts.
-- **Procurement:** Shoe Constructors request materials when they run low. Leather rolls only by
-  the constructor the Floor Manager or Admin allows (usually the one who orders leather). The
-  Floor Manager approves or rejects each item of a request, guided by the stock on hand, records
-  the order with a supplier and an expected date, then records each delivery with a photo or PDF
-  of the receipt. Only what actually arrived is added to inventory, and a late order is flagged.
 - **Production:** the Quality Inspector counts the pairs finished at each check-in (every 4 hours
   by default), per shoe type. The Floor Manager sets the schedule and a daily quota (with a
   suggestion from recent days) and sees each day against it, with the Shoe Constructors present
@@ -107,10 +102,10 @@ when there is no admin account yet, as on a real install with demo users off.
 
 | Role              | Email                      | Lands on             | Does                                                                                  |
 | ----------------- | -------------------------- | -------------------- | ------------------------------------------------------------------------------------- |
-| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Schedule and quota, attendance, rolls, rework, salvage, inventory, requests, reports  |
+| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Schedule and quota, attendance, rolls, rework, salvage, inventory, reports            |
 | Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Enters production check-ins, decides flagged scans, overrides, rework, finishes rolls |
-| System Admin      | `admin@cpoint.local`       | `/admin`             | Users, thresholds, defect types, tokens, audit, who can request materials             |
-| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | Sends purchase requests (the demo one may also request leather rolls)                 |
+| System Admin      | `admin@cpoint.local`       | `/admin`             | Users, thresholds, defect types, tokens, audit, camera access                         |
+| Shoe Constructor  | `constructor@cpoint.local` | `/constructor`       | Captures sections at the camera once allowed (the demo one is, D-075)                 |
 
 Twelve more **demo Shoe Constructors** (Ana Cruz, Ben Santos and others, `@cpoint.local`) are
 created with them so Attendance has a believable roster. They have random passwords and never sign
@@ -118,7 +113,7 @@ in (D-081).
 
 ## Demo script
 
-About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows
+About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows
 (or one normal and one private) to show two roles side by side.
 
 ### 1. Floor Manager (4 min)
@@ -126,7 +121,7 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 1. **Home** (`manager@cpoint.local`): **Today's production** (pairs per shoe type against the
    daily quota, the next check-in), the **Attendance** card (today is "Not taken yet"), today's
    inspection split, sections to clean or cut around, low stock (Contact cement), the daily
-   summary, and **purchase requests** waiting for a decision (one urgent).
+   summary.
 2. **Production:** today's check-ins (12:00, 16:00, 17:00) and the **Recent days** chart and
    table: three days fell short, each with its sentence, "Below quota by 18 pairs. 3 of 12 Shoe
    Constructors were absent." Nothing names a person. **Schedule and quota** shows the suggested
@@ -180,50 +175,7 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
 3. **Reports → Camera call vs final verdict:** the off-diagonal numbers are overrides. A high
    agreement (about 95% in the demo week) means the thresholds suit the line.
 
-### 3. Shoe Constructor → Floor Manager: a material request (2 min)
-
-1. **Constructor home** (`constructor@cpoint.local`): **My material requests**. The constructor's
-   side is called **Material requests** everywhere; the Floor Manager and Admin see the same
-   module as **Procurement**. **New material request**: pick **Contact cement** (the picker shows
-   it's low, and that MR-… already asks for it), 2 cans, set **Needed by** to tomorrow (the form
-   says the Floor Manager will see it as **High**), add a remark if it helps, and send it. Try
-   sending it empty first: each field says exactly what is missing. Requests can't be edited
-   afterwards: cancel and resend. Every constructor can request supplies; **leather rolls** only
-   once the Floor Manager or Admin allows it (the demo constructor is allowed).
-2. **Floor Manager → Procurement:** the **Pending** tab, the soonest needed-by date first, each
-   with its urgency (**High** within 3 working days or overdue, **Medium** within 7, **Low**
-   after that) and how long it has waited. Filter by **Urgency**. Open the request: the stock
-   **when asked** sits next to the stock **now**, and the constructor's remark is the first one
-   under Remarks.
-
-   ![A pending purchase request](docs/screenshots/purchase-request.png)
-
-3. **Decide each item.** Every item has **Approve** and **Reject**, with the stock now and when it
-   was requested beside it. An item that is still well stocked (more than twice its reorder
-   level) shows **Still in stock** and starts on Reject with the reason filled in; a low one
-   starts on Approve. These are suggestions: change any of them, then **Save decisions**.
-   **Reject whole request…** turns everything down with one reason. The constructor sees
-   "1 of 2 items approved" and the reason on each rejected item.
-4. **Order it.** On the approved request, **Mark as ordered…**: pick the supplier, type the
-   reference number and the date they expect to deliver. Nothing is sent to the supplier; this is
-   the record. The **Ordered** tab lists it with the expected date, and the contact cement order
-   from Tuesday shows **Delivery late**, also on the home card.
-5. **Record a delivery.** Open the **Partly received** request: two of four rolls came, with a
-   photo and a PDF of the receipt under Deliveries. **Record delivery…** for the rest: each
-   quantity starts at what is still to come, a proof file is required, and saving adds exactly
-   that to stock (Inventory shows "Delivery for MR-…"). If the rest won't come, **Close short…**
-   with a reason instead.
-6. **When it goes wrong.** An ordered request can be cancelled with a reason until something
-   arrives (see the cancelled soles order). On a rejected or cancelled request the requester
-   gets **Copy to a new request**: the form opens prefilled, rejected items unticked with their
-   reasons. The Floor Manager can also raise a request themselves, from **New purchase request**
-   or **Request** on a low item in Inventory.
-7. The **timeline** and **remarks** on the request show who did what and when. The **Leather roll
-   requesters** tab chooses who may also request leather rolls. Stop it for the demo
-   constructor: on their next try, leather rolls are greyed out in the form, without signing
-   them out.
-
-### 4. System Admin (2 min)
+### 3. System Admin (2 min)
 
 1. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Fixable from 60%,
    with a preview of what the camera will decide. Changes apply to new scans only. Old scans keep
@@ -244,8 +196,6 @@ About twelve minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two 
   thresholds are data the admin can change.
 - **People stay in charge:** the camera's calls can be overridden with a reason, and the reports
   show how often that happens. Flagged scans are the Quality Inspector's to decide (D-028).
-- **Requests close the loop with stock:** an approved request, once received, posts the delivery
-  into the inventory ledger. Nobody orders twice: Inventory marks items already requested.
 - **No per-person rankings or scores** anywhere (from the client survey). Reports aggregate by
   day, shoe type and defect only; a short day is explained by how many were absent, never who.
 - **Nothing is deleted:** stock moves through a ledger, rejected leather becomes salvage, and
@@ -316,12 +266,6 @@ erDiagram
   InventoryItem ||--o{ InventoryMovement : "ledger of"
   Batch |o--o{ InventoryMovement : "uses stock"
   Batch |o--o{ CvSettings : "camera points at"
-  User ||--o{ PurchaseRequest : "requests"
-  PurchaseRequest ||--|{ PurchaseRequestLine : "asks for"
-  InventoryItem |o--o{ PurchaseRequestLine : "is asked for"
-  PurchaseRequestLine |o--o| InventoryMovement : "received as"
-  PurchaseRequest ||--o{ PurchaseRequestEvent : "timeline"
-  PurchaseRequest ||--o{ PurchaseRequestRemark : "remarks"
 
   Batch {
     string code "B-2026-0001"
@@ -346,18 +290,6 @@ erDiagram
     string sku
     decimal quantityOnHand "changes only via movements"
     decimal reorderLevel
-  }
-  PurchaseRequest {
-    string code "MR-2026-0001"
-    enum status "PENDING, APPROVED, REJECTED, CANCELLED, RECEIVED"
-    date neededBy "required; urgency is worked out from it"
-    string rejectionReason
-  }
-  PurchaseRequestLine {
-    string itemName
-    enum category "leather rolls need the OK"
-    decimal quantity
-    decimal onHandAtRequest "snapshot"
   }
   InventoryMovement {
     enum type "IN, OUT, ADJUST"
@@ -605,7 +537,7 @@ isn't installed on the server" and Capture stays off; everything else works.
 
 The model reports `crease`, `cut`, `hole` and `scratch`. A fresh database knows `cut`, `hole`,
 `abrasion` and `dirt`, so `crease` and `scratch` would go to the review queue as unknown. Either
-run `npm run demo:reset -- --yes` (**it deletes test data**: batches, scans and requests; the
+run `npm run demo:reset -- --yes` (**it deletes test data**: batches and scans; the
 accounts stay) or add the two types by hand under Admin → Settings → Defect types
 ([`cv/README.md`](cv/README.md), "Defect types for yolo-v1").
 

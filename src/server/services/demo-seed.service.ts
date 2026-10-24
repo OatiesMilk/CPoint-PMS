@@ -1,6 +1,5 @@
 import type { Role } from "@/lib/domain";
-import { formatCalendarDate, manilaToday } from "@/lib/format";
-import { formatQuantity } from "@/lib/inventory-rules";
+import { manilaToday } from "@/lib/format";
 import { DEFAULT_SCHEDULE, slotsFor } from "@/lib/production-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
@@ -13,7 +12,6 @@ import {
 } from "@/server/lib/leather-scan";
 import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import { logger } from "@/server/lib/logger";
-import { renderReceiptImage, renderReceiptPdf } from "@/server/lib/receipt-sample";
 import { countBatches, listOpenBatches } from "@/server/models/batch.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
 import { findLiveOutcomes } from "@/server/models/outcome.model";
@@ -31,24 +29,13 @@ import { saveCheckIn, saveQuotas } from "./production.service";
 import { createItem, recordMovement } from "./inventory.service";
 import { moveReworkTicket } from "./rework.service";
 import { assignSalvage, discardSalvage } from "./salvage.service";
-import {
-  actOnRequest,
-  addRemark,
-  createRequest,
-  decideRequest,
-  getRequest,
-  orderRequest,
-  recordDelivery,
-  setRequester,
-  type UploadedFile,
-} from "./procurement.service";
 import { decideScan } from "./scan-decision.service";
 import { ingestScan } from "./scan-ingest.service";
 
 /**
  * The demo week (D-026, D-090): replays a small, believable past week of production through the
  * real services, each with its own `now`, so rolls, scans, repairs, salvage, the stock ledger,
- * requests, attendance, check-ins and audit rows all agree. Scans are Capture page captures (the
+ * attendance, check-ins and audit rows all agree. Scans are Capture page captures (the
  * website camera, D-069) by the QI, or by the Floor Manager on the day the QI is absent. Opt-in
  * (SEED_DEMO_WEEK or `npm run demo:seed`), and only on a database with no batches. The same seed
  * gives the same week.
@@ -147,7 +134,6 @@ export type DemoSeedResult =
       seeded: true;
       batches: number;
       scans: number;
-      requests: number;
       attendanceDays: number;
       checkIns: number;
       ms: number;
@@ -449,8 +435,22 @@ export async function seedDemoWeek(
     }
   }
 
-  // ── purchase requests (D-029): the constructor asks, the Floor Manager decides ──
-  const requests = await seedRequests();
+  // ── two more deliveries: thread and tacks on the second working day, leather and tacks on the
+  //    fourth. The shelf ends where the demo week of D-090 left it. ──
+  const workingDay = (i: number) => workingDays[Math.min(i, workingDays.length - 1)];
+  const deliveryFrom = (supplier: { name: string } | undefined) =>
+    supplier ? `Delivery from ${supplier.name}` : "Delivery received";
+  const supplies = deliveryFrom(suppliers[3] ?? suppliers[1] ?? suppliers[0]);
+  const leather = deliveryFrom(suppliers[0]);
+  await stock("TH-001", "IN", 4, supplies, at(workingDay(1), 14));
+  await stock("NL-001", "IN", 5, supplies, at(workingDay(1), 14));
+  await stock("LR-001", "IN", 2, leather, at(workingDay(3), 11));
+  await stock("NL-001", "IN", 5, leather, at(workingDay(3), 11));
+
+  // ── the demo constructor may capture at the camera (D-075), as the Floor Manager allowed ──
+  const demoConstructor = await findUserByEmail("constructor@cpoint.local");
+  if (demoConstructor?.isActive && !demoConstructor.canCapture)
+    await setCameraOperator(demoConstructor.id, true, fm).catch(() => undefined);
 
   // ── attendance (D-077, D-081): the past working days, taken by the Floor Manager ──
   const attendanceSaved = await seedAttendance();
@@ -462,7 +462,6 @@ export async function seedDemoWeek(
     seeded: true,
     batches,
     scans,
-    requests,
     attendanceDays: attendanceSaved,
     checkIns,
     ms: Date.now() - started,
@@ -593,392 +592,6 @@ export async function seedDemoWeek(
       }
     }
     return entered;
-  }
-
-  /**
-   * Requests through the real services, covering every state (D-029, D-039, D-041 to D-045):
-   *  1. received in full, with proof of delivery (posts stock IN, so the ledger still balances);
-   *  2. rejected with a reason;
-   *  3. cancelled by the requester while pending;
-   *  4. approved in part (one item rejected) and waiting to be ordered;
-   *  5. pending, needed tomorrow (High urgency);
-   *  6. partly received: two of four rolls came, with a photo and a PDF as proof;
-   *  7. ordered and late: the contact cement that request 5 is now chasing;
-   *  8. cancelled by the Floor Manager after ordering, with the reason;
-   *  9. raised by the Floor Manager, approved by them and ordered.
-   * What used to be "why it's needed" is each request's first remark (D-036). The proof files are
-   * generated samples, as the scan images are.
-   */
-  async function seedRequests(): Promise<number> {
-    const found = await findUserByEmail("constructor@cpoint.local");
-    if (!found || !found.isActive) return 0;
-    // Two of the requests are for leather rolls, which need the Floor Manager's OK (D-031).
-    if (!found.canRequestLeatherRolls) await setRequester(found.id, true, fm!);
-    // He may also capture at the camera (D-075), as the Floor Manager allowed under Camera.
-    if (!found.canCapture) await setCameraOperator(found.id, true, fm!).catch(() => undefined);
-    const sc = { id: found.id, role: found.role, canRequestLeatherRolls: true };
-    const manager = { id: fm!.id, role: fm!.role, canRequestLeatherRolls: false };
-    const item = (sku: string) => itemIds.get(sku);
-    const beforeLast = workingDays[Math.max(0, workingDays.length - 2)];
-    const day = (i: number) => workingDays[Math.min(i, workingDays.length - 1)];
-    // Leather from the first tannery; thread, tacks, cement and soles from the supplies shop.
-    const supplierA = suppliers[0];
-    const supplierB = suppliers[3] ?? suppliers[1] ?? supplierA;
-    let made = 0;
-
-    // Every step is queued with its time and run in time order, so request numbers, stock
-    // movements and audit rows read as one week. A step that would fall in the future is dropped,
-    // and so is everything that would have followed it.
-    const queue: { at: Date; run: () => Promise<void> }[] = [];
-    const schedule = (at: Date, run: () => Promise<void>) => {
-      if (past(at)) queue.push({ at, run });
-    };
-    const hours = (t: Date, n: number) => plus(t, n * HOUR);
-
-    type Lines = {
-      inventoryItemId?: string;
-      itemName?: string;
-      category?: "OTHER";
-      unit?: string;
-      quantity: number;
-    }[];
-    /** Sends a request at `when`, then hands its id to `next` to queue what happens to it. */
-    const send = (
-      when: Date,
-      values: { neededBy: string; remarks?: string; lines: Lines },
-      next: (id: string) => void = () => undefined,
-      by = sc,
-    ) =>
-      schedule(when, async () => {
-        if (values.lines.some((l) => !l.inventoryItemId && !l.itemName)) return;
-        made += 1;
-        next((await createRequest(values, by, when)).id);
-      });
-    /** Approves every item, marks the request as ordered, then hands over to `next`. */
-    const approveAndOrder = (
-      id: string,
-      approvedAt: Date,
-      order: { at: Date; supplier?: { id: string; name: string }; expected: string },
-      notes: { approve?: string; reference?: string; order?: string } = {},
-      next: (orderedAt: Date, supplier: string) => void = () => undefined,
-    ) => {
-      schedule(approvedAt, async () => {
-        await actOnRequest(id, { action: "approve", note: notes.approve }, fm!, approvedAt);
-      });
-      const { supplier } = order;
-      if (!supplier || order.at < approvedAt) return;
-      schedule(order.at, async () => {
-        const placedOn = manilaToday(order.at);
-        await orderRequest(
-          id,
-          {
-            supplierId: supplier.id,
-            reference: notes.reference,
-            expectedDeliveryOn: order.expected < placedOn ? placedOn : order.expected,
-            note: notes.order,
-          },
-          fm!,
-          order.at,
-        );
-        next(order.at, supplier.name);
-      });
-    };
-    /** Records a delivery of the given quantities (by item name), with generated proof files. */
-    const deliver = async (
-      id: string,
-      when: Date,
-      supplier: string,
-      got: Record<string, number>,
-      options: { note?: string; pdf?: boolean } = {},
-    ) => {
-      const detail = await getRequest(id, fm!, when);
-      if (!detail) return;
-      const approved = detail.lines.filter((l) => l.decision === "APPROVED");
-      const receipt = {
-        code: detail.code,
-        supplier,
-        date: formatCalendarDate(manilaToday(when)),
-        lines: approved
-          .filter((l) => (got[l.itemName] ?? 0) > 0)
-          .map((l) => `${formatQuantity(got[l.itemName], l.unit)} of ${l.itemName}`),
-      };
-      const files: UploadedFile[] = [
-        {
-          name: `receipt-${detail.code}.jpg`,
-          bytes: new Uint8Array(await renderReceiptImage(receipt)),
-        },
-      ];
-      if (options.pdf)
-        files.push({
-          name: `delivery-note-${detail.code}.pdf`,
-          bytes: new Uint8Array(renderReceiptPdf(receipt)),
-        });
-      await recordDelivery(
-        id,
-        {
-          deliveredOn: manilaToday(when),
-          note: options.note,
-          lines: approved.map((l) => ({ lineId: l.id, quantity: got[l.itemName] ?? 0 })),
-        },
-        files,
-        fm!,
-        when,
-      );
-    };
-
-    // 1. Monday: thread and tacks for the week. Approved, ordered, and delivered in full the next
-    //    afternoon with the receipt photographed.
-    const t1 = at(day(0), 9);
-    send(
-      t1,
-      {
-        neededBy: addDays(day(0), 3),
-        remarks: "Thread and tacks for this week's school shoe batches.",
-        lines: [
-          { inventoryItemId: item("TH-001"), quantity: 4 },
-          { inventoryItemId: item("NL-001"), quantity: 5 },
-        ],
-      },
-      (id) =>
-        approveAndOrder(
-          id,
-          hours(t1, 1.5),
-          { at: hours(t1, 2), supplier: supplierB, expected: day(1) },
-          { approve: "Ordering from the usual supplier today.", reference: "SO-4471" },
-          (orderedAt, supplier) => {
-            const got = at(day(1), 14);
-            if (got > orderedAt)
-              schedule(got, () =>
-                deliver(id, got, supplier, { "Waxed thread, black": 4, "Shoe tacks, 12 mm": 5 }),
-              );
-          },
-        ),
-    );
-
-    // 8. Monday: soles that aren't in inventory. Ordered, then the supplier dropped the product,
-    //    so the Floor Manager cancelled it with the reason (D-043).
-    const t8 = at(day(0), 13);
-    send(
-      t8,
-      {
-        neededBy: addDays(manilaToday(t8), 9),
-        remarks: "Soles for the new topsider sample run.",
-        lines: [
-          { itemName: "Rubber soles, size 40", category: "OTHER", unit: "pair", quantity: 20 },
-        ],
-      },
-      (id) =>
-        approveAndOrder(
-          id,
-          hours(t8, 2),
-          { at: hours(t8, 3), supplier: supplierB, expected: addDays(manilaToday(t8), 4) },
-          {},
-          (orderedAt) => {
-            const stop = hours(orderedAt, 50);
-            schedule(stop, async () => {
-              await actOnRequest(
-                id,
-                {
-                  action: "cancel",
-                  reason: "The supplier stopped making this sole. Looking for another one.",
-                },
-                fm!,
-                stop,
-              );
-            });
-          },
-        ),
-    );
-
-    // 6. Tuesday: rolls and tacks. Ordered for next week; the tacks and two of the four rolls came
-    //    early, so it is partly received, with a photo and the supplier's PDF as proof (D-042).
-    const t6 = at(day(1), 10);
-    send(
-      t6,
-      {
-        neededBy: addDays(manilaToday(t6), 8),
-        remarks: "Rolls and tacks for the two school shoe orders after this week.",
-        lines: [
-          { inventoryItemId: item("LR-001"), quantity: 4 },
-          { inventoryItemId: item("NL-001"), quantity: 5 },
-        ],
-      },
-      (id) =>
-        approveAndOrder(
-          id,
-          hours(t6, 1),
-          { at: hours(t6, 2), supplier: supplierA, expected: addDays(today, 2) },
-          { reference: "PO-1042", order: "Paid half up front; the rest on delivery." },
-          (orderedAt, supplier) => {
-            const got = at(day(3), 11);
-            if (got > orderedAt)
-              schedule(got, () =>
-                deliver(
-                  id,
-                  got,
-                  supplier,
-                  { "Black cowhide (school shoes)": 2, "Shoe tacks, 12 mm": 5 },
-                  {
-                    note: "Two rolls short. The supplier brings them with next week's truck.",
-                    pdf: true,
-                  },
-                ),
-              );
-          },
-        ),
-    );
-
-    // 7. Tuesday afternoon: contact cement. Ordered, expected two days later, and still not here:
-    //    "Delivery late" (D-041).
-    const t7 = at(day(1), 15);
-    send(
-      t7,
-      {
-        neededBy: addDays(manilaToday(t7), 4),
-        remarks: "Upper Making goes through a can every two days.",
-        lines: [{ inventoryItemId: item("AD-001"), quantity: 6 }],
-      },
-      (id) =>
-        approveAndOrder(
-          id,
-          hours(t7, 1),
-          { at: hours(t7, 18), supplier: supplierB, expected: addDays(manilaToday(t7), 2) },
-          {},
-          (orderedAt) => {
-            const chased = hours(orderedAt, 54);
-            schedule(chased, async () => {
-              await addRemark(
-                id,
-                "Called the supplier: their truck broke down. They promise it this week.",
-                fm!,
-                chased,
-              );
-            });
-          },
-        ),
-    );
-
-    // 2. Midweek: topsider leather the FM already has coming.
-    const t2 = at(day(2), 10);
-    send(
-      t2,
-      {
-        neededBy: addDays(manilaToday(t2), 5),
-        remarks: "Only two suede rolls left for the topsider orders.",
-        lines: [{ inventoryItemId: item("LR-002"), quantity: 2 }],
-      },
-      (id) => {
-        const no = hours(t2, 3);
-        schedule(no, async () => {
-          await actOnRequest(
-            id,
-            {
-              action: "reject",
-              reason: "Two suede rolls arrive with Thursday's leather delivery.",
-            },
-            fm!,
-            no,
-          );
-        });
-      },
-    );
-
-    // 3. Something not in inventory, then found in storage: cancelled by the requester.
-    const t3 = at(day(3), 13);
-    send(
-      t3,
-      {
-        neededBy: addDays(manilaToday(t3), 7),
-        remarks: "Eyelets for the new topsider sample.",
-        lines: [{ itemName: "Brass eyelets, 5 mm", category: "OTHER", unit: "pack", quantity: 2 }],
-      },
-      (id) => {
-        const off = hours(t3, 1);
-        schedule(off, async () => {
-          await actOnRequest(
-            id,
-            { action: "cancel", note: "Found a pack in the storage room." },
-            sc,
-            off,
-          );
-        });
-      },
-    );
-
-    // 9. Yesterday morning: the Floor Manager raises a restock request for suede, approves it and
-    //    orders it (D-045).
-    const t9 = at(beforeLast, 10);
-    send(
-      t9,
-      {
-        neededBy: addDays(manilaToday(t9), 9),
-        remarks: "Suede for the topsider orders booked for next month.",
-        lines: [{ inventoryItemId: item("LR-002"), quantity: 3 }],
-      },
-      (id) =>
-        approveAndOrder(
-          id,
-          hours(t9, 0.25),
-          { at: hours(t9, 1), supplier: supplierA, expected: addDays(today, 4) },
-          { reference: "PO-1047" },
-        ),
-      manager,
-    );
-
-    // 4. Yesterday: a leather roll and more thread. Decided item by item (D-039): the roll is
-    //    approved and waits to be ordered, the thread is rejected because Monday's order came in.
-    const t4 = at(beforeLast, 15);
-    send(
-      t4,
-      {
-        neededBy: addDays(manilaToday(t4), 7),
-        remarks: "Black cowhide and thread for next week's school shoe batches.",
-        lines: [
-          { inventoryItemId: item("LR-001"), quantity: 3 },
-          { inventoryItemId: item("TH-001"), quantity: 2 },
-        ],
-      },
-      (id) => {
-        const yes = hours(t4, 1);
-        schedule(yes, async () => {
-          const detail = await getRequest(id, fm!, yes);
-          const thread = item("TH-001");
-          if (!detail) return;
-          await decideRequest(
-            id,
-            {
-              note: "Ordering the roll tomorrow morning.",
-              lines: detail.lines.map((line) =>
-                line.inventoryItemId === thread
-                  ? {
-                      lineId: line.id,
-                      decision: "REJECTED" as const,
-                      reason: "Four spools came in with Tuesday's delivery, so we have enough.",
-                    }
-                  : { lineId: line.id, decision: "APPROVED" as const },
-              ),
-            },
-            fm!,
-            yes,
-          );
-        });
-      },
-    );
-
-    // 5. Today: contact cement is low and needed tomorrow, so a High-urgency request waits for the
-    //    Floor Manager.
-    const t5 = plus(now, -2 * HOUR);
-    send(t5, {
-      neededBy: addDays(manilaToday(t5), 1),
-      remarks: "The last can is half empty and Upper Making uses it all day.",
-      lines: [{ inventoryItemId: item("AD-001"), quantity: 4 }],
-    });
-
-    while (queue.length > 0) {
-      queue.sort((a, b) => a.at.getTime() - b.at.getTime());
-      await queue.shift()!.run();
-    }
-    return made;
   }
 
   /** What people do after each scan: overrides, review decisions, repairs, salvage. */

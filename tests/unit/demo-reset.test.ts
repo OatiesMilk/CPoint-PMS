@@ -4,12 +4,11 @@ const model = {
   countResetTargets: vi.fn(async () => ({ users: 135, scans: 900 })),
   deleteResetTargets: vi.fn(),
   upsertDefectTypeState: vi.fn(),
-  setLeatherRollRequester: vi.fn(),
   setDemoAccountNames: vi.fn(),
 };
 const env = { NODE_ENV: "development", BOOTSTRAP_ADMIN_EMAIL: "Owner@CPoint.local" };
 const recordAudit = vi.fn();
-const seedDemoWeek = vi.fn(async () => ({ seeded: true, batches: 14, scans: 290, requests: 9 }));
+const seedDemoWeek = vi.fn(async () => ({ seeded: true, batches: 14, scans: 290 }));
 const ensureDemoInventory = vi.fn();
 const ensureDemoConstructors = vi.fn();
 const clearUploadFolders = vi.fn();
@@ -73,11 +72,6 @@ describe("resetDemoData", () => {
     expect(runInTransaction).toHaveBeenCalledWith(expect.any(Function), { timeoutMs: 120_000 });
     expect(model.deleteResetTargets).toHaveBeenCalledWith(keep, "tx");
     expect(model.upsertDefectTypeState).toHaveBeenCalledTimes(MODEL_DEFECT_TYPES.length);
-    expect(model.setLeatherRollRequester).toHaveBeenCalledWith(
-      "constructor@cpoint.local",
-      true,
-      "tx",
-    );
     // The demo accounts get their names back (D-090).
     expect(model.setDemoAccountNames).toHaveBeenCalledWith(
       [

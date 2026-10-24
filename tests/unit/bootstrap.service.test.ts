@@ -98,22 +98,19 @@ describe("ensureDemoUsers", () => {
     expect(users.createUser).toHaveBeenCalledTimes(3);
   });
 
-  it("allows only the demo Shoe Constructor leather rolls, and only when creating it (D-031)", async () => {
+  it("creates each demo account with its role and no other switch (D-091)", async () => {
     Object.assign(env, { SEED_DEMO_USERS: true, DEMO_USER_PASSWORD: "demo-pass" });
     users.findUserByEmail.mockResolvedValue(null);
     await ensureDemoUsers();
-    const flags = Object.fromEntries(
-      users.createUser.mock.calls.map(([data]) => [
-        data.role,
-        (data as { canRequestLeatherRolls?: boolean }).canRequestLeatherRolls,
-      ]),
-    );
-    expect(flags).toEqual({
-      FLOOR_MANAGER: false,
-      QUALITY_INSPECTOR: false,
-      SYSTEM_ADMIN: false,
-      SHOE_CONSTRUCTOR: true,
-    });
+    expect(users.createUser).toHaveBeenCalledTimes(4);
+    for (const [data] of users.createUser.mock.calls)
+      expect(Object.keys(data).sort()).toEqual([
+        "createdAt",
+        "email",
+        "name",
+        "passwordHash",
+        "role",
+      ]);
   });
 });
 

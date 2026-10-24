@@ -45,13 +45,15 @@ configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 - When a module ships, remove its `phase` in `src/server/policies/navigation.ts` so the nav links it.
 - Never claim a check passed without running it. If you couldn't run it, say so.
 
-## Roles, CI fixes and the vault (D-089)
+## Roles, CI fixes and the vault (D-089, D-092)
 
-- Claude is the main developer. Codex runs QA and **fixes failing GitHub CI checks** on PRs.
-  When CI fails, don't fix it: read the failing check and write
-  `qa/CODEX_PROMPT_CI_FIX_<branch>.md` from `qa/templates/ci-fix-prompt.md` (failing jobs, error
-  lines, suspected files, the gates to rerun), then give Dylan that prompt. You may review
-  Codex's fix afterwards. Full loop: `qa/README.md` → "CI fix loop".
+- Claude is the main developer and **fixes every failure, failing GitHub CI checks included**.
+  Codex only tests and reports (the QA you write up); it never applies a fix (D-092). When CI
+  fails, read the failing check, fix it and rerun `npm run check` (and the `cv/` checks for
+  `station`). For an `e2e` or `docker` failure, which you don't run, also write
+  `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md` from `qa/templates/ci-recheck-prompt.md` (failing jobs,
+  error lines, what you changed, the jobs to rerun) and give Dylan that prompt. Full loop:
+  `qa/README.md` → "CI fix loop".
 - **Vault first:** Dylan's Obsidian vault `C:\dev\capstone-obsidian` is the first lookup. Read its
   `CLAUDE.md`, `Rules.md`, `Home.md`, `Inbox/CPoint commands and where to look.md` and the
   phase's summary in `Notes/Phases/` before exploring the repo; open only the repo files they
@@ -67,7 +69,7 @@ Run `/wrap-up` (or follow the documentation protocol in the master spec): update
 `docs/STATUS.md`, prepend to `docs/SESSION_LOG.md`, log decisions in `docs/DECISIONS.md`, tick
 `docs/ROADMAP.md`, and update the vault (Daily note and phase summary). Don't commit or push
 without Dylan's go: give him the exact git commands instead. CI runs once the PR is open; if it
-fails, write the Codex CI-fix prompt (above).
+fails, fix it (above).
 
 ## Commands
 

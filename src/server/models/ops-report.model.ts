@@ -1,7 +1,7 @@
 import { type Db, defaultDb } from "./db";
 
 // Operations report queries (D-033). Like report.model.ts these are aggregates per batch,
-// item, supplier or request. No query here selects or groups by a person (D-008).
+// item or supplier. No query here selects or groups by a person (D-008).
 
 type Range = { start: Date; end: Date };
 const iso = (d: Date) => d.toISOString();
@@ -57,10 +57,9 @@ export type StockRow = {
   reorderLevel: number;
   used: number;
   received: number;
-  requested: boolean;
 };
 
-/** Active items with their stock, what was used and received in the range, and open requests. */
+/** Active items with their stock, and what was used and received in the range. */
 export async function stockPosition(range: Range, db: Db = defaultDb()): Promise<StockRow[]> {
   const rows = await db.$queryRaw<
     {
@@ -73,18 +72,11 @@ export async function stockPosition(range: Range, db: Db = defaultDb()): Promise
       reorderLevel: string;
       used: string | null;
       received: string | null;
-      requested: boolean;
     }[]
   >`
     SELECT i.id, i.sku, i.name, i.category::text AS category, i.unit,
       i."quantityOnHand"::text AS "onHand", i."reorderLevel"::text AS "reorderLevel",
-      m.used::text AS used, m.received::text AS received,
-      EXISTS (
-        SELECT 1 FROM purchase_request_lines pl JOIN purchase_requests pr ON pr.id = pl."requestId"
-        WHERE pl."inventoryItemId" = i.id
-          AND pr.status IN ('PENDING', 'APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED')
-          AND pl.decision <> 'REJECTED'
-      ) AS requested
+      m.used::text AS used, m.received::text AS received
     FROM inventory_items i
     LEFT JOIN (
       SELECT "itemId",
@@ -107,73 +99,7 @@ export async function stockPosition(range: Range, db: Db = defaultDb()): Promise
     reorderLevel: Number(r.reorderLevel),
     used: Number(r.used ?? 0),
     received: Number(r.received ?? 0),
-    requested: r.requested,
   }));
-}
-
-/**
- * Purchasing flow: what is waiting now, and how fast requests were decided and received in the
- * range. Counts and times only; the requester is never selected.
- */
-export async function procurementFlow(
-  range: Range,
-  now: Date,
-  /** The last needed-by date (YYYY-MM-DD) that counts as High urgency today (D-037). */
-  highThrough: string,
-  /** Today in Manila (YYYY-MM-DD): an order expected before it is late (D-041). */
-  today: string,
-  db: Db = defaultDb(),
-) {
-  const [waiting, byStatus, timings] = await Promise.all([
-    db.$queryRaw<
-      {
-        pending: bigint;
-        high: bigint;
-        oldestPendingMs: number | null;
-        awaiting: bigint;
-        late: bigint;
-      }[]
-    >`
-      SELECT
-        count(*) FILTER (WHERE status = 'PENDING') AS pending,
-        count(*) FILTER (WHERE status = 'PENDING' AND "neededBy" <= ${highThrough}::date) AS high,
-        max(extract(epoch FROM (${iso(now)}::timestamptz AT TIME ZONE 'UTC') - "createdAt")) FILTER (WHERE status = 'PENDING') * 1000 AS "oldestPendingMs",
-        count(*) FILTER (WHERE status IN ('APPROVED', 'ORDERED', 'PARTIALLY_RECEIVED')) AS awaiting,
-        count(*) FILTER (WHERE status IN ('ORDERED', 'PARTIALLY_RECEIVED')
-          AND "expectedDeliveryOn" < ${today}::date) AS late
-      FROM purchase_requests`,
-    db.$queryRaw<{ status: string; count: bigint }[]>`
-      SELECT status::text AS status, count(*) AS count FROM purchase_requests
-      WHERE "createdAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-        AND "createdAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-      GROUP BY 1`,
-    db.$queryRaw<{ decideMs: number | null; receiveMs: number | null }[]>`
-      SELECT
-        (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM "decidedAt" - "createdAt")) * 1000
-           FROM purchase_requests
-           WHERE "decidedAt" IS NOT NULL
-             AND "decidedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-             AND "decidedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')) AS "decideMs",
-        (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM "receivedAt" - "decidedAt")) * 1000
-           FROM purchase_requests
-           WHERE "receivedAt" IS NOT NULL AND "decidedAt" IS NOT NULL
-             AND "receivedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-             AND "receivedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')) AS "receiveMs"`,
-  ]);
-  const w = waiting[0];
-  return {
-    pending: n(w?.pending),
-    highPending: n(w?.high),
-    oldestPendingMs: num(w?.oldestPendingMs),
-    awaitingDelivery: n(w?.awaiting),
-    lateAwaitingDelivery: n(w?.late),
-    byStatus: Object.fromEntries(byStatus.map((r) => [r.status, n(r.count)])) as Record<
-      string,
-      number
-    >,
-    medianDecideMs: num(timings[0]?.decideMs),
-    medianReceiveMs: num(timings[0]?.receiveMs),
-  };
 }
 
 export type SupplierRow = {

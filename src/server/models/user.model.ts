@@ -21,7 +21,6 @@ export type CreateUserData = {
   passwordHash: string;
   role: Role;
   mustChangePassword?: boolean;
-  canRequestLeatherRolls?: boolean;
   /** Only the demo constructors set this, so they are on the demo week's attendance (D-081). */
   createdAt?: Date;
 };
@@ -86,7 +85,6 @@ const adminSelect = {
   role: true,
   isActive: true,
   mustChangePassword: true,
-  canRequestLeatherRolls: true,
   canCapture: true,
   lockedUntil: true,
   lastLoginAt: true,
@@ -139,13 +137,7 @@ export async function listUsers(
 
 export function updateUser(
   id: string,
-  data: {
-    name?: string;
-    email?: string;
-    role?: Role;
-    isActive?: boolean;
-    canRequestLeatherRolls?: boolean;
-  },
+  data: { name?: string; email?: string; role?: Role; isActive?: boolean },
   db: Db = defaultDb(),
 ) {
   return db.user.update({ where: { id }, data, select: adminSelect });

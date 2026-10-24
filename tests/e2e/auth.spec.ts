@@ -20,7 +20,6 @@ const EXPECTED_NAV = {
     "Attendance",
     "Batches",
     "Inventory",
-    "Procurement",
     "Camera",
     "Capture",
     "Scans",
@@ -47,7 +46,6 @@ const EXPECTED_NAV = {
     "Attendance",
     "Batches",
     "Inventory",
-    "Procurement",
     "Camera",
     "Scans",
     "Users",
@@ -55,7 +53,7 @@ const EXPECTED_NAV = {
     "API tokens",
     "Audit log",
   ],
-  constructor: ["Home", "Material requests"],
+  constructor: ["Home"],
 } as const;
 
 /** Whether this account may capture at the camera, read from the database the app uses. */

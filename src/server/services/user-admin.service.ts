@@ -134,32 +134,18 @@ export async function updateAccount(id: string, values: UserFormValues, actor: A
     const other = await findUserByEmail(values.email);
     if (other && other.id !== id) throw Errors.validation([EMAIL_TAKEN(values.email)]);
   }
-  // Only a Shoe Constructor can be allowed leather rolls (D-031): a role change ends it.
-  const endsRequester = before.canRequestLeatherRolls && values.role !== "SHOE_CONSTRUCTOR";
   return runInTransaction(async (tx) => {
-    const after = await updateUserRow(
-      id,
-      endsRequester ? { ...values, canRequestLeatherRolls: false } : values,
-      tx,
-    ).catch((e: unknown) => emailTaken(e, values.email));
+    const after = await updateUserRow(id, values, tx).catch((e: unknown) =>
+      emailTaken(e, values.email),
+    );
     if (before.role === "SYSTEM_ADMIN") await assertAdminRemains(tx);
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "user.update",
       entity: "User",
       entityId: id,
-      before: {
-        name: before.name,
-        email: before.email,
-        role: before.role,
-        ...(endsRequester ? { canRequestLeatherRolls: true } : {}),
-      },
-      after: {
-        name: after.name,
-        email: after.email,
-        role: after.role,
-        ...(endsRequester ? { canRequestLeatherRolls: false } : {}),
-      },
+      before: { name: before.name, email: before.email, role: before.role },
+      after: { name: after.name, email: after.email, role: after.role },
     });
     return after;
   });
