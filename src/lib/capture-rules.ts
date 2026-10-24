@@ -102,6 +102,18 @@ export const FLOOR_VERDICT = {
   REJECT: { word: "Reject", next: "Set aside for salvage" },
 } as const satisfies Record<"PASS" | "REJECT", { word: string; next: string }>;
 
+/**
+ * The line when no picture could be taken: the camera has no frame yet (it is still starting, or
+ * Floor view has just given its own video the stream) or the browser couldn't make the image. Floor
+ * view has no Capture button, so it names Space there.
+ */
+export function frameProblemMessage(problem: "not_ready" | "no_image", floor: boolean): string {
+  const again = floor ? "press Space again" : "press Capture again";
+  return problem === "not_ready"
+    ? `The camera is still starting. Wait a moment, then ${again}.`
+    : `The picture couldn’t be taken from the camera. ${again[0].toUpperCase()}${again.slice(1)}.`;
+}
+
 /** The line under a failed send, by what happened. */
 export function sendFailureMessage(status: number | "network", appMessage?: string): string {
   if (status === "network")

@@ -124,6 +124,8 @@ test("the Quality Inspector enters the due check-in; a second entry is refused; 
   browser,
 }) => {
   const page = await signedIn(browser, ACCOUNTS.inspector.email, ACCOUNTS.inspector.home);
+  // A note of its own, so earlier runs' check-ins on the same database never match this row.
+  const note = `E2E check-in ${Date.now()}`;
   // The QI home points at the due check-in.
   await expect(page.getByTestId("next-check-in-card")).toBeVisible();
 
@@ -144,18 +146,18 @@ test("the Quality Inspector enters the due check-in; a second entry is refused; 
   await expect(fields.first()).toBeFocused();
 
   for (let i = 0; i < count; i++) await fields.nth(i).fill(String(10 + i));
-  await dialog.getByLabel("Notes (optional)").fill("E2E check-in");
+  await dialog.getByLabel("Notes (optional)").fill(note);
   await dialog.getByRole("button", { name: "Save count" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText(/check-in saved\./)).toBeVisible();
 
-  const row = today.getByRole("row").filter({ hasText: "Note: E2E check-in" });
+  const row = today.getByRole("row").filter({ hasText: `Note: ${note}` });
   await expect(row).toContainText(/Entered/);
 
   // The same slot again through the API: 409 STALE, naming who entered it.
   const state = (await (await page.request.get("/api/v1/production/today")).json()).data;
   const saved = state.rows.find(
-    (r: { checkIn: { notes: string | null } | null }) => r.checkIn?.notes === "E2E check-in",
+    (r: { checkIn: { notes: string | null } | null }) => r.checkIn?.notes === note,
   );
   const again = await page.request.post("/api/v1/production/check-ins", {
     data: {

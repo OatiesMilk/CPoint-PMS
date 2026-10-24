@@ -31,7 +31,8 @@ import { ingestScan } from "./scan-ingest.service";
  * The demo week (D-026, D-090): replays a small, believable past week of production through the
  * real services, each with its own `now`, so rolls, scans, the stock ledger, attendance,
  * check-ins and audit rows all agree. Every section is Pass or Reject and nobody changes it
- * (D-093); one section shows an unknown class, rejected and listed in Settings (A-12). Scans are Capture page captures (the
+ * (D-093); the newest roll's last section always shows an unknown class (the random mix adds a few
+ * more), rejected and listed in Settings (A-12). Scans are Capture page captures (the
  * website camera, D-069) by the QI, or by the Floor Manager on the day the QI is absent. Opt-in
  * (SEED_DEMO_WEEK or `npm run demo:seed`), and only on a database with no batches. The same seed
  * gives the same week.

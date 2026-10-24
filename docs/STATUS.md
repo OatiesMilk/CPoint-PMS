@@ -4,18 +4,16 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-24
-**Branch:** `main` has Phase 24 (#19). The Phase 24 QA report and notes are on `docs/phase-24-qa`
-(not in `main` yet). Uncommitted in `C:\dev\CPoint-PMS`, for a new branch from the latest `main`
-(Dylan commits; the team opens and merges the PR, D-032): the Phase 25 work.
+**Branch:** `main` has Phase 25 (#21, CI green). Uncommitted, for a new branch from the latest
+`main` (Dylan commits): the Phase 25 QA run 1 fixes and Codex's report.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 25, Pass or Reject (D-093, D-094). **Built; QA pending** (handoff
-`qa/handoffs/2026-10-24-phase-25-pass-or-reject.md`, prompt `qa/CODEX_PROMPT_PHASE_25.md`). Plan:
-`docs/prompts/plans/phase-25-plan.md`, approved by Dylan ("yes to all" three questions). Every
-section is Pass or Reject and the camera's verdict is final; the Review Queue, the Repair Station,
-Salvage and the override are gone (migration `pass_or_reject`, **not yet applied to the dev
-database**: Dylan backs up first). Phase 24 passed QA (18 of 18) on 2026-10-23.
+**Current phase:** Phase 25, Pass or Reject (D-093, D-094). **Merged; QA run 1 FAIL, fixes
+ready for run 2** (report `qa/reports/2026-10-24-phase-25-pass-or-reject.md`, run 2 prompt
+`qa/CODEX_PROMPT_PHASE_25_RUN2.md`). Run 1: 22 of 24 scenarios, e2e 71 passed, 1 failed. No app
+fault in the Pass or Reject rule, the removals, Settings or reports. Migration `pass_or_reject` is
+applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 **Then: Phases 26 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
 `docs/prompts/factory-visit-changes.md`, C-1 to C-41).
 **Overall:** 26 phases built (0 to 25); 6 planned (26 to 31, Phase 30 in two parts)
@@ -52,7 +50,7 @@ database**: Dylan backs up first). Phase 24 passed QA (18 of 18) on 2026-10-23.
   CPoint counts stock by hand)
 - [x] 24. Remove Material Requests and Procurement (QA passed, 18 of 18)
 - [x] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
-      (built; QA pending)
+      (merged; QA run 1 FAIL, fixes ready)
 - [ ] 26. Capture on the constructors' own phones; rolls start and finish there
 - [ ] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
 - [ ] 28. Each role sees only its modules; demo sign-in and reset on the login page
@@ -218,7 +216,15 @@ database**: Dylan backs up first). Phase 24 passed QA (18 of 18) on 2026-10-23.
 - **Quality:**
   - 519 unit tests pass (Vitest; 588 before Phase 25, the difference is the deleted review, repair
     and salvage tests; 716 before Phase 24), plus 81 model-toolkit tests (pytest; they also pass
-    without OpenCV or torch, as in CI). Phase 25's e2e changes are written, not run (Codex).
+    without OpenCV or torch, as in CI). 521 since the Phase 25 QA fixes.
+  - Phase 25 (Codex, 2026-10-24, run 1): FAIL, 22 of 24 scenarios, e2e 71 passed, 1 failed, 1
+    skipped. Fixes: the Production check-in e2e test matched earlier runs' rows by a fixed note
+    (now a note of its own per run); Space right after entering Floor view sent no picture with
+    "Press Capture again" (now it waits for a frame and says "The camera is still starting. Wait a
+    moment, then press Space again."); two handoff expectations were wrong (the daily CSV starts
+    "Date (Manila)"; the demo week has at least one unknown-class section, seven in that run).
+    CI on PR #21: run 1 failed (two e2e locators, the docker job's old counts), fixed, run 2
+    green.
   - Phase 20 (Codex, 2026-10-20, run 1, which also covered Phases 18 and 19): 56 of 69 passed, 4
     failed, 9 blocked; e2e 75 passed, 10 failed, 1 skipped (86). The app faults were old wording
     (a "Rework" button in Review, "the camera decided rework" in Override, "need rework" and "in
@@ -290,21 +296,19 @@ database**: Dylan backs up first). Phase 24 passed QA (18 of 18) on 2026-10-23.
 
 ## Next step (exact)
 
-0. Dylan: merge (or open the PR for) `docs/phase-24-qa`, the Phase 24 QA report.
-1. Dylan, on the laptop: back up the dev database (the vault's command), then `npm run db:deploy`
-   and `npm run db:generate` to apply `pass_or_reject`.
-2. Dylan: commit Phase 25 on a new branch from the latest `main` (git commands in the Phase 25
-   report; specific files only) and open the PR (D-032).
-3. Codex: Phase 25 QA from `qa/CODEX_PROMPT_PHASE_25.md` (paste it into Codex).
-4. After QA passes: back up, then `npm run demo:reset -- --yes` for a fresh demo week in the new
-   rule.
+1. Dylan: commit the Phase 25 QA fixes and Codex's report on a new branch from the latest `main`
+   (git commands in this session's reply) and open the PR (D-032).
+2. Codex: Phase 25 run 2 from `qa/CODEX_PROMPT_PHASE_25_RUN2.md`.
+3. Dylan: delete the two QA folders Codex couldn't remove
+   (`%TEMP%\cpoint-qa-uploads-phase25-…`).
+4. After run 2 passes: back up, then `npm run demo:reset -- --yes` for a fresh demo week.
 5. Phase 26 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 26. Stop
    for my approval before writing code."
 6. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
-   an A4 sheet). The open device checks (F3, P18 S3, P18 S18; R4 is gone with the Repair Station)
-   fit best there. Revoke the "Simulator" token first (it was pasted in chat).
-7. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
-   files; `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
+   an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the
+   "Simulator" token first (it was pasted in chat).
+7. Optional (Dylan's call): delete the backups in `storage/backups/` and the old `certs/` files;
+   `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
 
 Later:
 
