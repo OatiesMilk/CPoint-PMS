@@ -84,7 +84,6 @@ test.describe("camera ingestion API", () => {
 
 test("a section's page draws the boxes, explains the verdict and offers no change (D-093)", async ({
   browser,
-  page,
   request,
 }) => {
   const api = await managerApi(browser);
@@ -96,7 +95,10 @@ test("a section's page draws the boxes, explains the verdict and offers no chang
   ]);
   const { scanId } = (await res.json()).data;
 
+  // A fresh browser context per role, so the second sign-in never meets the first one's session.
   for (const account of [ACCOUNTS.inspector, ACCOUNTS.manager]) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
     await page.goto("/login");
     await signIn(page, account.email);
     await expect(page).toHaveURL(account.home);
@@ -106,7 +108,7 @@ test("a section's page draws the boxes, explains the verdict and offers no chang
     await expect(page.getByTestId("rules-used")).toContainText("Not accepted");
     await expect(page.getByRole("cell", { name: "Not accepted" })).toBeVisible();
     await expect(page.getByRole("button", { name: /Override|Pass|Fixable|Reject/ })).toHaveCount(0);
-    await page.context().clearCookies();
+    await context.close();
   }
 
   // The old decision endpoint is gone.

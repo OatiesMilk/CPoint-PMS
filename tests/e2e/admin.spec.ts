@@ -143,7 +143,9 @@ test.describe("camera settings", () => {
     ).toBeVisible();
 
     await found.fill("45");
-    await expect(page.getByText("What the camera will decide")).toContainText("from 45%");
+    await expect(page.getByRole("listitem").filter({ hasText: "Not accepted type" })).toContainText(
+      "found from 45%",
+    );
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Saved. New scans use it from now on.")).toBeVisible();
 

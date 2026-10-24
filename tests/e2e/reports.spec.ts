@@ -85,7 +85,11 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
   await signInAs(page, ACCOUNTS.manager);
   await page.goto(`/reports?view=quality&from=${day}&to=${day}`);
   await expect(page.getByTestId("total-scanned")).toHaveText(String(after.totals.scanned));
-  await expect(page.getByTestId("total-reject")).toContainText(`${after.totals.reject} sections`);
+  // The tile's title is the share; the line under it is the count.
+  const rejectTile = page
+    .locator("[data-slot='card']")
+    .filter({ has: page.getByTestId("total-reject") });
+  await expect(rejectTile).toContainText(`${after.totals.reject} sections`);
   await expect(page.getByTestId("daily-table").getByRole("row", { name: day })).toContainText(
     String(after.totals.reject),
   );

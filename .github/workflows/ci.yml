@@ -114,7 +114,7 @@ jobs:
       - name: Bootstrap created the admin and reference data
         run: |
           docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "select count(*) from users where role='SYSTEM_ADMIN'" | grep -qx 1
-          docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "select count(*) from defect_types" | grep -qx 4
+          docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "select count(*) from defect_types" | grep -qx 6
       - name: The demo week seeds in the background, consistently
         run: |
           q() { docker compose exec -T db psql -U cpoint -d cpoint_pms -tAc "$1"; }
@@ -126,7 +126,9 @@ jobs:
           # How much of the week has passed depends on the weekday CI runs on.
           test "$(q "select count(*) from batches")" -ge 10
           test "$(q "select count(*) from scans")" -ge 40
-          test "$(q "select count(*) from scans where status='PENDING_REVIEW'")" -ge 1
+          # Pass or Reject only (D-093), and one section rejected for an unknown class (A-12).
+          q "select count(*) from scans where \"finalVerdict\" is distinct from \"aiVerdict\"" | grep -qx 0
+          test "$(q "select count(*) from detections where \"isUnknownClass\"")" -ge 1
           # Production progression (Phase 23): the default schedule, a quota per shoe type, check-ins.
           test "$(q "select count(*) from production_schedules")" -eq 1
           test "$(q "select count(*) from daily_quotas")" -eq 2
