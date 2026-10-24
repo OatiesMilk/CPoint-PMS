@@ -120,7 +120,10 @@ test("a low item shows on the Floor Manager home", async ({ browser, page }) => 
   const card = page.getByTestId("low-stock-card");
   await expect(card).toContainText("at or below the reorder level");
   await page.goto(`/inventory?stock=low&q=${item.sku}`);
-  await expect(page.getByRole("row", { name: new RegExp(item.sku) })).toContainText("Low");
+  const row = page.getByRole("row", { name: new RegExp(item.sku) });
+  await expect(row).toContainText("Low");
+  // The badge is all the row offers besides the item's own page: stock comes in by Receive stock.
+  await expect(row.getByRole("link")).toHaveCount(1);
 });
 
 test("creating a batch can take a roll from inventory, and cancelling it before production returns it", async ({

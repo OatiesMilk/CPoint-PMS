@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, FileText, Hourglass, TriangleAlert } from "lucide-react";
+import { ArrowRight, Check, FileText, TriangleAlert } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -239,15 +239,7 @@ export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"
                     {i.coverDays === null ? "—" : `${Math.round(i.coverDays * 10) / 10} d`}
                   </TableCell>
                   <TableCell>
-                    <span className="flex flex-wrap gap-1">
-                      <StockBadge level={i.level} />
-                      {i.requested && (
-                        <Badge tone="info">
-                          <Hourglass aria-hidden />
-                          Requested
-                        </Badge>
-                      )}
-                    </span>
+                    <StockBadge level={i.level} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -259,61 +251,6 @@ export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"
             {stock.atRisk.length - STOCK_ROWS} more in the Stock CSV.
           </p>
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Purchasing: what waits for a decision or a delivery, and how fast requests move. */
-export function ProcurementFlowCard({ p }: { p: OperationsReport["procurement"] }) {
-  const sent = Object.values(p.byStatus).reduce((t, v) => t + v, 0);
-  return (
-    <Card data-testid="procurement-flow">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle>Purchasing</CardTitle>
-            <CardDescription>
-              {sent} request{sent === 1 ? "" : "s"} sent in this range. Waiting counts are live.
-            </CardDescription>
-          </div>
-          <SectionLink href="/procurement">Procurement</SectionLink>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <dl className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <dt className="text-muted-foreground">Waiting for a decision</dt>
-            <dd className="text-2xl font-semibold tabular-nums">{p.pending}</dd>
-            <dd className="text-xs text-muted-foreground">
-              {p.highPending > 0 ? `${p.highPending} high urgency` : "none high urgency"}
-              {p.oldestPendingMs !== null && ` · oldest ${formatDuration(p.oldestPendingMs)}`}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Approved, not all received</dt>
-            <dd className="text-2xl font-semibold tabular-nums">{p.awaitingDelivery}</dd>
-            <dd className="text-xs text-muted-foreground">
-              {p.lateAwaitingDelivery > 0
-                ? `${p.lateAwaitingDelivery} past the expected date`
-                : "none late"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Typical time to decide</dt>
-            <dd className="text-2xl font-semibold tabular-nums">
-              {p.medianDecideMs === null ? "—" : formatDuration(p.medianDecideMs)}
-            </dd>
-            <dd className="text-xs text-muted-foreground">sent to approved or rejected</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Typical time to receive</dt>
-            <dd className="text-2xl font-semibold tabular-nums">
-              {p.medianReceiveMs === null ? "—" : formatDuration(p.medianReceiveMs)}
-            </dd>
-            <dd className="text-xs text-muted-foreground">approved to in stock</dd>
-          </div>
-        </dl>
       </CardContent>
     </Card>
   );

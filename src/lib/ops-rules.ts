@@ -4,7 +4,7 @@ export { stockLevel, type StockLevel } from "./inventory-rules";
 
 /**
  * Operations report rules (D-033), pure and client-safe. Everything is an aggregate per day,
- * shoe type, batch, item, supplier or request, never per person (D-008). The thresholds below are
+ * shoe type, batch, item or supplier, never per person (D-008). The thresholds below are
  * operational defaults for what the report calls "needs attention"; they are named here so a
  * later settings screen can take them over.
  */
@@ -17,10 +17,6 @@ export const ATTENTION = {
   repairWaitingMs: DAY,
   /** Stock that would run out within this many days at the recent pace. */
   coverDays: 3,
-  /** A pending purchase request older than this needs a decision. */
-  requestPendingMs: 2 * DAY,
-  /** An approved request not received after this long is late. */
-  requestLateMs: 7 * DAY,
   /** A supplier is flagged when its Fixable + reject share is this far above the line's. */
   supplierGap: 0.1,
   /** Sections needed before a supplier's share means anything. */
@@ -114,12 +110,6 @@ export type AttentionInput = {
   belowQuota: { below: number; of: number } | null;
   repairs: { waitingOverDay: number; open: number; oldestWaitingMs: number | null };
   stock: { out: number; low: number; shortCover: { item: string; days: number }[] };
-  requests: {
-    highPending: number;
-    pending: number;
-    oldestPendingMs: number | null;
-    lateAwaitingDelivery: number;
-  };
   suppliers: { supplier: string; sections: number; problemShare: number | null }[];
   lineProblemShare: number | null;
   flaggedScans: number;
@@ -146,7 +136,7 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
       id: "stock-low",
       severity: "warning",
       title: `${plural(i.stock.low, "item")} at or below reorder level`,
-      detail: "Raise a purchase request before they run out.",
+      detail: "Restock them before they run out.",
       href: "/inventory",
     });
   if (i.stock.shortCover.length > 0) {
@@ -183,34 +173,6 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
           ? `The oldest has waited ${formatDuration(i.repairs.oldestWaitingMs)} without being started.`
           : "Nobody has started them yet.",
       href: "/rework",
-    });
-
-  if (i.requests.highPending > 0)
-    out.push({
-      id: "requests-high",
-      severity: "warning",
-      title: `${plural(i.requests.highPending, "high-urgency purchase request")} waiting for a decision`,
-      detail: "They are needed within 3 working days and are listed first in the Pending tab.",
-      href: "/procurement?status=PENDING",
-    });
-  else if (
-    i.requests.oldestPendingMs !== null &&
-    i.requests.oldestPendingMs > ATTENTION.requestPendingMs
-  )
-    out.push({
-      id: "requests-old",
-      severity: "info",
-      title: `${plural(i.requests.pending, "purchase request")} pending`,
-      detail: `The oldest has waited ${formatDuration(i.requests.oldestPendingMs)}.`,
-      href: "/procurement?status=PENDING",
-    });
-  if (i.requests.lateAwaitingDelivery > 0)
-    out.push({
-      id: "requests-late",
-      severity: "warning",
-      title: `${plural(i.requests.lateAwaitingDelivery, "ordered request")} past the expected delivery date`,
-      detail: "Check with the supplier, then record the delivery when it arrives.",
-      href: "/procurement?status=all&late=1",
     });
 
   if (i.lineProblemShare !== null) {

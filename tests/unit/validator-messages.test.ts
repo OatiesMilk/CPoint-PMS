@@ -17,19 +17,6 @@ import {
   salvageDiscardSchema,
   salvageUnassignSchema,
 } from "@/server/validators/outcome.validator";
-import {
-  approveSchema,
-  cancelAfterApprovalSchema,
-  cancelSchema,
-  closeShortSchema,
-  decideSchema,
-  deliverySchema,
-  orderSchema,
-  purchaseRequestSchema,
-  rejectSchema,
-  remarkSchema,
-  requesterSchema,
-} from "@/server/validators/procurement.validator";
 import { decisionSchema, ingestFieldsSchema } from "@/server/validators/scan.validator";
 import {
   defectTypeCreateSchema,
@@ -188,107 +175,6 @@ const CASES: [string, ZodType, unknown[]][] = [
     [{}, { reason: "x", expectedStatus: "AVAILABLE" }, { reason: long(301), expectedStatus: "X" }],
   ],
   [
-    "material request",
-    purchaseRequestSchema,
-    [
-      {},
-      { neededBy: "", lines: [] },
-      { neededBy: "tomorrow", lines: [{ quantity: "" }] },
-      { neededBy: "2000-01-01", lines: [{ inventoryItemId: "nope", quantity: "0" }] },
-      {
-        neededBy: "2999-01-01",
-        remarks: long(501),
-        lines: [{ itemName: "x", category: "ROCKS", unit: long(21), quantity: "1.999" }],
-      },
-      {
-        neededBy: "2999-01-01",
-        lines: [{ itemName: long(81), quantity: "abc", note: long(201) }],
-      },
-      {
-        neededBy: "2999-01-01",
-        lines: Array.from({ length: 11 }, () => ({
-          inventoryItemId: "0199a8f0-0000-7000-8000-000000000001",
-          quantity: "99999999",
-        })),
-      },
-    ],
-  ],
-  ["request approve", approveSchema, [{ note: long(301) }, { note: 5 }]],
-  ["request reject", rejectSchema, [{}, { reason: "" }, { reason: "x" }, { reason: long(301) }]],
-  [
-    "request item decisions",
-    decideSchema,
-    [
-      {},
-      { lines: [] },
-      { lines: [{}] },
-      { lines: [{ lineId: "nope", decision: "MAYBE" }] },
-      { lines: [{ lineId: "0199a8f0-0000-7000-8000-000000000001", decision: "REJECTED" }] },
-      {
-        lines: [
-          { lineId: "0199a8f0-0000-7000-8000-000000000001", decision: "REJECTED", reason: "x" },
-        ],
-      },
-      {
-        note: long(301),
-        lines: [
-          {
-            lineId: "0199a8f0-0000-7000-8000-000000000001",
-            decision: "REJECTED",
-            reason: long(301),
-          },
-        ],
-      },
-    ],
-  ],
-  ["request cancel", cancelSchema, [{ note: long(301) }, { reason: long(301) }]],
-  [
-    "request cancel after approval",
-    cancelAfterApprovalSchema,
-    [{}, { reason: "" }, { reason: "x" }, { reason: long(301) }],
-  ],
-  [
-    "request order",
-    orderSchema,
-    [
-      {},
-      { supplierId: "", expectedDeliveryOn: "" },
-      { supplierId: "nope", expectedDeliveryOn: "soon" },
-      {
-        supplierId: "0199c0de-0000-7000-8000-000000000001",
-        reference: long(61),
-        expectedDeliveryOn: "2000-01-01",
-        note: long(301),
-      },
-      { supplierId: "0199c0de-0000-7000-8000-000000000001", expectedDeliveryOn: "2999-01-01" },
-    ],
-  ],
-  [
-    "request delivery",
-    deliverySchema,
-    [
-      {},
-      { deliveredOn: "", lines: [] },
-      { deliveredOn: "yesterday", lines: "none" },
-      { deliveredOn: "2999-01-01", lines: [{ lineId: "nope", quantity: "abc" }] },
-      {
-        deliveredOn: "2026-01-01",
-        note: long(301),
-        lines: [
-          { lineId: "0199c0de-0000-7000-8000-000000000001", quantity: -1 },
-          { lineId: "0199c0de-0000-7000-8000-000000000002", quantity: "1.234" },
-        ],
-      },
-    ],
-  ],
-  [
-    "request close short",
-    closeShortSchema,
-    [{}, { reason: "" }, { reason: "x" }, { reason: long(301) }],
-  ],
-  ["request remark", remarkSchema, [{}, { body: "" }, { body: "   " }, { body: long(501) }]],
-  ["leather roll requester", requesterSchema, [{}, { canRequestLeatherRolls: "yes" }]],
-  [
     "scan decision",
     decisionSchema,
     [
@@ -429,58 +315,10 @@ describe("validator messages are specific (D-038)", () => {
   }
 
   it("uses the brief's wording for the common cases", () => {
-    const line = (quantity: string) =>
-      messages(purchaseRequestSchema, {
-        neededBy: "2999-01-01",
-        lines: [{ itemName: "Brass eyelets", category: "OTHER", unit: "pack", quantity }],
-      });
-    expect(line("0")).toContain("Enter a quantity greater than 0.");
-    expect(line("1.234")).toContain("Quantity can have at most 2 decimal places.");
-    expect(messages(purchaseRequestSchema, { neededBy: "2000-01-01", lines: [] })).toContain(
-      "Needed by can't be in the past. Pick today or a later date.",
-    );
-    expect(messages(purchaseRequestSchema, { lines: [] })).toContain(
-      "Choose the date you need the items by.",
-    );
-  });
-
-  it("no longer asks for a priority or a justification (D-036, D-037)", () => {
-    const parsed = purchaseRequestSchema.parse({
-      neededBy: new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10),
-      lines: [{ itemName: "Brass eyelets", category: "OTHER", unit: "pack", quantity: "2" }],
-    });
-    expect(parsed).not.toHaveProperty("priority");
-    expect(parsed).not.toHaveProperty("justification");
-    expect(parsed.remarks).toBeUndefined();
-  });
-});
-
-describe("ordering and delivery messages name the field and the fix (D-041, D-042)", () => {
-  it("says which order field is missing or wrong", () => {
-    expect(messages(orderSchema, {})).toEqual([
-      "Choose the supplier you ordered from.",
-      "Choose the date the supplier expects to deliver.",
-    ]);
-    expect(
-      messages(orderSchema, {
-        supplierId: "0199c0de-0000-7000-8000-000000000001",
-        expectedDeliveryOn: "2000-01-01",
-      }),
-    ).toEqual(["Expected delivery can't be in the past. Pick today or a later date."]);
-  });
-
-  it("accepts 0 for an item that didn't come, and says what's wrong with a quantity", () => {
-    const lineId = "0199c0de-0000-7000-8000-000000000001";
-    expect(
-      deliverySchema.safeParse({ deliveredOn: "2026-01-01", lines: [{ lineId, quantity: "0" }] })
-        .success,
-    ).toBe(true);
-    expect(
-      messages(deliverySchema, { deliveredOn: "2026-01-01", lines: [{ lineId, quantity: -1 }] }),
-    ).toEqual(["Received quantity can't be below 0. Enter 0 or more."]);
-    expect(
-      messages(deliverySchema, { deliveredOn: "2999-01-01", lines: [{ lineId, quantity: 1 }] }),
-    ).toEqual(["Delivered on can't be in the future. Pick today or the day it arrived."]);
+    const received = (quantity: string) =>
+      messages(movementSchema, { type: "IN", quantity, reason: "Delivery received" });
+    expect(received("0")).toContain("Enter a quantity greater than 0.");
+    expect(received("1.234")).toContain("Quantity can have at most 2 decimal places.");
   });
 });
 
@@ -500,7 +338,7 @@ describe("form-level messages (D-038)", () => {
   it("counts several and quotes the first, never a bare generic line", () => {
     const text = summarizeIssues([
       { message: "Enter a quantity greater than 0." },
-      { message: "Choose the date you need the items by." },
+      { message: "Pick a real date, like 2026-10-21." },
     ]);
     expect(text).toBe(
       "2 fields need fixing. Start with this one: Enter a quantity greater than 0.",
@@ -511,38 +349,38 @@ describe("form-level messages (D-038)", () => {
     for (const pattern of GENERIC) expect(summarizeIssues([])).not.toMatch(pattern);
   });
 
-  it("keys field errors by the full path, so a line's message lands on that line", () => {
-    const error = issues(purchaseRequestSchema, {
-      neededBy: "",
-      lines: [
-        { itemName: "Brass eyelets", category: "OTHER", unit: "pack", quantity: "2" },
-        { itemName: "Brass eyelets", category: "OTHER", unit: "pack", quantity: "0" },
+  it("keys field errors by the full path, so a row's message lands on that row", () => {
+    const error = issues(saveAttendanceSchema, {
+      expectedUpdatedAt: "yesterday",
+      marks: [
+        { userId: "0192f000-0000-7000-8000-000000000001", present: true },
+        { userId: "0192f000-0000-7000-8000-000000000002", present: "yes" },
       ],
     });
     expect(error).toBeInstanceOf(ZodError);
-    const result = toActionError(error, "Material request");
+    const result = toActionError(error, "Attendance");
     expect(result).toMatchObject({
       ok: false,
       fieldErrors: {
-        neededBy: "Choose the date you need the items by.",
-        "lines.1.quantity": "Enter a quantity greater than 0.",
+        expectedUpdatedAt: "This page is out of date. Refresh it and try again.",
+        "marks.1.present": "Tick Present or leave it empty for each person.",
       },
     });
     const fromService = toActionError(
-      Errors.validation([{ path: ["lines", 0, "inventoryItemId"], message: "Pick another item." }]),
-      "Material request",
+      Errors.validation([{ path: ["marks", 0, "userId"], message: "Pick another person." }]),
+      "Attendance",
     );
     expect(fromService).toMatchObject({
-      error: "Pick another item.",
-      fieldErrors: { "lines.0.inventoryItemId": "Pick another item." },
+      error: "Pick another person.",
+      fieldErrors: { "marks.0.userId": "Pick another person." },
     });
   });
 
   it("names what failed when the server itself breaks", () => {
-    const result = toActionError(new Error("boom"), "Material request");
+    const result = toActionError(new Error("boom"), "Attendance");
     expect(result).toMatchObject({ ok: false });
     if (!result.ok) {
-      expect(result.error).toContain("Material request couldn't be saved");
+      expect(result.error).toContain("Attendance couldn't be saved");
       expect(result.error).toContain("Nothing was changed");
     }
   });

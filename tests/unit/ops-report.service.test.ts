@@ -9,7 +9,6 @@ const report = {
   verdictMatrix: vi.fn(),
 };
 const ops = {
-  procurementFlow: vi.fn(),
   repairQueue: vi.fn(),
   repairTurnaround: vi.fn(),
   stockPosition: vi.fn(),
@@ -154,7 +153,6 @@ beforeEach(() => {
       reorderLevel: 2,
       used: 5,
       received: 0,
-      requested: true,
     },
     {
       id: "i2",
@@ -166,7 +164,6 @@ beforeEach(() => {
       reorderLevel: 2,
       used: 14,
       received: 0,
-      requested: false,
     },
     {
       id: "i3",
@@ -178,19 +175,8 @@ beforeEach(() => {
       reorderLevel: 5,
       used: 7,
       received: 0,
-      requested: false,
     },
   ]);
-  ops.procurementFlow.mockResolvedValue({
-    pending: 2,
-    highPending: 1,
-    oldestPendingMs: 10 * H,
-    awaitingDelivery: 1,
-    lateAwaitingDelivery: 0,
-    byStatus: { PENDING: 2, RECEIVED: 1 },
-    medianDecideMs: 3 * H,
-    medianReceiveMs: 48 * H,
-  });
   ops.supplierQuality.mockResolvedValue([
     {
       id: "s2",
@@ -251,8 +237,6 @@ const PERSON_KEYS = [
   "decidedById",
   "createdBy",
   "completedBy",
-  "requestedBy",
-  "requestedById",
   "actor",
 ];
 
@@ -367,14 +351,27 @@ describe("operationsReport", () => {
     );
     expect(ids).not.toContain("bottleneck");
     expect(ids).toEqual(
-      expect.arrayContaining([
-        "below-quota",
-        "repairs-waiting",
-        "requests-high",
-        "supplier",
-        "flagged",
-      ]),
+      expect.arrayContaining(["below-quota", "repairs-waiting", "supplier", "flagged"]),
     );
+  });
+
+  it("answers with the floor's sections only (D-091)", async () => {
+    const r = await svc.operationsReport(range, now);
+    expect(Object.keys(r).sort()).toEqual([
+      "asOf",
+      "attention",
+      "checkpoint",
+      "days",
+      "kpis",
+      "lineProblemShare",
+      "previous",
+      "production",
+      "range",
+      "rejectedRolls",
+      "repairs",
+      "stock",
+      "suppliers",
+    ]);
   });
 
   it("keeps the checkpoint as a short summary with a Pareto", async () => {
@@ -402,6 +399,9 @@ describe("CSV", () => {
   it("stock CSV lists every item, riskiest first", async () => {
     const lines = (await svc.stockCsv(range)).trim().split("\r\n");
     expect(lines).toHaveLength(4);
+    expect(lines[0]).toBe(
+      "SKU,Item,Category,Unit,On hand,Reorder level,Used in period,Received in period,Days of cover,Status",
+    );
     expect(lines[1]).toContain("LR-001,Leather roll");
     expect(lines[1]).toContain("OUT");
   });

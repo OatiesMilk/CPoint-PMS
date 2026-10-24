@@ -23,6 +23,7 @@ description: End-of-session routine for the CPoint rebuild. Runs the quality gat
 8. Don't commit or push unless Dylan says so in this session. Give him one copy-paste block: a
    branch from the latest `main` (never `main`, D-032), `git add` with only this work's files
    (never `git add .`), `git commit -m`, `git push -u origin <branch>`, and a reminder to open the
-   PR. List the files left out on purpose. If CI then fails on the PR, write
-   `qa/CODEX_PROMPT_CI_FIX_<branch>.md` from `qa/templates/ci-fix-prompt.md` for Codex (D-089).
+   PR. List the files left out on purpose. If CI then fails on the PR, fix it yourself; for an
+   `e2e` or `docker` failure also write `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md` from
+   `qa/templates/ci-recheck-prompt.md` so Codex reruns that job and reports (D-092).
 9. Print the final report in the format from `docs/prompts/system-rebuild.md` → `<final_report_format>`.

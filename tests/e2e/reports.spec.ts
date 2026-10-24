@@ -175,6 +175,11 @@ test("the Floor Manager sees production against the quota in place of stage time
   expect(csv).toContain("Date (Manila),Shoe type,Pairs finished,Daily quota,% of quota");
   const ops = await (await page.request.get("/api/v1/reports/operations.csv?preset=today")).text();
   expect(ops).toContain("Rolls started,Rolls finished");
+  // The purchasing card and the stock CSV's request column left with the module (D-091).
+  await expect(page.getByRole("heading", { name: "Purchasing" })).toHaveCount(0);
+  const stock = await (await page.request.get("/api/v1/reports/stock.csv?preset=today")).text();
+  expect(stock).toContain("Days of cover,Status");
+  expect(stock).not.toContain("Open request");
 
   // Range presets live in the URL.
   await page.getByRole("link", { name: "7 days" }).click();

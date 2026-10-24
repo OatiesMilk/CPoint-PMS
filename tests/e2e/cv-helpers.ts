@@ -164,46 +164,16 @@ export async function postScan(
  * constructor). It reuses the demo constructor's password hash, so it signs in with the demo
  * password.
  */
-export async function makeConstructor(
-  canRequestLeatherRolls = true,
-): Promise<{ id: string; email: string }> {
+export async function makeConstructor(): Promise<{ id: string; email: string }> {
   const id = randomUUID();
   const email = `sc-${randomBytes(4).toString("hex")}@e2e.local`;
   await withDb((db) =>
     db.query(
-      `INSERT INTO users (id, name, email, "passwordHash", role, "canRequestLeatherRolls", "updatedAt")
-       SELECT $1, $2, $3, "passwordHash", 'SHOE_CONSTRUCTOR', $4, now() FROM users
+      `INSERT INTO users (id, name, email, "passwordHash", role, "updatedAt")
+       SELECT $1, $2, $3, "passwordHash", 'SHOE_CONSTRUCTOR', now() FROM users
        WHERE email = 'constructor@cpoint.local'`,
-      [id, `E2E Constructor ${email.slice(3, 11)}`, email, canRequestLeatherRolls],
+      [id, `E2E Constructor ${email.slice(3, 11)}`, email],
     ),
   );
   return { id, email };
-}
-
-/** A Manila calendar date `days` from today, as YYYY-MM-DD (for needed-by dates). */
-export function daysAhead(days: number): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(
-    new Date(Date.now() + days * 86_400_000),
-  );
-}
-
-/**
- * A request needed today (High urgency, D-037) waiting on the Floor Manager, so the FM home shows
- * that state.
- */
-export async function urgentPendingRequest(browser: Browser): Promise<void> {
-  const sc = await makeConstructor();
-  const page = await browser.newPage();
-  await page.goto("/login");
-  await signIn(page, sc.email);
-  await expect(page).toHaveURL("/constructor");
-  const res = await page.request.post("/api/v1/procurement/requests", {
-    data: {
-      neededBy: daysAhead(0),
-      remarks: "E2E: the line stops without it",
-      lines: [{ itemName: "E2E urgent item", category: "OTHER", unit: "box", quantity: 1 }],
-    },
-  });
-  expect(res.status()).toBe(201);
-  await page.close();
 }

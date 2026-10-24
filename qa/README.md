@@ -42,37 +42,40 @@ A second run on the same day adds a suffix: `2026-10-10-material-requests-run2.m
 
 ## Rules for Codex (tester)
 
-- Test only; do not change application code, tests, migrations or `.env`. The one exception is a
-  CI fix (see "CI fix loop" below), where Codex changes only what makes the failing checks pass.
+- Test and report only; never apply a fix (D-092). Don't change application code, tests,
+  migrations, config, `package.json` or `.env`, not even to get a CI check green. Write only under
+  `qa/reports/`; Claude fixes what you report.
 - Read the vault first (`C:\dev\capstone-obsidian`: `CLAUDE.md`, `Rules.md`, `Inbox/CPoint
 commands and where to look.md`) to find files, and add one line to today's Daily note under
-  "Agent sessions" when you finish a run or a fix.
+  "Agent sessions" when you finish a run.
 - Run against the local app as described in the handoff. Never test against a shared or real
   database.
 - Record what you actually saw. If a scenario could not be run, mark it **BLOCKED** with the
   reason, never PASS.
 
-## CI fix loop: Codex fixes failing CI checks
+## CI fix loop: Claude fixes, Codex re-checks
 
-Claude is the main developer. When a GitHub CI check fails on a PR, **Codex applies the fix**,
-not Claude (D-089).
+When a GitHub CI check fails on a PR, **Claude fixes it**. Codex never applies a fix; it only
+reruns the jobs Claude doesn't run and reports (D-092, which replaced D-089's Codex fix).
 
 ```
 1. A CI check fails on the PR      → Dylan tells Claude (or Claude sees it on the PR)
-2. Claude reads the failing check  → writes qa/CODEX_PROMPT_CI_FIX_<branch>.md   (from templates/ci-fix-prompt.md)
-3. Dylan opens Codex on the branch → pastes that prompt
-4. Codex fixes + reruns the gates  → writes qa/reports/YYYY-MM-DD-ci-fix-<branch>.md and a vault Daily line
-5. Claude reviews the fix          → updates SESSION_LOG / STATUS and the vault, gives Dylan the git commands
+2. Claude reads the failing check  → fixes it, reruns npm run check (and the cv/ checks for station)
+3. Was it e2e or docker?           → Claude writes qa/CODEX_PROMPT_CI_RECHECK_<branch>.md (from templates/ci-recheck-prompt.md)
+4. Dylan opens Codex on the branch → pastes that prompt; Codex reruns those jobs and writes
+                                     qa/reports/YYYY-MM-DD-ci-recheck-<branch>.md and a vault Daily line
+5. Claude reads the report         → fixes again if a job still fails; updates SESSION_LOG / STATUS
+                                     and the vault, gives Dylan the git commands
 6. Dylan commits and pushes        → CI reruns; repeat from 1 until green
 ```
 
+- A `check` or `station` failure skips steps 3 and 4: Claude reruns those gates itself.
 - `<branch>` has its slashes turned into hyphens: `feature/phases-20-23` →
-  `CODEX_PROMPT_CI_FIX_feature-phases-20-23.md`. A second round adds `_RUN2`.
-- The prompt names the PR, the failing job(s) and step, the exact error lines, the suspected files
-  and the gates to rerun. It never asks for new features.
-- Codex may change application code and tests **only** for a CI fix, and only what makes the
-  failing checks pass. It never skips, disables or loosens a test or a check.
-- Claude may review Codex's fix and point out problems in a new prompt; it doesn't rewrite the fix.
+  `CODEX_PROMPT_CI_RECHECK_feature-phases-20-23.md`. A second round adds `_RUN2`.
+- The prompt names the PR, the failing job(s) and step, the exact error lines, what Claude changed
+  and the jobs to rerun.
+- Codex writes only its report and its vault Daily line. If a job still fails, it reports the
+  error lines and the file it suspects; it never fixes, skips, disables or loosens a test or a check.
 
 ## Where Codex can run the browser
 

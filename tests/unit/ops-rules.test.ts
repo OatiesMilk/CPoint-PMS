@@ -62,7 +62,6 @@ describe("buildAttention", () => {
     belowQuota: null,
     repairs: { waitingOverDay: 0, open: 0, oldestWaitingMs: null },
     stock: { out: 0, low: 0, shortCover: [] },
-    requests: { highPending: 0, pending: 0, oldestPendingMs: null, lateAwaitingDelivery: 0 },
     suppliers: [],
     lineProblemShare: null,
     flaggedScans: 0,
@@ -107,12 +106,22 @@ describe("buildAttention", () => {
     expect(flagged[0].title).toContain("Tannery A");
   });
 
-  it("prefers the high-urgency message over the age message (D-037)", () => {
+  it("asks for a restock on low stock and links every item to a screen that exists (D-091)", () => {
     const items = buildAttention({
       ...quiet,
-      requests: { highPending: 1, pending: 3, oldestPendingMs: 100 * H, lateAwaitingDelivery: 1 },
+      belowQuota: { below: 3, of: 5 },
+      repairs: { waitingOverDay: 2, open: 4, oldestWaitingMs: 30 * H },
+      stock: { out: 1, low: 2, shortCover: [{ item: "Thread", days: 1.2 }] },
+      suppliers: [{ supplier: "Tannery A", sections: 60, problemShare: 0.4 }],
+      lineProblemShare: 0.2,
+      flaggedScans: 1,
     });
-    expect(items.map((i) => i.id)).toEqual(["requests-high", "requests-late"]);
+    expect(items).toHaveLength(7);
+    expect(items.find((i) => i.id === "stock-low")?.detail).toBe(
+      "Restock them before they run out.",
+    );
+    const screens = ["/inventory", "/production", "/rework", "/reports", "/review"];
+    for (const item of items) expect(screens).toContain(item.href.split(/[?#]/)[0]);
   });
 });
 

@@ -26,6 +26,12 @@ Operational endpoints such as health are unversioned.
 | 422    | `VALIDATION_FAILED`        | Body failed validation; `details` lists the fields               |
 | 500    | `INTERNAL`                 | Unexpected server error. Details are logged, never returned      |
 
+**Validation errors (D-038).** A `422` carries `details[]` with one issue per field: `path` is the
+full path (`["marks", 1, "present"]`) and `message` names the field and the fix ("Enter a
+quantity greater than 0."). The top-level `message` is that sentence when there is one issue, or
+"N fields need fixing. Start with this one: …" when there are several. This holds for every
+endpoint.
+
 ## Authentication
 
 - **People** sign in on `/login`. The session is an HTTP-only cookie (Auth.js JWT, 12 hours).
@@ -278,102 +284,6 @@ never edited or deleted. Quantities are numbers with at most 2 decimals.
 
 Low stock means an active item with `quantityOnHand ≤ reorderLevel` (out of stock at 0).
 
-## Procurement (session)
-
-Material requests (D-029, D-031, D-035 to D-040). The UI calls this "Material requests" for Shoe
-Constructors and "Procurement" for the Floor Manager and System Admin; the paths and permission
-keys stay `procurement`. Any Shoe Constructor asks for materials; **leather rolls** only
-if the Floor Manager or System Admin has allowed them. The Floor Manager approves or rejects
-**each item** of a request (D-039), then marks the request received. A request is never edited
-after it's sent: cancel it and send a new one. Every change adds a timeline event and an audit row.
-
-**Item decisions (D-039).** Each line carries `decision` (`PENDING | APPROVED | REJECTED`) and
-`rejectionReason`. The request's status follows from its lines: `APPROVED` when at least one line
-is approved, `REJECTED` when every line is rejected. The detail also carries `decided`
-(`{ approved, rejected, total, label }`, e.g. "1 of 2 items approved", or `null` while pending),
-and list rows carry `partlyApproved` (that label when some lines were rejected, else `null`).
-
-**Stock guidance (D-040).** On the detail, each line has `wellStocked` (on hand is more than 2×
-the reorder level; never true with a reorder level of 0), `suggestedDecision` (`REJECTED` for a
-well-stocked item, `APPROVED` for a low or out-of-stock one, otherwise `null`) and
-`suggestedReason`. These are suggestions for the decision panel; nothing is decided until
-`POST …/decide`.
-
-**Urgency** is never stored. Every read works it out from `neededBy` and today's Manila date,
-counting working days (Monday to Friday): `HIGH` up to 3 working days or overdue, `MEDIUM` up to
-7, `LOW` after that. Rows and the detail carry `urgency` and `daysLeft` ("in 2 working days");
-both are `null` once the request is received, rejected or cancelled.
-
-**Delivery late** is never stored either: `late` is `true` on rows and the detail when the request
-is `ORDERED` or `PARTIALLY_RECEIVED` and `expectedDeliveryOn` is before today's Manila date.
-`raisedByFloorManager` is `true` when the requester is the Floor Manager (D-045).
-
-```
-PENDING ─decide every item─▶ APPROVED (at least one approved) ─order─▶ ORDERED
-   │                       └▶ REJECTED (every item rejected)            │
-   └─cancel (requester)─▶ CANCELLED ◀─cancel with a reason (FM)─ APPROVED or ORDERED
-
-ORDERED ─delivery (some short)─▶ PARTIALLY_RECEIVED ─the rest─▶ RECEIVED
-                                  └─close short (FM, reason)─▶ RECEIVED (closedShortAt set)
-```
-
-Every move is conditional on the status the server loaded (`409 STALE` if someone else moved it),
-and a move the status doesn't allow answers `409 CONFLICT` with one sentence saying why, e.g.
-"Only pending, approved or ordered requests can be cancelled. This one is received."
-
-| Method & path                                          | Who                                                                                | Body / query                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------------------------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/procurement/requests`                     | `procurement:read` (constructors: own)                                             | `?status=&category=&urgency=&late=&item=&from=&to=&page=` → `{ rows, total, counts, page, pageCount }`. `urgency` (`HIGH\|MEDIUM\|LOW`) matches open requests only; `late=1` matches late deliveries. Pending is ordered by `neededBy`, ordered and partly received by `expectedDeliveryOn`                                                                                                                                                       |
-| `POST /api/v1/procurement/requests`                    | `procurement:request` (constructors, leather rolls need the OK; the Floor Manager) | `RequestForm` → `201 { id, code, alreadyRequested[] }`                                                                                                                                                                                                                                                                                                                                                                                            |
-| `GET /api/v1/procurement/requests/{id}`                | `procurement:read` (constructors: own)                                             | lines (stock snapshot + current stock, decision, stock guidance, `receivedQuantity`, `outstanding`), the order (`supplier`, `orderReference`, `expectedDeliveryOn`, `orderedBy`, `orderedAt`), `deliveries` (lines + `attachments`), `late`, `decided`, `events`, `remarks`, `copiedFrom`, `copies`, `actions`, `cancelBlocked`, `canCopy`, `canAddProof`, `canRemark`                                                                            |
-| `POST /api/v1/procurement/requests/{id}/decide`        | `procurement:decide` (FM)                                                          | `{ lines: [{ lineId, decision: "APPROVED"\|"REJECTED", reason? }], note? }`. Every line of the request exactly once; `reason` (3–300) is required to reject. One transaction                                                                                                                                                                                                                                                                      |
-| `POST /api/v1/procurement/requests/{id}/approve`       | `procurement:decide` (FM)                                                          | `{ note? }` (send `{}` for none). Approves every line                                                                                                                                                                                                                                                                                                                                                                                             |
-| `POST /api/v1/procurement/requests/{id}/reject`        | `procurement:decide` (FM)                                                          | `{ reason }` (3–300). Rejects every line with the one reason                                                                                                                                                                                                                                                                                                                                                                                      |
-| `GET /api/v1/procurement/suppliers`                    | `procurement:decide` (FM)                                                          | active suppliers `{ id, name }`, for the order form                                                                                                                                                                                                                                                                                                                                                                                               |
-| `POST /api/v1/procurement/requests/{id}/order`         | `procurement:decide` (FM)                                                          | `{ supplierId, reference?, expectedDeliveryOn, note? }`. APPROVED → ORDERED. `expectedDeliveryOn` is `YYYY-MM-DD`, today or later, at most 365 days ahead; the supplier must be active                                                                                                                                                                                                                                                            |
-| `POST /api/v1/procurement/requests/{id}/deliveries`    | `procurement:decide` (FM)                                                          | **multipart/form-data**: `data` = JSON `{ deliveredOn, note?, lines: [{ lineId, quantity }] }`, `files` = 1–5 proof files. → `201 { id, code, status, deliveryId, message }`. One quantity per approved line (0 allowed, never more than outstanding, not all 0); `deliveredOn` not in the future and not before the order. Posts an inventory **IN** ("Delivery for MR-…") per inventory line. Status becomes `PARTIALLY_RECEIVED` or `RECEIVED` |
-| `POST /api/v1/procurement/deliveries/{id}/attachments` | `procurement:decide` (FM)                                                          | **multipart/form-data**: `files` = 1–5 proof files, up to 10 per delivery in all → `201`. Proof is only ever added                                                                                                                                                                                                                                                                                                                                |
-| `GET /api/v1/procurement/attachments/{id}`             | `procurement:read` (constructors: own request)                                     | the file, with `Cache-Control: private`, `X-Content-Type-Options: nosniff` and `Content-Disposition: inline`. `404` for anyone who can't see the request                                                                                                                                                                                                                                                                                          |
-| `POST /api/v1/procurement/requests/{id}/close-short`   | `procurement:decide` (FM)                                                          | `{ reason }` (3–300). PARTIALLY_RECEIVED → RECEIVED with `closedShortAt` and `closedShortReason`                                                                                                                                                                                                                                                                                                                                                  |
-| `POST /api/v1/procurement/requests/{id}/cancel`        | the requester while PENDING; the FM once APPROVED or ORDERED                       | `{ note? }` for a pending one; `{ reason }` (3–300, required) after approval. `409` once anything has arrived                                                                                                                                                                                                                                                                                                                                     |
-| `POST /api/v1/procurement/requests/{id}/remarks`       | FM; the requester on their own                                                     | `{ body }` (1–500) → `201`. Remarks are never edited or deleted                                                                                                                                                                                                                                                                                                                                                                                   |
-| `GET /api/v1/procurement/items`                        | `procurement:request`                                                              | active items: `sku, name, category, unit, onHand, reorderLevel, low, allowed, openRequestCode` (`allowed: false` for leather rolls without the OK)                                                                                                                                                                                                                                                                                                |
-| `GET /api/v1/procurement/requesters`                   | `procurement:designate` (FM, Admin)                                                | active Shoe Constructors with `canRequestLeatherRolls`                                                                                                                                                                                                                                                                                                                                                                                            |
-| `PUT /api/v1/procurement/requesters/{userId}`          | `procurement:designate` (FM, Admin)                                                | `{ canRequestLeatherRolls }`. `409` unless the person is an active Shoe Constructor                                                                                                                                                                                                                                                                                                                                                               |
-
-**Proof files** (D-042): JPEG, PNG, WebP or PDF, recognised from the file's first bytes (the name
-and the browser's content type are ignored), at most 10 MB each. A refusal is a `422` whose
-`details` carry `path: ["files"]` and a message naming the file, e.g. "“receipt.pdf” isn't a photo
-or a PDF. Attach a JPEG, PNG, WebP or PDF file." An upload over the total size is `413`.
-
-**`RequestForm`** (changed in Phase 11: `priority` and `justification` are gone): `neededBy`
-(required, `YYYY-MM-DD`, today or later in Manila time and at most 180 days ahead), `remarks?`
-(up to 500; saved as the request's first remark), `copiedFromId?` (Phase 13: the caller's own
-rejected or cancelled request this one is copied from, else `409`), `lines` (1–10). Each line is `{ inventoryItemId, quantity,
-note? }`, or `{ itemName, category, unit, quantity, note? }` for something not in inventory yet
-(`category` is an inventory category, so a typed leather roll is recognised). The same
-item can't appear twice. `alreadyRequested` lists items another open request already asks for:
-a heads-up, never a block.
-
-**Validation errors (D-038).** A `422` carries `details[]` with one issue per field: `path` is the
-full path (`["lines", 1, "quantity"]`) and `message` names the field and the fix ("Enter a
-quantity greater than 0."). The top-level `message` is that sentence when there is one issue, or
-"N fields need fixing. Start with this one: …" when there are several. This holds for every
-endpoint, not only procurement.
-
-**Errors:**
-
-- `403 LEATHER_ROLLS_NOT_ALLOWED`: a line is a leather roll (picked or typed) and the constructor
-  isn't allowed leather rolls. A change to the flag applies on their next request; they stay
-  signed in.
-- `422` on `decide`: a line of the request has no decision (`["lines", i, "decision"]`, "Choose
-  Approve or Reject for Shoe tacks."), a rejected line has no reason (`["lines", i, "reason"]`),
-  or a `lineId` isn't on the request. `i` is the line's position on the request.
-- `409 CONFLICT`: the status doesn't allow it ("Only a pending request can be approved…", "Only a
-  pending request can be decided…").
-- `409 STALE`: someone else changed the request after it was loaded.
-- `404`: a constructor asking for someone else's request.
-
 ## Administration (session, System Admin)
 
 All of these need the System Admin role (`user:manage`, `settings:manage`, `audit:read`) and are
@@ -484,19 +394,19 @@ Aggregates per Manila day, shoe type, defect type or batch, never per person (D-
 `?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
 default is the last 14 days, at most 92, and never past today.
 
-| Method & path                            | Permission          | Returns                                                                                                                           |
-| ---------------------------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals, days[], defects[], matrix[] }`                                                                                  |
-| `GET /api/v1/reports/production`         | `report:production` | `{ shoeTypes[], days[], totals: { pairs, share, daysBelow, daysWithQuota } }` (Phase 23)                                          |
-| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: scanned, verdicts, pending, overridden, agreement %, repairs                                                     |
-| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection), by final verdict                                                          |
-| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day and shoe type: pairs, quota, % of quota, check-ins, constructors present, line average, shortfall                 |
-| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], repairs, stock, procurement, suppliers[], rejectedRolls[], checkpoint }` (D-033, D-072) |
-| `GET /api/v1/reports/repairs`            | `report:quality`    | `{ waiting, beingRepaired, doneInRange, medianTurnaroundMs, rows[] }` repair station now                                          |
-| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, scans by verdict, repairs done                                                       |
-| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                                               |
-| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, batches, sections, verdict counts, pass %, Fixable %, reject %, top defect, High (D-072)                     |
-| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, batch, supplier, sections, rejected, main defects (D-072)                              |
+| Method & path                            | Permission          | Returns                                                                                                              |
+| ---------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals, days[], defects[], matrix[] }`                                                                     |
+| `GET /api/v1/reports/production`         | `report:production` | `{ shoeTypes[], days[], totals: { pairs, share, daysBelow, daysWithQuota } }` (Phase 23)                             |
+| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: scanned, verdicts, pending, overridden, agreement %, repairs                                        |
+| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection), by final verdict                                             |
+| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day and shoe type: pairs, quota, % of quota, check-ins, constructors present, line average, shortfall    |
+| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], repairs, stock, suppliers[], rejectedRolls[], checkpoint }` (D-033, D-072) |
+| `GET /api/v1/reports/repairs`            | `report:quality`    | `{ waiting, beingRepaired, doneInRange, medianTurnaroundMs, rows[] }` repair station now                             |
+| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, scans by verdict, repairs done                                          |
+| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                                  |
+| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, batches, sections, verdict counts, pass %, Fixable %, reject %, top defect, High (D-072)        |
+| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, batch, supplier, sections, rejected, main defects (D-072)                 |
 
 - **Verdicts** count the **final** verdict.
 - **AI agreement** = scans the AI decided whose final verdict is the same / scans the AI decided

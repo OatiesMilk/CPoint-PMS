@@ -1,5 +1,3 @@
-import { manilaToday } from "@/lib/format";
-import { urgencyCutoffs } from "@/lib/procurement-rules";
 import {
   ATTENTION,
   buildAttention,
@@ -13,7 +11,6 @@ import { agreementRate, previousRange, toCsv, type ReportRange } from "@/lib/rep
 import { belowQuotaAttention, ATTENTION_DAYS } from "@/lib/production-rules";
 import { countRollsByStatus } from "@/server/models/batch.model";
 import {
-  procurementFlow,
   repairQueue,
   repairTurnaround,
   countBatchVerdicts,
@@ -26,9 +23,9 @@ import {
 import { productionReport, recentProductionDays } from "./production.service";
 import { qualityReport, rollFlow } from "./report.service";
 
-// Operations report (D-033): what is happening on the floor, in resources, flow, stock, purchasing
-// and supply. Aggregates per day, shoe type, batch, item, supplier or request. Nothing here carries a user
-// id, name or email (D-008); tests/unit/ops-report.service.test.ts checks that.
+// Operations report (D-033): what is happening on the floor, in resources, flow, stock and supply.
+// Aggregates per day, shoe type, batch, item or supplier. Nothing here carries a user id, name or
+// email (D-008); tests/unit/ops-report.service.test.ts checks that.
 
 const share = (part: number, whole: number) => (whole > 0 ? part / whole : null);
 /** Rolls listed under Supplier quality, and in its CSV. */
@@ -82,7 +79,6 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     prevQuality,
     repairs,
     stockRows,
-    procurement,
     supplierRows,
     supplierDefectRows,
     rejectedRolls,
@@ -97,7 +93,6 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     qualityReport(prev),
     repairStation(range, now),
     stockPosition(range),
-    procurementFlow(range, now, urgencyCutoffs(manilaToday(now)).highThrough, manilaToday(now)),
     supplierQuality(range),
     supplierDefects(range),
     rollsWithMostRejects(range, ROLLS_SHOWN),
@@ -114,7 +109,6 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     reorderLevel: r.reorderLevel,
     used: r.used,
     received: r.received,
-    requested: r.requested,
     level: stockLevel(r.onHand, r.reorderLevel),
     coverDays: daysOfCover(r.onHand, r.used, range.days),
   }));
@@ -207,12 +201,6 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
       low: stock.low,
       shortCover: shortCover.map((i) => ({ item: i.item, days: i.coverDays ?? 0 })),
     },
-    requests: {
-      highPending: procurement.highPending,
-      pending: procurement.pending,
-      oldestPendingMs: procurement.oldestPendingMs,
-      lateAwaitingDelivery: procurement.lateAwaitingDelivery,
-    },
     suppliers: suppliers.map((s) => ({
       supplier: s.supplier,
       sections: s.sections,
@@ -246,7 +234,6 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     days,
     repairs,
     stock,
-    procurement,
     suppliers,
     rejectedRolls,
     lineProblemShare,
@@ -327,7 +314,6 @@ export async function stockCsv(range: ReportRange) {
     { header: "Received in period", value: (i) => i.received },
     { header: "Days of cover", value: (i) => (i.coverDays === null ? "" : i.coverDays.toFixed(1)) },
     { header: "Status", value: (i) => i.level },
-    { header: "Open request", value: (i) => (i.requested ? "yes" : "") },
   ]);
 }
 

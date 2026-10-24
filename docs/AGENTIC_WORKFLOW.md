@@ -24,7 +24,7 @@ Phases 0–9 are done (see `docs/ROADMAP.md`). For a new feature or a client cha
 
 1. `git checkout main && git pull`, then create a branch (e.g. `feature/<topic>`).
 2. Start Claude Code in the repo root and paste the prompt from `docs/STATUS.md` → Next step, or
-   write the request in `docs/prompts/<topic>.md` (see `procurement.md` for the shape) and ask
+   write the request in `docs/prompts/<topic>.md` (see `factory-visit-changes.md` for the shape) and ask
    Claude to "read it and start with Step 1 in plan mode".
 3. Review the plan, approve it, and let it work. It stops with a report; then open the PR.
 
@@ -41,18 +41,19 @@ Phases 0–9 are done (see `docs/ROADMAP.md`). For a new feature or a client cha
 Keep **one phase per session**. Long sessions get compacted and lose detail. A fresh session plus
 STATUS.md is more reliable.
 
-## Claude builds, Codex tests and fixes CI, the vault remembers (D-089)
+## Claude builds and fixes, Codex tests and reports, the vault remembers (D-089, D-092)
 
-- **Claude** is the main developer. **Codex** runs the QA handoffs (`qa/README.md`) and applies
-  the fix when a GitHub CI check fails on a PR: Claude writes
-  `qa/CODEX_PROMPT_CI_FIX_<branch>.md` from `qa/templates/ci-fix-prompt.md`, Dylan pastes it into
-  Codex, Codex fixes and reports, Claude reviews. See `qa/README.md` → "CI fix loop".
+- **Claude** is the main developer and fixes every failure, failing GitHub CI checks included.
+  **Codex** runs the QA handoffs (`qa/README.md`) and reports; it never applies a fix (D-092).
+  When CI fails, Claude fixes it; for an `e2e` or `docker` failure Claude also writes
+  `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md` from `qa/templates/ci-recheck-prompt.md`, Dylan pastes
+  it into Codex, and Codex reruns the job and reports. See `qa/README.md` → "CI fix loop".
 - **The vault** (`C:\dev\capstone-obsidian`) is every agent's first lookup: its `CLAUDE.md`,
   `Rules.md`, `Home.md`, `Inbox/CPoint commands and where to look.md` and one short summary note
   per phase in `Notes/Phases/` point to the one repo file that answers each question. That saves
   tokens and stops agents guessing.
 - **Every change is recorded twice:** in the repo (wrap-up docs, or a `qa/reports/` file for
-  Codex) and in the vault's Daily note, including Codex's CI fixes.
+  Codex) and in the vault's Daily note, including every Codex run.
 
 ## Recommended practices
 
@@ -75,7 +76,7 @@ STATUS.md is more reliable.
 
 - **One driver per phase.** Two people running Claude on the same branch at once will create conflicts.
 - **Branches (D-032):** `main` is the base. Each session works on its own branch from the latest
-  `main` (e.g. `feature/procurement-csv`), pushes it, and the team opens and merges the PR. Nobody
+  `main` (e.g. `feature/stock-count`), pushes it, and the team opens and merges the PR. Nobody
   pushes to `main` directly. `system-rebuild` holds Phases 0–8 and is no longer used.
 - To work in parallel, give each person a separate feature on a separate branch. Merge one PR
   before starting a session that depends on it, and keep schema changes to one branch at a time.

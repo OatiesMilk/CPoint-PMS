@@ -14,12 +14,7 @@ import {
 import { formatDayLabel, formatManilaDateTime, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AttentionList, KpiTile } from "./ops-parts";
-import {
-  ProcurementFlowCard,
-  RepairStationCard,
-  StockRiskCard,
-  SupplierQualityCard,
-} from "./ops-sections";
+import { RepairStationCard, StockRiskCard, SupplierQualityCard } from "./ops-sections";
 import type { OperationsReport } from "@/server/services/ops-report.service";
 import type { ReportRange } from "@/lib/report-rules";
 
@@ -134,10 +129,7 @@ export function OperationsView({
 
       <RepairStationCard repairs={report.repairs} days={range.days} />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[3fr_2fr]">
-        <StockRiskCard stock={report.stock} days={range.days} />
-        <ProcurementFlowCard p={report.procurement} />
-      </div>
+      <StockRiskCard stock={report.stock} days={range.days} />
 
       <SupplierQualityCard
         suppliers={report.suppliers}

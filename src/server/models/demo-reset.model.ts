@@ -22,7 +22,6 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     tokens,
     batches,
     scans,
-    requests,
     inventoryItems,
     movements,
     auditLogs,
@@ -38,7 +37,6 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.apiToken.count({ where: { tokenHash: notIn(keep.tokenHashes) } }),
     db.batch.count(),
     db.scan.count(),
-    db.purchaseRequest.count(),
     db.inventoryItem.count(),
     db.inventoryMovement.count(),
     db.auditLog.count(),
@@ -56,7 +54,6 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     tokens,
     batches,
     scans,
-    requests,
     inventoryItems,
     movements,
     auditLogs,
@@ -72,17 +69,8 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
 
 export type ResetCounts = Awaited<ReturnType<typeof countResetTargets>>;
 
-/** Removes the production, procurement, stock and audit history, then what isn't kept. */
+/** Removes the production, stock and audit history, then what isn't kept. */
 export async function deleteResetTargets(keep: ResetKeep, db: Db) {
-  // Procurement: lines and files before deliveries, deliveries before requests.
-  await db.purchaseDeliveryLine.deleteMany();
-  await db.purchaseAttachment.deleteMany();
-  await db.purchaseRequestEvent.deleteMany();
-  await db.purchaseRequestRemark.deleteMany();
-  await db.purchaseDelivery.deleteMany();
-  await db.purchaseRequestLine.deleteMany();
-  await db.purchaseRequest.deleteMany();
-  await db.purchaseRequestSequence.deleteMany();
   // Stock: the ledger, then the items (the demo week adds them back with opening stock).
   await db.inventoryMovement.deleteMany();
   await db.inventoryItem.deleteMany();
@@ -133,10 +121,6 @@ export function upsertDefectTypeState(
     create: data,
     update: { isActive: rest.isActive, action: rest.action, handling: rest.handling },
   });
-}
-
-export function setLeatherRollRequester(email: string, value: boolean, db: Db) {
-  return db.user.updateMany({ where: { email }, data: { canRequestLeatherRolls: value } });
 }
 
 /** Puts the demo accounts' names back (D-090); an account that isn't there is skipped. */

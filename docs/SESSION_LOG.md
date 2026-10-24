@@ -14,6 +14,64 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-23 — Phase 24: remove Material Requests and Procurement
+
+**Who:** Dylan (uncommitted, on top of `main` at #18)
+**Summary:** The Material Requests and Procurement module is deleted end to end, as CPoint asked on
+the factory visit (C-1, D-091): pages, 16 API routes, controller, service, model, validator, rules,
+permissions, nav item, label map, the leather-roll switch and the eight purchase tables. Inventory,
+suppliers, the homes and the Operations report keep working; the constructor home shows Capture or
+who grants camera access.
+**Changed:**
+
+- **Data:** migration `drop_procurement` (8 tables, 2 enums, `users.canRequestLeatherRolls`, 20
+  foreign keys). Stock movements stay with their reason text.
+- **Deleted (46 files):** `src/app/(app)/procurement/**`, `src/app/api/v1/procurement/**`,
+  `components/features/procurement/`, the procurement controller, service, model and validator,
+  `lib/procurement-rules.ts`, `server/lib/attachment-type.ts` and `receipt-sample.ts`, three unit
+  test files, `tests/e2e/procurement.spec.ts`, two README screenshots.
+- **Policies:** five `procurement:*` permissions gone (27 left); the Shoe Constructor has none in
+  the matrix (Capture comes from the D-075 switch); nav item, icon and `requestLabelsFor` gone.
+- **Pages:** FM home without Pending requests; constructor home rewritten (Capture card or "Ask the
+  System Admin for camera access."); Inventory without the Requested badge and Request link; Users
+  without the Leather rolls badge and menu item.
+- **Reports:** no purchasing card, no request attention items, the low-stock item reads "Restock
+  them before they run out.", `stock.csv` loses "Open request", the API loses `procurement`.
+- **Seed and reset:** no requests or flag in bootstrap, the demo week or `demo:reset`; the demo
+  week's two deliveries stay as stock IN ("Delivery from …"); `demo:reset` still clears
+  `UPLOADS_DIR/pod`.
+- **Tests:** unit tests updated in 9 files (588 pass; 716 on `main`, the rest were procurement's);
+  e2e specs updated (auth, smoke, capture, inventory, reports, cv-helpers), not run by Claude.
+- **Docs:** API (Procurement removed; the D-038 validation note moved to Conventions), README,
+  master spec roles table, DESIGN, AGENTIC_WORKFLOW examples, ROADMAP (Phases 9, 11 to 13 marked
+  removed; Phase 24 criteria), STATUS, DECISIONS (D-091 and the superseded headings).
+- **QA:** handoff `qa/handoffs/2026-10-23-phase-24-remove-procurement.md`, prompt
+  `qa/CODEX_PROMPT_PHASE_24.md`.
+
+**Gates:** in a cloud copy: lint ✅ · format:check ✅ · typecheck ✅ · test ✅ (588) · build ✅ ·
+removal sweep ✅ (nothing found) · e2e n/a (Codex) · docker not run (Codex's throwaway stack)
+**Decisions:** D-091
+**Follow-ups:**
+
+- Codex runs the Phase 24 QA; Dylan commits and opens the PR.
+- Phase 25 next (Pass or Reject; remove the Review Queue, Repair Station and Salvage).
+
+## 2026-10-23 — Agent workflow: Codex only tests and reports
+
+**Who:** Dylan (uncommitted, on top of `main`)
+**Summary:** Docs only, no app code. Codex applies no fixes at all now, CI included: it runs the QA Claude writes up and reports. Claude fixes failing CI checks and, for an `e2e` or `docker` failure, has Codex rerun that job and report (D-092, superseding D-089's Codex CI fix).
+**Changed:**
+
+- `qa/templates/ci-fix-prompt.md` renamed to `qa/templates/ci-recheck-prompt.md` and rewritten (rerun and report, no fixes); `qa/README.md` (Codex rules, "CI fix loop"); `qa/CODEX_PROMPT.md`; `AGENTS.md` roles; `CLAUDE.md` "Roles, CI fixes and the vault"; `docs/AGENTIC_WORKFLOW.md`; `/wrap-up`; the CI rule in the factory-visit brief's project rules; D-089's heading; STATUS (the branch and agent-workflow lines).
+- Vault: `CLAUDE.md`, `Rules.md` §9, `Home.md`, `Notes/Agent workflow.md`, `Templates/Phase summary.md`, today's Daily note.
+
+**Gates:** Prettier `--check` on the changed Markdown ✅ · lint, typecheck, test, build not run (docs only, no code changed) · e2e n/a · docker n/a
+**Decisions:** D-092 (D-091 is Phase 24's, planned before this entry)
+**Follow-ups:**
+
+- The Claude project's instructions get the same wording.
+- Dylan: commit these docs on a branch from the latest `main` (git commands from Claude when asked).
+
 ## 2026-10-23 — Factory visit: the plan for Phases 24 to 31
 
 **Who:** Dylan (uncommitted, on top of `main`)

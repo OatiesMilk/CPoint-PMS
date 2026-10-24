@@ -197,10 +197,12 @@ test.describe("constructors at the camera (D-075)", () => {
     browser,
     page,
   }) => {
-    const sc = await makeConstructor(false);
+    const sc = await makeConstructor();
     await page.goto("/login");
     await signIn(page, sc.email);
     await expect(page).toHaveURL(ACCOUNTS.constructor.home);
+    // Their home says who grants camera access (D-091).
+    await expect(page.getByText("Ask the System Admin for camera access.")).toBeVisible();
     expect(await navLabels(page)).not.toContain("Capture");
     await page.goto("/camera/capture");
     await expect(page).toHaveURL(/\/forbidden/);

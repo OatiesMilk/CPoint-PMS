@@ -245,7 +245,7 @@ the repaired sections join it later.
 **Consequences:** a completed batch's usable count can still change until its repairs finish.
 Phase 7 reports should read yield "as of now", or only after the tag clears.
 
-### D-023 · 2026-10-03 · Accepted — Inventory is a ledger; optional roll consumption
+### D-023 · 2026-10-03 · Accepted (the delivery link removed by D-091) — Inventory is a ledger; optional roll consumption
 
 **Context:** CPoint tracks materials in a paper log book, and a late leather roll has stopped
 production before (survey Q12–Q14). Phase 5 adds items, stock movements and low-stock alerts.
@@ -459,7 +459,7 @@ rule and overrides of automatic calls are unchanged.
 (Q5), so confirm it with CPoint** (listed under STATUS → Open questions). Reverting means mapping
 `scan:review` back to FM + QI in `permissions.ts`.
 
-### D-029 · 2026-10-05 · Accepted — Purchase requests: model and lifecycle
+### D-029 · 2026-10-05 · Superseded by D-091 (module removed) — Purchase requests: model and lifecycle
 
 **Context:** CPoint orders materials from a paper log book (Q12). A late leather roll has stopped
 the line (Q13), and nobody formally asks for stock (Q14). The client wants designated Shoe
@@ -497,7 +497,7 @@ an audit trail and remarks.
 **Consequences:** the ledger stays the only way stock changes. Lines keep their own name and
 unit, so renaming an item later doesn't rewrite history.
 
-### D-030 · 2026-10-05 · Accepted — Designated requesters
+### D-030 · 2026-10-05 · Superseded by D-031, then D-091 — Designated requesters
 
 **Context:** only some Shoe Constructors should request materials, and the System Admin **or** the
 FM chooses who.
@@ -526,7 +526,7 @@ FM chooses who.
 **Consequences:** Phase 1's "Constructor is a placeholder role" no longer holds. Q14 is still
 open: who approves leather rolls (the FM or the leather-ordering staff member)?
 
-### D-031 · 2026-10-05 · Accepted — Every constructor requests materials; leather rolls need the OK (supersedes D-030)
+### D-031 · 2026-10-05 · Superseded by D-091 (module removed) — Every constructor requests materials; leather rolls need the OK (supersedes D-030)
 
 **Context:** the team clarified the client's rule (survey Q14).
 
@@ -580,7 +580,7 @@ matched how the repo is used.
 **Consequences:** STATUS names the branch that holds unmerged work. A session that finds its
 branch already merged restarts it from `main`.
 
-### D-033 · 2026-10-08 · Accepted — Operations-first reports for the Floor Manager
+### D-033 · 2026-10-08 · Accepted (the purchasing parts removed by D-091) — Operations-first reports for the Floor Manager
 
 **Context:** the team said the Reports tab was centred on quality inspection. As a product
 monitoring system it should show what is happening on the production floor in the chosen days
@@ -640,7 +640,7 @@ several screens broke (fixed column counts, clipped numbers, tables pushing the 
 **Consequences:** new screens use these patterns. Not checked: the Shoe Constructor home and
 long tables at 640px, which scroll inside their card.
 
-### D-035 · 2026-10-10 · Accepted — "Material requests" for constructors, "Procurement" for the FM and Admin
+### D-035 · 2026-10-10 · Superseded by D-091 (module removed) — "Material requests" for constructors, "Procurement" for the FM and Admin
 
 **Context:** the team's review of Phase 9: Shoe Constructors only ask for materials; they don't
 procure anything. Calling their screen "Procurement" was wrong for them.
@@ -657,7 +657,7 @@ procure anything. Calling their screen "Procurement" was wrong for them.
 
 **Consequences:** a new screen in this module takes its title from the map, never a literal.
 
-### D-036 · 2026-10-10 · Accepted — Remarks replace "Why it's needed" (supersedes part of D-029)
+### D-036 · 2026-10-10 · Superseded by D-091 (module removed) — Remarks replace "Why it's needed" (supersedes part of D-029)
 
 **Context:** the required justification duplicated what remarks already do.
 **Decision:**
@@ -673,7 +673,7 @@ procure anything. Calling their screen "Procurement" was wrong for them.
 snapshot carry the case. The copied remarks have random (v4) ids, not UUIDv7; they sort by
 `createdAt`, so this has no visible effect.
 
-### D-037 · 2026-10-10 · Accepted — Urgency is automatic, from the needed-by date (supersedes the manual priority in D-029; updates D-033)
+### D-037 · 2026-10-10 · Superseded by D-091 (module removed) — Urgency is automatic, from the needed-by date (supersedes the manual priority in D-029; updates D-033)
 
 **Context:** a manual Normal/Urgent pick was subjective. The team asked for three classes worked
 out from the date.
@@ -723,7 +723,7 @@ went wrong.") and several fields falling back to Zod's built-in English text.
 sentences in `details[].message`. Not done: the summary component on the batch and inventory item
 forms (they have it available but rarely reach 3 errors).
 
-### D-039 · 2026-10-13 · Accepted — The Floor Manager decides each item of a request (supersedes the whole-request decision in D-029)
+### D-039 · 2026-10-13 · Superseded by D-091 (module removed) — The Floor Manager decides each item of a request (supersedes the whole-request decision in D-029)
 
 **Context:** the team's review of Phase 9: a request often mixes items that are really needed with
 items still on the shelf. Deciding the whole request forced the Floor Manager to approve too much
@@ -752,7 +752,7 @@ or reject too much.
 the same reason; otherwise the reasons are on the items. The requester sees "1 of 2 items
 approved" and each rejected item's reason. Phase 13 builds receiving on the approved lines.
 
-### D-040 · 2026-10-13 · Accepted — Stock guidance on each item: "still well stocked" is more than 2× the reorder level
+### D-040 · 2026-10-13 · Superseded by D-091 (module removed) — Stock guidance on each item: "still well stocked" is more than 2× the reorder level
 
 **Context:** the Floor Manager should see at a glance which items in a request are still on the
 shelf, without the system deciding for them.
@@ -776,7 +776,7 @@ shelf, without the system deciding for them.
 **Consequences:** ASSUMPTION to confirm with CPoint: the 2× factor. The guidance uses current
 stock, so it can differ from the snapshot taken when the request was sent; both are shown.
 
-### D-041 · 2026-10-13 · Accepted — An approved request is ordered before it is received; one order per request
+### D-041 · 2026-10-13 · Superseded by D-091 (module removed) — An approved request is ordered before it is received; one order per request
 
 **Context:** Phase 9 went from approved straight to received, so nothing said who the materials
 were ordered from, when they were due, or that a delivery was overdue.
@@ -798,7 +798,7 @@ were ordered from, when they were due, or that a delivery was overdue.
 **Consequences:** the Operations report's "not received after a week" becomes "past the expected
 delivery date". Open (survey Q14): who places leather-roll orders at CPoint.
 
-### D-042 · 2026-10-13 · Accepted — Deliveries can be partial, and each needs proof (supersedes "received as a whole" in D-029)
+### D-042 · 2026-10-13 · Superseded by D-091 (module removed) — Deliveries can be partial, and each needs proof (supersedes "received as a whole" in D-029)
 
 **Context:** suppliers deliver short, and the team asked for a proof of delivery on every receipt.
 **Decision:**
@@ -831,7 +831,7 @@ delivery date". Open (survey Q14): who places leather-roll orders at CPoint.
 **Consequences:** two deliveries recorded at once can't both count: every approved line is updated
 only if its received quantity is still what the caller saw (409 STALE).
 
-### D-043 · 2026-10-13 · Accepted — The Floor Manager can cancel after approval, with a reason, until something arrives
+### D-043 · 2026-10-13 · Superseded by D-091 (module removed) — The Floor Manager can cancel after approval, with a reason, until something arrives
 
 **Context:** a supplier sometimes can't deliver, and an approved request had no way out.
 **Decision:**
@@ -846,7 +846,7 @@ only if its received quantity is still what the caller saw (409 STALE).
 **Consequences:** stock is never reversed by a cancellation, because nothing has been received
 when one is allowed.
 
-### D-044 · 2026-10-13 · Accepted — "Copy to a new request" instead of editing a rejected or cancelled one
+### D-044 · 2026-10-13 · Superseded by D-091 (module removed) — "Copy to a new request" instead of editing a rejected or cancelled one
 
 **Context:** requests are never edited after they're sent (D-029), so a rejected or cancelled one
 had to be typed again.
@@ -862,7 +862,7 @@ had to be typed again.
 
 **Consequences:** copying changes nothing on the old request, so it writes no event there.
 
-### D-045 · 2026-10-13 · Accepted — The Floor Manager can raise a restock request and approve it (extends D-031)
+### D-045 · 2026-10-13 · Superseded by D-091 (module removed) — The Floor Manager can raise a restock request and approve it (extends D-031)
 
 **Context:** survey Q14: the production manager orders equipment and some materials without a
 constructor asking.
@@ -880,7 +880,7 @@ constructor asking.
 
 **Consequences:** the master spec's roles table gains the Floor Manager under "create requests".
 
-### D-046 · 2026-10-14 · Accepted — Request numbers read MR-…, and pages use the full width (supersedes part of D-035)
+### D-046 · 2026-10-14 · Request numbers superseded by D-091 (full width kept) — Request numbers read MR-…, and pages use the full width (supersedes part of D-035)
 
 **Context:** Dylan, 2026-10-14: the constructors' records are material requests, not
 procurement, so "PR-2026-0001" reads wrong; and every page sat in a 1152 px column with empty
@@ -1487,7 +1487,7 @@ shows no Quality Inspector present."). The QI can always enter. One function dec
 (`qualityInspectorPresent`), never a count or a name (D-008). A covering entry is saved under the
 Floor Manager's name and its audit row carries `coveringForQualityInspector: true`.
 
-### D-089 · 2026-10-22 · Accepted — Codex fixes failing CI checks; the vault is every agent's first lookup and records every change
+### D-089 · 2026-10-22 · Codex CI fix superseded by D-092 (vault rules kept) — Codex fixes failing CI checks; the vault is every agent's first lookup and records every change
 
 **Context:** Dylan asked (2026-10-22) that Claude stays the main developer, that Codex applies
 the fix when a GitHub CI check fails on a PR, and that every change is also documented in his
@@ -1543,3 +1543,70 @@ pieces" (D-082).
 `.github/workflows/ci.yml`, `tests/unit/demo-seed.test.ts`, `tests/unit/demo-reset.test.ts`.
 **Consequences:** demo data only; no migration and no rule changes. The names and suppliers are
 invented for the demo; none is a real CPoint person or supplier.
+
+### D-091 · 2026-10-23 · Accepted — Material Requests and Procurement are removed (Phase 24)
+
+**Context:** on the 23 October factory visit CPoint listed Material Requests and Procurement among
+the modules to remove (`docs/CPOINT_VISIT_10232026.md`; brief C-1, part of C-18). The notes give
+no reason. Dylan approved the Phase 24 plan (`docs/prompts/plans/phase-24-plan.md`) the same day.
+**Decision:**
+
+- The module is deleted end to end: the pages, the 16 API routes, the controller, service, model,
+  validator, `procurement-rules.ts`, the proof-file helpers (`attachment-type.ts`,
+  `receipt-sample.ts`), the feature components, the five `procurement:*` permissions, the nav item
+  and the role label map (`requestLabelsFor`). `/procurement` and `/api/v1/procurement/**`
+  answer 404. Nothing is hidden behind a flag.
+- The leather-roll switch goes with it: `users.canRequestLeatherRolls`, the session field,
+  `canRequestLeatherRollsFor`, Users → More actions and the requesters tab.
+- Migration `drop_procurement` drops the eight purchase tables, both enums, the column and their
+  foreign keys. Stock movements that deliveries posted stay, with their reason text ("Delivery for
+  MR-…"), so the ledger still adds up. Proof files already on disk are left alone; `demo:reset`
+  clears them with the scan images (`UPLOADS_DIR/pod`).
+- FM home: no Pending requests card. Inventory: no Requested badge or Request button. Operations:
+  no purchasing section and no request attention items; the low-stock item reads "Restock them
+  before they run out."; `stock.csv` loses "Open request".
+- Constructor home until Phase 26: the Capture card for a constructor allowed to capture (D-075),
+  otherwise "Your work in the system is at the camera. Ask the System Admin for camera access."
+  The Shoe Constructor has no permission in the matrix any more; Capture comes from the switch.
+- The demo week has no requests; its two deliveries stay as plain stock IN ("Delivery from …"), so
+  the shelf ends where D-090 left it.
+
+**Supersedes:** D-029 to D-031, D-035 to D-037, D-039 to D-045 and the request numbers of D-046;
+the delivery link of D-023; the purchasing parts of D-033. D-038 (form messages) still holds for
+every form. The survey Q14 question (who orders leather) closes with the module.
+**Where:** `prisma/schema.prisma`, `prisma/migrations/20261023090000_drop_procurement/`,
+`src/server/policies/{permissions,navigation}.ts`, `src/app/(app)/{constructor,floor-manager,
+inventory}/page.tsx`, `src/app/(app)/admin/users/**`, `src/app/(app)/reports/_components/**`,
+`src/lib/ops-rules.ts`, `src/server/services/{ops-report,bootstrap,demo-seed,demo-reset,auth,
+user-admin}.service.ts`, `src/server/models/{demo-reset,inventory,user,ops-report}.model.ts`.
+**Consequences:** the dev database loses its requests when the migration runs (backed up first).
+Tell CPoint the module is gone; how they order stays outside the system.
+
+### D-092 · 2026-10-23 · Accepted — Codex only tests and reports; Claude fixes failing CI checks (supersedes D-089's Codex CI fix)
+
+**Context:** Dylan decided (2026-10-23) that Codex applies no fixes at all: its role is to run the
+QA (UAT) that Claude writes up for it and to report. D-089 had Codex fix failing GitHub CI checks
+from a prompt Claude wrote, the one case where Codex changed application code.
+**Decision:**
+
+- **Codex** tests and reports only. It runs the QA from Claude's handoff and paste-in prompt,
+  writes its report in `qa/reports/` and adds a line to the vault's Daily note. It never changes
+  application code, tests, migrations, config, `package.json` or `.env`, not even to get a CI
+  check green.
+- **Claude** fixes every failure, failing CI checks included: it reads the failing check, fixes
+  it and reruns `npm run check` (and the `cv/` checks for `station`). Claude doesn't run e2e tests
+  or Docker, so for an `e2e` or `docker` failure it also writes
+  `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md` from `qa/templates/ci-recheck-prompt.md` (renamed from
+  `ci-fix-prompt.md`). Codex reruns that job and writes
+  `qa/reports/YYYY-MM-DD-ci-recheck-<branch>.md`; a job that still fails goes back to Claude. Then
+  Dylan commits and pushes, and CI reruns.
+- The rest of D-089 stands: every agent reads the vault first and records every change there, and
+  no agent creates branches, commits, pushes or PRs.
+
+**Where:** `AGENTS.md`, `CLAUDE.md`, `qa/README.md`, `qa/CODEX_PROMPT.md`,
+`qa/templates/ci-recheck-prompt.md`, `docs/AGENTIC_WORKFLOW.md`, `.claude/skills/wrap-up/SKILL.md`
+and the project rules in `docs/prompts/factory-visit-changes.md`; the vault's `CLAUDE.md`,
+`Rules.md`, `Home.md`, `Notes/Agent workflow.md` and `Templates/Phase summary.md`; the Claude
+project instructions.
+**Consequences:** workflow docs only, no code. D-091 belongs to Phase 24, which was planned with
+that number before this entry was written.

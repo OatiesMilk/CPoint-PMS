@@ -7,7 +7,6 @@ import {
   countResetTargets,
   deleteResetTargets,
   setDemoAccountNames,
-  setLeatherRollRequester,
   upsertDefectTypeState,
   type ResetCounts,
   type ResetKeep,
@@ -29,9 +28,9 @@ import { seedDemoWeek } from "./demo-seed.service";
  * Keeps the bootstrap System Admin and the demo accounts, the device tokens given to it (so the
  * camera station keeps working), the bootstrap shoe types and suppliers, and the defect types.
  * Removes everything else: test accounts and tokens, batches, scans, repairs, salvage, stock
- * movements and items, purchase requests with their files, the audit log, and the image and proof
- * files on disk. Then it sets the camera model's classes (D-052, D-053) and, unless told not to,
- * seeds a fresh demo week, which puts the demo inventory back at its opening stock.
+ * movements and items, attendance, check-ins, the audit log, and the files on disk. Then it sets
+ * the camera model's classes (D-052, D-053) and, unless told not to, seeds a fresh demo week,
+ * which puts the demo inventory back at its opening stock.
  */
 
 /**
@@ -104,8 +103,6 @@ export const MODEL_DEFECT_TYPES: {
   },
 ];
 
-const DEMO_LEATHER_REQUESTER = "constructor@cpoint.local";
-
 /** What the reset keeps. `deviceTokens` are plain tokens (from CV_DEVICE_TOKEN); only hashes go on. */
 export function resetKeep(deviceTokens: string[]): ResetKeep {
   const admin = getEnv().BOOTSTRAP_ADMIN_EMAIL?.toLowerCase();
@@ -153,7 +150,6 @@ export async function resetDemoData(
     async (tx) => {
       await deleteResetTargets(keep, tx);
       for (const type of MODEL_DEFECT_TYPES) await upsertDefectTypeState(type, tx);
-      await setLeatherRollRequester(DEMO_LEATHER_REQUESTER, true, tx);
       // Accounts made before the demo names (D-090) get them; the constructors list has its own.
       await setDemoAccountNames(
         DEMO_USERS.filter((u) => u.name).map((u) => ({ email: u.email, name: u.name })),
@@ -179,6 +175,7 @@ export async function resetDemoData(
     },
     { timeoutMs: 120_000 },
   );
+  // Scan images, and the proof-of-delivery files kept from before Phase 24 (D-091).
   await clearUploadFolders(["scans", "pod"]);
   await ensureDemoConstructors(options.now);
   const demoWeek = options.demoWeek === false ? null : await seedDemoWeek({ now: options.now });

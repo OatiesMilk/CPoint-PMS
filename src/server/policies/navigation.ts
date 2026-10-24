@@ -1,5 +1,4 @@
 import { ROLE_HOME, type Role } from "@/lib/domain";
-import { requestLabelsFor } from "@/lib/procurement-rules";
 import { can, canCaptureFor, type Permission } from "./permissions";
 
 export type NavIcon =
@@ -14,7 +13,6 @@ export type NavIcon =
   | "rework"
   | "salvage"
   | "inventory"
-  | "procurement"
   | "reports"
   | "users"
   | "settings"
@@ -55,12 +53,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         href: "/inventory",
         icon: "inventory",
         permission: "inventory:read",
-      },
-      {
-        label: "Procurement",
-        href: "/procurement",
-        icon: "procurement",
-        permission: "procurement:read",
       },
     ],
   },
@@ -151,13 +143,7 @@ export function navigationFor(user: { role: Role; canCapture?: boolean }): NavSe
     title: section.title,
     items: section.items
       .filter(allowed)
-      // Constructors see "Material requests"; the same page is "Procurement" for the rest (D-035).
-      .map(({ label, href, icon, phase }) => ({
-        label: href === "/procurement" ? requestLabelsFor(role).nav : label,
-        href,
-        icon,
-        phase,
-      })),
+      .map(({ label, href, icon, phase }) => ({ label, href, icon, phase })),
   })).filter((section) => section.items.length > 0);
   return [home, ...sections];
 }

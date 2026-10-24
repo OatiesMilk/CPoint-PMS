@@ -1,13 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import {
-  createBatch,
-  createDeviceToken,
-  managerApi,
-  postScan,
-  urgentPendingRequest,
-} from "./cv-helpers";
+import { createBatch, createDeviceToken, managerApi, postScan } from "./cv-helpers";
 
 /**
  * Smoke per role (Phase 8): every page in the role's sidebar renders (a heading, no error
@@ -65,9 +59,8 @@ test("the sign-in page passes axe in light and dark", async ({ browser }) => {
 
 test.describe("dark mode", () => {
   test.use({ colorScheme: "dark" });
-  test("every page in the manager's sidebar passes axe in dark mode", async ({ browser, page }) => {
+  test("every page in the manager's sidebar passes axe in dark mode", async ({ page }) => {
     test.setTimeout(90_000); // every sidebar page, each scanned by axe
-    await urgentPendingRequest(browser); // the FM home's urgent state is checked too
     await signInAs(page, ACCOUNTS.manager);
     for (const href of await sidebarLinks(page)) {
       await page.goto(href);
@@ -78,9 +71,8 @@ test.describe("dark mode", () => {
 });
 
 for (const [role, account] of Object.entries(ACCOUNTS)) {
-  test(`every page in the ${role}'s sidebar renders and passes axe`, async ({ browser, page }) => {
+  test(`every page in the ${role}'s sidebar renders and passes axe`, async ({ page }) => {
     test.setTimeout(90_000); // up to ten pages, each scanned by axe
-    if (role === "manager") await urgentPendingRequest(browser); // the FM home's urgent state
     await signInAs(page, account);
     const links = await sidebarLinks(page);
     expect(links.length).toBeGreaterThan(0);
@@ -185,13 +177,20 @@ test("System Admin journey: thresholds, unknown classes and the audit trail", as
   ).toBeVisible();
 });
 
-test("Shoe Constructor: their requests, and nothing else (D-031)", async ({ page }) => {
+test("Shoe Constructor: a home that leads to the camera, and nothing else (D-091)", async ({
+  page,
+}) => {
   await signInAs(page, ACCOUNTS.constructor);
   await expectRendered(page);
-  await expectAccessible(page);
-  await page.goto("/procurement");
-  await expectRendered(page);
+  // The Capture card when the demo data allows this constructor to capture, otherwise who to ask.
+  await expect(
+    page
+      .getByRole("link", { name: "Open Capture" })
+      .or(page.getByText("Ask the System Admin for camera access.")),
+  ).toBeVisible();
   await expectAccessible(page);
   await page.goto("/batches");
+  await expect(page).toHaveURL("/forbidden");
+  await page.goto("/inventory");
   await expect(page).toHaveURL("/forbidden");
 });
