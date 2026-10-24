@@ -2,14 +2,22 @@
 
 import pytest
 
-from cpoint_cv.preview import PreviewConfig, PreviewDecision, preview_verdict
+from cpoint_cv.preview import PreviewConfig, PreviewDecision, detection_outcome, preview_verdict
 from cpoint_cv.types import Box, Detection
 
+# The model's classes as CPoint decided them (C-11, C-12, C-19, A-13), plus an inactive
+# Not accepted type.
 CONFIG = PreviewConfig(
-    reject_at_or_above=0.9,
-    rework_at_or_above=0.6,
-    active_keys=frozenset({"cut", "hole", "abrasion"}),
+    active_keys=frozenset({"cut", "hole", "crease", "scratch"}),
     inactive_keys=frozenset({"dirt"}),
+    found_at_or_above=0.5,
+    outcomes={
+        "cut": "NOT_ACCEPTED",
+        "hole": "NOT_ACCEPTED",
+        "crease": "USABLE",
+        "scratch": "USABLE",
+        "dirt": "NOT_ACCEPTED",
+    },
 )
 BOX = Box(0.1, 0.1, 0.1, 0.1)
 
@@ -18,82 +26,60 @@ def dets(*pairs: tuple[str, float]) -> list[Detection]:
     return [Detection(key, conf, BOX) for key, conf in pairs]
 
 
-def test_a_clean_section_passes() -> None:
+def v(*pairs: tuple[str, float]) -> str:
+    return preview_verdict(dets(*pairs), CONFIG).verdict
+
+
+def test_a_section_with_no_detections_passes() -> None:
     assert preview_verdict([], CONFIG) == PreviewDecision("PASS", None, (), ())
 
 
-@pytest.mark.parametrize(
-    ("confidence", "verdict"),
-    [
-        (0.5999, "PASS"),
-        (0.6, "REWORK"),
-        (0.75, "REWORK"),
-        (0.8999, "REWORK"),
-        (0.9, "REJECT"),
-        (0.99, "REJECT"),
-    ],
-)
-def test_thresholds(confidence: float, verdict: str) -> None:
-    assert preview_verdict(dets(("cut", confidence)), CONFIG).verdict == verdict
+@pytest.mark.parametrize(("confidence", "verdict"), [(0.4999, "PASS"), (0.5, "REJECT")])
+def test_a_not_accepted_cut_from_found_at(confidence: float, verdict: str) -> None:
+    assert v(("cut", confidence)) == verdict
 
 
-def test_the_highest_confidence_decides() -> None:
-    d = preview_verdict(dets(("hole", 0.62), ("cut", 0.93), ("abrasion", 0.4)), CONFIG)
+def test_only_usable_defects_pass_however_sure() -> None:
+    assert v(("crease", 0.5)) == "PASS"
+    assert v(("scratch", 0.99), ("crease", 0.8)) == "PASS"
+
+
+def test_usable_plus_not_accepted_rejects() -> None:
+    assert v(("scratch", 0.66), ("hole", 0.52)) == "REJECT"
+
+
+def test_a_not_accepted_type_below_found_at_counts_for_nothing() -> None:
+    assert v(("scratch", 0.66), ("hole", 0.3)) == "PASS"
+
+
+def test_several_types_report_the_highest_confidence() -> None:
+    d = preview_verdict(dets(("hole", 0.62), ("cut", 0.93), ("crease", 0.4)), CONFIG)
     assert (d.verdict, d.max_confidence) == ("REJECT", 0.93)
 
 
-def test_inactive_types_are_ignored() -> None:
+def test_an_inactive_not_accepted_type_is_ignored() -> None:
     assert preview_verdict(dets(("dirt", 0.99)), CONFIG) == PreviewDecision(
         "PASS", None, (), ("dirt",)
     )
 
 
-def test_an_unknown_class_goes_to_review_even_beside_a_certain_reject() -> None:
-    d = preview_verdict(dets(("cut", 0.95), ("scratch", 0.7), ("scratch", 0.8)), CONFIG)
-    assert d == PreviewDecision("NEEDS_REVIEW", 0.95, ("scratch",), ())
+def test_an_unknown_class_alone_rejects() -> None:
+    assert preview_verdict(dets(("stain", 0.3)), CONFIG) == PreviewDecision(
+        "REJECT", None, ("stain",), ()
+    )
 
 
-def test_edited_thresholds_are_followed() -> None:
-    strict = PreviewConfig(0.7, 0.3, frozenset({"cut"}), frozenset())
-    assert preview_verdict(dets(("cut", 0.5)), strict).verdict == "REWORK"
-    assert preview_verdict(dets(("cut", 0.7)), strict).verdict == "REJECT"
+def test_an_unknown_class_beside_a_usable_one_rejects() -> None:
+    d = preview_verdict(dets(("crease", 0.8), ("stain", 0.7), ("stain", 0.6)), CONFIG)
+    assert d == PreviewDecision("REJECT", 0.8, ("stain",), ())
 
 
-# ───────────── per-type actions (D-053), mirroring "decide with per-type actions" ─────────────
-
-ACTIONS = PreviewConfig(
-    reject_at_or_above=0.9,
-    rework_at_or_above=0.6,
-    active_keys=frozenset({"cut", "hole", "crease", "scratch", "stain"}),
-    inactive_keys=frozenset({"dirt"}),
-    found_at_or_above=0.5,
-    actions={"cut": "REJECT", "hole": "REJECT", "crease": "REWORK", "scratch": "REWORK"},
-)
+def test_an_edited_found_at_value_is_followed() -> None:
+    strict = PreviewConfig(CONFIG.active_keys, CONFIG.inactive_keys, 0.6, CONFIG.outcomes)
+    assert preview_verdict(dets(("cut", 0.55)), strict).verdict == "PASS"
 
 
-def v(*pairs: tuple[str, float]) -> str:
-    return preview_verdict(dets(*pairs), ACTIONS).verdict
-
-
-def test_a_found_defect_gets_its_type_action() -> None:
-    assert v(("cut", 0.51)) == "REJECT"
-    assert v(("crease", 0.5)) == "REWORK"
-    assert v(("crease", 0.4999)) == "PASS"
-
-
-def test_a_rework_type_stays_rework_at_high_confidence() -> None:
-    assert v(("scratch", 0.97)) == "REWORK"
-
-
-def test_the_worst_outcome_wins() -> None:
-    assert v(("scratch", 0.66), ("hole", 0.52)) == "REJECT"
-    assert v(("scratch", 0.66), ("hole", 0.3)) == "REWORK"
-
-
-def test_a_type_without_an_action_goes_by_confidence() -> None:
-    assert [v(("stain", c)) for c in (0.59, 0.75, 0.95)] == ["PASS", "REWORK", "REJECT"]
-
-
-def test_inactive_and_unknown_still_apply() -> None:
-    assert v(("dirt", 0.99)) == "PASS"
-    assert v(("cut", 0.95), ("sim-unknown", 0.7)) == "NEEDS_REVIEW"
+def test_detection_outcome() -> None:
+    assert detection_outcome(0.5, "USABLE", CONFIG) == "USABLE"
+    assert detection_outcome(0.49, "NOT_ACCEPTED", CONFIG) is None
+    assert detection_outcome(0.1, None, CONFIG) == "NOT_ACCEPTED"

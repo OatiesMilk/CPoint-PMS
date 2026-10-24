@@ -149,7 +149,7 @@ export async function lockBatchRow(id: string, db: Db): Promise<void> {
   await db.$queryRaw`SELECT id FROM batches WHERE id = ${id}::uuid FOR UPDATE`;
 }
 
-/** Batches that can still take work (e.g. receive salvage): planned or in progress. */
+/** Batches that can still take work (e.g. record a stock use): planned or in progress. */
 export function listOpenBatches(db: Db = defaultDb()) {
   return db.batch.findMany({
     where: { status: { in: ["PLANNED", "IN_PROGRESS"] } },

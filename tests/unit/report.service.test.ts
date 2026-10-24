@@ -3,10 +3,8 @@ import { parseRange } from "@/lib/report-rules";
 
 const model = {
   dailyScanStats: vi.fn(),
-  dailyRepairsDone: vi.fn(),
   dailyProduction: vi.fn(),
   defectBreakdown: vi.fn(),
-  verdictMatrix: vi.fn(),
 };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/report.model", () => model);
@@ -21,23 +19,12 @@ beforeEach(() => {
     {
       day: "2026-10-02",
       scanned: 10,
-      pass: 5,
-      rework: 2,
-      reject: 2,
-      pending: 1,
-      overridden: 1,
-      aiDecided: 8,
-      agreed: 7,
-      personResolved: 1,
+      pass: 7,
+      reject: 3,
     },
   ]);
-  model.dailyRepairsDone.mockResolvedValue([{ day: "2026-10-03", done: 2 }]);
   model.defectBreakdown.mockResolvedValue([
-    { key: "cut", label: "Cut", known: true, scans: 3, pass: 0, rework: 1, reject: 2, pending: 0 },
-  ]);
-  model.verdictMatrix.mockResolvedValue([
-    { ai: "REJECT", final: "REWORK", count: 1 },
-    { ai: "NEEDS_REVIEW", final: null, count: 1 },
+    { key: "cut", label: "Cut", known: true, scans: 3, pass: 1, reject: 2 },
   ]);
   model.dailyProduction.mockResolvedValue([{ day: "2026-10-01", started: 2, completed: 1 }]);
 });
@@ -64,23 +51,13 @@ const PERSON_KEYS = [
 ];
 
 describe("qualityReport", () => {
-  it("fills every day, merges repairs, and totals with agreement", async () => {
+  it("fills every day and totals Pass and Reject (D-093)", async () => {
     const r = await svc.qualityReport(range);
     expect(r.days.map((d) => d.day)).toEqual(["2026-10-01", "2026-10-02", "2026-10-03"]);
-    expect(r.days[1]).toMatchObject({ scanned: 10, agreement: 7 / 8 });
-    expect(r.days[2]).toMatchObject({ scanned: 0, repairsDone: 2, agreement: null });
-    expect(r.totals).toMatchObject({ scanned: 10, repairsDone: 2, agreement: 7 / 8 });
-  });
-
-  it("builds the AI × final matrix with pending as its own column", async () => {
-    const r = await svc.qualityReport(range);
-    expect(r.matrix.find((m) => m.ai === "REJECT")?.counts).toEqual({
-      PASS: 0,
-      REWORK: 1,
-      REJECT: 0,
-      PENDING: 0,
-    });
-    expect(r.matrix.find((m) => m.ai === "NEEDS_REVIEW")?.counts.PENDING).toBe(1);
+    expect(r.days[1]).toEqual({ day: "2026-10-02", scanned: 10, pass: 7, reject: 3 });
+    expect(r.days[2]).toEqual({ day: "2026-10-03", scanned: 0, pass: 0, reject: 0 });
+    expect(r.totals).toEqual({ scanned: 10, pass: 7, reject: 3 });
+    expect(r).not.toHaveProperty("matrix");
   });
 
   it("never carries a person", async () => {
@@ -103,6 +80,13 @@ describe("CSV", () => {
     expect(csv.startsWith("﻿Date (Manila),Scanned,Pass")).toBe(true);
     const lines = csv.trim().split("\r\n");
     expect(lines).toHaveLength(4);
-    expect(lines[2]).toBe("2026-10-02,10,5,2,2,1,1,87.5,1,0");
+    expect(lines[0]).toBe("Date (Manila),Scanned,Pass,Reject (for salvage)");
+    expect(lines[2]).toBe("2026-10-02,10,7,3");
+  });
+
+  it("defects CSV has Pass and Reject (for salvage) per type", async () => {
+    const lines = (await svc.defectsCsv(range)).trim().split("\r\n");
+    expect(lines[0]).toContain("Scans,Pass,Reject (for salvage)");
+    expect(lines[1]).toBe("Cut,cut,yes,3,1,2");
   });
 });

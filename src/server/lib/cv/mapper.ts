@@ -4,7 +4,7 @@
  * A line-for-line port of the station's `cv/cpoint_cv/mapper.py`, so a capture from the website
  * and one from the camera station report the same detections for the same model output (Phase 18).
  * `tests/fixtures/cv-mapper-parity.json`, written by the station's tests, proves the two agree.
- * Nothing here decides PASS/REWORK/REJECT: the app does that in `ingestScan` (D-011).
+ * Nothing here decides Pass or Reject: the app does that in `ingestScan` (D-011, D-093).
  */
 
 /** The app accepts at most this many detections per scan (MAX_DETECTIONS in scan.validator.ts). */

@@ -37,7 +37,7 @@ export function AttendanceCard({ workforce, summary }: { workforce: Workforce; s
         ) : (
           <div className="flex flex-col items-start gap-3">
             <p className="flex items-center gap-2">
-              <CircleAlert aria-hidden className="size-4 text-rework" />
+              <CircleAlert aria-hidden className="size-4 text-caution" />
               Not taken yet today.
             </p>
             <Button asChild size="sm">

@@ -3,9 +3,9 @@ import {
   TEMP_PASSWORD_ALPHABET,
   auditDiff,
   checkAccountChange,
-  describeThresholds,
+  FOUND_AT_MESSAGE,
   generateTemporaryPassword,
-  validateThresholds,
+  validateFoundAt,
 } from "@/lib/admin-rules";
 
 describe("generateTemporaryPassword", () => {
@@ -46,31 +46,20 @@ describe("checkAccountChange", () => {
   });
 });
 
-describe("thresholds", () => {
-  it("accepts rework below reject, within (0, 1]", () => {
-    expect(validateThresholds({ rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6 })).toEqual([]);
-    expect(validateThresholds({ rejectAtOrAbove: 1, reworkAtOrAbove: 0.99 })).toEqual([]);
+describe("validateFoundAt (D-093)", () => {
+  it("accepts a found-at value within (0, 1]", () => {
+    expect(validateFoundAt(0.5)).toEqual([]);
+    expect(validateFoundAt(0.01)).toEqual([]);
+    expect(validateFoundAt(1)).toEqual([]);
   });
 
-  it("refuses rework at or above reject, and out-of-range values", () => {
-    expect(validateThresholds({ rejectAtOrAbove: 0.8, reworkAtOrAbove: 0.8 })[0]).toMatchObject({
-      path: ["reworkAtOrAbove"],
-      message: "Fixable must start below Reject (80%).",
-    });
-    expect(validateThresholds({ rejectAtOrAbove: 0, reworkAtOrAbove: 0.5 })[0].path).toEqual([
-      "rejectAtOrAbove",
-    ]);
-    expect(validateThresholds({ rejectAtOrAbove: 0.9, reworkAtOrAbove: 0 })[0].path).toEqual([
-      "reworkAtOrAbove",
-    ]);
-  });
-
-  it("describes the bands in words", () => {
-    expect(describeThresholds({ rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6 })).toEqual({
-      reject: "90% and above",
-      rework: "60% to 89.9%",
-      pass: "below 60%",
-    });
+  it("refuses 0, above 100% and not-a-number with the named message", () => {
+    for (const v of [0, 1.2, Number.NaN]) {
+      expect(validateFoundAt(v)[0]).toMatchObject({
+        path: ["foundAtOrAbove"],
+        message: FOUND_AT_MESSAGE,
+      });
+    }
   });
 });
 

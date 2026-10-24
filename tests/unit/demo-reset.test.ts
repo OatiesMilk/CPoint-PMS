@@ -112,17 +112,17 @@ describe("resetDemoData", () => {
     expect(clearUploadFolders).not.toHaveBeenCalled();
   });
 
-  it("leaves the model's four classes on with actions and the two placeholders off", () => {
+  it("leaves the model's four classes on with outcomes and the two placeholders off", () => {
     const state = Object.fromEntries(
-      MODEL_DEFECT_TYPES.map((d) => [d.key, [d.isActive, d.action]]),
+      MODEL_DEFECT_TYPES.map((d) => [d.key, [d.isActive, d.outcome]]),
     );
     expect(state).toEqual({
-      cut: [true, "REJECT"],
-      hole: [true, "REJECT"],
-      crease: [true, "REWORK"],
-      scratch: [true, "REWORK"],
-      abrasion: [false, null],
-      dirt: [false, null],
+      cut: [true, "NOT_ACCEPTED"],
+      hole: [true, "NOT_ACCEPTED"],
+      crease: [true, "USABLE"],
+      scratch: [true, "USABLE"],
+      abrasion: [false, "NOT_ACCEPTED"],
+      dirt: [false, "NOT_ACCEPTED"],
     });
   });
 });

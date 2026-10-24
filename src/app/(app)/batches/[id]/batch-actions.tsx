@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { Stage } from "@/lib/domain";
-import { EXPECTED_PIECES_PER_ROLL, openRepairsNote, type BatchActions } from "@/lib/stage-machine";
+import { EXPECTED_PIECES_PER_ROLL, type BatchActions } from "@/lib/stage-machine";
 import { cancelBatchAction, transitionBatchAction, type ActionResult } from "../actions";
 
 type Props = {
@@ -26,11 +26,8 @@ type Props = {
   code: string;
   currentStage: Stage;
   actions: BatchActions;
-  /** Sections still at the repair station; finishing is allowed and tags the roll (D-022). */
-  openRepairs: number;
-  /** Sections scanned so far and those still waiting for the QI's decision. */
+  /** Sections scanned so far. */
   scanned: number;
-  pendingReview: number;
   /** Start, edit and cancel (batch:manage, the Floor Manager). */
   canManage: boolean;
   /** Finish roll (batch:finish, the Floor Manager and the QI). */
@@ -44,9 +41,7 @@ export function BatchActionsBar({
   code,
   currentStage,
   actions,
-  openRepairs,
   scanned,
-  pendingReview,
   canManage,
   canFinish,
 }: Props) {
@@ -187,14 +182,6 @@ export function BatchActionsBar({
             scanned ({EXPECTED_PIECES_PER_ROLL} expected). The camera moves on to the next roll at
             Preparation, and this one can’t be restarted.
           </DialogDescription>
-          {openRepairs > 0 && <Alert tone="info">{openRepairsNote(openRepairs)}</Alert>}
-          {pendingReview > 0 && (
-            <Alert tone="info">
-              {pendingReview} scan{pendingReview === 1 ? " is" : "s are"} still waiting for the
-              Quality Inspector’s decision. {pendingReview === 1 ? "It stays" : "They stay"} in the
-              review queue.
-            </Alert>
-          )}
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="ghost">Not yet</Button>

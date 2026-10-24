@@ -10,19 +10,16 @@ import {
   Camera,
   ChartColumn,
   ChevronsUpDown,
-  ClipboardCheck,
   KeyRound,
   LayoutDashboard,
   LockKeyhole,
   LogOut,
   Package,
-  Recycle,
   ScanLine,
   ScrollText,
   Settings,
   UserRound,
   Users,
-  Wrench,
   type LucideIcon,
   Gauge,
 } from "lucide-react";
@@ -47,9 +44,6 @@ type NavIcon =
   | "camera"
   | "capture"
   | "scans"
-  | "review"
-  | "rework"
-  | "salvage"
   | "inventory"
   | "reports"
   | "users"
@@ -67,9 +61,6 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   camera: Camera,
   capture: Aperture,
   scans: ScanLine,
-  review: ClipboardCheck,
-  rework: Wrench,
-  salvage: Recycle,
   inventory: Package,
   reports: ChartColumn,
   users: Users,

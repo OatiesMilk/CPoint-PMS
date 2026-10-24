@@ -109,7 +109,7 @@ export default async function ProductionPage({ searchParams }: PageProps<"/produ
                       <TableCell>
                         <div className="flex flex-col items-start gap-1">
                           <SlotStateBadge state={r.state} late={r.checkIn?.enteredLate} />
-                          {r.lateBy && <span className="text-sm text-rework">{r.lateBy}</span>}
+                          {r.lateBy && <span className="text-sm text-caution">{r.lateBy}</span>}
                         </div>
                       </TableCell>
                       {today.shoeTypes.map((t) => (
@@ -130,7 +130,7 @@ export default async function ProductionPage({ searchParams }: PageProps<"/produ
                                 : `${r.checkIn.constructorsPresent} of ${r.checkIn.constructorsOnRoster}`}
                             </span>
                             {r.checkIn.attendanceChanged && (
-                              <span className="text-xs text-rework">
+                              <span className="text-xs text-caution">
                                 Attendance changed after this check-in
                               </span>
                             )}
@@ -188,7 +188,7 @@ export default async function ProductionPage({ searchParams }: PageProps<"/produ
             )}
             {!wf.taken && today.workingDay && (
               <p className="flex items-center gap-2 text-sm">
-                <TriangleAlert aria-hidden className="size-4 text-rework" />
+                <TriangleAlert aria-hidden className="size-4 text-caution" />
                 Attendance for today hasn’t been taken, so check-ins are saved without a worker
                 count.
               </p>

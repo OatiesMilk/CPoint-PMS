@@ -1,10 +1,10 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   the System Admin, rarely, often after a model retrain or a new supplier.
- * What:  adjust what the camera decides (thresholds, defect classes) and the lists people pick
- *        from (shoe types, suppliers).
- * Worst: a threshold change misread, or a new defect class silently piling up in review. The
- *        threshold form spells out the resulting bands; unknown classes are listed with counts.
+ * What:  adjust what the camera decides (each defect type's outcome, "counts as found at") and
+ *        the lists people pick from (shoe types, suppliers).
+ * Worst: a new defect class silently rejecting sections (A-12). Unknown classes are listed with
+ *        counts and one click to add each as a defect type.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -37,16 +37,10 @@ type Tab = (typeof TABS)[number]["id"];
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 
-const ACTION_LABEL: Record<string, string> = {
-  "": "By confidence",
-  REWORK: "Fixable when found",
-  REJECT: "Reject when found",
-};
-
-/** How a Fixable section of the type is made usable (D-070). Cut around is the default. */
-const HANDLING_LABEL: Record<string, string> = {
-  CUT_AROUND: "Cut around the marked area",
-  CLEAN: "Clean before cutting",
+/** What a found defect of the type means for its section (D-093). */
+const OUTCOME_LABEL: Record<string, string> = {
+  USABLE: "Usable (Pass)",
+  NOT_ACCEPTED: "Not accepted (Reject)",
 };
 
 export default async function SettingsPage({ searchParams }: PageProps<"/admin/settings">) {
@@ -95,15 +89,11 @@ async function ThresholdsTab() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
-        Each defect the camera finds gives a result, and the worst one decides the section. A defect
-        type set to Fixable or Reject when found always gives that; the others go by the model’s
-        confidence. Last changed {formatManilaDateTime(t.updatedAt)}.
+        A section is Pass or Reject. Any defect found that is Not accepted rejects it; Usable
+        defects leave it Pass. Each type’s outcome is set under Defect types. Last changed{" "}
+        {formatManilaDateTime(t.updatedAt)}.
       </p>
-      <ThresholdsForm
-        reject={t.rejectAtOrAbove}
-        rework={t.reworkAtOrAbove}
-        found={t.foundAtOrAbove}
-      />
+      <ThresholdsForm found={t.foundAtOrAbove} />
       <ModelNoticeForm initial={t.earlyModelNotice} />
     </div>
   );
@@ -114,8 +104,7 @@ async function DefectsTab({ add }: { add?: string }) {
   const columns: Column[] = [
     { key: "label", label: "Label" },
     { key: "key", label: "Class key", mono: true },
-    { key: "action", label: "When found" },
-    { key: "handling", label: "When Fixable" },
+    { key: "outcome", label: "When found" },
     { key: "description", label: "Description" },
     { key: "sortOrder", label: "Order", numeric: true },
   ];
@@ -129,24 +118,15 @@ async function DefectsTab({ add }: { add?: string }) {
     },
     { name: "label", label: "Label", placeholder: "e.g. Scratch" },
     {
-      name: "action",
+      name: "outcome",
       label: "When found",
       type: "select",
-      optional: true,
-      placeholder: ACTION_LABEL[""],
+      placeholder: "Choose Usable or Not accepted",
       options: [
-        { value: "REWORK", label: ACTION_LABEL.REWORK },
-        { value: "REJECT", label: ACTION_LABEL.REJECT },
+        { value: "USABLE", label: OUTCOME_LABEL.USABLE },
+        { value: "NOT_ACCEPTED", label: OUTCOME_LABEL.NOT_ACCEPTED },
       ],
-      hint: "The model’s confidence says how sure it is a defect is there, not how bad it is. Choose Fixable or Reject to decide by the type instead.",
-    },
-    {
-      name: "handling",
-      label: "When Fixable",
-      type: "select",
-      placeholder: HANDLING_LABEL.CUT_AROUND,
-      options: [{ value: "CLEAN", label: HANDLING_LABEL.CLEAN }],
-      hint: "What the person at the board does with a Fixable section of this type before cutting.",
+      hint: "Usable leaves the section Pass. Not accepted rejects it, and it is reported for salvage.",
     },
     { name: "description", label: "Description", type: "textarea", optional: true },
     {
@@ -163,13 +143,13 @@ async function DefectsTab({ add }: { add?: string }) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CircleHelp aria-hidden className="size-5 text-review" />
+              <CircleHelp aria-hidden className="size-5 text-reject" />
               Unknown classes seen
             </CardTitle>
             <CardDescription>
-              The camera sent these, but no defect type matches, so their scans went to the review
-              queue. Add one to have future scans decided automatically. Past scans stay in the
-              queue.
+              The camera sent these, but no defect type matches, so those sections are rejected
+              until you set the type up. Add one and choose its outcome; future sections follow it.
+              Past sections keep their verdict.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -214,16 +194,13 @@ async function DefectsTab({ add }: { add?: string }) {
           values: {
             key: str(r.key),
             label: str(r.label),
-            action: str(r.action),
-            // Cut around is the select's blank option, so only Clean is stored as a value here.
-            handling: r.handling === "CLEAN" ? "CLEAN" : "",
+            outcome: str(r.outcome),
             description: str(r.description),
             sortOrder: str(r.sortOrder),
           },
           cells: {
             label: str(r.label),
-            action: ACTION_LABEL[str(r.action)] ?? str(r.action),
-            handling: HANDLING_LABEL[str(r.handling)] ?? HANDLING_LABEL.CUT_AROUND,
+            outcome: OUTCOME_LABEL[str(r.outcome)] ?? str(r.outcome),
             key: str(r.key),
             description: str(r.description),
             sortOrder: str(r.sortOrder),
@@ -232,7 +209,8 @@ async function DefectsTab({ add }: { add?: string }) {
       />
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Info aria-hidden className="size-4" />
-        An inactive defect type is ignored when the camera decides. Its past detections stay.
+        An inactive defect type is ignored when the camera decides. Its past detections stay. A
+        defect counts as found from the value on the Thresholds tab.
       </p>
     </div>
   );

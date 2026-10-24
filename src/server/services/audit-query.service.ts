@@ -24,10 +24,6 @@ function entityHref(entity: string, id: string | null): string | null {
       return `/scans/${id}`;
     case "InventoryItem":
       return `/inventory/${id}`;
-    case "ReworkTicket":
-      return "/rework";
-    case "SalvageItem":
-      return "/salvage";
     case "User":
       return "/admin/users";
     case "ApiToken":

@@ -56,45 +56,17 @@ export function checkAccountChange(
   return { ok: true };
 }
 
-// ───────────── CV thresholds ─────────────
+// ───────────── CV rule ─────────────
+
+export const FOUND_AT_MESSAGE = "Enter the found-at value as a percentage from 1 to 100, like 50.";
 
 /**
- * Validates thresholds given as fractions (0.9 = 90%). Rework must stay below Reject (D-011);
- * the found-at value (D-053) only needs to be a real percentage.
+ * Validates "A defect counts as found at" given as a fraction (0.5 = 50%), the one number the
+ * Pass or Reject rule has (D-053, D-093).
  */
-export function validateThresholds(t: {
-  rejectAtOrAbove: number;
-  reworkAtOrAbove: number;
-  foundAtOrAbove?: number;
-}) {
-  const errors: {
-    path: ["rejectAtOrAbove" | "reworkAtOrAbove" | "foundAtOrAbove"];
-    message: string;
-  }[] = [];
-  const pct = (n: number) => Math.round(n * 1000) / 10;
-  if (!(t.rejectAtOrAbove > 0 && t.rejectAtOrAbove <= 1))
-    errors.push({ path: ["rejectAtOrAbove"], message: "Use a value above 0% and up to 100%." });
-  if (!(t.reworkAtOrAbove > 0 && t.reworkAtOrAbove < 1))
-    errors.push({ path: ["reworkAtOrAbove"], message: "Use a value above 0% and below 100%." });
-  if (errors.length === 0 && t.reworkAtOrAbove >= t.rejectAtOrAbove)
-    errors.push({
-      path: ["reworkAtOrAbove"],
-      message: `Fixable must start below Reject (${pct(t.rejectAtOrAbove)}%).`,
-    });
-  if (t.foundAtOrAbove !== undefined && !(t.foundAtOrAbove > 0 && t.foundAtOrAbove < 1))
-    errors.push({ path: ["foundAtOrAbove"], message: "Use a value above 0% and below 100%." });
-  return errors;
-}
-
-/** "≥ 90% → Reject · 60–89.9% → Fixable · below 60% → Pass" for the settings page. */
-export function describeThresholds(t: { rejectAtOrAbove: number; reworkAtOrAbove: number }) {
-  const pct = (n: number) => `${Math.round(n * 1000) / 10}%`;
-  const below = Math.round(t.rejectAtOrAbove * 1000 - 1) / 10;
-  return {
-    reject: `${pct(t.rejectAtOrAbove)} and above`,
-    rework: `${pct(t.reworkAtOrAbove)} to ${below}%`,
-    pass: `below ${pct(t.reworkAtOrAbove)}`,
-  };
+export function validateFoundAt(foundAtOrAbove: number) {
+  const ok = Number.isFinite(foundAtOrAbove) && foundAtOrAbove >= 0.01 && foundAtOrAbove <= 1;
+  return ok ? [] : [{ path: ["foundAtOrAbove"] as const, message: FOUND_AT_MESSAGE }];
 }
 
 // ───────────── audit diff ─────────────

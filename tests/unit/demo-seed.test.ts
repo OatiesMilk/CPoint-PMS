@@ -26,31 +26,29 @@ const svc = {
         now,
         classKeys: input.detections.map((d) => d.classKey),
       });
-      // The unknown class is flagged, as the real decision engine does (D-011).
-      const flagged = input.detections.some((d) => d.classKey === "sim-unknown");
+      // The unknown class is rejected, as the real decision engine does (A-12).
+      const unknown = input.detections.some((d) => d.classKey === "sim-unknown");
       return {
         scanId: `s${calls.length}`,
         batchId: input.batchId,
-        verdict: flagged ? "NEEDS_REVIEW" : "PASS",
+        verdict: unknown ? "REJECT" : "PASS",
       };
     },
   ),
 };
 const mocks = {
   countBatches: vi.fn(async () => 0),
-  listOpenBatches: vi.fn(async () => []),
   // Each item is known by its code, so a movement shows which item it moved.
   findInventoryItemBySku: vi.fn(async (sku: string) => ({ id: sku })),
-  findLiveOutcomes: vi.fn(async () => ({ rework: null, salvage: null })),
   listActiveShoeTypes: vi.fn(async () => [
     { id: "st1", name: "School Shoe" },
     { id: "st2", name: "Topsider" },
   ]),
   listActiveSuppliers: vi.fn(async () => [{ id: "sp1", name: "Supplier" }]),
   listDefectTypes: vi.fn(async () => [
-    { id: "d1", key: "crease", label: "Crease", isActive: true, action: "REWORK" },
-    { id: "d2", key: "cut", label: "Cut", isActive: true, action: "REJECT" },
-    { id: "d3", key: "dirt", label: "Dirt", isActive: false, action: null },
+    { id: "d1", key: "crease", label: "Crease", isActive: true, outcome: "USABLE" },
+    { id: "d2", key: "cut", label: "Cut", isActive: true, outcome: "NOT_ACCEPTED" },
+    { id: "d3", key: "dirt", label: "Dirt", isActive: false, outcome: "NOT_ACCEPTED" },
   ]),
   findUserByEmail: vi.fn(async (email: string) => ({
     id: email,
@@ -66,12 +64,10 @@ vi.mock("@/server/lib/leather-scan", async (orig) => ({
 }));
 vi.mock("@/server/models/batch.model", () => ({
   countBatches: mocks.countBatches,
-  listOpenBatches: mocks.listOpenBatches,
 }));
 vi.mock("@/server/models/inventory.model", () => ({
   findInventoryItemBySku: mocks.findInventoryItemBySku,
 }));
-vi.mock("@/server/models/outcome.model", () => ({ findLiveOutcomes: mocks.findLiveOutcomes }));
 vi.mock("@/server/models/reference-data.model", () => ({
   listActiveShoeTypes: mocks.listActiveShoeTypes,
   listActiveSuppliers: mocks.listActiveSuppliers,
@@ -84,13 +80,6 @@ vi.mock("@/server/services/camera.service", () => ({ setCameraOperator }));
 vi.mock("@/server/services/batch.service", () => svc);
 const inventory = { createItem: vi.fn(async () => ({ id: "item" })), recordMovement: vi.fn() };
 vi.mock("@/server/services/inventory.service", () => inventory);
-vi.mock("@/server/services/rework.service", () => ({ moveReworkTicket: vi.fn() }));
-vi.mock("@/server/services/salvage.service", () => ({
-  assignSalvage: vi.fn(),
-  discardSalvage: vi.fn(),
-}));
-const decideScan = vi.fn();
-vi.mock("@/server/services/scan-decision.service", () => ({ decideScan }));
 // Twelve demo constructors, as the bootstrap creates (D-081).
 const roster = [
   ...Array.from({ length: 12 }, (_, i) => ({ id: `c${i + 1}`, role: "SHOE_CONSTRUCTOR" })),
@@ -197,13 +186,12 @@ describe("seedDemoWeek", () => {
   it.each([
     ["Saturday afternoon", now],
     ["Monday before the first shift", new Date("2026-10-04T23:30:00.000Z")],
-  ])("leaves the newest batch's last two sections for review (%s)", async (_label, at) => {
+  ])("ends on the newest batch's last section, an unknown class (%s)", async (_label, at) => {
     await seedDemoWeek({ now: at, seed: 1 });
     const scans = calls.filter((c) => c.fn === "scan");
     // Ten sections a roll (D-082): small, but every roll has a full set.
     expect(scans.length).toBeGreaterThanOrEqual(80);
-    expect(scans.slice(-2).map((c) => c.classKeys)).toEqual([[UNKNOWN_CLASS], [UNKNOWN_CLASS]]);
-    expect(new Set(scans.slice(-2).map((c) => c.batchId)).size).toBe(1);
+    expect(scans.at(-1)!.classKeys).toEqual([UNKNOWN_CLASS]);
   });
 
   it("captures every section from the website camera with the real model, ten a roll (D-090)", async () => {
@@ -255,14 +243,6 @@ describe("seedDemoWeek", () => {
       expect(scan.by).toBe(
         byDay(scan.now) === "2026-09-30" ? "manager@cpoint.local" : "inspector@cpoint.local",
       );
-    // Nobody decides a flagged scan that day: the QI does it the next morning (D-028).
-    for (const [, , actor, when] of decideScan.mock.calls as unknown as [
-      string,
-      { expectedFinalVerdict: string | null },
-      { id: string },
-      Date,
-    ][])
-      if (actor.id === "inspector@cpoint.local") expect(byDay(when)).not.toBe("2026-09-30");
   });
 
   it("draws defects from the active defect types only", async () => {
@@ -277,22 +257,6 @@ describe("seedDemoWeek", () => {
       seeded: false,
       reason: "no active defect types",
     });
-  });
-
-  it("decides flagged scans as the Quality Inspector only, never by override (D-028)", async () => {
-    await seedDemoWeek({ now, seed: 1 });
-    // ingestScan's mock names each scan s<n>, where n counts every recorded call so far.
-    const flaggedIds = new Set(
-      calls.flatMap((c, i) =>
-        c.fn === "scan" && c.classKeys?.includes("sim-unknown") ? [`s${i + 1}`] : [],
-      ),
-    );
-    const onFlagged = decideScan.mock.calls.filter(([scanId]) => flaggedIds.has(scanId as string));
-    expect(onFlagged.length).toBeGreaterThan(0);
-    for (const [, input, actor] of onFlagged) {
-      expect((actor as { id: string }).id).toBe("inspector@cpoint.local");
-      expect(input).toMatchObject({ expectedFinalVerdict: null }); // a review, not an override
-    }
   });
 
   it("takes attendance for the working days before today, never today, with a few absences (D-081)", async () => {

@@ -1,7 +1,5 @@
 import type { Verdict } from "@/lib/domain";
-import { PAGE_SIZE, pageCountFor, pageWindow } from "@/lib/pagination";
-import { computeBatchYield, type BatchYield } from "@/lib/outcome-rules";
-import { countReworkByStatus, countSalvageAssignedTo } from "@/server/models/outcome.model";
+import { PAGE_SIZE } from "@/lib/pagination";
 import { manilaToday } from "@/lib/format";
 import {
   countScans,
@@ -22,9 +20,7 @@ export type ScanListItem = {
   batchId: string;
   batchCode: string;
   aiVerdict: Verdict;
-  finalVerdict: Verdict | null;
-  status: string;
-  isOverride: boolean;
+  finalVerdict: Verdict;
   maxConfidence: number | null;
   source: string;
   createdAt: string;
@@ -41,8 +37,6 @@ function toItem(row: ScanListRow): ScanListItem {
     batchCode: row.batch.code,
     aiVerdict: row.aiVerdict,
     finalVerdict: row.finalVerdict,
-    status: row.status,
-    isOverride: row.isOverride,
     maxConfidence: row.maxConfidence,
     source: row.source,
     createdAt: row.createdAt.toISOString(),
@@ -59,10 +53,8 @@ function toItem(row: ScanListRow): ScanListItem {
 function filtersFrom(q: ScanListQuery): ScanFilters {
   return {
     verdict: q.verdict,
-    status: q.status,
     source: q.source,
     batchCode: q.batch,
-    overridesOnly: q.override === "1",
     defectKey: q.defect,
   };
 }
@@ -92,67 +84,25 @@ export function startOfManilaDay(now: Date = new Date()): Date {
   return new Date(Date.UTC(y, m - 1, d) - 8 * 3_600_000);
 }
 
-/**
- * Oldest pending first (fair to the waiting sections); `batchCode` narrows both lists. Each list
- * pages on its own (D-047): `pendingPage` for the flagged scans, `autoPage` for today's calls.
- */
-export async function reviewQueue(
-  now: Date = new Date(),
-  batchCode?: string,
-  pendingPage = 1,
-  autoPage = 1,
-) {
-  const [pending, todayAuto] = await Promise.all([
-    listScanRows({ status: "PENDING_REVIEW", batchCode }, pageWindow(pendingPage), "oldest"),
-    listScanRows(
-      { aiVerdictIn: ["REWORK", "REJECT"], since: startOfManilaDay(now), batchCode },
-      pageWindow(autoPage),
-    ),
-  ]);
-  return {
-    pending: {
-      rows: pending.rows.map(toItem),
-      total: pending.total,
-      page: pendingPage,
-      pageCount: pageCountFor(pending.total),
-    },
-    todayAuto: {
-      rows: todayAuto.rows.map(toItem),
-      total: todayAuto.total,
-      page: autoPage,
-      pageCount: pageCountFor(todayAuto.total),
-    },
-  };
-}
-
+/** Today's sections for the QI's home: how many were scanned and how many were rejected. */
 export async function inspectorSummary(now: Date = new Date()) {
-  const [pending, todayAuto, todayOverrides] = await Promise.all([
-    countScans({ status: "PENDING_REVIEW" }),
-    countScans({ aiVerdictIn: ["REWORK", "REJECT"], since: startOfManilaDay(now) }),
-    countScans({ overridesOnly: true, since: startOfManilaDay(now) }),
+  const since = startOfManilaDay(now);
+  const [scannedToday, rejectedToday] = await Promise.all([
+    countScans({ since }),
+    countScans({ verdict: "REJECT", since }),
   ]);
-  return { pending, todayAuto, todayOverrides };
+  return { scannedToday, rejectedToday };
 }
 
-/** Usable = passed + repaired (D-007, D-021). Cancelled repairs never count. */
+/** A roll's sections: passed, rejected (reported for salvage, A-11) and the total. */
+export type BatchYield = { passed: number; rejected: number; scanned: number };
+
 export async function batchYield(batchId: string): Promise<BatchYield> {
-  const [groups, rework, salvageReceived] = await Promise.all([
-    countScansByVerdict(batchId),
-    countReworkByStatus({ scan: { batchId } }),
-    countSalvageAssignedTo(batchId),
-  ]);
-  const scans = (v: Verdict | null) => groups.find((g) => g.finalVerdict === v)?._count._all ?? 0;
-  const tickets = (s: string) => rework.find((g) => g.status === s)?._count._all ?? 0;
-  return computeBatchYield({
-    scans: {
-      pass: scans("PASS"),
-      rework: scans("REWORK"),
-      reject: scans("REJECT"),
-      pending: scans(null),
-    },
-    rework: { open: tickets("OPEN"), inProgress: tickets("IN_PROGRESS"), done: tickets("DONE") },
-    salvageReceived,
-  });
+  const groups = await countScansByVerdict(batchId);
+  const scans = (v: Verdict) => groups.find((g) => g.finalVerdict === v)?._count._all ?? 0;
+  const passed = scans("PASS");
+  const rejected = scans("REJECT");
+  return { passed, rejected, scanned: passed + rejected };
 }
 
 export type ScanDetail = ScanDetailRow;

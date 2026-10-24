@@ -3,24 +3,22 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-23
-**Branch:** `main` has Phases 20 to 23 (#15), the agent-workflow docs (D-089, #16), the demo seed
-refresh (D-090, #17) and the factory-visit plan (#18). Uncommitted, for a new branch from the
-latest `main` (Dylan commits; the team opens and merges the PR, D-032): the Phase 24 work and the
-Codex report-only docs (D-092).
+**Last updated:** 2026-10-24
+**Branch:** `main` has Phase 24 (#19). The Phase 24 QA report and notes are on `docs/phase-24-qa`
+(not in `main` yet). Uncommitted in `C:\dev\CPoint-PMS`, for a new branch from the latest `main`
+(Dylan commits; the team opens and merges the PR, D-032): the Phase 25 work.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
-included; Codex only tests and reports (the QA runs, and a rerun of an `e2e` or `docker` CI fix
-from `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md`, `qa/README.md` → "CI fix loop"); every agent reads
-the Obsidian vault (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 24, Remove Material Requests and Procurement (D-091). **Built; QA
-pending** (handoff `qa/handoffs/2026-10-23-phase-24-remove-procurement.md`, prompt
-`qa/CODEX_PROMPT_PHASE_24.md`). Plan: `docs/prompts/plans/phase-24-plan.md`, approved as planned.
-The module is gone end to end (migration `drop_procurement`); Inventory, suppliers, the homes and
-the Operations report still work. Phase 23 (Production progression) passed QA on 2026-10-22.
-**Then: Phases 25 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`), briefed
-in `docs/prompts/factory-visit-changes.md` with Dylan's answers of the same day (C-1 to C-41). They
-replace the old Phase 24 (materials used) of `production-progression.md`, which was never built.
-**Overall:** 25 phases built (0 to 24); 7 planned (25 to 31, Phase 30 in two parts)
+included; Codex only tests and reports; every agent reads the Obsidian vault
+(`C:\dev\capstone-obsidian`) first and records each change there.
+**Current phase:** Phase 25, Pass or Reject (D-093, D-094). **Built; QA pending** (handoff
+`qa/handoffs/2026-10-24-phase-25-pass-or-reject.md`, prompt `qa/CODEX_PROMPT_PHASE_25.md`). Plan:
+`docs/prompts/plans/phase-25-plan.md`, approved by Dylan ("yes to all" three questions). Every
+section is Pass or Reject and the camera's verdict is final; the Review Queue, the Repair Station,
+Salvage and the override are gone (migration `pass_or_reject`, **not yet applied to the dev
+database**: Dylan backs up first). Phase 24 passed QA (18 of 18) on 2026-10-23.
+**Then: Phases 26 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
+`docs/prompts/factory-visit-changes.md`, C-1 to C-41).
+**Overall:** 26 phases built (0 to 25); 6 planned (26 to 31, Phase 30 in two parts)
 
 ## Phase progress
 
@@ -52,8 +50,9 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 - [x] 23. Production progression in place of stage monitoring (QA passed)
 - ~~24. Materials used, worked out from the check-ins~~ (replaced by the factory-visit plan;
   CPoint counts stock by hand)
-- [x] 24. Remove Material Requests and Procurement (built; QA pending)
-- [ ] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
+- [x] 24. Remove Material Requests and Procurement (QA passed, 18 of 18)
+- [x] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
+      (built; QA pending)
 - [ ] 26. Capture on the constructors' own phones; rolls start and finish there
 - [ ] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
 - [ ] 28. Each role sees only its modules; demo sign-in and reset on the login page
@@ -63,7 +62,35 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 
 ## What works right now
 
-- **Database:** 19 migrations (the latest is `drop_procurement`, D-091; before it
+- **Pass or Reject (Phase 25, D-093, D-094):**
+  - every section is **Pass** or **Reject** and the camera's verdict is final: no review, no
+    override, no correction (C-21). `aiVerdict` and `finalVerdict` are both kept and always equal;
+  - each defect type has an outcome, **Usable** or **Not accepted** ("When found", a required
+    choice in Settings → Defect types). A detection at or above "A defect counts as found at"
+    (50%) gives its type's outcome; any Not accepted → Reject, otherwise Pass. An unknown class →
+    Reject, listed under Settings → Unknown classes (the Admin home says when some are waiting);
+  - Settings → Thresholds keeps found-at and the early-model notice; the two confidence
+    thresholds are gone (old keys get a named 422);
+  - rejected sections are reported **for salvage**: Reports → Quality (Scanned, Pass, Reject (for
+    salvage)), Operations (Reject rate KPI, a For salvage card, Supplier quality by Reject % with
+    Pass %); the CSVs follow. The system moves no leather (A-11);
+  - Capture and Floor view show green Pass ("Goes on to cutting") or red Reject ("Set aside for
+    salvage"); `docs/STATION_SETUP.md` has two bins;
+  - removed: `/review`, `/rework`, `/salvage` (404), their APIs, `POST /scans/{id}/decision`,
+    `/reports/repairs`, five permissions, three nav items, the tables `rework_tickets` and
+    `salvage_items`, and the scan status and override columns. Their audit rows stay as history;
+  - migration `pass_or_reject` converts first (A-10): Fixable → Pass, Needs review → Reject, a
+    pending scan takes its converted camera verdict; a type's Rework → Usable, Reject or no action
+    → Not accepted;
+  - a new database gets crease and scratch Usable, cut, hole, abrasion and dirt Not accepted
+    (A-13 and plan question 3); `demo:reset` sets cut and hole Not accepted, crease and scratch Usable, abrasion and
+    dirt off;
+  - the `cv/` preview, `predict` and `evaluate` use the same rule (`[preview.outcomes]`; old keys
+    in a local `config.toml` warn).
+- The bullets below are from before Phase 25. Where they mention Fixable, Needs review, the
+  Repair Station, Salvage, review or two thresholds, Phase 25 replaced them.
+- **Database:** 20 migrations (the latest is `pass_or_reject`, D-093/D-094; before it
+  `drop_procurement`, D-091; before it
   `production_progression`, D-082 to D-087, applied to the dev database on 2026-10-21; before it `attendance`, D-077; before it `user_can_capture`, D-075; before it `defect_handling`, D-070, and `drop_component_types`, D-071). UUIDv7 ids (D-018).
 - **Bootstrap on start** (D-017):
   - reference data and the first System Admin;
@@ -189,9 +216,9 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
-  - 588 unit tests pass (Vitest; 716 before Phase 24, the difference is the deleted procurement
-    tests; 646 before Phase 23), plus 81 model-toolkit tests (pytest; they also pass without
-    OpenCV or torch, as in CI).
+  - 519 unit tests pass (Vitest; 588 before Phase 25, the difference is the deleted review, repair
+    and salvage tests; 716 before Phase 24), plus 81 model-toolkit tests (pytest; they also pass
+    without OpenCV or torch, as in CI). Phase 25's e2e changes are written, not run (Codex).
   - Phase 20 (Codex, 2026-10-20, run 1, which also covered Phases 18 and 19): 56 of 69 passed, 4
     failed, 9 blocked; e2e 75 passed, 10 failed, 1 skipped (86). The app faults were old wording
     (a "Rework" button in Review, "the camera decided rework" in Override, "need rework" and "in
@@ -263,20 +290,20 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 
 ## Next step (exact)
 
-0. Dylan: commit Phase 24 (and the D-092 workflow docs) on a new branch from the latest `main`
-   (git commands in the Phase 24 report) and open the PR (D-032).
-1. Codex: Phase 24 QA from `qa/CODEX_PROMPT_PHASE_24.md` (paste it into Codex).
-2. Phase 25 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 25. Stop
+0. Dylan: merge (or open the PR for) `docs/phase-24-qa`, the Phase 24 QA report.
+1. Dylan, on the laptop: back up the dev database (the vault's command), then `npm run db:deploy`
+   and `npm run db:generate` to apply `pass_or_reject`.
+2. Dylan: commit Phase 25 on a new branch from the latest `main` (git commands in the Phase 25
+   report; specific files only) and open the PR (D-032).
+3. Codex: Phase 25 QA from `qa/CODEX_PROMPT_PHASE_25.md` (paste it into Codex).
+4. After QA passes: back up, then `npm run demo:reset -- --yes` for a fresh demo week in the new
+   rule.
+5. Phase 26 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 26. Stop
    for my approval before writing code."
-3. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
-   an A4 sheet). It can run any time now.
-4. Dylan (D-090, D-091): back up, then `npm run demo:reset -- --yes` for the new demo week; it also
-   clears the old proof-of-delivery files.
-5. Dylan, at the real station (`docs/STATION_SETUP.md`): the open device checks (F3, P18 S3, P18
-   S18, R4) change with Phases 25 and 26 (two outcomes, no Repair Station, the constructors'
-   phones), so they fit best with Phase 30A. Revoke the "Simulator" token first (it was pasted in
-   chat).
-6. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
+6. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
+   an A4 sheet). The open device checks (F3, P18 S3, P18 S18; R4 is gone with the Repair Station)
+   fit best there. Revoke the "Simulator" token first (it was pasted in chat).
+7. Optional (Dylan's call): delete the two backups in `storage/backups/` and the old `certs/`
    files; `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
 
 Later:
@@ -317,20 +344,26 @@ Later:
 - Decided (D-077 to D-079, Dylan 2026-10-21): attendance is present or absent only (no reasons),
   taken by the Floor Manager for today and 7 days back, viewed by the Admin. Tell CPoint it is a
   one-day log book with no per-person history.
-- Decided (D-028, team-confirmed 2026-10-05): only the QI resolves flagged (NEEDS_REVIEW) scans;
-  the FM can't. This differs from survey Q5 ("whoever is available"), so tell CPoint. If no QI is
-  on shift, flagged scans wait.
+- Closed (D-093, Dylan 2026-10-24, C-21): nobody reviews or overrides a scan; the camera's
+  verdict is final (replaces D-028).
+- Confirmed (A-10, DQ-2): old scans are converted, Fixable → Pass and Needs review → Reject; a
+  pending scan takes its converted camera verdict.
+- ASSUMPTION (A-11, D-093): rejected sections are only reported "for salvage"; the system tracks
+  no salvage stock or reuse.
+- Decided (A-12, Dylan 2026-10-24): an unknown class rejects the section and is listed under
+  Settings → Unknown classes until the Admin sets it up.
+- Decided (Dylan 2026-10-24, plan question 3): a defect type with no "when found" action before Phase 25
+  (abrasion, dirt, test types) became Not accepted; the Admin can change it.
 - Closed, module removed (Phase 24, D-091): the material-request questions of D-029, D-031,
   D-037, D-039, D-040, D-041, D-042, D-044, D-045 and survey Q14 (who orders leather rolls).
-- Decided (D-011, team-confirmed; D-053, Dylan 2026-10-19): a defect type set to Fixable or Reject
-  "when found" gets that result from 50% confidence; other types: ≥ 90% → REJECT, 60–89% →
-  REWORK, below 60% → PASS; an unknown class key → NEEDS_REVIEW. Confirm with CPoint which defect
-  gets which action (the demo uses cut and hole → Reject, crease and scratch → Rework).
-- ASSUMPTION: one scan = one leather section of the roll; reworked sections aren't re-scanned.
+- Decided (D-093, Dylan 2026-10-24, C-11, C-12, C-19, A-13): each defect type is Usable or Not accepted from
+  50% confidence; the two thresholds of D-011 are gone. cut and hole Not accepted, crease and
+  scratch Usable (a scratch at any length, C-39).
+- ASSUMPTION: one scan = one leather section of the roll.
 - ASSUMPTION: the sign-in lockout (5 tries / 15 minutes) and the 12-hour session suit factory
   shifts. Confirm the shift length.
-- Decided (D-021/D-022, team-confirmed): salvage reused in a batch is shown separately, and a
-  batch can be completed with repairs open ("In repair"). Still to confirm with CPoint.
+- Closed (D-094, C-19, C-20): the Repair Station and Salvage are removed; D-021/D-022 no longer
+  apply.
 - ASSUMPTION (D-026): the demo week's stage times match the survey.
 - Closed (D-071, Dylan 2026-10-20): component tracking is out of scope.
 - Decided (D-073 to D-076, Dylan 2026-10-20): the board is the Repair Station; Floor view with
@@ -365,7 +398,8 @@ Later:
   from the photos; Dylan to confirm.
 - Decided (D-049, Dylan 2026-10-19): model files stay out of git (`cv/models/`), not Git LFS.
 - Pending: the new YOLO training photos will change the defect classes. They arrive as
-  "unknown", go to the QI's review queue, and are added under Settings → Defect types.
+  "unknown", reject their sections and show under Settings → Unknown classes until the Admin adds
+  them under Settings → Defect types (D-093).
 
 ## Known test observations
 

@@ -179,7 +179,7 @@ test.describe("Floor view (D-074)", () => {
       await expect(floor.getByLabel("Live camera picture")).toBeVisible();
       await page.keyboard.press("Space"); // the station's capture key
       const band = floor.getByRole("status").filter({ hasText: /Section #\d+/ });
-      await expect(band).toContainText(/Pass|Fixable|Reject|Needs review/, { timeout: 30_000 });
+      await expect(band).toContainText(/Pass|Reject/, { timeout: 30_000 });
     } else {
       await expect(floor.getByRole("alert")).toContainText("Capture is off.");
     }

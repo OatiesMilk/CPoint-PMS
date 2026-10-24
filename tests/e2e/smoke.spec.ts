@@ -130,7 +130,7 @@ test("Floor Manager journey: register a roll as a batch, start it, receive stock
   await expect(page.getByTestId("report-range")).toBeVisible();
 });
 
-test("Quality Inspector journey: settle a review-queue scan, then repair a section", async ({
+test("Quality Inspector journey: a rejected and a passed section, explained on their pages", async ({
   browser,
   page,
   request,
@@ -139,26 +139,19 @@ test("Quality Inspector journey: settle a review-queue scan, then repair a secti
   const batch = await createBatch(api);
   const { token } = await createDeviceToken();
   await postScan(request, token, batch.id, [{ classKey: "smoke-unknown", confidence: 0.9 }]);
-  await postScan(request, token, batch.id, [{ classKey: "hole", confidence: 0.7 }]);
+  await postScan(request, token, batch.id, [{ classKey: "abrasion", confidence: 0.7 }]);
 
   await signInAs(page, ACCOUNTS.inspector);
-  await page.goto("/review");
   await expectAccessible(page);
   await page.goto(`/scans?batch=${batch.code}`);
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expectAccessible(page);
+  await page.goto(`/scans?batch=${batch.code}&verdict=REJECT`);
+  await expect(page.locator("tbody tr")).toHaveCount(1);
   await page.locator("tbody a").first().click();
   await expect(page).toHaveURL(/\/scans\/[0-9a-f-]{36}$/);
+  await expect(page.getByText(/so this section is rejected/)).toBeVisible();
   await expectAccessible(page);
-  await page.goto(`/rework?batch=${batch.code}`);
-  await page.getByRole("button", { name: "Start", exact: true }).click();
-  await page
-    .getByRole("region", { name: "Being handled" })
-    .getByRole("button", { name: "Mark done" })
-    .click();
-  await expect(
-    page
-      .getByRole("region", { name: "Done, usable" })
-      .getByRole("listitem", { name: `${batch.code} · section #2` }),
-  ).toBeVisible();
 });
 
 test("System Admin journey: thresholds, unknown classes and the audit trail", async ({ page }) => {

@@ -85,14 +85,6 @@ export type BatchActions = {
 const asAvailability = (r: PlanResult): Availability =>
   r.ok ? { allowed: true } : { allowed: false, reason: r.reason };
 
-/**
- * Shown when finishing a roll whose sections are still being repaired (D-022). Finishing is
- * allowed: the roll is tagged "Being handled" and the sections count as usable once done.
- */
-export function openRepairsNote(openRepairs: number): string {
-  return `${openRepairs} section${openRepairs === 1 ? " is" : "s are"} still to be cleaned or cut around. The roll will be tagged Being handled, and ${openRepairs === 1 ? "it counts" : "they count"} as usable once marked done at the Repair Station.`;
-}
-
 export function availableActions(batch: BatchState): BatchActions {
   const closed = CLOSED[batch.status];
   return {

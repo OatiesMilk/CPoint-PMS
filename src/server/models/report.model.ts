@@ -1,4 +1,3 @@
-import type { Verdict } from "@/generated/prisma/enums";
 import { type Db, defaultDb } from "./db";
 
 // Report queries (D-025). Aggregates per Manila day, stage or defect type only: no query here
@@ -14,13 +13,8 @@ export type DailyScanRow = {
   day: string;
   scanned: number;
   pass: number;
-  rework: number;
+  /** Rejected sections, which reports call "for salvage" (A-11). */
   reject: number;
-  pending: number;
-  overridden: number;
-  aiDecided: number;
-  agreed: number;
-  personResolved: number;
 };
 
 export async function dailyScanStats(range: Range, db: Db = defaultDb()): Promise<DailyScanRow[]> {
@@ -28,13 +22,7 @@ export async function dailyScanStats(range: Range, db: Db = defaultDb()): Promis
     SELECT to_char((s."capturedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila', 'YYYY-MM-DD') AS day,
       count(*) AS scanned,
       count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REWORK') AS rework,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject,
-      count(*) FILTER (WHERE s.status = 'PENDING_REVIEW') AS pending,
-      count(*) FILTER (WHERE s."isOverride") AS overridden,
-      count(*) FILTER (WHERE s."aiVerdict" <> 'NEEDS_REVIEW' AND s."finalVerdict" IS NOT NULL) AS "aiDecided",
-      count(*) FILTER (WHERE s."aiVerdict" <> 'NEEDS_REVIEW' AND s."finalVerdict" = s."aiVerdict") AS agreed,
-      count(*) FILTER (WHERE s."aiVerdict" = 'NEEDS_REVIEW' AND s."finalVerdict" IS NOT NULL) AS "personResolved"
+      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
     FROM scans s
     WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
       AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
@@ -43,27 +31,8 @@ export async function dailyScanStats(range: Range, db: Db = defaultDb()): Promis
     day: String(r.day),
     scanned: n(r.scanned as bigint),
     pass: n(r.pass as bigint),
-    rework: n(r.rework as bigint),
     reject: n(r.reject as bigint),
-    pending: n(r.pending as bigint),
-    overridden: n(r.overridden as bigint),
-    aiDecided: n(r.aiDecided as bigint),
-    agreed: n(r.agreed as bigint),
-    personResolved: n(r.personResolved as bigint),
   }));
-}
-
-/** Repairs marked done per Manila day. */
-export async function dailyRepairsDone(range: Range, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<{ day: string; done: bigint }[]>`
-    SELECT to_char((r."completedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila', 'YYYY-MM-DD') AS day,
-      count(*) AS done
-    FROM rework_tickets r
-    WHERE r.status = 'DONE'
-      AND r."completedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND r."completedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-    GROUP BY 1`;
-  return rows.map((r) => ({ day: r.day, done: n(r.done) }));
 }
 
 /** Batches started (first Preparation log) and completed (last log closed) per Manila day. */
@@ -93,9 +62,8 @@ export type DefectRow = {
   known: boolean;
   scans: number;
   pass: number;
-  rework: number;
+  /** Sections rejected (for salvage) whose main defect was this type. */
   reject: number;
-  pending: number;
 };
 
 /**
@@ -118,9 +86,7 @@ export async function defectBreakdown(range: Range, db: Db = defaultDb()): Promi
       (t.id IS NOT NULL) AS known,
       count(*) AS scans,
       count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REWORK') AS rework,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject,
-      count(*) FILTER (WHERE s."finalVerdict" IS NULL) AS pending
+      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
     FROM top JOIN scans s ON s.id = top."scanId"
     LEFT JOIN defect_types t ON t.id = top."defectTypeId"
       OR (top."defectTypeId" IS NULL AND t.key = top."rawClassKey")
@@ -132,19 +98,6 @@ export async function defectBreakdown(range: Range, db: Db = defaultDb()): Promi
     known: Boolean(r.known),
     scans: n(r.scans as bigint),
     pass: n(r.pass as bigint),
-    rework: n(r.rework as bigint),
     reject: n(r.reject as bigint),
-    pending: n(r.pending as bigint),
   }));
-}
-
-/** AI verdict × final verdict counts (final null = still pending review). */
-export async function verdictMatrix(range: Range, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<{ ai: Verdict; final: Verdict | null; count: bigint }[]>`
-    SELECT s."aiVerdict" AS ai, s."finalVerdict" AS final, count(*) AS count
-    FROM scans s
-    WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-    GROUP BY 1, 2`;
-  return rows.map((r) => ({ ai: r.ai, final: r.final, count: n(r.count) }));
 }

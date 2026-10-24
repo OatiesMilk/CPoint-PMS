@@ -26,7 +26,7 @@ export const settingsController = {
     return json({ data: await getThresholds() });
   }),
 
-  /** PUT /api/v1/settings/cv  { rejectPercent, reworkPercent } (e.g. 90, 60) */
+  /** PUT /api/v1/settings/cv  { foundPercent, earlyModelNotice? } (e.g. 50, true) */
   putThresholds: handle(async (request: Request) => {
     const admin = await requireApiPermission("settings:manage");
     const input = thresholdsSchema.parse(await readJsonBody(request));

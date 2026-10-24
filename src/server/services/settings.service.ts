@@ -1,4 +1,4 @@
-import { validateThresholds } from "@/lib/admin-rules";
+import { validateFoundAt } from "@/lib/admin-rules";
 import { Errors } from "@/server/lib/errors";
 import { getCvSettings } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
@@ -23,14 +23,12 @@ import { recordAudit } from "./audit.service";
 
 type Actor = { id: string };
 
-// ───────────── CV thresholds (D-011, D-024) ─────────────
+// ───────────── the CV rule (D-053, D-093) ─────────────
 
 export async function getThresholds() {
   const s = await getCvSettings();
   if (!s) throw Errors.notFound("The CV settings");
   return {
-    rejectAtOrAbove: s.rejectAtOrAbove,
-    reworkAtOrAbove: s.reworkAtOrAbove,
     foundAtOrAbove: s.foundAtOrAbove,
     earlyModelNotice: s.earlyModelNotice,
     updatedAt: s.updatedAt,
@@ -38,29 +36,22 @@ export async function getThresholds() {
 }
 
 /**
- * Saves new decision thresholds. Scans already taken keep the thresholds in their snapshot, so
- * their decisions stay explainable; only new scans use these.
+ * Saves "A defect counts as found at" (and the early-model notice when the API sends it). Scans
+ * already taken keep the rule in their snapshot, so their verdicts stay explainable; only new
+ * scans use this.
  */
 export async function saveThresholds(input: ThresholdsInput, actor: Actor) {
   const before = await getThresholds();
-  const next = {
-    rejectAtOrAbove: Math.round(input.rejectPercent * 10) / 1000,
-    reworkAtOrAbove: Math.round(input.reworkPercent * 10) / 1000,
-    foundAtOrAbove:
-      input.foundPercent === undefined
-        ? before.foundAtOrAbove
-        : Math.round(input.foundPercent * 10) / 1000,
-  };
-  const FIELD = {
-    rejectAtOrAbove: "rejectPercent",
-    reworkAtOrAbove: "reworkPercent",
-    foundAtOrAbove: "foundPercent",
-  } as const;
-  const errors = validateThresholds(next).map((e) => ({
-    path: [FIELD[e.path[0]]],
+  const foundAtOrAbove = Math.round(input.foundPercent * 10) / 1000;
+  const errors = validateFoundAt(foundAtOrAbove).map((e) => ({
+    path: ["foundPercent"],
     message: e.message,
   }));
   if (errors.length > 0) throw Errors.validation(errors);
+  const next = {
+    foundAtOrAbove,
+    earlyModelNotice: input.earlyModelNotice ?? before.earlyModelNotice,
+  };
   await runInTransaction(async (tx) => {
     await updateThresholds({ ...next, updatedById: actor.id }, tx);
     await recordAudit(tx, {
@@ -68,11 +59,7 @@ export async function saveThresholds(input: ThresholdsInput, actor: Actor) {
       action: "settings.thresholds",
       entity: "CvSettings",
       entityId: "1",
-      before: {
-        rejectAtOrAbove: before.rejectAtOrAbove,
-        reworkAtOrAbove: before.reworkAtOrAbove,
-        foundAtOrAbove: before.foundAtOrAbove,
-      },
+      before: { foundAtOrAbove: before.foundAtOrAbove, earlyModelNotice: before.earlyModelNotice },
       after: next,
     });
   });
@@ -160,7 +147,7 @@ function uniqueRace(kind: ReferenceKind, error: unknown): never {
 /** Optional fields left blank are stored as null, so clearing a field on edit works. */
 function toColumns(kind: ReferenceKind, values: Record<string, unknown>) {
   const nullable: Record<ReferenceKind, string[]> = {
-    defectType: ["description", "action"],
+    defectType: ["description"],
     shoeType: [],
     supplier: ["contactPerson", "phone", "notes"],
   };
@@ -215,7 +202,7 @@ export async function updateReferenceRow(
 
 /**
  * No deletes: batches and scans reference these rows. An inactive one disappears
- * from pickers (and an inactive defect type is ignored by the decision engine, D-011).
+ * from pickers (and an inactive defect type is ignored by the decision engine, D-093).
  */
 export async function setReferenceActive(
   kind: ReferenceKind,

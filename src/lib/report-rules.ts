@@ -91,14 +91,6 @@ export function fillDays<T extends { day: string }>(
   return out;
 }
 
-/**
- * How often people kept the camera's call: among scans where the AI decided (not NEEDS_REVIEW)
- * and a final verdict exists. Null when there's nothing to compare.
- */
-export function agreementRate(c: { agreed: number; aiDecided: number }): number | null {
-  return c.aiDecided > 0 ? c.agreed / c.aiDecided : null;
-}
-
 // ───────────── CSV ─────────────
 
 export type CsvColumn<T> = {

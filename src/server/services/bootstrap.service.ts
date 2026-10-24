@@ -24,25 +24,54 @@ export const REFERENCE_DATA = {
     { code: "SCH", name: "School Shoe", sortOrder: 1 },
     { code: "TOP", name: "Topsider", sortOrder: 2 },
   ],
-  // Placeholder classes until the YOLO model is retrained (see docs/STATUS.md).
+  // The model's four classes with CPoint's outcomes (DQ-7, A-13), and the two earlier placeholder
+  // types, which the model never sends. Data: the Admin changes them in Settings, and a fine-tuned
+  // model's new classes arrive under Unknown classes.
   defectTypes: [
+    {
+      key: "crease",
+      label: "Crease",
+      description: "Fold or crease line in the leather.",
+      sortOrder: 1,
+      outcome: "USABLE" as const,
+    },
     {
       key: "cut",
       label: "Cut",
       description: "Slit or cut through the leather surface.",
-      sortOrder: 1,
+      sortOrder: 2,
+      outcome: "NOT_ACCEPTED" as const,
     },
-    { key: "hole", label: "Hole", description: "Puncture or hole in the leather.", sortOrder: 2 },
-    { key: "abrasion", label: "Abrasion", description: "Scuffed or worn grain.", sortOrder: 3 },
+    {
+      key: "hole",
+      label: "Hole",
+      description: "Puncture or hole in the leather.",
+      sortOrder: 3,
+      outcome: "NOT_ACCEPTED" as const,
+    },
+    {
+      key: "scratch",
+      label: "Scratch",
+      description: "Scratch on the grain, at any length.",
+      sortOrder: 4,
+      outcome: "USABLE" as const,
+    },
+    {
+      key: "abrasion",
+      label: "Abrasion",
+      description: "Scuffed or worn grain.",
+      sortOrder: 5,
+      outcome: "NOT_ACCEPTED" as const,
+    },
     {
       key: "dirt",
       label: "Dirt",
       description: "Stain or dirt on the surface.",
-      sortOrder: 4,
-      handling: "CLEAN" as const, // cleaned before cutting, not cut around (D-070)
+      sortOrder: 6,
+      outcome: "NOT_ACCEPTED" as const,
     },
   ],
-  cvSettings: { rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6 }, // D-011
+  cvSettings: { foundAtOrAbove: 0.5 }, // D-053
   suppliers: [
     { name: "Sample Leather Supplier", notes: "Placeholder; replace with real suppliers." },
   ],
@@ -83,7 +112,7 @@ export const DEMO_CONSTRUCTORS: { name: string; email: string }[] = [
 const DEMO_ACCOUNT_AGE_DAYS = 30;
 
 /**
- * Shoe types, defect types, CV thresholds, a sample supplier and the default check-in schedule
+ * Shoe types, defect types, the CV rule, a sample supplier and the default check-in schedule
  * (D-083). Never overwrites existing rows.
  */
 export async function ensureReferenceData(): Promise<void> {

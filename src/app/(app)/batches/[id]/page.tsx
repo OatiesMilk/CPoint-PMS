@@ -12,7 +12,6 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft, CornerUpLeft } from "lucide-react";
 import { BatchStatusBadge } from "@/components/features/batches/batch-status-badge";
-import { InRepairBadge } from "@/components/features/batches/in-repair-badge";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -42,7 +41,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
   if (!isBatchId(id)) notFound();
   const detail = await getBatchDetail(id);
   if (!detail) notFound();
-  const { batch, actions, openRepairs, rollFromInventory, now } = detail;
+  const { batch, actions, rollFromInventory, now } = detail;
   const y = await batchYield(batch.id);
   const canManage = can(user.role, "batch:manage");
   const canFinish = can(user.role, "batch:finish");
@@ -67,7 +66,6 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
             <div className="flex items-center gap-3">
               <h1 className="font-mono text-3xl font-semibold tracking-tight">{batch.code}</h1>
               <BatchStatusBadge status={batch.status} currentStage={batch.currentStage} />
-              <InRepairBadge count={openRepairs} />
             </div>
             <p className="mt-1 text-lg text-muted-foreground">
               {batch.shoeType.name} · roll <span className="font-mono">{batch.rollCode}</span>
@@ -92,9 +90,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
           code={batch.code}
           currentStage={batch.currentStage}
           actions={actions}
-          openRepairs={openRepairs}
           scanned={y.scanned}
-          pendingReview={y.pendingReview}
           canManage={canManage}
           canFinish={canFinish}
         />
@@ -149,7 +145,7 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
                   <TableCell className="text-muted-foreground">{log.startedBy.name}</TableCell>
                   <TableCell className="max-w-80 whitespace-normal">
                     {log.isRollback ? (
-                      <span className="inline-flex items-start gap-1.5 text-rework">
+                      <span className="inline-flex items-start gap-1.5 text-caution">
                         <CornerUpLeft aria-hidden className="mt-0.5 size-4 shrink-0" />
                         <span>
                           Moved back: <span className="text-foreground">{log.reason}</span>
@@ -224,60 +220,27 @@ export default async function BatchDetailPage({ params }: PageProps<"/batches/[i
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {y.scanned === 0 ? (
-              <div className="flex flex-col gap-2 text-sm">
-                <p className="text-muted-foreground">
-                  No sections of this roll have been scanned yet.
-                </p>
-                {y.salvageReceived > 0 && (
-                  <p>
-                    Salvage reused here:{" "}
-                    <Link
-                      href={`/salvage?status=ASSIGNED&batch=${batch.code}`}
-                      data-testid="yield-salvage-in"
-                      className="font-semibold tabular-nums underline-offset-4 hover:underline"
-                    >
-                      {y.salvageReceived}
-                    </Link>
-                  </p>
-                )}
-              </div>
+              <p className="text-sm text-muted-foreground">
+                No sections of this roll have been scanned yet.
+              </p>
             ) : (
               <>
                 <div>
-                  <p className="text-sm text-muted-foreground">Usable sections</p>
-                  <p className="text-3xl font-semibold tabular-nums" data-testid="yield-usable">
-                    {y.usable}
+                  <p className="text-sm text-muted-foreground">Passed sections</p>
+                  <p className="text-3xl font-semibold tabular-nums" data-testid="yield-passed">
+                    {y.passed}
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    {y.passed} passed + {y.reworkDone} repaired, of {y.scanned} scanned
-                  </p>
+                  <p className="text-sm text-muted-foreground">of {y.scanned} scanned</p>
                 </div>
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   {[
                     [
-                      "Being cleaned or cut around",
-                      y.reworkOpen + y.reworkInProgress,
-                      `/rework?batch=${batch.code}`,
-                      "yield-repair",
-                    ],
-                    [
-                      "Rejected (salvage)",
+                      "Rejected (for salvage)",
                       y.rejected,
-                      `/salvage?batch=${batch.code}`,
+                      `/scans?batch=${batch.code}&verdict=REJECT`,
                       "yield-rejected",
                     ],
-                    [
-                      "Needs review",
-                      y.pendingReview,
-                      `/scans?batch=${batch.code}&status=PENDING_REVIEW`,
-                      "yield-review",
-                    ],
-                    [
-                      "Salvage reused here",
-                      y.salvageReceived,
-                      `/salvage?status=ASSIGNED&batch=${batch.code}`,
-                      "yield-salvage-in",
-                    ],
+                    ["Total scanned", y.scanned, `/scans?batch=${batch.code}`, "yield-total"],
                   ].map(([label, value, href, id]) => (
                     <div key={label as string}>
                       <dt className="text-muted-foreground">{label}</dt>

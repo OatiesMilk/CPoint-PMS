@@ -3,15 +3,14 @@
 import Link from "next/link";
 import { ScanImage } from "@/components/features/scans/scan-image";
 import { VerdictBadge, type Verdict } from "@/components/features/verdict-badge";
-import { readSnapshot } from "@/lib/decision-engine";
+import { detectionOutcome, OUTCOME_LABELS, readSnapshot } from "@/lib/decision-engine";
 
 /** The scan as GET /api/v1/scans/{id} returns it: only the fields this card reads. */
 export type ScanDetail = {
   id: string;
   sequence: number;
   aiVerdict: Verdict;
-  finalVerdict: Verdict | null;
-  status: "PENDING_REVIEW" | "DECIDED";
+  finalVerdict: Verdict;
   imagePath: string | null;
   modelVersion: string | null;
   thresholdsSnapshot: unknown;
@@ -49,20 +48,27 @@ export function LastScanSummary({ summary, repeat }: { summary: ScanSummary; rep
           This capture had already reached the app, so it wasn’t saved twice.
         </p>
       )}
-      {summary.verdict === "NEEDS_REVIEW" && (
-        <p className="text-sm">
-          The model found something the app doesn’t know. Set the piece aside for the Quality
-          Inspector.
-        </p>
-      )}
+      <p className="text-sm">
+        {summary.verdict === "REJECT"
+          ? "Reject: set the piece aside for salvage."
+          : "Pass: the piece goes on to cutting."}
+      </p>
     </div>
   );
 }
 
 /** The app's verdict for the last capture, with the section and every defect it found. */
 export function LastScan({ scan, repeat }: { scan: ScanDetail; repeat: boolean }) {
-  const snapshot = readSnapshot(scan.thresholdsSnapshot);
-  const verdict = scan.finalVerdict ?? scan.aiVerdict;
+  const rule = readSnapshot(scan.thresholdsSnapshot);
+  const verdict = scan.finalVerdict;
+  /** What each detection did to the section, in words beside the colour (D-093). */
+  const effect = (d: ScanDetail["detections"][number]) => {
+    if (d.isUnknownClass) return "Unknown class, rejected";
+    const outcome = rule.outcomes[d.rawClassKey];
+    if (!outcome) return null;
+    const found = detectionOutcome(d.confidence, outcome, rule);
+    return found ? OUTCOME_LABELS[found] : "Not counted";
+  };
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -76,10 +82,10 @@ export function LastScan({ scan, repeat }: { scan: ScanDetail; repeat: boolean }
           This capture had already reached the app, so it wasn’t saved twice.
         </p>
       )}
-      {scan.status === "PENDING_REVIEW" && (
+      {scan.detections.some((d) => d.isUnknownClass) && (
         <p className="text-sm">
-          The model found something the app doesn’t know, so the Quality Inspector decides this
-          section in the Review queue.
+          The model found a class the app doesn’t know, so the section is rejected. The System Admin
+          can set the type up in Settings.
         </p>
       )}
       {scan.detections.length > 0 ? (
@@ -88,9 +94,7 @@ export function LastScan({ scan, repeat }: { scan: ScanDetail; repeat: boolean }
             <li key={d.id} className="flex justify-between gap-3">
               <span>
                 {d.defectType?.label ?? d.rawClassKey}
-                {d.isUnknownClass && (
-                  <span className="text-muted-foreground"> (not a defect type yet)</span>
-                )}
+                {effect(d) && <span className="text-muted-foreground"> · {effect(d)}</span>}
               </span>
               <span className="text-muted-foreground tabular-nums">{percent(d.confidence)}</span>
             </li>
@@ -103,13 +107,13 @@ export function LastScan({ scan, repeat }: { scan: ScanDetail; repeat: boolean }
         <ScanImage
           src={`/api/v1/scans/${scan.id}/image`}
           alt={`Section #${scan.sequence} of ${scan.batch.code}, as captured`}
-          thresholds={snapshot}
+          rule={rule}
           detections={scan.detections.map((d) => ({
             id: d.id,
             label: d.defectType?.label ?? d.rawClassKey,
             confidence: d.confidence,
             unknown: d.isUnknownClass,
-            action: snapshot.actions?.[d.rawClassKey] ?? null,
+            outcome: rule.outcomes[d.rawClassKey] ?? null,
             box: { x: d.x, y: d.y, width: d.width, height: d.height },
           }))}
         />

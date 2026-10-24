@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const alertVariants = cva("flex items-start gap-3 rounded-md px-4 py-3 text-base", {
   variants: {
     tone: {
-      info: "bg-review-soft text-foreground [&>svg]:text-review",
+      info: "bg-info-soft text-foreground [&>svg]:text-info",
       danger: "bg-reject-soft text-foreground [&>svg]:text-reject",
       success: "bg-pass-soft text-foreground [&>svg]:text-pass",
     },

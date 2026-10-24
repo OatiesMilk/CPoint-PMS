@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { decide, type Thresholds } from "@/lib/decision-engine";
+import { decide, type DecisionSnapshot } from "@/lib/decision-engine";
 import type { ScanSource } from "@/lib/domain";
 import { Errors } from "@/server/lib/errors";
 import type { ImageType } from "@/server/lib/image-type";
@@ -8,7 +8,6 @@ import { getStorage, type StorageService } from "@/server/lib/storage";
 import { lockBatchRow } from "@/server/models/batch.model";
 import { getCvSettings } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
-import { insertReworkTicket, insertSalvageItem } from "@/server/models/outcome.model";
 import { listDefectTypes } from "@/server/models/reference-data.model";
 import {
   findScanByCaptureId,
@@ -35,7 +34,6 @@ export type IngestResult = {
   batchCode: string;
   sequence: number;
   verdict: string;
-  status: string;
   /** True when this captureId was already received: nothing new was written (D-051). */
   duplicate: boolean;
 };
@@ -68,7 +66,6 @@ export async function earlierCapture(captureId: string, origin: ScanOrigin) {
     batchCode: scan.batch.code,
     sequence: scan.sequence,
     verdict: scan.aiVerdict,
-    status: scan.status,
     duplicate: true,
   } satisfies IngestResult;
 }
@@ -80,10 +77,10 @@ function storageKey(now: Date, ext: string): string {
 }
 
 /**
- * One camera capture → one scan (D-005, D-011, D-020). The decision is made here, with the
- * thresholds in force right now (snapshotted on the scan). REWORK opens a repair ticket and REJECT
- * creates a salvage item in the same transaction (D-007). A captureId the same origin already
- * sent returns the first scan instead, so a camera's retry never makes a second one (D-051).
+ * One camera capture → one scan (D-005, D-020). The verdict, Pass or Reject, is made here with the
+ * rule in force right now (snapshotted on the scan) and is final: nobody changes it (D-093). A
+ * captureId the same origin already sent returns the first scan instead, so a camera's retry
+ * never makes a second one (D-051).
  */
 export async function ingestScan(
   input: IngestInput,
@@ -102,18 +99,16 @@ export async function ingestScan(
   const [settings, defectTypes] = await Promise.all([getCvSettings(), listDefectTypes()]);
   if (!settings)
     throw new Error("CV settings row is missing; the bootstrap should have created it.");
-  const thresholds: Thresholds = {
-    rejectAtOrAbove: settings.rejectAtOrAbove,
-    reworkAtOrAbove: settings.reworkAtOrAbove,
-    foundAtOrAbove: settings.foundAtOrAbove,
-  };
+  const rule = { foundAtOrAbove: settings.foundAtOrAbove };
   const byKey = new Map(defectTypes.map((t) => [t.key, t]));
-  const decision = decide(input.detections, byKey, thresholds);
-  // The actions in force, kept with the thresholds so the decision stays explainable (D-053).
-  const actions = Object.fromEntries(
-    defectTypes.filter((t) => t.isActive && t.action).map((t) => [t.key, t.action]),
-  );
-  const pending = decision.verdict === "NEEDS_REVIEW";
+  const decision = decide(input.detections, byKey, rule);
+  // The outcomes in force, kept with the found-at value so the verdict stays explainable.
+  const snapshot: Omit<DecisionSnapshot, "earlierRule"> = {
+    ...rule,
+    outcomes: Object.fromEntries(
+      defectTypes.filter((t) => t.isActive).map((t) => [t.key, t.outcome]),
+    ),
+  };
 
   const key = storageKey(now, input.image.type.ext);
   await storage.put(key, input.image.bytes);
@@ -134,10 +129,8 @@ export async function ingestScan(
           captureId: input.captureId ?? null,
           aiVerdict: decision.verdict,
           maxConfidence: decision.maxConfidence,
-          thresholdsSnapshot: { ...thresholds, actions },
-          finalVerdict: pending ? null : decision.verdict,
-          status: pending ? "PENDING_REVIEW" : "DECIDED",
-          decidedAt: pending ? null : now,
+          thresholdsSnapshot: snapshot,
+          finalVerdict: decision.verdict,
           capturedAt: input.capturedAt ?? now,
           createdAt: now,
         },
@@ -156,9 +149,6 @@ export async function ingestScan(
         }),
         tx,
       );
-      if (decision.verdict === "REWORK") await insertReworkTicket(scan.id, tx, now);
-      if (decision.verdict === "REJECT")
-        await insertSalvageItem({ scanId: scan.id, originBatchId: batch.id, createdAt: now }, tx);
       await recordAudit(tx, {
         actor:
           origin.kind === "website"
@@ -184,7 +174,6 @@ export async function ingestScan(
         batchCode: batch.code,
         sequence,
         verdict: decision.verdict,
-        status: scan.status,
         duplicate: false,
       };
     });

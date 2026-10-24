@@ -1,21 +1,16 @@
-import { CircleCheck, CircleHelp, CircleX, Wrench } from "lucide-react";
+import { CircleCheck, CircleX } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type Verdict = "PASS" | "REWORK" | "REJECT" | "NEEDS_REVIEW";
+/** A section is Pass or Reject, and the camera's verdict is final (D-093). */
+export type Verdict = "PASS" | "REJECT";
 
 // Color never carries meaning alone: every verdict has an icon and a label.
 const styles: Record<Verdict, { label: string; className: string; Icon: typeof CircleCheck }> = {
   PASS: { label: "Pass", className: "bg-pass-soft text-pass", Icon: CircleCheck },
-  REWORK: { label: "Fixable", className: "bg-rework-soft text-rework", Icon: Wrench },
   REJECT: { label: "Reject", className: "bg-reject-soft text-reject", Icon: CircleX },
-  NEEDS_REVIEW: {
-    label: "Needs review",
-    className: "bg-review-soft text-review",
-    Icon: CircleHelp,
-  },
 };
 
-/** The word a user sees for a verdict (REWORK reads "Fixable", D-070). */
+/** The word a user sees for a verdict. */
 export function verdictLabel(verdict: Verdict) {
   return styles[verdict].label;
 }

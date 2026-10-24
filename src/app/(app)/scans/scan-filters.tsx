@@ -9,9 +9,7 @@ import { Select } from "@/components/ui/select";
 
 const VERDICTS = [
   ["PASS", "Pass"],
-  ["REWORK", "Fixable"],
   ["REJECT", "Reject"],
-  ["NEEDS_REVIEW", "Needed review"],
 ] as const;
 const SOURCES = [
   ["SIMULATOR", "Simulator"],
@@ -78,18 +76,6 @@ export function ScanFilters() {
         </Select>
       </div>
       <div className="flex w-44 flex-col gap-1.5">
-        <Label htmlFor="filter-status">Status</Label>
-        <Select
-          id="filter-status"
-          value={params.get("status") ?? ""}
-          onChange={(e) => update("status", e.target.value)}
-        >
-          <option value="">All</option>
-          <option value="PENDING_REVIEW">Waiting for review</option>
-          <option value="DECIDED">Decided</option>
-        </Select>
-      </div>
-      <div className="flex w-44 flex-col gap-1.5">
         <Label htmlFor="filter-source">Source</Label>
         <Select
           id="filter-source"
@@ -104,15 +90,6 @@ export function ScanFilters() {
           ))}
         </Select>
       </div>
-      <label className="flex h-9 items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="size-4 accent-(--primary)"
-          checked={params.get("override") === "1"}
-          onChange={(e) => update("override", e.target.checked ? "1" : "")}
-        />
-        Overridden only
-      </label>
     </div>
   );
 }

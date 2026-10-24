@@ -40,8 +40,8 @@ export function ModelNoticeForm({ initial }: { initial: boolean }) {
       <div>
         <h2 className="font-medium">Early model notice</h2>
         <p className="text-sm text-muted-foreground">
-          Tells everyone on the Camera page that the model is still being trained and that the
-          Quality Inspector checks every flagged section.
+          Tells everyone on the Camera and Capture pages that the model is still being trained, so
+          some verdicts may be wrong.
         </p>
       </div>
       {error && <Alert tone="danger">{error}</Alert>}

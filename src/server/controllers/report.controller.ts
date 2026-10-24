@@ -3,7 +3,6 @@ import { handle, json } from "@/server/lib/http";
 import {
   operationsCsv,
   operationsReport,
-  repairStation,
   stockCsv,
   supplierRollsCsv,
   suppliersCsv,
@@ -46,12 +45,6 @@ export const reportController = {
   operations: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     return json({ data: await operationsReport(rangeFrom(request)) });
-  }),
-
-  /** GET /api/v1/reports/repairs?preset=|from=&to= (Floor Manager, Quality Inspector) */
-  repairs: handle(async (request: Request) => {
-    await requireApiPermission("report:quality");
-    return json({ data: await repairStation(rangeFrom(request)) });
   }),
 
   operationsCsv: handle(async (request: Request) => {

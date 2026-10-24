@@ -4,7 +4,6 @@ import {
   EXPECTED_PIECES_PER_ROLL,
   availableActions,
   finishHint,
-  openRepairsNote,
   planCancel,
   planTransition,
   rollStatusLabel,
@@ -149,7 +148,5 @@ describe("labels and hints", () => {
   it("names the buttons and the open repairs", () => {
     expect(transitionLabel("start")).toBe("Start roll");
     expect(transitionLabel("finish")).toBe("Finish roll");
-    expect(openRepairsNote(1)).toContain("1 section is still to be cleaned or cut around");
-    expect(openRepairsNote(2)).toContain("they count as usable");
   });
 });

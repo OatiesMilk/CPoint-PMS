@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agreementRate, csvCell, fillDays, parseRange, toCsv } from "@/lib/report-rules";
+import { csvCell, fillDays, parseRange, toCsv } from "@/lib/report-rules";
 
 // 2026-10-03 01:00 in Manila is still 2026-10-02 in UTC.
 const now = new Date("2026-10-02T17:00:00.000Z");
@@ -49,13 +49,6 @@ describe("fillDays", () => {
       { day: "2026-10-02", n: 5 },
       { day: "2026-10-03", n: 0 },
     ]);
-  });
-});
-
-describe("agreementRate", () => {
-  it("is the share kept, or null when the AI decided nothing", () => {
-    expect(agreementRate({ agreed: 9, aiDecided: 10 })).toBe(0.9);
-    expect(agreementRate({ agreed: 0, aiDecided: 0 })).toBeNull();
   });
 });
 

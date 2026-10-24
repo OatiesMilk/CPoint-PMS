@@ -1,27 +1,21 @@
 import type { Verdict } from "./domain";
 
 /**
- * The CV decision rule, pure and client-safe. Each detection of an active defect type gives an
- * outcome, and the worst outcome decides the section:
- *   - a type with an action (D-053): that action once the detection counts as found
- *     (confidence ≥ foundAtOrAbove), otherwise PASS. A YOLO confidence says how sure the model is
- *     that a defect is there, not how bad it is, so the type decides how bad;
- *   - a type without one (D-011): confidence ≥ rejectAtOrAbove → REJECT, ≥ reworkAtOrAbove →
- *     REWORK, otherwise PASS;
- *   - any class key the system doesn't know → NEEDS_REVIEW (an untrained class can't be trusted).
- * Thresholds, actions and defect types are data (CvSettings, DefectType), never constants here.
+ * The CV decision rule, pure and client-safe (Phase 25, D-093). A section is Pass or Reject:
+ *   - a detection of an active, known type at or above "counts as found at" gives its type's
+ *     outcome, Usable or Not accepted; below it, it counts for nothing (a YOLO confidence says how
+ *     sure the model is that a defect is there, not how bad it is, so the type decides that);
+ *   - any Not accepted → Reject, otherwise Pass;
+ *   - any class key the system doesn't know → Reject (A-12), listed in Settings → Unknown classes;
+ *   - inactive types are ignored.
+ * The found-at value, the outcomes and the defect types are data (CvSettings, DefectType).
+ * Nobody changes the verdict afterwards (C-21).
  */
 
-export type DefectAction = "REWORK" | "REJECT";
-export type Thresholds = {
-  rejectAtOrAbove: number;
-  reworkAtOrAbove: number;
-  /** Missing on scans decided before D-053; types had no actions then. */
-  foundAtOrAbove?: number;
-};
+export type DefectOutcome = "USABLE" | "NOT_ACCEPTED";
+export type RuleSettings = { foundAtOrAbove: number };
 export type DetectionInput = { classKey: string; confidence: number };
-export type DefectTypeInfo = { id: string; isActive: boolean; action?: DefectAction | null };
-export type Outcome = "PASS" | DefectAction;
+export type DefectTypeInfo = { id: string; isActive: boolean; outcome: DefectOutcome };
 
 export type Decision = {
   verdict: Verdict;
@@ -32,35 +26,41 @@ export type Decision = {
   ignoredKeys: string[];
 };
 
-/** The default for foundAtOrAbove (the bootstrap and the migration use the same, D-053). */
+/** The default for foundAtOrAbove (the bootstrap and the migrations use the same, D-053). */
 export const DEFAULT_FOUND_AT_OR_ABOVE = 0.5;
 
-const RANK: Record<Outcome, number> = { PASS: 0, REWORK: 1, REJECT: 2 };
+export const OUTCOME_LABELS: Record<DefectOutcome, string> = {
+  USABLE: "Usable",
+  NOT_ACCEPTED: "Not accepted",
+};
 
-/** What one detection of an active, known type means on its own. */
+/** Whether a detection counts as found (D-053). */
+export function isFound(confidence: number, rule: RuleSettings): boolean {
+  return confidence >= rule.foundAtOrAbove;
+}
+
+/**
+ * What one detection does to its section: its type's outcome once found, nothing (null) below
+ * found-at. An unknown class is Not accepted (A-12).
+ */
 export function detectionOutcome(
   confidence: number,
-  action: DefectAction | null | undefined,
-  thresholds: Thresholds,
-): Outcome {
-  if (action) {
-    const found = thresholds.foundAtOrAbove ?? DEFAULT_FOUND_AT_OR_ABOVE;
-    return confidence >= found ? action : "PASS";
-  }
-  if (confidence >= thresholds.rejectAtOrAbove) return "REJECT";
-  if (confidence >= thresholds.reworkAtOrAbove) return "REWORK";
-  return "PASS";
+  outcome: DefectOutcome | null | undefined,
+  rule: RuleSettings,
+): DefectOutcome | null {
+  if (!outcome) return "NOT_ACCEPTED";
+  return isFound(confidence, rule) ? outcome : null;
 }
 
 export function decide(
   detections: DetectionInput[],
   defectTypesByKey: ReadonlyMap<string, DefectTypeInfo>,
-  thresholds: Thresholds,
+  rule: RuleSettings,
 ): Decision {
   const unknown = new Set<string>();
   const ignored = new Set<string>();
   let max: number | null = null;
-  let worst: Outcome = "PASS";
+  let rejected = false;
 
   for (const d of detections) {
     const type = defectTypesByKey.get(d.classKey);
@@ -68,50 +68,46 @@ export function decide(
     else if (!type.isActive) ignored.add(d.classKey);
     else {
       if (max === null || d.confidence > max) max = d.confidence;
-      const outcome = detectionOutcome(d.confidence, type.action, thresholds);
-      if (RANK[outcome] > RANK[worst]) worst = outcome;
+      if (detectionOutcome(d.confidence, type.outcome, rule) === "NOT_ACCEPTED") rejected = true;
     }
   }
 
-  const verdict: Verdict = unknown.size > 0 ? "NEEDS_REVIEW" : worst;
+  const verdict: Verdict = rejected || unknown.size > 0 ? "REJECT" : "PASS";
   return { verdict, maxConfidence: max, unknownKeys: [...unknown], ignoredKeys: [...ignored] };
 }
 
-/** Returns an error message, or null when the thresholds make sense. */
-export function validateThresholds(t: Thresholds): string | null {
-  const inRange = (v: number) => Number.isFinite(v) && v > 0 && v <= 1;
-  if (!inRange(t.reworkAtOrAbove) || !inRange(t.rejectAtOrAbove)) {
-    return "Thresholds must be between 0 and 1 (e.g. 0.60 and 0.90).";
-  }
-  if (t.reworkAtOrAbove >= t.rejectAtOrAbove) {
-    return "The Fixable threshold must be lower than the Reject threshold.";
-  }
-  if (t.foundAtOrAbove !== undefined && !inRange(t.foundAtOrAbove)) {
-    return "The found-at value must be between 0 and 1 (e.g. 0.50).";
-  }
-  return null;
-}
-
 /** What a scan stores in `thresholdsSnapshot`: the rule in force when it was decided. */
-export type DecisionSnapshot = Thresholds & { actions?: Record<string, DefectAction> };
+export type DecisionSnapshot = {
+  foundAtOrAbove: number;
+  outcomes: Record<string, DefectOutcome>;
+  /**
+   * Set on scans decided before Phase 25, which used Fixable and the two confidence thresholds
+   * (D-011, D-053). Their verdicts were converted (Fixable → Pass, Needs review → Reject).
+   */
+  earlierRule: boolean;
+};
 
-/** Reads a stored snapshot; actions are missing on scans decided before D-053. */
+/** Reads a stored snapshot, old shapes included (`rejectAtOrAbove`, `actions`). */
 export function readSnapshot(json: unknown): DecisionSnapshot {
-  const s = (json ?? {}) as Partial<DecisionSnapshot>;
+  const s = (json ?? {}) as {
+    foundAtOrAbove?: unknown;
+    outcomes?: Record<string, DefectOutcome>;
+    rejectAtOrAbove?: unknown;
+  };
   return {
-    rejectAtOrAbove: Number(s.rejectAtOrAbove ?? 0.9),
-    reworkAtOrAbove: Number(s.reworkAtOrAbove ?? 0.6),
-    ...(typeof s.foundAtOrAbove === "number" ? { foundAtOrAbove: s.foundAtOrAbove } : {}),
-    actions: s.actions ?? {},
+    foundAtOrAbove:
+      typeof s.foundAtOrAbove === "number" ? s.foundAtOrAbove : DEFAULT_FOUND_AT_OR_ABOVE,
+    outcomes: s.outcomes ?? {},
+    earlierRule: s.outcomes === undefined || s.rejectAtOrAbove !== undefined,
   };
 }
 
-/** Class keys grouped by action, for "Rules used" lines. */
-export function actionGroups(actions: Record<string, DefectAction> = {}) {
-  const keys = (a: DefectAction) =>
-    Object.entries(actions)
-      .filter(([, v]) => v === a)
+/** Class keys grouped by outcome, for "Rules used" lines. */
+export function outcomeGroups(outcomes: Record<string, DefectOutcome> = {}) {
+  const keys = (o: DefectOutcome) =>
+    Object.entries(outcomes)
+      .filter(([, v]) => v === o)
       .map(([k]) => k)
       .sort();
-  return { reject: keys("REJECT"), rework: keys("REWORK") };
+  return { notAccepted: keys("NOT_ACCEPTED"), usable: keys("USABLE") };
 }

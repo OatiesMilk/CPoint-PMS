@@ -474,9 +474,10 @@ C-38, assumptions A-1 to A-26, each phase's **Done when**). It replaces the old 
 (materials used, worked out from the check-ins) of `docs/prompts/production-progression.md`, which
 was never built. Each phase gets its own criteria here when its plan is approved.
 
-- [x] Phase 24: remove Material Requests and Procurement (built; QA pending)
-- [ ] Phase 25: Pass or Reject, a final verdict; remove the Review Queue, Repair Station and
-      Salvage
+- [x] Phase 24: remove Material Requests and Procurement (QA passed, 18 of 18; the report is on
+      `docs/phase-24-qa`)
+- [x] Phase 25: Pass or Reject, a final verdict; remove the Review Queue, Repair Station and
+      Salvage (built; QA pending)
 - [ ] Phase 26: capture on the constructors' own phones; rolls start and finish there; Reports →
       Rolls
 - [ ] Phase 27: batches are the check-in intervals (lunch break, on-screen notices, pairs finished
@@ -509,3 +510,31 @@ Decision: D-091.
 - [x] Unit and e2e tests updated; the brief's removal check finds nothing
 - [ ] Codex QA: every role's nav, the 404s, Inventory, the FM home, Operations, `demo:reset` and
       the demo week on a throwaway stack
+
+## Phase 25 — Pass or Reject, a final verdict; no Review Queue, Repair Station or Salvage
+
+Brief: `docs/prompts/factory-visit-changes.md`, Phase 25. Plan: `docs/prompts/plans/phase-25-plan.md`
+(approved 2026-10-24, "yes to all"). Decisions: D-093, D-094.
+
+- [x] The rule: each defect type is Usable or Not accepted; a found Not accepted type, or an
+      unknown class, rejects the section; otherwise it passes. Inactive types are ignored; below
+      "A defect counts as found at" a detection counts for nothing
+- [x] The verdict is final at once; no status, override, decided-by or decision API
+- [x] Migration `pass_or_reject`: REWORK → PASS and NEEDS_REVIEW → REJECT on both verdict columns,
+      actions → outcomes, then the repair, salvage and decision tables and columns are dropped
+      (tested on a scratch database; the schema diff after it is empty)
+- [x] `/review`, `/rework`, `/salvage`, their APIs, `/api/v1/reports/repairs` and five permissions
+      are gone; the nav has no Review queue, Repair Station or Salvage
+- [x] Settings: "When found" Usable or Not accepted (required); Thresholds has the found-at value
+      only; the Admin home shows waiting unknown classes
+- [x] Screens: Pass or Reject badges, filters, charts and legends; a section's page explains its
+      verdict ("Rules used"); Capture and Floor view show two results; a roll's yield is Passed,
+      Rejected (for salvage), Total
+- [x] Reports: Quality without the agreement matrix; Operations with For salvage, the reject rate
+      and Supplier quality on the reject share; the CSVs say "Reject (for salvage)"
+- [x] Chart colours re-validated (Pass lighter than Reject, light and dark)
+- [x] Bootstrap, the demo week, `demo:reset` and the simulator on the new outcomes
+- [x] The model toolkit's preview: `[preview.outcomes]`, PASS or REJECT, old keys warn
+- [x] `npm run check` (519 unit tests) and the `cv/` checks (81 tests) pass; e2e specs updated,
+      not run
+- [ ] Codex QA from `qa/CODEX_PROMPT_PHASE_25.md`

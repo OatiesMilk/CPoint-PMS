@@ -14,7 +14,6 @@ import {
   setCameraOperator,
 } from "@/server/services/camera.service";
 import { getStorage } from "@/server/lib/storage";
-import { decideScan } from "@/server/services/scan-decision.service";
 import { captureScan } from "@/server/services/capture.service";
 import { ingestScan } from "@/server/services/scan-ingest.service";
 import { getScanDetail, latestScans, listScans } from "@/server/services/scan-query.service";
@@ -22,7 +21,6 @@ import { readJsonBody } from "@/server/lib/http";
 import {
   cameraOperatorSchema,
   captureFieldsSchema,
-  decisionSchema,
   ingestFieldsSchema,
   isScanId,
   MAX_IMAGE_BYTES,
@@ -71,7 +69,7 @@ async function readImageForm(request: Request) {
 }
 
 export const scanController = {
-  /** GET /api/v1/scans?verdict=&status=&source=&batch=&override=1&page=  or  ?limit=8 (latest, for the live widget). */
+  /** GET /api/v1/scans?verdict=&source=&batch=&defect=&page=  or  ?limit=8 (latest, for the live widget). */
   index: handle(async (request: Request) => {
     await requireApiPermission("scan:read");
     const query = scanListQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
@@ -80,7 +78,7 @@ export const scanController = {
     return json({ data: rows, meta: { total, page, pageCount } });
   }),
 
-  /** GET /api/v1/scans/{id}: scan, detections, outcomes, decision history. */
+  /** GET /api/v1/scans/{id}: the scan, its detections and the rule used. */
   show: handle(async (_request: Request, ctx: IdContext) => {
     await requireApiPermission("scan:read");
     const scan = await getScanDetail(await scanIdFrom(ctx));
@@ -106,14 +104,6 @@ export const scanController = {
         "X-Content-Type-Options": "nosniff",
       },
     });
-  }),
-
-  /** POST /api/v1/scans/{id}/decision  { verdict, reason?, expectedFinalVerdict } */
-  decide: handle(async (request: Request, ctx: IdContext) => {
-    const user = await requireApiPermission("scan:decide");
-    const id = await scanIdFrom(ctx);
-    const input = decisionSchema.parse(await readJsonBody(request));
-    return json({ data: await decideScan(id, input, user) });
   }),
 
   /** POST /api/v1/scans: camera ingestion (multipart/form-data, device token). */

@@ -68,7 +68,7 @@ async function main() {
   const started = Date.now();
   const result = await resetDemoData(keep, { demoWeek });
   console.log(
-    `\nReset done in ${Math.round((Date.now() - started) / 1000)}s. Defect types: cut and hole reject when found, crease and scratch rework, abrasion and dirt off.`,
+    `\nReset done in ${Math.round((Date.now() - started) / 1000)}s. Defect types: cut and hole Not accepted, crease and scratch Usable, abrasion and dirt off.`,
   );
   if (result.demoWeek)
     console.log(

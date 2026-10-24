@@ -31,21 +31,19 @@ overlap_iou = 0.7
 
 [preview]
 # Only for the verdict preview that predict and evaluate print. Copy these from Admin > Settings
-# so the preview matches the app. The app decides the real verdict.
-reject_at_or_above = 0.90
-rework_at_or_above = 0.60
+# so the preview matches the app. The app decides the real verdict: Pass or Reject (D-093).
 # Defect types as they are in Settings once the yolo-v1 classes are set up (cv/README.md,
 # "Defect types for yolo-v1", D-052): the model's four classes active, the two it never sends off.
 active_keys = ["crease", "cut", "hole", "scratch"]
 inactive_keys = ["abrasion", "dirt"]
-# "A defect counts as found at" in Settings > Thresholds (D-053).
+# "A defect counts as found at" in Settings > Thresholds (D-053). Below it a detection counts
+# for nothing; a class the app doesn't know always rejects the section.
 found_at_or_above = 0.50
 
-[preview.actions]
-# Each defect type's "When found" in Settings > Defect types (D-053). A type left out goes by
-# confidence (the two thresholds above). These match npm run demo:reset.
-crease = "REWORK"
-cut = "REJECT"
-hole = "REJECT"
-scratch = "REWORK"
-
+[preview.outcomes]
+# Each active defect type's "When found" in Settings > Defect types: USABLE (Pass) or
+# NOT_ACCEPTED (Reject). These match npm run demo:reset and CPoint's answers (C-14 to C-17).
+crease = "USABLE"
+cut = "NOT_ACCEPTED"
+hole = "NOT_ACCEPTED"
+scratch = "USABLE"

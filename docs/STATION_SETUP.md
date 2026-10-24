@@ -11,21 +11,22 @@ system itself runs on the main PC (Docker). The station only needs a browser tha
 | A fixed camera                | A USB webcam on a stand, pointing straight down at the table        | The same angle and distance for every piece                     |
 | A monitor facing the operator | Any screen, readable from about 2 m                                 | The operator glances up to see the verdict                      |
 | A keyboard                    | The station's own keyboard, within reach of the operator            | **Space** captures                                              |
-| Four bins                     | The bins you already have, taped or labelled by colour **and** word | Where each piece goes                                           |
+| Two bins                      | The bins you already have, taped or labelled by colour **and** word | Where each piece goes                                           |
 | Network                       | The station and the main PC online (Wi-Fi or cable)                 | The station opens the site through the tunnel                   |
 
 Keep the lighting even and the table plain, so the camera sees the leather the same way all day.
 
 ## Bins
 
-| Bin colour | Label on the bin | What goes in it                          | Who takes it from there                                |
-| ---------- | ---------------- | ---------------------------------------- | ------------------------------------------------------ |
-| Green      | **Pass**         | Good pieces                              | On to cutting                                          |
-| Orange     | **Fixable**      | Pieces to clean or cut around            | The Repair Station                                     |
-| Red        | **Reject**       | Pieces that can't be used for this batch | Salvage                                                |
-| Blue       | **Needs review** | Pieces the camera wasn't sure about      | The Quality Inspector, who decides in the Review queue |
+| Bin colour | Label on the bin | What goes in it                            | Who takes it from there |
+| ---------- | ---------------- | ------------------------------------------ | ----------------------- |
+| Green      | **Pass**         | Pieces with no defect, or only usable ones | On to cutting           |
+| Red        | **Reject**       | Pieces with a defect that isn't accepted   | Set aside for salvage   |
 
-Put the word on every bin as well as the colour: some people can't tell orange from red or green.
+Every piece is Pass or Reject, and the camera's verdict is final (D-093): nobody changes it
+afterwards. A piece with a defect class the system doesn't know yet is a Reject too.
+
+Put the word on every bin as well as the colour: some people can't tell red from green.
 
 ## One-time setup
 
@@ -48,8 +49,8 @@ Use the station PC only for this, so the Capture page keeps the keyboard focus f
 
 1. Place the piece flat under the camera.
 2. Press **Space**.
-3. Wait for the colour (about a second): the frame and the band at the bottom turn green, orange,
-   red or blue, with the word and the section number.
+3. Wait for the colour (about a second): the frame and the band at the bottom turn green or red,
+   with the word and the section number.
 4. Put the piece in the bin of that colour.
 
 The verdict stays on screen until the next capture, so a late glance still shows the right bin.

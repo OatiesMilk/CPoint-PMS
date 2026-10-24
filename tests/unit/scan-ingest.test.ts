@@ -23,18 +23,17 @@ const scans = {
   findLatestScan: vi.fn(),
   findScanByCaptureId: vi.fn(async (_captureId: string): Promise<unknown> => null),
 };
-const outcomes = { insertReworkTicket: vi.fn(), insertSalvageItem: vi.fn() };
 const recordAudit = vi.fn();
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/batch.model", () => batchModel);
 vi.mock("@/server/models/cv-settings.model", () => cv);
 vi.mock("@/server/models/scan.model", () => scans);
-vi.mock("@/server/models/outcome.model", () => outcomes);
 vi.mock("@/server/models/reference-data.model", () => ({
   listDefectTypes: async () => [
-    { id: "t-cut", key: "cut", label: "Cut", isActive: true },
-    { id: "t-hole", key: "hole", label: "Hole", isActive: true },
+    { id: "t-cut", key: "cut", label: "Cut", isActive: true, outcome: "NOT_ACCEPTED" },
+    { id: "t-hole", key: "hole", label: "Hole", isActive: true, outcome: "NOT_ACCEPTED" },
+    { id: "t-crease", key: "crease", label: "Crease", isActive: true, outcome: "USABLE" },
   ],
 }));
 vi.mock("@/server/models/db", () => ({
@@ -73,11 +72,7 @@ const det = (classKey: string, confidence: number) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  cv.getCvSettings.mockResolvedValue({
-    rejectAtOrAbove: 0.9,
-    reworkAtOrAbove: 0.6,
-    activeBatchId: null,
-  });
+  cv.getCvSettings.mockResolvedValue({ foundAtOrAbove: 0.5, activeBatchId: null });
   batchModel.listBatchesAtPreparation.mockResolvedValue([prep("0001")]);
 });
 
@@ -171,7 +166,7 @@ describe("ingestScan", () => {
       storage,
     );
 
-  it("stores the image, numbers the scan under a row lock and snapshots the thresholds", async () => {
+  it("stores the image, numbers the scan under a row lock and snapshots the rule", async () => {
     const storage = memoryStorage();
     const result = await ingest([det("cut", 0.3)], storage);
     expect(result).toEqual({
@@ -180,14 +175,17 @@ describe("ingestScan", () => {
       batchCode: "B-2026-0001",
       sequence: 4,
       verdict: "PASS",
-      status: "DECIDED",
       duplicate: false,
     });
     expect(batchModel.lockBatchRow).toHaveBeenCalledWith("0001", "tx");
     const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
     expect(data).toMatchObject({
       imagePath: expect.stringMatching(/^scans\/2026\/10\/[0-9a-f-]{36}\.jpg$/),
-      thresholdsSnapshot: { rejectAtOrAbove: 0.9, reworkAtOrAbove: 0.6 },
+      thresholdsSnapshot: {
+        foundAtOrAbove: 0.5,
+        outcomes: { cut: "NOT_ACCEPTED", hole: "NOT_ACCEPTED", crease: "USABLE" },
+      },
+      aiVerdict: "PASS",
       finalVerdict: "PASS",
       deviceTokenId: "tok1",
     });
@@ -199,28 +197,30 @@ describe("ingestScan", () => {
     expect(storage.files.size).toBe(1);
   });
 
-  it("opens a rework ticket for REWORK and a salvage item for REJECT", async () => {
-    await ingest([det("hole", 0.7)]);
-    expect(outcomes.insertReworkTicket).toHaveBeenCalledWith("scan1", "tx", now);
-    await ingest([det("cut", 0.95)]);
-    expect(outcomes.insertSalvageItem).toHaveBeenCalledWith(
-      { scanId: "scan1", originBatchId: "0001", createdAt: now },
-      "tx",
-    );
+  it("gives Reject for a found Not accepted type and Pass for a Usable one, final at once", async () => {
+    expect((await ingest([det("hole", 0.7)])).verdict).toBe("REJECT");
+    expect(scans.insertScanWithDetections.mock.calls[0][0]).toMatchObject({
+      aiVerdict: "REJECT",
+      finalVerdict: "REJECT",
+    });
+    expect((await ingest([det("crease", 0.95)])).verdict).toBe("PASS");
+    const data = scans.insertScanWithDetections.mock.calls[1][0];
+    expect(data).toMatchObject({ aiVerdict: "PASS", finalVerdict: "PASS" });
+    for (const gone of ["status", "decidedAt", "decidedById", "isOverride"])
+      expect(data).not.toHaveProperty(gone);
   });
 
-  it("flags unknown classes and leaves the scan pending review with no outcome rows", async () => {
+  it("rejects an unknown class and flags it (A-12)", async () => {
     const result = await ingest([det("scratch", 0.99)]);
-    expect(result).toMatchObject({ verdict: "NEEDS_REVIEW", status: "PENDING_REVIEW" });
+    expect(result).toMatchObject({ verdict: "REJECT" });
+    expect(result).not.toHaveProperty("status");
     const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
-    expect(data).toMatchObject({ finalVerdict: null, decidedAt: null });
+    expect(data).toMatchObject({ aiVerdict: "REJECT", finalVerdict: "REJECT" });
     expect(detections[0]).toMatchObject({
       defectTypeId: null,
       rawClassKey: "scratch",
       isUnknownClass: true,
     });
-    expect(outcomes.insertReworkTicket).not.toHaveBeenCalled();
-    expect(outcomes.insertSalvageItem).not.toHaveBeenCalled();
   });
 
   it("answers 409 without storing anything when no batch is at Preparation", async () => {
@@ -267,8 +267,7 @@ describe("ingestScan with a captureId (D-051)", () => {
   const earlier = {
     id: "scan-first",
     sequence: 2,
-    aiVerdict: "REWORK",
-    status: "DECIDED",
+    aiVerdict: "REJECT",
     deviceTokenId: "tok1",
     batch: { id: "0001", code: "B-2026-0001" },
   };
@@ -287,13 +286,11 @@ describe("ingestScan with a captureId (D-051)", () => {
       batchId: "0001",
       batchCode: "B-2026-0001",
       sequence: 2,
-      verdict: "REWORK",
-      status: "DECIDED",
+      verdict: "REJECT",
       duplicate: true,
     });
     expect(storage.put).not.toHaveBeenCalled();
     expect(scans.insertScanWithDetections).not.toHaveBeenCalled();
-    expect(outcomes.insertReworkTicket).not.toHaveBeenCalled();
     expect(recordAudit).not.toHaveBeenCalled();
   });
 

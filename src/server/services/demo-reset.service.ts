@@ -1,4 +1,4 @@
-import type { DefectAction, DefectHandling } from "@/generated/prisma/client";
+import type { DefectOutcome } from "@/generated/prisma/client";
 import { hashDeviceToken } from "@/server/lib/device-token";
 import { getEnv } from "@/server/lib/env";
 import { clearUploadFolders } from "@/server/lib/storage";
@@ -27,15 +27,15 @@ import { seedDemoWeek } from "./demo-seed.service";
  *
  * Keeps the bootstrap System Admin and the demo accounts, the device tokens given to it (so the
  * camera station keeps working), the bootstrap shoe types and suppliers, and the defect types.
- * Removes everything else: test accounts and tokens, batches, scans, repairs, salvage, stock
+ * Removes everything else: test accounts and tokens, batches, scans, stock
  * movements and items, attendance, check-ins, the audit log, and the files on disk. Then it sets
- * the camera model's classes (D-052, D-053) and, unless told not to, seeds a fresh demo week,
+ * the camera model's classes and their outcomes (D-052, A-13) and, unless told not to, seeds a fresh demo week,
  * which puts the demo inventory back at its opening stock.
  */
 
 /**
- * The yolo-v1 classes as the demo uses them: the model's four active with "When found" actions,
- * the two placeholder types it never sends turned off (D-052, D-053). Data the reset writes, like
+ * The yolo-v1 classes as the demo uses them: the model's four active with CPoint's outcomes
+ * (A-13), the two placeholder types it never sends turned off (D-052). Data the reset writes, like
  * the bootstrap's reference data; the System Admin can change all of it in Settings afterwards.
  */
 export const MODEL_DEFECT_TYPES: {
@@ -44,8 +44,7 @@ export const MODEL_DEFECT_TYPES: {
   description: string;
   sortOrder: number;
   isActive: boolean;
-  action: DefectAction | null;
-  handling: DefectHandling;
+  outcome: DefectOutcome;
 }[] = [
   {
     key: "cut",
@@ -53,8 +52,7 @@ export const MODEL_DEFECT_TYPES: {
     description: "Slit or cut through the leather surface.",
     sortOrder: 1,
     isActive: true,
-    action: "REJECT",
-    handling: "CUT_AROUND",
+    outcome: "NOT_ACCEPTED",
   },
   {
     key: "hole",
@@ -62,26 +60,23 @@ export const MODEL_DEFECT_TYPES: {
     description: "Puncture or hole in the leather.",
     sortOrder: 2,
     isActive: true,
-    action: "REJECT",
-    handling: "CUT_AROUND",
+    outcome: "NOT_ACCEPTED",
   },
   {
     key: "crease",
     label: "Crease",
-    description: "A fold line pressed into the grain.",
+    description: "A fold line in the grain. CPoint can use it (C-11).",
     sortOrder: 3,
     isActive: true,
-    action: "REWORK",
-    handling: "CUT_AROUND",
+    outcome: "USABLE",
   },
   {
     key: "scratch",
     label: "Scratch",
-    description: "A surface scratch that doesn't go through.",
+    description: "A surface scratch, at any length. CPoint can use it (C-19, C-39).",
     sortOrder: 4,
     isActive: true,
-    action: "REWORK",
-    handling: "CUT_AROUND",
+    outcome: "USABLE",
   },
   {
     key: "abrasion",
@@ -89,8 +84,7 @@ export const MODEL_DEFECT_TYPES: {
     description: "Scuffed or worn grain.",
     sortOrder: 5,
     isActive: false,
-    action: null,
-    handling: "CUT_AROUND",
+    outcome: "NOT_ACCEPTED",
   },
   {
     key: "dirt",
@@ -98,8 +92,7 @@ export const MODEL_DEFECT_TYPES: {
     description: "Stain or dirt on the surface.",
     sortOrder: 6,
     isActive: false,
-    action: null,
-    handling: "CLEAN",
+    outcome: "NOT_ACCEPTED",
   },
 ];
 
@@ -168,7 +161,7 @@ export async function resetDemoData(
           defectTypes: MODEL_DEFECT_TYPES.map((d) => ({
             key: d.key,
             isActive: d.isActive,
-            action: d.action,
+            outcome: d.outcome,
           })),
         },
       });

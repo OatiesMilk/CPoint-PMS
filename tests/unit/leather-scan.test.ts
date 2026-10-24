@@ -13,7 +13,7 @@ describe("scenario (simulator and demo week)", () => {
     expect([...keys].sort()).toEqual(["crease", "cut", "hole", "scratch", UNKNOWN_CLASS].sort());
   });
 
-  it("draws Rework sections from rework types and Reject sections from reject types", () => {
+  it("draws strong marks from Not accepted types and middling ones from Usable types", () => {
     const rejectKeys = new Set(["cut", "hole"]);
     for (const d of draw(400)) {
       const top = d[0];
@@ -25,7 +25,7 @@ describe("scenario (simulator and demo week)", () => {
   });
 
   it("falls back to every class when none fits an outcome, and needs at least one", () => {
-    expect(draw(50, [{ key: "cut", action: "REJECT" }]).flat().length).toBeGreaterThan(0);
+    expect(draw(50, [{ key: "cut", outcome: "NOT_ACCEPTED" }]).flat().length).toBeGreaterThan(0);
     expect(() => scenario(Math.random, [])).toThrow(/at least one/);
   });
 });

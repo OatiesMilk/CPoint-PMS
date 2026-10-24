@@ -1,4 +1,4 @@
-import type { DefectAction, DefectHandling } from "@/generated/prisma/client";
+import type { DefectOutcome } from "@/generated/prisma/client";
 import { type Db, defaultDb } from "./db";
 
 /**
@@ -74,11 +74,9 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   // Stock: the ledger, then the items (the demo week adds them back with opening stock).
   await db.inventoryMovement.deleteMany();
   await db.inventoryItem.deleteMany();
-  // Production: the camera's batch, then scans and what came of them, then batches.
+  // Production: the camera's batch, then scans, then batches.
   await db.cvSettings.updateMany({ data: { activeBatchId: null } });
   await db.detection.deleteMany();
-  await db.reworkTicket.deleteMany();
-  await db.salvageItem.deleteMany();
   await db.scan.deleteMany();
   await db.batchStageLog.deleteMany();
   await db.batch.deleteMany();
@@ -110,8 +108,7 @@ export function upsertDefectTypeState(
     description: string;
     sortOrder: number;
     isActive: boolean;
-    action: DefectAction | null;
-    handling: DefectHandling;
+    outcome: DefectOutcome;
   },
   db: Db,
 ) {
@@ -119,7 +116,7 @@ export function upsertDefectTypeState(
   return db.defectType.upsert({
     where: { key },
     create: data,
-    update: { isActive: rest.isActive, action: rest.action, handling: rest.handling },
+    update: { isActive: rest.isActive, outcome: rest.outcome },
   });
 }
 

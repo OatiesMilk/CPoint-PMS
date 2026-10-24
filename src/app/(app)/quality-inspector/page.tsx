@@ -1,15 +1,15 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   the Quality Inspector, at a desk next to the line, through the whole shift.
- * What:  verify the camera's decisions and settle the ones it can't make; count the pairs
- *        finished at each production check-in (D-084).
- * Worst: a wrong automatic Reject or Pass goes unchecked. Pending reviews are the primary action.
+ * What:  capture sections at the camera, whose Pass or Reject is final (D-093), and count the
+ *        pairs finished at each production check-in (D-084).
+ * Worst: a check-in is missed. Capturing is the primary action; today's sections are context.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { Aperture, ArrowRight, CircleHelp, ListChecks, UserCheck } from "lucide-react";
-import { AgreementCard, DefectsTodayCard } from "@/components/features/reports/home-cards";
+import { Aperture, CircleX, ScanLine } from "lucide-react";
+import { DefectsTodayCard } from "@/components/features/reports/home-cards";
 import { PageHeader } from "@/components/features/page-header";
 import { NextCheckInCard } from "@/components/features/production/production-cards";
 import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/server/policies/guard";
 import { productionToday } from "@/server/services/production.service";
-import { agreementSummary, defectsToday } from "@/server/services/report.service";
+import { defectsToday } from "@/server/services/report.service";
 import { inspectorSummary } from "@/server/services/scan-query.service";
 
 export const metadata: Metadata = { title: "Overview" };
@@ -25,34 +25,26 @@ export const metadata: Metadata = { title: "Overview" };
 export default async function QualityInspectorHome() {
   const user = await requireRole("QUALITY_INSPECTOR");
   await connection();
-  const [summary, defects, agreement, production] = await Promise.all([
+  const [summary, defects, production] = await Promise.all([
     inspectorSummary(),
     defectsToday(),
-    agreementSummary(),
     productionToday(user),
   ]);
 
   const tiles = [
     {
-      label: "Waiting for your decision",
-      value: summary.pending,
-      hint: "Unknown defect classes the camera couldn’t decide.",
-      href: "/review",
-      Icon: CircleHelp,
+      label: "Sections scanned today",
+      value: summary.scannedToday,
+      hint: "Every section gets Pass or Reject from the camera.",
+      href: "/scans",
+      Icon: ScanLine,
     },
     {
-      label: "Fixable and Reject today",
-      value: summary.todayAuto,
-      hint: "Automatic calls you can spot-check.",
-      href: "/review",
-      Icon: ListChecks,
-    },
-    {
-      label: "Overridden today",
-      value: summary.todayOverrides,
-      hint: "Decisions a person changed.",
-      href: "/scans?override=1",
-      Icon: UserCheck,
+      label: "Rejected today",
+      value: summary.rejectedToday,
+      hint: "Reported for salvage. The camera’s verdict is final.",
+      href: "/scans?verdict=REJECT",
+      Icon: CircleX,
     },
   ];
 
@@ -62,26 +54,16 @@ export default async function QualityInspectorHome() {
         title={`Good day, ${user.name.split(" ")[0]}`}
         description="Today’s inspection work."
         actions={
-          <>
-            {/* Capturing is the steady work; reviews waiting come first when there are any. */}
-            <Button asChild variant={summary.pending > 0 ? "secondary" : "primary"}>
-              <Link href="/camera/capture">
-                <Aperture aria-hidden />
-                Capture sections
-              </Link>
-            </Button>
-            {summary.pending > 0 && (
-              <Button asChild>
-                <Link href="/review">
-                  Review {summary.pending} scan{summary.pending === 1 ? "" : "s"}
-                  <ArrowRight aria-hidden />
-                </Link>
-              </Button>
-            )}
-          </>
+          <Button asChild>
+            <Link href="/camera/capture">
+              <Aperture aria-hidden />
+              Capture sections
+            </Link>
+          </Button>
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <NextCheckInCard today={production} />
         {tiles.map((t) => (
           <Card key={t.label}>
             <CardHeader>
@@ -101,11 +83,7 @@ export default async function QualityInspectorHome() {
           </Card>
         ))}
         <LatestScansWidget className="xl:col-span-2" />
-        <div className="flex flex-col gap-4">
-          <NextCheckInCard today={production} />
-          <DefectsTodayCard defects={defects} />
-          <AgreementCard {...agreement} />
-        </div>
+        <DefectsTodayCard defects={defects} />
       </div>
     </>
   );

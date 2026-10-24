@@ -6,46 +6,6 @@ import { type Db, defaultDb } from "./db";
 type Range = { start: Date; end: Date };
 const iso = (d: Date) => d.toISOString();
 const n = (v: bigint | number | null | undefined) => Number(v ?? 0);
-const num = (v: number | string | null | undefined) => (v == null ? null : Number(v));
-
-export type RepairRow = {
-  id: string;
-  status: "OPEN" | "IN_PROGRESS";
-  batchId: string;
-  batchCode: string;
-  sequence: number;
-  defect: string | null;
-  openedAt: Date;
-  startedAt: Date | null;
-};
-
-/** Sections at the repair station now (waiting or being repaired), oldest first. */
-export async function repairQueue(db: Db = defaultDb()): Promise<RepairRow[]> {
-  return db.$queryRaw<RepairRow[]>`
-    SELECT r.id, r.status::text AS status, b.id AS "batchId", b.code AS "batchCode", s.sequence,
-      (SELECT coalesce(t.label, d."rawClassKey")
-         FROM detections d LEFT JOIN defect_types t ON t.id = d."defectTypeId"
-         WHERE d."scanId" = s.id ORDER BY d.confidence DESC LIMIT 1) AS defect,
-      r."openedAt", r."startedAt"
-    FROM rework_tickets r
-    JOIN scans s ON s.id = r."scanId"
-    JOIN batches b ON b.id = s."batchId"
-    WHERE r.status IN ('OPEN', 'IN_PROGRESS')
-    ORDER BY r."openedAt"
-    LIMIT 200`;
-}
-
-/** Repairs finished in the range: how many, and the median time from opened to done (ms). */
-export async function repairTurnaround(range: Range, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<{ done: bigint; medianMs: number | null }[]>`
-    SELECT count(*) AS done,
-      percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM r."completedAt" - r."openedAt")) * 1000 AS "medianMs"
-    FROM rework_tickets r
-    WHERE r.status = 'DONE'
-      AND r."completedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND r."completedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')`;
-  return { done: n(rows[0]?.done), medianMs: num(rows[0]?.medianMs) };
-}
 
 export type StockRow = {
   id: string;
@@ -110,7 +70,6 @@ export type SupplierRow = {
   rolls: number;
   scanned: number;
   pass: number;
-  rework: number;
   reject: number;
 };
 
@@ -120,7 +79,6 @@ export async function supplierQuality(range: Range, db: Db = defaultDb()): Promi
     SELECT b."supplierId" AS id, coalesce(sp.name, 'No supplier recorded') AS name,
       count(DISTINCT b.id) AS batches, count(DISTINCT b."rollCode") AS rolls, count(*) AS scanned,
       count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REWORK') AS rework,
       count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
     FROM scans s
     JOIN batches b ON b.id = s."batchId"
@@ -136,7 +94,6 @@ export async function supplierQuality(range: Range, db: Db = defaultDb()): Promi
     rolls: n(r.rolls as bigint),
     scanned: n(r.scanned as bigint),
     pass: n(r.pass as bigint),
-    rework: n(r.rework as bigint),
     reject: n(r.reject as bigint),
   }));
 }
@@ -172,9 +129,9 @@ async function mainDefects(
   return rows.map((r) => ({ groupId: r.groupId, label: r.label, sections: n(r.sections) }));
 }
 
-/** The main defect of each supplier's Fixable and rejected sections, most common first. */
+/** The main defect of each supplier's rejected sections (for salvage), most common first. */
 export function supplierDefects(range: Range, db: Db = defaultDb()) {
-  return mainDefects(range, ["REWORK", "REJECT"], "supplier", null, db);
+  return mainDefects(range, ["REJECT"], "supplier", null, db);
 }
 
 export type RollRejectRow = {
@@ -242,7 +199,6 @@ export function findClaimBatch(batchId: string, db: Db = defaultDb()) {
           sequence: true,
           capturedAt: true,
           imagePath: true,
-          isOverride: true,
           detections: {
             orderBy: { confidence: "desc" },
             select: {

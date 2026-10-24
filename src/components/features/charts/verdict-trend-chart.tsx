@@ -7,9 +7,7 @@ import { VERDICT_SERIES, VerdictLegend } from "./verdict-legend";
 type Day = {
   day: string;
   pass: number;
-  rework: number;
   reject: number;
-  pending: number;
   scanned: number;
 };
 
@@ -99,7 +97,7 @@ export function VerdictTrendChart({ days }: { days: Day[] }) {
       {lastWithData && (
         <figcaption className="text-sm text-muted-foreground">
           Latest day with scans: {formatDayLabel(lastWithData.day)}, {lastWithData.scanned} scanned
-          ({lastWithData.pass} pass, {lastWithData.rework} rework, {lastWithData.reject} reject).
+          ({lastWithData.pass} pass, {lastWithData.reject} reject, for salvage).
         </figcaption>
       )}
     </figure>

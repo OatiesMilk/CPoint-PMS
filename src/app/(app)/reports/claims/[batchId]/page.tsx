@@ -28,7 +28,6 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
   const sheet = isBatchId(batchId) ? await claimSheet(batchId) : null;
   if (!sheet) notFound();
   const t = sheet.totals;
-  const decided = t.pass + t.rework + t.reject;
 
   return (
     <>
@@ -75,11 +74,11 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
           <dt className="text-muted-foreground">Sections scanned at Preparation</dt>
           <dd className="font-medium">
             {t.reject} of {t.sections} rejected
-            {decided > 0 && ` (${formatPercent(t.reject / decided)})`}
+            {t.sections > 0 && ` (${formatPercent(t.reject / t.sections)})`}
           </dd>
           <dd>
-            {t.pass} passed, {t.rework} Fixable
-            {t.pending > 0 ? `, ${t.pending} waiting for review` : ""}
+            {t.pass} passed. The camera’s verdict is final; rejected sections are set aside for
+            salvage.
           </dd>
         </div>
       </dl>
@@ -122,9 +121,6 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
                   ? s.defects.map((d) => `${d.label} ${formatPercent(d.confidence)}`).join(", ")
                   : "No defect marked by the camera"}
               </p>
-              {s.decidedByPerson && (
-                <p className="text-sm text-muted-foreground">Rejected by the Quality Inspector.</p>
-              )}
             </li>
           ))}
         </ol>

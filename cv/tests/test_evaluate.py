@@ -21,7 +21,12 @@ from cpoint_cv.types import Box, Detection, RawDetection
 PREVIEW = PreviewConfig(
     active_keys=frozenset({"crease", "cut", "hole", "scratch"}),
     inactive_keys=frozenset({"abrasion", "dirt"}),
-    actions={"cut": "REJECT", "hole": "REJECT", "crease": "REWORK", "scratch": "REWORK"},
+    outcomes={
+        "cut": "NOT_ACCEPTED",
+        "hole": "NOT_ACCEPTED",
+        "crease": "USABLE",
+        "scratch": "USABLE",
+    },
 )
 BOX = Box(0.1, 0.1, 0.1, 0.1)
 
@@ -33,7 +38,7 @@ def case(file: str, expected: str, classes: str, *found: tuple[str, float]) -> C
 
 CASES = [
     case("a.jpg", "REJECT", "cut;scratch", ("scratch", 0.66), ("cut", 0.51)),
-    case("b.jpg", "REWORK", "crease", ("crease", 0.51)),
+    case("b.jpg", "PASS", "crease", ("crease", 0.51)),
     case("c.jpg", "PASS", "", ("scratch", 0.3)),
     case("d.jpg", "REJECT", "hole"),
 ]
@@ -47,6 +52,10 @@ def test_parses_labels_and_names_the_bad_row() -> None:
     ]
     with pytest.raises(LabelError, match=r"line 3: expected_verdict for b.jpg must be one of"):
         parse_labels("file,expected_verdict\na.jpg,PASS\nb.jpg,MAYBE\n")
+    with pytest.raises(LabelError, match=r"line 2: REWORK for a.jpg is no longer a verdict"):
+        parse_labels("file,expected_verdict\na.jpg,REWORK\n")
+    with pytest.raises(LabelError, match=r"Write REJECT instead"):
+        parse_labels("file,expected_verdict\na.jpg,NEEDS_REVIEW\n")
     with pytest.raises(LabelError, match=r"line 3: a.jpg is listed twice"):
         parse_labels("file,expected_verdict\na.jpg,PASS\na.jpg,PASS\n")
     with pytest.raises(LabelError, match="expected_verdict is missing"):
@@ -80,13 +89,11 @@ def test_per_class_precision_and_recall_by_photo() -> None:
     assert scores["hole"].precision is None  # never found: no precision to give
 
 
-def test_sweep_moves_the_found_at_value_and_the_thresholds() -> None:
-    found, confidence = sweep(CASES, PREVIEW)
-    assert found[0].setting == "Found at 0.50"
-    assert found[0].matches == 3  # a, b, c right; d's hole was missed
-    assert found[1].counts["PASS"] == 3  # at 0.60 the 0.51 cut and crease no longer count
-    assert confidence[0].setting == "Rework 0.50, Reject 0.80"
-    assert sweep(CASES, PreviewConfig(active_keys=PREVIEW.active_keys))[0] == []
+def test_sweep_moves_the_found_at_value() -> None:
+    rows = sweep(CASES, PREVIEW)
+    assert [r.setting for r in rows][:2] == ["Found at 0.50", "Found at 0.60"]
+    assert rows[0].matches == 3  # a, b, c right; d's hole was missed
+    assert rows[1].counts["PASS"] == 4  # at 0.60 the 0.51 cut no longer counts
 
 
 def test_report_is_labelled_a_small_check() -> None:
@@ -102,4 +109,5 @@ def test_report_is_labelled_a_small_check() -> None:
     assert "**Small check on 4 photos.**" in report
     assert "matched the expected verdict on **3 of 4** photos" in report
     assert "| d.jpg | REJECT | PASS | nothing | no |" in report
-    assert "| REJECT | 1 | 0 | 1 | 0 |" in report  # expected Reject: one passed, one rejected
+    assert "| REJECT | 1 | 1 |" in report  # expected Reject: one passed, one rejected
+    assert "Rework" not in report

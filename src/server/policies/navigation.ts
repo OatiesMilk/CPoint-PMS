@@ -9,9 +9,6 @@ export type NavIcon =
   | "camera"
   | "capture"
   | "scans"
-  | "review"
-  | "rework"
-  | "salvage"
   | "inventory"
   | "reports"
   | "users"
@@ -67,19 +64,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         permission: "camera:capture",
       },
       { label: "Scans", href: "/scans", icon: "scans", permission: "scan:read" },
-      {
-        label: "Review queue",
-        href: "/review",
-        icon: "review",
-        permission: "scan:decide",
-      },
-      {
-        label: "Repair Station",
-        href: "/rework",
-        icon: "rework",
-        permission: "rework:manage",
-      },
-      { label: "Salvage", href: "/salvage", icon: "salvage", permission: "salvage:read" },
     ],
   },
   {

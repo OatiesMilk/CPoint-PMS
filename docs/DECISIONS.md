@@ -42,7 +42,7 @@ Stages advance manually by the Floor Manager, with logged durations (to measure 
 with a reason). Defect types, default actions and thresholds are admin-editable data.
 Seeded: cut/hole → REJECT, abrasion/dirt → REWORK. **Confirm with the client.**
 
-### D-007 · 2026-10-02 · Accepted — Rework and reject handling
+### D-007 · 2026-10-02 · Superseded by D-093, D-094 — Rework and reject handling
 
 **Decision:** REWORK opens a repair-station ticket. When it's DONE, the section counts as usable
 (no re-scan). REJECT creates a SalvageItem that can be assigned to a later batch or discarded,
@@ -66,7 +66,7 @@ rate); audit log; decision-support style defect analytics; light/dark theme with
 **Decision:** `CLAUDE.md` (auto-loads `docs/STATUS.md`), `docs/ROADMAP.md`, `docs/DECISIONS.md`,
 `docs/SESSION_LOG.md`, plus `/resume` and `/wrap-up` skills. Every session ends by updating them.
 
-### D-011 · 2026-10-02 · Accepted — Uniform confidence rule for all defect types (supersedes D-006)
+### D-011 · 2026-10-02 · Thresholds superseded by D-093 (the camera decides, kept) — Uniform confidence rule for all defect types (supersedes D-006)
 
 **Context:** The team set one default for every defect type instead of per-type actions.
 **Decision:** The highest confidence among active defect types decides: **≥ 0.90 → REJECT**,
@@ -167,7 +167,7 @@ means there's no second toolchain in the image, and a fresh factory install is u
 **Consequences:** stage durations come from `batch_stage_logs`, which is the data for the Phase 7
 bottleneck report. Phase 3 attaches scans to batches `IN_PROGRESS` at `PREPARATION`.
 
-### D-020 · 2026-10-02 · Accepted — Camera ingestion contract, batch targeting and device tokens
+### D-020 · 2026-10-02 · Accepted (an unknown class rejects since D-093) — Camera ingestion contract, batch targeting and device tokens
 
 **Context:** One camera at Preparation, but several batches can be at Preparation at once. The real
 YOLO service must plug in later without code changes.
@@ -194,7 +194,7 @@ YOLO service must plug in later without code changes.
 **Consequences:** Phase 4 only builds the lifecycle and boards for rows that already exist. Phase 6
 adds the Settings page for defect types and thresholds.
 
-### D-021 · 2026-10-02 · Accepted — Rework and salvage lifecycle, repair guard and batch yield
+### D-021 · 2026-10-02 · Superseded by D-094 (yield kept as Pass and Reject) — Rework and salvage lifecycle, repair guard and batch yield
 
 **Context:** Phase 3 creates a rework ticket for every REWORK scan and a salvage item for every
 REJECT scan (D-007, D-020). The client said repaired sections "should still be counted in the
@@ -224,7 +224,7 @@ batch", and that rejected leather is kept for later production (survey Q15).
 completedAt`) and salvage reuse from these rows. There are no per-person metrics; `completedById`
 and `handledById` are only for the audit trail (D-008).
 
-### D-022 · 2026-10-03 · Accepted — Completing a batch with repairs still open (supersedes part of D-021)
+### D-022 · 2026-10-03 · Superseded by D-094 — Completing a batch with repairs still open (supersedes part of D-021)
 
 **Context:** D-021 blocked completing a batch while any section was still at the repair station.
 The team pointed out that the line doesn't wait for the repair station: the batch moves on, and
@@ -333,7 +333,7 @@ There is no email in the factory setup, so password handover is in person.
 "sign out everywhere" if CPoint wants it later. Phase 7 reports can rely on thresholds and defect
 types being data that admins change.
 
-### D-025 · 2026-10-03 · Stage metrics superseded by D-087 — Report metrics, chart colours, and server-side sign-out
+### D-025 · 2026-10-03 · Stage metrics superseded by D-087; the agreement rate and Fixable colour by D-093 — Report metrics, chart colours, and server-side sign-out
 
 **Context:** Phase 7 summarizes production and quality. The client wants a daily summary,
 cares about the bottleneck stages, and doesn't want anyone singled out (D-008). Separately, the
@@ -436,7 +436,7 @@ start. The only "fix" npm offers is a downgrade to Prisma 6, which breaks the pr
 **Consequences:** re-check `npm audit` when upgrading Prisma, and drop this entry once Prisma
 ships fixed dependencies. Don't add `overrides` that swap the CLI's dependencies untested.
 
-### D-028 · 2026-10-05 · Accepted — Only the Quality Inspector decides flagged scans (supersedes part of D-011)
+### D-028 · 2026-10-05 · Superseded by D-093 (nobody decides after the camera) — Only the Quality Inspector decides flagged scans (supersedes part of D-011)
 
 **Context:** D-011 and the master spec said the QI **or** the FM, "whoever is available" (survey
 Q5), resolves a scan the camera flagged (an unknown defect class, NEEDS_REVIEW). The client now
@@ -580,7 +580,7 @@ matched how the repo is used.
 **Consequences:** STATUS names the branch that holds unmerged work. A session that finds its
 branch already merged restarts it from `main`.
 
-### D-033 · 2026-10-08 · Accepted (the purchasing parts removed by D-091) — Operations-first reports for the Floor Manager
+### D-033 · 2026-10-08 · Accepted (the purchasing parts removed by D-091; the repair parts by D-094) — Operations-first reports for the Floor Manager
 
 **Context:** the team said the Reports tab was centred on quality inspection. As a product
 monitoring system it should show what is happening on the production floor in the chosen days
@@ -1025,7 +1025,7 @@ and `dirt`; with the last two off, those detections no longer decide a verdict.
 **Consequences:** with the steps done, yolo-v1's detections are judged by D-011 instead of all
 going to review. Doing the steps is a per-database task for the demo and for CPoint.
 
-### D-053 · 2026-10-19 · Accepted — A defect type can say what a found defect means ("When found"), and the worst outcome decides
+### D-053 · 2026-10-19 · Found-at kept; Rework and "worst outcome" superseded by D-093 — A defect type can say what a found defect means ("When found"), and the worst outcome decides
 
 **Context:** D-011 reads a detection's confidence as how bad a defect is. For a YOLO model it is how
 sure the model is that a defect is there. In the five-photo baseline a long, clear cut scored 0.51
@@ -1264,7 +1264,7 @@ phone or tablet, otherwise `WEBCAM`. No migration.
   the GPU, the token and the PC clock; none of those exist on the website, and the page already
   checks the camera, the model and the batch with a specific message for each.
 
-### D-070 · 2026-10-20 · Accepted — "Rework" reads **Fixable**; the board is **Cut around or clean**; each defect type says how
+### D-070 · 2026-10-20 · Superseded by D-093, D-094 — "Rework" reads **Fixable**; the board is **Cut around or clean**; each defect type says how
 
 **Decision (Dylan, 2026-10-20, Phase 20):**
 
@@ -1290,7 +1290,7 @@ part of the system. The `/components` "coming soon" page, the Settings → Compo
 `drop_component_types`; the table only held optional names and nothing pointed to it). The open
 question about components per shoe type is closed.
 
-### D-072 · 2026-10-20 · Accepted — Supplier quality on the Operations report, with a printable claim sheet per roll
+### D-072 · 2026-10-20 · Accepted (High on the reject share since D-093) — Supplier quality on the Operations report, with a printable claim sheet per roll
 
 **Decision (Dylan, 2026-10-20, Phase 20):**
 
@@ -1308,7 +1308,7 @@ question about components per shoe type is closed.
 - The demo week adds two demo suppliers (Marikina Leather, Bulacan Hides) and rotates rolls between
   the three; Marikina's leather shows more defects. `demo:reset` keeps them.
 
-### D-073 · 2026-10-20 · Accepted — The Fixable board is named Repair Station
+### D-073 · 2026-10-20 · Superseded by D-094 — The Fixable board is named Repair Station
 
 **Decision (Dylan, 2026-10-20, Phase 21):** CPoint's factory already calls the station the
 **Repair Station**, so the nav, the page and every place that names the board use that name
@@ -1318,7 +1318,7 @@ defect." The cards keep **Clean before cutting** / **Cut around the marked area*
 keep To handle / Being handled / Done, usable, and the verdict stays **Fixable**. `/rework` and
 the internal names stay (D-070).
 
-### D-074 · 2026-10-20 · Accepted — Floor view: a full-screen verdict for the operator at the fixed camera
+### D-074 · 2026-10-20 · Accepted (two results, not four, since D-093) — Floor view: a full-screen verdict for the operator at the fixed camera
 
 **Decision (Dylan, 2026-10-20, Phase 21):** the station operator has no desk screen, only a
 monitor facing them. **Floor view** is a full-screen mode of the Capture page: the same live
@@ -1610,3 +1610,79 @@ and the project rules in `docs/prompts/factory-visit-changes.md`; the vault's `C
 project instructions.
 **Consequences:** workflow docs only, no code. D-091 belongs to Phase 24, which was planned with
 that number before this entry was written.
+
+### D-093 · 2026-10-24 · Accepted — Pass or Reject: the camera's verdict is final (Phase 25)
+
+**Context:** at the 23 October factory visit CPoint said a section is either usable or not:
+nobody cleans or cuts around a marked section, and nobody changes the camera's call (C-11 to C-15,
+C-19 to C-22). Dylan approved the plan on 2026-10-24 and answered its three questions "yes to
+all": an unknown class rejects and is listed in Settings, both verdict columns stay, and a type
+with no "When found" action becomes Not accepted.
+**Decision:**
+
+- Every section is **Pass** or **Reject**. Each defect type has an **outcome**, Usable or Not
+  accepted (Settings → Defect types → When found, required). A detection of an active type at or
+  above **A defect counts as found at** (50%, D-053) gives its type's outcome; below it, it counts
+  for nothing. Any Not accepted makes the section Reject; otherwise it passes. Inactive types are
+  ignored.
+- A class the system doesn't know rejects the section (A-12) and is listed under Settings →
+  Unknown classes; the Admin home shows a line while any is waiting.
+- The verdict is final at once: `finalVerdict` always equals `aiVerdict` (both kept, so old
+  reports and queries still read). No status, no override, no decided-by, no decision API.
+- A rejected section is reported **for salvage** (A-11): Operations has a For salvage section
+  (total and by main defect), the daily and supplier tables and the CSVs say "Reject (for
+  salvage)". The report moves no leather (C-20).
+- The two confidence thresholds are gone; `PUT /api/v1/settings/cv` takes `foundPercent` (and
+  `earlyModelNotice`) and refuses `rejectPercent`/`reworkPercent` by name.
+- New scans snapshot `{ foundAtOrAbove, outcomes }`; a scan from before shows "Decided by the
+  earlier rule (before 24 Oct 2026)".
+- Migration `pass_or_reject` converts first: REWORK → PASS, NEEDS_REVIEW → REJECT on both columns,
+  a pending final takes the AI verdict; a type's REWORK action → USABLE, REJECT or none →
+  NOT_ACCEPTED. A section a person had decided keeps its final verdict.
+- The model's four classes: crease and scratch Usable, cut and hole Not accepted (C-11, C-12, C-19, A-13).
+  A new database also gets abrasion and dirt as Not accepted. `demo:reset` sets the four and turns
+  abrasion and dirt off.
+- Charts have two series. The chart colours were re-stepped so Pass and Reject stay apart for
+  red-green colour blindness where they touch (validator: light ΔE 13.0, dark 11.0). The
+  `--rework` and `--review` tokens are now `--caution` and `--info`.
+- The model toolkit's preview follows: `[preview.outcomes]`, PASS or REJECT; old keys warn by
+  name; `labels.csv` takes PASS or REJECT.
+
+**Supersedes:** D-007; D-011's thresholds (the camera still decides); D-028; the Rework and
+"worst outcome" parts of D-053; D-070. Amends D-020 (unknown → Reject), D-025 (no agreement rate,
+no Fixable colour), D-072 (High on the reject share), D-074 (two results).
+**Where:** `src/lib/decision-engine.ts`, `prisma/migrations/20261024090000_pass_or_reject/`,
+`src/server/services/{scan-ingest,settings,report,ops-report,bootstrap,demo-seed,demo-reset}.service.ts`,
+`src/server/validators/settings.validator.ts`, `src/app/(app)/admin/settings/**`,
+`src/app/(app)/scans/**`, `src/app/(app)/camera/capture/**`, `src/app/(app)/reports/**`,
+`src/styles/tokens.css`, `cv/cpoint_cv/{preview,config,evaluate,cli}.py`.
+**Consequences:** the dev database's Fixable and pending sections become Pass and Reject when the
+migration runs (back up first). Tell CPoint: two results, the camera's call stands, and rejected
+sections are counted for salvage.
+
+### D-094 · 2026-10-24 · Accepted — The Review Queue, the Repair Station and Salvage are removed (Phase 25)
+
+**Context:** with Pass or Reject final (D-093) there is nothing to review, repair or track in
+salvage inside the system (C-1, C-20, C-21).
+**Decision:**
+
+- Deleted end to end: `/review`, `/rework`, `/salvage` (they answer 404), `/api/v1/rework/**`,
+  `/api/v1/salvage/**`, `/api/v1/reports/repairs`, `POST /api/v1/scans/{id}/decision`, the
+  decision panel, the rework and salvage services, the outcome controller, model and validator,
+  `outcome-rules.ts`, the In repair badge and the Open repairs card.
+- Permissions `scan:decide`, `scan:review`, `rework:manage`, `salvage:read`, `salvage:manage` and
+  the nav items Review queue, Repair Station and Salvage go.
+- Migration `pass_or_reject` drops `rework_tickets`, `salvage_items`, their enums, the scan
+  status and decision columns, and the defect type's `handling`.
+- A roll's page shows Passed, Rejected (for salvage) and Total; Finish roll has no open-repairs
+  note. The homes lose the flagged count and Open repairs. Operations loses the Repair Station
+  section and the repairs attention item. The audit log keeps old `rework.*`, `salvage.*` and
+  `scan.decide` rows as history, without a link.
+
+**Supersedes:** D-021 (the batch yield stays as Pass and Reject), D-022, D-073; the repair parts
+of D-033.
+**Where:** as D-093, plus `src/server/policies/{permissions,navigation}.ts`,
+`src/components/features/app-shell/sidebar.tsx`, `src/app/(app)/batches/**`,
+`src/app/(app)/{floor-manager,quality-inspector}/page.tsx`, `src/server/services/audit-query.service.ts`.
+**Consequences:** the dev database loses its repair tickets and salvage items when the migration
+runs. Tell CPoint the three screens are gone.

@@ -53,12 +53,12 @@
 
   --color-pass: var(--pass);
   --color-pass-soft: var(--pass-soft);
-  --color-rework: var(--rework);
-  --color-rework-soft: var(--rework-soft);
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
   --color-reject: var(--reject);
   --color-reject-soft: var(--reject-soft);
-  --color-review: var(--review);
-  --color-review-soft: var(--review-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
 
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

@@ -23,7 +23,14 @@ def test_the_example_config_loads_and_matches_todays_settings() -> None:
     assert c.model.device == "cpu"
     assert c.preview.active_keys == {"crease", "cut", "hole", "scratch"}
     assert c.preview.inactive_keys == {"abrasion", "dirt"}
-    assert (c.preview.reject_at_or_above, c.preview.rework_at_or_above) == (0.9, 0.6)
+    assert c.preview.found_at_or_above == 0.5
+    assert c.preview.outcomes == {
+        "crease": "USABLE",
+        "cut": "NOT_ACCEPTED",
+        "hole": "NOT_ACCEPTED",
+        "scratch": "USABLE",
+    }
+    assert c.warnings == ()
 
 
 def test_environment_overrides_the_file() -> None:
@@ -55,9 +62,14 @@ def test_rename_map_is_read() -> None:
         ({**MINIMAL, "mapper": {"max_detections": 51}}, r"max_detections must be from 1 to 50"),
         ({**MINIMAL, "mapper": {"rename": {"crease": ""}}}, r"\[mapper.rename\]"),
         (
-            {**MINIMAL, "preview": {"reject_at_or_above": 0.5, "rework_at_or_above": 0.6}},
-            r"rework_at_or_above must be lower",
+            {**MINIMAL, "preview": {"active_keys": ["cut"]}},
+            r"\[preview.outcomes\] has no outcome for cut",
         ),
+        (
+            {**MINIMAL, "preview": {"outcomes": {"hole": "REJECT"}}},
+            r"\[preview.outcomes\] maps a class key to \"USABLE\" or \"NOT_ACCEPTED\"",
+        ),
+        ({**MINIMAL, "preview": {"found_at_or_above": 0}}, r"found_at_or_above must be from"),
         ({**MINIMAL, "preview": {"active_keys": "cut"}}, r"active_keys must be a list"),
         (
             {**MINIMAL, "preview": {"active_keys": ["cut"], "inactive_keys": ["cut"]}},
@@ -96,21 +108,37 @@ def test_the_retired_station_sections_are_ignored() -> None:
     assert parse_config(MINIMAL, base_dir=BASE).mapper.overlap_iou == 0.7
 
 
-def test_preview_actions(tmp_path: Path) -> None:
+def test_preview_outcomes(tmp_path: Path) -> None:
     config = parse_config(
         {
             "model": {"path": "m.pt"},
             "preview": {
+                "active_keys": ["hole", "crease"],
                 "found_at_or_above": 0.45,
-                "actions": {"hole": "reject", "crease": "REWORK"},
+                "outcomes": {"hole": "not_accepted", "crease": " USABLE "},
             },
         },
         base_dir=tmp_path,
     )
-    assert config.preview.actions == {"hole": "REJECT", "crease": "REWORK"}
+    assert config.preview.outcomes == {"hole": "NOT_ACCEPTED", "crease": "USABLE"}
     assert config.preview.found_at_or_above == 0.45
-    with pytest.raises(ConfigError, match=r"\[preview.actions\]"):
-        parse_config(
-            {"model": {"path": "m.pt"}, "preview": {"actions": {"hole": "DISCARD"}}},
-            base_dir=tmp_path,
-        )
+
+
+def test_the_retired_preview_settings_warn_by_name(tmp_path: Path) -> None:
+    config = parse_config(
+        {
+            "model": {"path": "m.pt"},
+            "preview": {
+                "reject_at_or_above": 0.9,
+                "rework_at_or_above": 0.6,
+                "actions": {"hole": "REJECT"},
+            },
+        },
+        base_dir=tmp_path,
+    )
+    assert [w.split(" is no longer used")[0] for w in config.warnings] == [
+        "warning: [preview] reject_at_or_above",
+        "warning: [preview] rework_at_or_above",
+        "warning: [preview] actions",
+    ]
+    assert all("[preview.outcomes]" in w for w in config.warnings)

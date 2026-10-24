@@ -1,17 +1,16 @@
-import { CircleCheck, CircleHelp, CircleX, Wrench, type LucideIcon } from "lucide-react";
+import { CircleCheck, CircleX, type LucideIcon } from "lucide-react";
 
-export type VerdictKey = "pass" | "rework" | "reject" | "pending";
+export type VerdictKey = "pass" | "reject";
 
 /**
- * The verdict series in their fixed stacking and legend order (never re-ordered by value). Colors
- * are the chart steps validated for colour-vision separation (tokens.css → charts, D-025).
+ * The two verdict series in their fixed stacking and legend order (never re-ordered by value).
+ * Colors are the chart steps validated in light and dark (tokens.css → charts, D-025, D-093). A
+ * rejected section is reported "for salvage" (A-11).
  */
 export const VERDICT_SERIES: { key: VerdictKey; label: string; color: string; Icon: LucideIcon }[] =
   [
     { key: "pass", label: "Pass", color: "var(--chart-pass)", Icon: CircleCheck },
-    { key: "rework", label: "Fixable", color: "var(--chart-rework)", Icon: Wrench },
-    { key: "reject", label: "Reject", color: "var(--chart-reject)", Icon: CircleX },
-    { key: "pending", label: "Needs review", color: "var(--chart-review)", Icon: CircleHelp },
+    { key: "reject", label: "Reject (for salvage)", color: "var(--chart-reject)", Icon: CircleX },
   ];
 
 /** Swatch + icon + label in text colour, so identity never rests on colour alone. */

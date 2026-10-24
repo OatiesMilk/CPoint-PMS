@@ -33,30 +33,17 @@ enum BatchStatus {
   CANCELLED
 }
 
+/// A section is Pass or Reject, and the camera's verdict is final (Phase 25, D-093).
 enum Verdict {
   PASS
-  REWORK
-  REJECT
-  NEEDS_REVIEW // only as aiVerdict (unknown class key); finalVerdict is PASS/REWORK/REJECT
-}
-
-enum ScanStatus {
-  PENDING_REVIEW
-  DECIDED
-}
-
-/// What a found defect of a type means, whatever the model's confidence (D-053). Null on the
-/// type = the confidence rule (D-011).
-enum DefectAction {
-  REWORK
   REJECT
 }
 
-/// How a Fixable section of a type is made usable before cutting (Phase 20, D-070). Data, set per
-/// defect type in Settings.
-enum DefectHandling {
-  CLEAN
-  CUT_AROUND
+/// What a found defect of a type means for the section (D-093): Usable leaves it Pass, Not
+/// accepted rejects it. Data, set per defect type in Settings.
+enum DefectOutcome {
+  USABLE
+  NOT_ACCEPTED
 }
 
 enum ScanSource {
@@ -64,20 +51,6 @@ enum ScanSource {
   PHONE
   WEBCAM
   DEDICATED_CAMERA
-}
-
-enum ReworkStatus {
-  OPEN
-  IN_PROGRESS
-  DONE
-  CANCELLED // its scan's decision was overridden
-}
-
-enum SalvageStatus {
-  AVAILABLE
-  ASSIGNED
-  DISCARDED
-  CANCELLED // its scan's decision was overridden
 }
 
 enum InventoryCategory {
@@ -124,9 +97,6 @@ model User {
   batchesCreated    Batch[]              @relation("BatchCreatedBy")
   stageLogsStarted  BatchStageLog[]      @relation("StageStartedBy")
   stageLogsEnded    BatchStageLog[]      @relation("StageEndedBy")
-  scanDecisions     Scan[]               @relation("ScanDecidedBy")
-  reworkCompleted   ReworkTicket[]       @relation("ReworkCompletedBy")
-  salvageHandled    SalvageItem[]        @relation("SalvageHandledBy")
   movements         InventoryMovement[]
   apiTokensCreated  ApiToken[]
   cvSettingsUpdates CvSettings[]
@@ -238,10 +208,8 @@ model DefectType {
   label       String
   description String?
   isActive    Boolean        @default(true) // inactive types are ignored by the decision engine
-  /// Rework or Reject once found (confidence ≥ CvSettings.foundAtOrAbove); null = by confidence (D-053)
-  action      DefectAction?
-  /// Clean the section, or cut around the defect, when it's Fixable (D-070)
-  handling    DefectHandling @default(CUT_AROUND)
+  /// Usable or Not accepted once found (confidence ≥ CvSettings.foundAtOrAbove, D-093)
+  outcome     DefectOutcome
   sortOrder   Int            @default(0)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
@@ -253,9 +221,7 @@ model DefectType {
 
 model CvSettings {
   id               Int      @id @default(1)
-  rejectAtOrAbove  Float    @default(0.9)
-  reworkAtOrAbove  Float    @default(0.6)
-  /// A detection of a type with an action counts as found from this confidence (D-053).
+  /// A detection counts as found from this confidence (D-053); below it, it counts for nothing.
   foundAtOrAbove   Float    @default(0.5)
   /// Show the early-model notice on the Camera page (D-055).
   earlyModelNotice Boolean  @default(true)
@@ -301,8 +267,6 @@ model Batch {
   createdBy       User                @relation("BatchCreatedBy", fields: [createdById], references: [id])
   stageLogs       BatchStageLog[]
   scans           Scan[]
-  salvageOrigin   SalvageItem[]       @relation("SalvageOrigin")
-  salvageAssigned SalvageItem[]       @relation("SalvageAssigned")
   cameraSettings  CvSettings[]        @relation("CameraActiveBatch")
   movements       InventoryMovement[]
 
@@ -350,29 +314,19 @@ model Scan {
   captureId          String?    @unique @db.Uuid // set by the camera; a retry returns the first scan (D-051)
   aiVerdict          Verdict
   maxConfidence      Float?
-  thresholdsSnapshot Json // { rejectAtOrAbove, reworkAtOrAbove } used for this decision
-  finalVerdict       Verdict? // null while PENDING_REVIEW
-  status             ScanStatus
-  isOverride         Boolean    @default(false)
-  overrideReason     String?
-  decidedById        String?    @db.Uuid // null = decided automatically
-  decidedAt          DateTime?
+  thresholdsSnapshot Json // the rule in force: { foundAtOrAbove, outcomes } (older scans: thresholds, actions)
+  finalVerdict       Verdict // always equal to aiVerdict since Phase 25: nobody changes it (D-093)
   capturedAt         DateTime   @default(now())
   createdAt          DateTime   @default(now())
 
   batch         Batch          @relation(fields: [batchId], references: [id], onDelete: Restrict)
   deviceToken   ApiToken?      @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
-  decidedBy     User?          @relation("ScanDecidedBy", fields: [decidedById], references: [id])
-  detections    Detection[]
-  reworkTickets ReworkTicket[]
-  salvageItems  SalvageItem[]
+  detections  Detection[]
 
   @@unique([batchId, sequence])
   @@index([createdAt])
-  @@index([status, createdAt])
   @@index([finalVerdict])
   @@index([deviceTokenId])
-  @@index([decidedById])
   @@map("scans")
 }
 
@@ -394,51 +348,6 @@ model Detection {
   @@index([scanId])
   @@index([defectTypeId])
   @@map("detections")
-}
-
-model ReworkTicket {
-  id            String       @id @default(uuid(7)) @db.Uuid
-  scanId        String       @db.Uuid // one non-cancelled ticket per scan (service-enforced)
-  status        ReworkStatus @default(OPEN)
-  notes         String?
-  openedAt      DateTime     @default(now())
-  startedAt     DateTime?
-  completedAt   DateTime?
-  completedById String?      @db.Uuid
-  cancelledAt   DateTime?
-
-  scan        Scan  @relation(fields: [scanId], references: [id], onDelete: Cascade)
-  completedBy User? @relation("ReworkCompletedBy", fields: [completedById], references: [id])
-
-  @@index([scanId])
-  @@index([status, openedAt])
-  @@index([completedById])
-  @@map("rework_tickets")
-}
-
-model SalvageItem {
-  id              String        @id @default(uuid(7)) @db.Uuid
-  scanId          String        @db.Uuid
-  originBatchId   String        @db.Uuid
-  status          SalvageStatus @default(AVAILABLE)
-  assignedBatchId String?       @db.Uuid
-  assignedAt      DateTime?
-  discardedAt     DateTime?
-  handledById     String?       @db.Uuid
-  notes           String?
-  createdAt       DateTime      @default(now())
-
-  scan          Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
-  originBatch   Batch  @relation("SalvageOrigin", fields: [originBatchId], references: [id])
-  assignedBatch Batch? @relation("SalvageAssigned", fields: [assignedBatchId], references: [id])
-  handledBy     User?  @relation("SalvageHandledBy", fields: [handledById], references: [id])
-
-  @@index([scanId])
-  @@index([originBatchId])
-  @@index([assignedBatchId])
-  @@index([status])
-  @@index([handledById])
-  @@map("salvage_items")
 }
 
 // ───────────── inventory ─────────────

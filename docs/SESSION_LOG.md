@@ -14,6 +14,53 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-24 — Phase 25: Pass or Reject, a final verdict
+
+**Who:** Dylan (uncommitted, on top of `main` at #19)
+**Summary:** Every section is Pass or Reject and the camera's verdict is final, as CPoint said on
+the factory visit (C-11, C-12, C-19 to C-21, D-093). Each defect type is Usable or Not accepted
+when found; an unknown class rejects the section. The Review Queue, the Repair Station, Salvage
+and the override are removed (D-094). Dylan approved the plan with "yes to all" (unknown → Reject;
+keep both verdict columns; no action → Not accepted).
+**Changed:**
+
+- **Data:** migration `pass_or_reject` converts first (Fixable → Pass, Needs review → Reject,
+  pending takes the converted camera verdict; Rework → Usable, Reject or none → Not accepted), then
+  drops `rework_tickets`, `salvage_items`, the scan status and override columns, the type's action
+  and handling and the two thresholds. Checked on a scratch database with old rows; `prisma
+migrate diff` empty. Not applied to the dev database (Dylan backs up first).
+- **Rule:** `decision-engine.ts` rewritten (found-at plus outcomes; snapshot `{foundAtOrAbove,
+outcomes}`; old snapshots read as "the earlier rule").
+- **Deleted (36 files):** the review, rework and salvage pages, their APIs, the decision endpoint
+  and panel, `reports/repairs`, the rework, salvage and scan-decision services, the outcome
+  controller, model and validator, `outcome-rules.ts`, the In repair badge, Open repairs card and
+  verdict flow, three unit test files and three e2e specs.
+- **Policies:** five permissions and three nav items gone.
+- **Screens:** Settings (When found Usable or Not accepted, found-at only, Unknown classes), the
+  Admin home alert, a section's page, a roll's page, Capture and Floor view, the homes, Reports →
+  Quality and Operations (Reject rate, For salvage, Supplier quality by Reject %), claim sheet,
+  CSVs. Chart Pass/Reject re-stepped and checked with the dataviz validator in light and dark.
+- **Seeds:** bootstrap outcomes (A-13), the demo week with Pass and Reject only and one unknown
+  class, `demo:reset` outcomes.
+- **cv/:** the preview, `predict` and `evaluate` on the same rule; `[preview.outcomes]`; old keys
+  warn by name; `labels.csv` PASS or REJECT.
+- **Tests:** unit tests updated (519 pass; 588 before, the rest were the removed modules'); e2e
+  specs updated (cv, reports, admin, auth, smoke, capture, supplier-quality), not run by Claude.
+- **Docs:** DECISIONS (D-093, D-094; superseded headings marked), API, DESIGN, STATION_SETUP,
+  master spec, ROADMAP, STATUS, cv README and model card.
+- **QA:** handoff `qa/handoffs/2026-10-24-phase-25-pass-or-reject.md`, prompt
+  `qa/CODEX_PROMPT_PHASE_25.md`.
+
+**Gates:** in a cloud copy: lint ✅ · typecheck ✅ · test ✅ (519) · build ✅ · cv ruff, format,
+mypy ✅ · pytest ✅ (81) · migration on a scratch database ✅ · e2e n/a (Codex) · docker not run
+(Codex's throwaway stack)
+**Decisions:** D-093, D-094
+**Follow-ups:**
+
+- Dylan backs up and applies `pass_or_reject`, commits on a new branch and opens the PR; Codex runs
+  the Phase 25 QA; then `demo:reset -- --yes`.
+- Phase 26 next (capture on the constructors' own phones).
+
 ## 2026-10-23 — Phase 24: remove Material Requests and Procurement
 
 **Who:** Dylan (uncommitted, on top of `main` at #18)

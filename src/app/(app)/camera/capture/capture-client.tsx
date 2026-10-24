@@ -540,7 +540,7 @@ export function CaptureClient({
             </p>
           )}
           {batchNotice && (
-            <p role="status" className="mt-2 rounded-md bg-rework-soft p-3 text-sm">
+            <p role="status" className="mt-2 rounded-md bg-caution-soft p-3 text-sm">
               {batchNotice}
             </p>
           )}
@@ -720,8 +720,7 @@ export function CaptureClient({
           {earlyModelNotice && model.state === "ready" && (
             <CardContent>
               <Alert tone="info">
-                Early model. Results are for testing; the Quality Inspector checks every flagged
-                section.
+                Early model. It is still being trained, so some verdicts may be wrong.
               </Alert>
             </CardContent>
           )}
