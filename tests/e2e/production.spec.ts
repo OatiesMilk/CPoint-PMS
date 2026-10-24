@@ -41,6 +41,9 @@ async function signedIn(browser: Browser, email: string, home: string): Promise<
 }
 
 async function axe(page: Page) {
+  // A toast fading in or out is half transparent, which axe reads as low contrast. Let any
+  // confirmation toast finish and leave first (they last 4 s).
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 15_000 });
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
@@ -75,6 +78,7 @@ test.afterAll(async () => {
 test("the Floor Manager sets the schedule and a quota, with specific messages", async ({
   browser,
 }) => {
+  test.setTimeout(60_000); // the axe check waits for the two save toasts to leave
   const page = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
   await page.goto("/production");
   await page.getByRole("link", { name: "Schedule and quota" }).click();
@@ -266,14 +270,16 @@ test("the Floor Manager enters check-ins only on a day no Quality Inspector is p
     const dialog = page.getByRole("dialog");
     const fields = dialog.getByLabel(/finished since \d\d:\d\d/);
     for (let i = 0; i < (await fields.count()); i++) await fields.nth(i).fill("3");
-    await dialog.getByLabel("Notes (optional)").fill("E2E FM cover");
+    // A note of its own per run, so earlier runs' rows never match (Phase 25 QA run 2).
+    const coverNote = `E2E FM cover ${Date.now()}`;
+    await dialog.getByLabel("Notes (optional)").fill(coverNote);
     await dialog.getByRole("button", { name: "Save count" }).click();
     await expect(dialog).toBeHidden();
     await expect(
       page
         .getByTestId("today-check-ins")
         .getByRole("row")
-        .filter({ hasText: "Note: E2E FM cover" }),
+        .filter({ hasText: `Note: ${coverNote}` }),
     ).toContainText("Entered");
     expect(await axe(page)).toEqual([]);
   } finally {

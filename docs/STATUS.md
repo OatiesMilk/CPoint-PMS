@@ -4,14 +4,17 @@
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
 **Last updated:** 2026-10-24
-**Branch:** `main` has Phase 25 (#21, CI green). Uncommitted, for a new branch from the latest
-`main` (Dylan commits): the Phase 25 QA run 1 fixes and Codex's report.
+**Branch:** `main` has Phase 25 (#21) and the QA run 1 fixes (#22), CI green. Uncommitted, for a
+new branch from the latest `main` (Dylan commits): the run 2 test fixes, Codex's run 2 report and
+the run 3 prompt.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 25, Pass or Reject (D-093, D-094). **Merged; QA run 1 FAIL, fixes
-ready for run 2** (report `qa/reports/2026-10-24-phase-25-pass-or-reject.md`, run 2 prompt
-`qa/CODEX_PROMPT_PHASE_25_RUN2.md`). Run 1: 22 of 24 scenarios, e2e 71 passed, 1 failed. No app
+**Current phase:** Phase 25, Pass or Reject (D-093, D-094). **Merged; QA run 2 FAIL (two
+test faults, no app fault), fixes ready for run 3** (report `qa/reports/2026-10-24-phase-25-run2.md`,
+run 3 prompt `qa/CODEX_PROMPT_PHASE_25_RUN3.md`). Run 2: R3 to R5 passed (Floor view's early Space,
+the CSV header, the 404s and reports); the D-088 check-in test matched old rows by a fixed note, and
+axe caught a save toast mid-fade. Run 1: 22 of 24 scenarios, e2e 71 passed, 1 failed. No app
 fault in the Pass or Reject rule, the removals, Settings or reports. Migration `pass_or_reject` is
 applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 **Then: Phases 26 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
@@ -296,12 +299,12 @@ applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 
 ## Next step (exact)
 
-1. Dylan: commit the Phase 25 QA fixes and Codex's report on a new branch from the latest `main`
-   (git commands in this session's reply) and open the PR (D-032).
-2. Codex: Phase 25 run 2 from `qa/CODEX_PROMPT_PHASE_25_RUN2.md`.
+1. Dylan: commit the run 2 test fixes, Codex's run 2 report and the run 3 prompt on a new branch
+   from the latest `main` (git commands in this session's reply) and open the PR (D-032).
+2. Codex: Phase 25 run 3 from `qa/CODEX_PROMPT_PHASE_25_RUN3.md`.
 3. Dylan: delete the two QA folders Codex couldn't remove
    (`%TEMP%\cpoint-qa-uploads-phase25-…`).
-4. After run 2 passes: back up, then `npm run demo:reset -- --yes` for a fresh demo week.
+4. After run 3 passes: back up, then `npm run demo:reset -- --yes` for a fresh demo week.
 5. Phase 26 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 26. Stop
    for my approval before writing code."
 6. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
