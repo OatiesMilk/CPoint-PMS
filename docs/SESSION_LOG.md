@@ -14,6 +14,58 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-24 — Phase 26: QA run 1 fixes
+
+- Codex run 1 (`qa/reports/2026-10-24-phase-26-phone-capture.md`): FAIL, 25 of 29 scenarios; e2e
+  57 passed, 18 failed, 1 skipped.
+- F1: the desktop sidebar had `hidden` and no `sm:flex`, so it was hidden at every desktop width
+  (S1 and 13 e2e failures). Fixed in `sidebar.tsx`.
+- F2: `requireApiPermission` takes an optional message; the camera-operators route answers 403
+  "Only the System Admin chooses who can capture."
+- F3: Inventory's Roll column shows only when a row on the page names a roll (none after a reset,
+  since Phase 26 dropped "For roll"). The handoff's S17 expectation was wrong and is corrected.
+- F4: a scan's page links "Scans of this roll" to `/scans?roll=<code>`.
+- Tests: the Roll combobox in `capture.spec.ts`, `shot-row` test ids in `rolls.spec.ts`, the BOM
+  in `supplier-quality.spec.ts`. Eight files reformatted with Prettier.
+- Dev data: only `constructor@` had camera access after Dylan's reset (the throwaway stack had all
+  four); run 2 collects the user rows to find why.
+- `npm run check` passed (506 unit tests, build). E2E not run by Claude. Run 2 prompt
+  `qa/CODEX_PROMPT_PHASE_26_RUN2.md`.
+
+## 2026-10-24 — Phase 26: capture on the constructors' own phones
+
+**Who:** Dylan (plan approved with "go"; uncommitted in `C:\dev\CPoint-PMS`)
+**Summary:** Rolls now start, are captured shot by shot and finish at Capture, on the constructors'
+phones, and only constructors the System Admin allows capture. `Batch` is `Roll` in the code;
+Reports → Rolls lets the Floor Manager follow and cancel rolls.
+**Changed:**
+
+- **Data:** migration `rolls_at_capture` (OPEN, FINISHED, CANCELLED, converted from the old
+  statuses; stages, the stage log, quota, notes, shoe type and the camera's active batch dropped).
+  Codes `R-YYYY-NNNN`; the supplier's code is the optional tag.
+- **Capture:** Start roll (supplier required), the Roll dropdown over every open roll, Finish roll
+  (at least one shot), Cancel an empty roll; `409 NO_ROLL_CHOSEN` and `409 ROLL_CLOSED` before the
+  model runs. Phone layout (D-096): the top bar below 640 px, a bottom Capture button.
+- **Access:** Capture is the constructor's only page and home; the QI, FM and Admin no longer
+  capture; only the Admin gives camera access (the Camera page's operators panel is gone).
+- **Reports → Rolls (FM):** list with filters, a roll's page with its shots and claim sheet, Cancel
+  with a reason. `/batches`, `/constructor` and `/api/v1/batches/**` are 404; Inventory has no
+  "For roll".
+- **Demo:** the demo week captures on phones as four allowed constructors, keeps the newest roll
+  open and one roll cancelled by the FM; `demo:reset` follows. The simulator and the `cv/` payload
+  send `rollId`. CI's docker job checks the new demo data.
+- **Fix found by a test:** Start roll accepted a missing supplier; the validator now refuses it.
+- **Docs:** CLAUDE.md, DESIGN.md (phone layout), API.md, STATION_SETUP.md (phones on a stand),
+  README, the master spec, the plan `docs/prompts/plans/phase-26-plan.md`, QA handoff and Codex
+  prompt.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (506) · build ✅ · cv ruff, mypy, pytest ✅ (81) · e2e
+not run (Codex) · docker not run (CI and Codex)
+**Decisions:** D-095, D-096
+**Follow-ups:** Dylan backs up the dev database, applies the migration and resets the demo week;
+Codex QA from `qa/CODEX_PROMPT_PHASE_26.md`; Phase 27 (batches are check-in intervals) after it
+passes.
+
 ## 2026-10-24 — Phase 25: QA run 2 fixes
 
 - Codex run 2 (`qa/reports/2026-10-24-phase-25-run2.md`): FAIL. R3 to R5 passed; R1 and R2 failed

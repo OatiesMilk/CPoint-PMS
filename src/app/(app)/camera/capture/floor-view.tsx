@@ -2,7 +2,7 @@
 
 /*
  * Intent brief (ui-craft §1)
- * Who:   the constructor feeding the fixed camera at Preparation, glancing up from the leather at a
+ * Who:   the constructor capturing a roll at a station PC, glancing up from the leather at a
  *        monitor about 2 m away. Space on the station's keyboard captures.
  * What:  see the live camera, then where the piece goes: Pass or Reject, in colour, word and
  *        icon (D-074, D-093).
@@ -26,7 +26,7 @@ const TONE: Record<Verdict, { frame: string; band: string; Icon: typeof CircleCh
 export type FloorResult = {
   verdict: Verdict;
   sequence: number;
-  batchCode: string;
+  rollCode: string;
   repeat: boolean;
 };
 
@@ -42,16 +42,16 @@ export function FloorView({
   videoRef,
   live,
   frozenUrl,
-  batchLine,
-  batchNotice,
+  rollLine,
+  rollNotice,
   band,
   onLeave,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>;
   live: boolean;
   frozenUrl: string | null;
-  batchLine: string;
-  batchNotice: string | null;
+  rollLine: string;
+  rollNotice: string | null;
   band: FloorBand;
   onLeave: () => void;
 }) {
@@ -71,10 +71,10 @@ export function FloorView({
     >
       <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
         <div className="min-w-0">
-          <p className="text-3xl font-semibold">{batchLine}</p>
-          {batchNotice && (
+          <p className="text-3xl font-semibold">{rollLine}</p>
+          {rollNotice && (
             <p role="status" className="mt-1 text-xl text-muted-foreground">
-              {batchNotice}
+              {rollNotice}
             </p>
           )}
         </div>
@@ -116,7 +116,7 @@ export function FloorView({
 
 function FloorBandView({ band }: { band: FloorBand }) {
   if (band.kind === "result") {
-    const { verdict, sequence, batchCode, repeat } = band.result;
+    const { verdict, sequence, rollCode, repeat } = band.result;
     const { band: tone, Icon } = TONE[verdict];
     const copy = FLOOR_VERDICT[verdict];
     return (
@@ -132,7 +132,7 @@ function FloorBandView({ band }: { band: FloorBand }) {
         <span className="flex flex-col text-3xl font-semibold">
           <span>{copy.next}</span>
           <span className="text-2xl font-medium">
-            Section #{sequence} · <span className="font-mono">{batchCode}</span>
+            Shot #{sequence} · <span className="font-mono">{rollCode}</span>
             {repeat && " · already saved"}
           </span>
         </span>
@@ -152,7 +152,7 @@ function FloorBandView({ band }: { band: FloorBand }) {
   if (band.kind === "ready")
     return (
       <div role="status" className="bg-card px-8 py-6 text-4xl font-medium text-muted-foreground">
-        Place the next piece, then press Space.
+        Move the roll on to the next part, then press Space.
       </div>
     );
   if (band.kind === "problem")

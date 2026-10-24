@@ -1,11 +1,10 @@
 import { ROLE_HOME, type Role } from "@/lib/domain";
-import { can, canCaptureFor, type Permission } from "./permissions";
+import { can, type Permission } from "./permissions";
 
 export type NavIcon =
   | "overview"
   | "production"
   | "attendance"
-  | "batches"
   | "camera"
   | "capture"
   | "scans"
@@ -44,7 +43,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
         icon: "attendance",
         permission: "attendance:read",
       },
-      { label: "Batches", href: "/batches", icon: "batches", permission: "batch:read" },
       {
         label: "Inventory",
         href: "/inventory",
@@ -57,12 +55,6 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
     title: "Quality",
     items: [
       { label: "Camera", href: "/camera", icon: "camera", permission: "camera:view" },
-      {
-        label: "Capture",
-        href: "/camera/capture",
-        icon: "capture",
-        permission: "camera:capture",
-      },
       { label: "Scans", href: "/scans", icon: "scans", permission: "scan:read" },
     ],
   },
@@ -105,23 +97,18 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
 
 /**
  * The sidebar for a person: their home first, then every section they have at least one permission
- * in. Capture also follows the per-person switch for constructors (D-075).
+ * in. A Shoe Constructor has one page, Capture (Phase 26, D-095), which is also their home; without
+ * camera access it says who grants it. Nobody else captures.
  */
 export function navigationFor(user: { role: Role; canCapture?: boolean }): NavSection[] {
   const role = user.role;
-  const allowed = (item: { href: string; permission: Permission }) =>
-    item.href === "/camera/capture"
-      ? canCaptureFor({ role, canCapture: !!user.canCapture })
-      : can(role, item.permission);
+  if (role === "SHOE_CONSTRUCTOR") {
+    return [{ title: null, items: [{ label: "Capture", href: ROLE_HOME[role], icon: "capture" }] }];
+  }
+  const allowed = (item: { permission: Permission }) => can(role, item.permission);
   const home: NavSection = {
     title: null,
-    items: [
-      {
-        label: role === "SHOE_CONSTRUCTOR" ? "Home" : "Overview",
-        href: ROLE_HOME[role],
-        icon: "overview",
-      },
-    ],
+    items: [{ label: "Overview", href: ROLE_HOME[role], icon: "overview" }],
   };
   const sections = SECTIONS.map((section) => ({
     title: section.title,

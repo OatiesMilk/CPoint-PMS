@@ -3,12 +3,12 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
 import {
+  captureApi,
   createDeviceToken,
+  createRoll,
   e2eKey,
   ensureRuleTypes,
-  managerApi,
   sampleJpeg,
-  shoeTypeId,
   withDb,
 } from "./cv-helpers";
 
@@ -27,7 +27,7 @@ async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCO
 async function scan(
   request: APIRequestContext,
   token: string,
-  batchId: string,
+  rollId: string,
   classKey: string,
   confidence: number,
 ) {
@@ -42,7 +42,7 @@ async function scan(
           box: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
         },
       ]),
-      batchId,
+      rollId,
       source: "SIMULATOR",
       capturedAt: `${day}T10:00:00+08:00`,
     },
@@ -50,7 +50,7 @@ async function scan(
   expect(res.status()).toBe(201);
 }
 
-/** A supplier of its own, one batch (one roll) from it, and three sections: two rejected. */
+/** A supplier of its own, one roll from it started at Capture, and three shots: two rejected. */
 async function rollWithRejects(api: APIRequestContext, request: APIRequestContext) {
   await ensureRuleTypes();
   const supplier = `E2E Tannery ${randomBytes(3).toString("hex").toUpperCase()}`;
@@ -61,21 +61,13 @@ async function rollWithRejects(api: APIRequestContext, request: APIRequestContex
       [supplierId, supplier],
     ),
   );
-  const rollCode = `E2E-SQ-${randomBytes(3).toString("hex").toUpperCase()}`;
-  const res = await api.post("/api/v1/batches", {
-    data: { rollCode, shoeTypeId: await shoeTypeId(), supplierId, receivedAt: "2024-01-02" },
-  });
-  expect(res.status()).toBe(201);
-  const batch = (await res.json()).data as { id: string; code: string };
-  const started = await api.post(`/api/v1/batches/${batch.id}/stages`, {
-    data: { action: "start", expectedStage: "PREPARATION" },
-  });
-  expect(started.status()).toBe(200);
+  const tagCode = `E2E-SQ-${randomBytes(3).toString("hex").toUpperCase()}`;
+  const roll = await createRoll(api, { supplierId, tagCode });
   const { token } = await createDeviceToken();
-  await scan(request, token, batch.id, "hole", 0.95); // REJECT
-  await scan(request, token, batch.id, "hole", 0.96); // REJECT
-  await scan(request, token, batch.id, "cut", 0.3); // PASS
-  return { supplier, rollCode, batch };
+  await scan(request, token, roll.id, "hole", 0.95); // REJECT
+  await scan(request, token, roll.id, "hole", 0.96); // REJECT
+  await scan(request, token, roll.id, "cut", 0.3); // PASS
+  return { supplier, tagCode, roll };
 }
 
 test("Supplier quality lists the supplier and its roll, and the claim sheet shows the rejects", async ({
@@ -83,8 +75,7 @@ test("Supplier quality lists the supplier and its roll, and the claim sheet show
   page,
   request,
 }) => {
-  const api = await managerApi(browser);
-  const { supplier, rollCode, batch } = await rollWithRejects(api, request);
+  const { supplier, tagCode, roll } = await rollWithRejects(await captureApi(browser), request);
 
   await signInAs(page, ACCOUNTS.manager);
   await page.goto(`/reports?view=operations&from=${day}&to=${day}`);
@@ -94,9 +85,12 @@ test("Supplier quality lists the supplier and its roll, and the claim sheet show
   // Rolls 1, Sections 3, Pass 33%, Reject 67%, top defect "E2E hole".
   await expect(row).toContainText("67%");
   await expect(row).toContainText("E2E hole");
-  const roll = card.getByTestId("rejected-rolls").getByRole("row", { name: new RegExp(rollCode) });
-  await expect(roll).toContainText("2 of 3");
-  await expect(roll).toContainText("E2E hole 2");
+  const rollRow = card
+    .getByTestId("rejected-rolls")
+    .getByRole("row", { name: new RegExp(roll.code) });
+  await expect(rollRow).toContainText(tagCode);
+  await expect(rollRow).toContainText("2 of 3");
+  await expect(rollRow).toContainText("E2E hole 2");
   await expect(card).toContainText("never by person");
 
   const axe = await new AxeBuilder({ page })
@@ -107,12 +101,15 @@ test("Supplier quality lists the supplier and its roll, and the claim sheet show
 
   const csv = await page.request.get(`/api/v1/reports/supplier-rolls.csv?from=${day}&to=${day}`);
   expect(csv.status()).toBe(200);
-  expect(await csv.text()).toContain(`${rollCode},${batch.code},${supplier},3,2,E2E hole 2`);
+  const text = await csv.text();
+  // The CSV starts with a UTF-8 byte-order mark so Excel reads it (report-rules.ts).
+  expect(text.split("\n")[0]).toMatch(/^\uFEFF?Roll,Tag number,Supplier,/);
+  expect(text).toContain(`${roll.code},${tagCode},${supplier},3,2,E2E hole 2`);
 
-  await roll.getByRole("link", { name: /Claim sheet/ }).click();
-  await expect(page).toHaveURL(`/reports/claims/${batch.id}`);
+  await rollRow.getByRole("link", { name: /Claim sheet/ }).click();
+  await expect(page).toHaveURL(`/reports/claims/${roll.id}`);
   await expect(
-    page.getByRole("heading", { name: `Claim sheet: roll ${rollCode}`, level: 1 }),
+    page.getByRole("heading", { name: `Claim sheet: roll ${roll.code}`, level: 1 }),
   ).toBeVisible();
   await expect(page.getByTestId("claim-summary")).toContainText("2 of 3 rejected");
   await expect(page.getByTestId("claim-sections").getByRole("listitem")).toHaveCount(2);
@@ -128,15 +125,14 @@ test("only the Floor Manager opens claim sheets and the rolls CSV", async ({
   page,
   request,
 }) => {
-  const api = await managerApi(browser);
-  const { batch } = await rollWithRejects(api, request);
+  const { roll } = await rollWithRejects(await captureApi(browser), request);
   await signInAs(page, ACCOUNTS.inspector);
-  await page.goto(`/reports/claims/${batch.id}`);
+  await page.goto(`/reports/claims/${roll.id}`);
   await expect(page).toHaveURL(/\/forbidden/);
   expect((await page.request.get("/api/v1/reports/supplier-rolls.csv")).status()).toBe(403);
 });
 
-test("a claim sheet for a batch that doesn't exist is a 404", async ({ page }) => {
+test("a claim sheet for a roll that doesn't exist is a 404", async ({ page }) => {
   await signInAs(page, ACCOUNTS.manager);
   // Reports has a loading.tsx, so the response streams with 200 before notFound() runs; the
   // not-found page is what the user sees.

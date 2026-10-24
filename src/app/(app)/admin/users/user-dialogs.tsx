@@ -279,7 +279,7 @@ export function UserRowActions({
     });
   }
 
-  /** Camera operators (D-075): the same action the Floor Manager uses on the Camera page. */
+  /** Camera access (D-075; Phase 26: the System Admin only grants it). */
   function setOperator(value: boolean, quiet = false) {
     startTransition(async () => {
       const result = await setCameraOperatorAction(user.id, value);
@@ -287,8 +287,8 @@ export function UserRowActions({
       if (quiet) return;
       toast.success(
         value
-          ? `${user.name} can now capture at the camera.`
-          : `${user.name} can no longer capture at the camera.`,
+          ? `${user.name} can now capture rolls on their phone.`
+          : `${user.name} can no longer capture rolls.`,
         { duration: 6000, action: { label: "Undo", onClick: () => setOperator(!value, true) } },
       );
     });
@@ -329,7 +329,7 @@ export function UserRowActions({
             )}
             {user.role === "SHOE_CONSTRUCTOR" && user.isActive && (
               <DropdownMenuItem onSelect={() => setOperator(!user.canCapture)}>
-                {user.canCapture ? "Stop capturing at the camera" : "Allow capturing at the camera"}
+                {user.canCapture ? "Remove camera access" : "Give camera access"}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

@@ -18,8 +18,9 @@ const nextDay = (day: string) => new Date(manilaDayStart(day).getTime() + 86_400
 function entityHref(entity: string, id: string | null): string | null {
   if (!id) return null;
   switch (entity) {
-    case "Batch":
-      return `/batches/${id}`;
+    case "Roll":
+    case "Batch": // audit rows from before Phase 26
+      return `/reports/rolls/${id}`;
     case "Scan":
       return `/scans/${id}`;
     case "InventoryItem":
@@ -46,7 +47,7 @@ function entityLabel(row: AuditRow): string | null {
   for (const source of [row.after, row.before]) {
     if (source && typeof source === "object" && !Array.isArray(source)) {
       const v = source as Record<string, unknown>;
-      const label = v.code ?? v.sku ?? v.name ?? v.email ?? v.label ?? v.item ?? v.batch;
+      const label = v.code ?? v.sku ?? v.name ?? v.email ?? v.label ?? v.item ?? v.roll;
       if (typeof label === "string" && label) return label;
     }
   }

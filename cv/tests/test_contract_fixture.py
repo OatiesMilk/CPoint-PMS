@@ -35,7 +35,7 @@ DETECTOR = FakeDetector(
 )
 CAPTURED_AT = datetime(2026, 10, 1, 9, 30, tzinfo=timezone(timedelta(hours=8)))
 CAPTURE_ID = "0199f0a1-7c2e-4a51-9d3f-2b8c4e6a1f00"
-BATCH_ID = "0199e2b4-1f00-7c3a-8d21-5e6f7a8b9c0d"
+ROLL_ID = "0199e2b4-1f00-7c3a-8d21-5e6f7a8b9c0d"
 
 
 def build() -> dict[str, str]:
@@ -47,7 +47,7 @@ def build() -> dict[str, str]:
         "WEBCAM",
         CAPTURED_AT,
         capture_id=CAPTURE_ID,
-        batch_id=BATCH_ID,
+        roll_id=ROLL_ID,
     )
 
 
@@ -74,7 +74,7 @@ def test_the_fixture_has_the_contract_shape() -> None:
         "source",
         "capturedAt",
         "captureId",
-        "batchId",
+        "rollId",
     }
     detections = json.loads(fields["detections"])
     assert [d["classKey"] for d in detections] == ["hole", "cut", "crease", "scratch"]

@@ -20,7 +20,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
   const [
     users,
     tokens,
-    batches,
+    rolls,
     scans,
     inventoryItems,
     movements,
@@ -35,7 +35,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
   ] = await Promise.all([
     db.user.count({ where: { email: notIn(keep.emails) } }),
     db.apiToken.count({ where: { tokenHash: notIn(keep.tokenHashes) } }),
-    db.batch.count(),
+    db.roll.count(),
     db.scan.count(),
     db.inventoryItem.count(),
     db.inventoryMovement.count(),
@@ -52,7 +52,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
   return {
     users,
     tokens,
-    batches,
+    rolls,
     scans,
     inventoryItems,
     movements,
@@ -74,13 +74,11 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   // Stock: the ledger, then the items (the demo week adds them back with opening stock).
   await db.inventoryMovement.deleteMany();
   await db.inventoryItem.deleteMany();
-  // Production: the camera's batch, then scans, then batches.
-  await db.cvSettings.updateMany({ data: { activeBatchId: null } });
+  // Production: scans, then rolls.
   await db.detection.deleteMany();
   await db.scan.deleteMany();
-  await db.batchStageLog.deleteMany();
-  await db.batch.deleteMany();
-  await db.batchSequence.deleteMany();
+  await db.roll.deleteMany();
+  await db.rollSequence.deleteMany();
   // Attendance (D-077): the marks, then the days, before any account goes.
   await db.attendanceMark.deleteMany();
   await db.attendanceDay.deleteMany();

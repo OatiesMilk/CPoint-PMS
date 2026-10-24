@@ -15,10 +15,8 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { MovementType } from "@/lib/domain";
 import { focusFirstInvalid } from "@/lib/focus-first-invalid";
@@ -45,7 +43,6 @@ type Props = {
     isActive: boolean;
     level: StockLevel;
   };
-  openBatches: { id: string; code: string }[];
 };
 
 const TITLE: Record<MovementType, string> = {
@@ -59,13 +56,12 @@ const SUBMIT: Record<MovementType, string> = {
   ADJUST: "Save count",
 };
 
-export function StockActions({ item, openBatches }: Props) {
+export function StockActions({ item }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [dialog, setDialog] = useState<MovementType | null>(null);
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
-  const [batchId, setBatchId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [stale, setStale] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +76,6 @@ export function StockActions({ item, openBatches }: Props) {
   function open(kind: MovementType) {
     setAmount("");
     setNote(DEFAULT_REASON[kind] ?? "");
-    setBatchId("");
     setErrors({});
     setError(null);
     setDialog(kind);
@@ -131,7 +126,6 @@ export function StockActions({ item, openBatches }: Props) {
             type: dialog,
             quantity: amount,
             reason: note,
-            ...(dialog === "OUT" ? { batchId } : {}),
           };
     const parsed = movementSchema.safeParse(body);
     if (!parsed.success) {
@@ -290,29 +284,6 @@ export function StockActions({ item, openBatches }: Props) {
                 )
               )}
             </div>
-
-            {dialog === "OUT" && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="movement-batch">
-                  For batch <span className="font-normal text-muted-foreground">(optional)</span>
-                </Label>
-                <Select
-                  id="movement-batch"
-                  value={batchId}
-                  aria-invalid={!!errors.batchId}
-                  aria-describedby={errors.batchId ? "movement-batch-error" : undefined}
-                  onChange={(e) => setBatchId(e.target.value)}
-                >
-                  <option value="">Not for a specific batch</option>
-                  {openBatches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.code}
-                    </option>
-                  ))}
-                </Select>
-                <FieldError id="movement-batch-error" message={errors.batchId} />
-              </div>
-            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="movement-note">

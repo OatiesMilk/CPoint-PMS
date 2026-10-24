@@ -63,7 +63,7 @@ export const ingestFieldsSchema = z.object({
           `detections can have at most ${MAX_DETECTIONS} entries per scan. Send the strongest ones.`,
         ),
     ),
-  batchId: z.uuid("batchId must be a batch id from this system, or left out.").optional(),
+  rollId: z.uuid("rollId must be a roll id from this system, or left out.").optional(),
   /** The camera's own id for this capture, so a retry never creates a second scan (D-051). */
   captureId: z
     .uuid("captureId must be a UUID the camera made for this capture, or left out.")
@@ -95,7 +95,7 @@ export type IngestFields = z.infer<typeof ingestFieldsSchema>;
 export const scanListQuerySchema = z.object({
   verdict: z.enum(Verdict).optional().catch(undefined),
   source: z.enum(ScanSource).optional().catch(undefined),
-  batch: z.string().trim().max(30).optional().catch(undefined), // batch code, e.g. B-2026-0001
+  roll: z.string().trim().max(30).optional().catch(undefined), // roll code, e.g. B-2026-0001
   /** A defect class key (from Reports → Defects by type): scans with a detection of it. */
   defect: z
     .string()
@@ -116,7 +116,7 @@ export const isScanId = (value: string) => z.uuid().safeParse(value).success;
  * The page always makes a captureId, so a retry never makes a second scan (D-051).
  */
 export const captureFieldsSchema = ingestFieldsSchema
-  .pick({ batchId: true, capturedAt: true })
+  .pick({ rollId: true, capturedAt: true })
   .extend({
     captureId: z.uuid("captureId must be the UUID this page made for the capture."),
     source: z

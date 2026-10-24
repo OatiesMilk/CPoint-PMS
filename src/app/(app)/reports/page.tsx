@@ -6,7 +6,8 @@
  *        wrong. Quality Inspector: how the checkpoint before cutting did: Pass, Reject (for salvage) and the defects.
  * Worst: a problem hidden under averages (a short day, an empty shelf), a number read as
  *        something else, or anyone singled out. Every figure says what it counts; everything is
- *        per day, shoe type, batch, item, supplier or defect type, never per person (D-008, D-033).
+ *        per day, shoe type, roll, item, supplier or defect type, never per person (D-008, D-033).
+ *        Rolls (Phase 26) has its own page, /reports/rolls.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -14,6 +15,7 @@ import { connection } from "next/server";
 import { Download } from "lucide-react";
 import { OperationsView } from "./_components/operations-view";
 import { QualityView } from "./_components/quality-view";
+import { ReportTabs } from "./_components/report-tabs";
 import { PageHeader } from "@/components/features/page-header";
 import { Button } from "@/components/ui/button";
 import { formatDayLabel, formatManilaDateTime } from "@/lib/format";
@@ -83,30 +85,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         }
       />
 
-      {canOperations && (
-        <nav aria-label="Report" className="flex gap-6 border-b">
-          {(
-            [
-              { id: "operations", label: "Operations" },
-              { id: "quality", label: "Quality" },
-            ] as const
-          ).map((tab) => (
-            <Link
-              key={tab.id}
-              href={`/reports?view=${tab.id}&${qs}`}
-              aria-current={view === tab.id ? "page" : undefined}
-              className={cn(
-                "-mb-px border-b-2 px-1 pb-2 text-lg font-medium",
-                view === tab.id
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {tab.label}
-            </Link>
-          ))}
-        </nav>
-      )}
+      {canOperations && <ReportTabs current={view} qs={qs} />}
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <nav aria-label="Report range" className="flex gap-1 rounded-md border p-1">

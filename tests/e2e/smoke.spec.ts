@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { createBatch, createDeviceToken, managerApi, postScan } from "./cv-helpers";
+import { captureApi, createRoll, createDeviceToken, managerApi, postScan } from "./cv-helpers";
 
 /**
  * Smoke per role (Phase 8): every page in the role's sidebar renders (a heading, no error
@@ -84,7 +84,7 @@ for (const [role, account] of Object.entries(ACCOUNTS)) {
   });
 }
 
-test("Floor Manager journey: register a roll as a batch, start it, receive stock, read the report", async ({
+test("Floor Manager journey: read the rolls, receive stock, read the report", async ({
   browser,
   page,
 }) => {
@@ -104,14 +104,11 @@ test("Floor Manager journey: register a roll as a batch, start it, receive stock
   });
   expect(created.status()).toBe(201);
 
+  // A constructor starts a roll at Capture; the Floor Manager reads it in Reports → Rolls.
+  const roll = await createRoll(await captureApi(browser));
   await signInAs(page, ACCOUNTS.manager);
-  await page.goto("/batches/new");
-  await page.getByLabel("Roll code").fill(`SMOKE-${Date.now()}`);
-  await page.getByLabel("Shoe type").selectOption({ index: 1 });
-  await page.getByRole("button", { name: "Create batch" }).click();
-  await expect(page).toHaveURL(/\/batches\/[0-9a-f-]{36}$/);
-  await page.getByRole("button", { name: "Start roll" }).click();
-  await expect(page.locator("header").getByText("At Preparation", { exact: true })).toBeVisible();
+  await page.goto(`/reports/rolls?q=${roll.code}`);
+  await expect(page.getByTestId("roll-row").filter({ hasText: roll.code })).toContainText("Open");
   await expectAccessible(page);
 
   // Searched, not browsed: earlier e2e runs add items that push it past page 1.
@@ -135,18 +132,17 @@ test("Quality Inspector journey: a rejected and a passed section, explained on t
   page,
   request,
 }) => {
-  const api = await managerApi(browser);
-  const batch = await createBatch(api);
+  const roll = await createRoll(await captureApi(browser));
   const { token } = await createDeviceToken();
-  await postScan(request, token, batch.id, [{ classKey: "smoke-unknown", confidence: 0.9 }]);
-  await postScan(request, token, batch.id, [{ classKey: "abrasion", confidence: 0.7 }]);
+  await postScan(request, token, roll.id, [{ classKey: "smoke-unknown", confidence: 0.9 }]);
+  await postScan(request, token, roll.id, [{ classKey: "abrasion", confidence: 0.7 }]);
 
   await signInAs(page, ACCOUNTS.inspector);
   await expectAccessible(page);
-  await page.goto(`/scans?batch=${batch.code}`);
+  await page.goto(`/scans?roll=${roll.code}`);
   await expect(page.locator("tbody tr")).toHaveCount(2);
   await expectAccessible(page);
-  await page.goto(`/scans?batch=${batch.code}&verdict=REJECT`);
+  await page.goto(`/scans?roll=${roll.code}&verdict=REJECT`);
   await expect(page.locator("tbody tr")).toHaveCount(1);
   await page.locator("tbody a").first().click();
   await expect(page).toHaveURL(/\/scans\/[0-9a-f-]{36}$/);
@@ -170,20 +166,18 @@ test("System Admin journey: thresholds, unknown classes and the audit trail", as
   ).toBeVisible();
 });
 
-test("Shoe Constructor: a home that leads to the camera, and nothing else (D-091)", async ({
-  page,
-}) => {
+test("Shoe Constructor: Capture is their only page (Phase 26)", async ({ page }) => {
   await signInAs(page, ACCOUNTS.constructor);
   await expectRendered(page);
-  // The Capture card when the demo data allows this constructor to capture, otherwise who to ask.
+  // Capture when the demo data gives this constructor camera access, otherwise who to ask.
   await expect(
     page
-      .getByRole("link", { name: "Open Capture" })
+      .getByRole("button", { name: "Capture", exact: true })
       .or(page.getByText("Ask the System Admin for camera access.")),
   ).toBeVisible();
   await expectAccessible(page);
-  await page.goto("/batches");
-  await expect(page).toHaveURL("/forbidden");
-  await page.goto("/inventory");
-  await expect(page).toHaveURL("/forbidden");
+  for (const path of ["/reports/rolls", "/inventory", "/scans"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL("/forbidden");
+  }
 });

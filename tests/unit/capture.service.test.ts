@@ -6,42 +6,31 @@ const ingest = {
   earlierCapture: vi.fn(async (): Promise<unknown> => null),
   ingestScan: vi.fn(async (..._args: unknown[]) => ({
     scanId: "scan1",
-    batchId: "b1",
-    batchCode: "B-2026-0001",
+    rollId: "b1",
+    rollCode: "R-2026-0001",
     sequence: 3,
     verdict: "REJECT",
-    status: "DECIDED",
     duplicate: false,
+    defects: [],
   })),
 };
-const camera = {
-  NO_BATCH_MESSAGE: "No batch is at Preparation. Start one on the Batches page, then scan again.",
-  resolveCameraBatch: vi.fn(),
-};
+const rolls = { resolveCaptureRoll: vi.fn() };
 vi.mock("@/server/services/scan-ingest.service", () => ingest);
-vi.mock("@/server/services/camera.service", () => camera);
+vi.mock("@/server/services/roll.service", () => rolls);
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 
 const { captureScan } = await import("@/server/services/capture.service");
 
-const batch = (id: string, code: string) => ({
-  id,
-  code,
-  rollCode: "LR-1",
-  shoeType: { name: "School Shoe" },
-  _count: { scans: 4 },
-  selection: "oldest",
-});
 const IMAGE = {
   bytes: new Uint8Array([0xff, 0xd8, 0xff]),
   type: { mime: "image/jpeg", ext: "jpg" },
 } as const;
 const FIELDS = {
   captureId: "0199f0a1-7c2e-4a51-9d3f-2b8c4e6a1f00",
-  batchId: "b1",
+  rollId: "b1",
   source: "WEBCAM" as const,
 };
-const USER = { id: "user-qi" };
+const USER = { id: "user-sc" };
 const SEEN = [
   { classKey: "cut", confidence: 0.91, box: { x: 0.1, y: 0.1, width: 0.2, height: 0.1 } },
 ];
@@ -64,9 +53,11 @@ function fakeRunner(state: "ready" | "missing" = "ready"): ModelRunner & {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  camera.resolveCameraBatch.mockImplementation(async (id?: string) =>
-    id === undefined || id === "b1" ? batch("b1", "B-2026-0001") : null,
-  );
+  rolls.resolveCaptureRoll.mockResolvedValue({
+    id: "b1",
+    code: "R-2026-0001",
+    selection: "chosen",
+  });
 });
 
 describe("captureScan", () => {
@@ -79,13 +70,13 @@ describe("captureScan", () => {
       {
         image: IMAGE,
         detections: SEEN,
-        batchId: "b1",
+        rollId: "b1",
         captureId: FIELDS.captureId,
         modelVersion: "yolo-v1-1d729fb0",
         source: "WEBCAM",
         capturedAt: undefined,
       },
-      { kind: "website", userId: "user-qi" },
+      { kind: "website", userId: "user-sc" },
       expect.any(Date),
     );
     expect(result).toMatchObject({ scanId: "scan1", verdict: "REJECT", detections: SEEN });
@@ -108,35 +99,32 @@ describe("captureScan", () => {
     expect(ingest.ingestScan).not.toHaveBeenCalled();
   });
 
-  it("refuses with no batch at Preparation", async () => {
-    camera.resolveCameraBatch.mockResolvedValue(null);
-    await expect(captureScan(IMAGE, FIELDS, USER, fakeRunner())).rejects.toMatchObject({
-      status: 409,
-      code: "NO_BATCH_AT_PREPARATION",
-    });
+  it("checks the chosen roll from the website, before the model runs", async () => {
+    await captureScan(IMAGE, FIELDS, USER, fakeRunner());
+    expect(rolls.resolveCaptureRoll).toHaveBeenCalledWith("b1", "website");
   });
 
-  it("refuses before the model runs when the roll shown was finished (D-082)", async () => {
-    camera.resolveCameraBatch.mockImplementation(async (id?: string) => {
-      if (id) throw new AppError(409, "CONFLICT", "That batch isn't in progress at Preparation.");
-      return batch("b2", "B-2026-0002");
-    });
+  it("refuses without a chosen roll (Phase 26)", async () => {
+    rolls.resolveCaptureRoll.mockRejectedValue(
+      new AppError(409, "NO_ROLL_CHOSEN", "Choose the roll this shot belongs to."),
+    );
     const runner = fakeRunner();
-    const error = await captureScan(IMAGE, FIELDS, USER, runner).catch((e: unknown) => e);
-    expect(error).toMatchObject({
-      status: 409,
-      code: "BATCH_MOVED",
-      message: expect.stringMatching(/The next scan goes to B-2026-0002\. Press Capture again\./),
-      details: { current: { batchId: "b2", batchCode: "B-2026-0002", scanned: 4 } },
-    });
+    await expect(
+      captureScan(IMAGE, { ...FIELDS, rollId: undefined }, USER, runner),
+    ).rejects.toMatchObject({ status: 409, code: "NO_ROLL_CHOSEN" });
     expect(runner.detect).not.toHaveBeenCalled();
   });
 
-  it("sends to the batch it showed while that batch is still at Preparation", async () => {
-    camera.resolveCameraBatch.mockImplementation(async (id?: string) =>
-      id ? batch(id, "B-2026-0001") : batch("b2", "B-2026-0002"),
+  it("refuses before the model runs when the chosen roll was finished or cancelled", async () => {
+    rolls.resolveCaptureRoll.mockRejectedValue(
+      new AppError(409, "ROLL_CLOSED", "R-2026-0001 is finished or cancelled."),
     );
-    await captureScan(IMAGE, FIELDS, USER, fakeRunner());
-    expect(ingest.ingestScan.mock.calls[0][0]).toMatchObject({ batchId: "b1" });
+    const runner = fakeRunner();
+    await expect(captureScan(IMAGE, FIELDS, USER, runner)).rejects.toMatchObject({
+      status: 409,
+      code: "ROLL_CLOSED",
+    });
+    expect(runner.detect).not.toHaveBeenCalled();
+    expect(ingest.ingestScan).not.toHaveBeenCalled();
   });
 });

@@ -1,70 +1,79 @@
-# Camera station setup (Preparation)
+# Capture setup (before cutting)
 
-One page for setting up the fixed camera where leather pieces are checked before cutting. The
-system itself runs on the main PC (Docker). The station only needs a browser that reaches it.
+One page for setting up where leather rolls are checked before cutting (Phase 26, D-095). The
+system runs on the main PC (Docker). Each Shoe Constructor with camera access captures on their
+own phone; a PC with a webcam and Floor view still works the same way.
 
-## What the station needs
+## What a capture spot needs
 
-| Item                          | What to use                                                         | Why                                                             |
-| ----------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------- |
-| A computer with a browser     | An old laptop or a mini PC (Chrome or Edge)                         | Shows the Capture page. The model runs on the main PC, not here |
-| A fixed camera                | A USB webcam on a stand, pointing straight down at the table        | The same angle and distance for every piece                     |
-| A monitor facing the operator | Any screen, readable from about 2 m                                 | The operator glances up to see the verdict                      |
-| A keyboard                    | The station's own keyboard, within reach of the operator            | **Space** captures                                              |
-| Two bins                      | The bins you already have, taped or labelled by colour **and** word | Where each piece goes                                           |
-| Network                       | The station and the main PC online (Wi-Fi or cable)                 | The station opens the site through the tunnel                   |
+| Item                     | What to use                                                         | Why                                                             |
+| ------------------------ | ------------------------------------------------------------------- | --------------------------------------------------------------- |
+| A phone with a browser   | The constructor's own phone (Chrome on Android, Safari on iPhone)   | Shows the Capture page. The model runs on the main PC, not here |
+| A stand at a fixed place | A phone stand over the table, pointing straight down                | The same angle and distance for every shot (C-24)               |
+| Two bins                 | The bins you already have, taped or labelled by colour **and** word | Where each part of the roll goes                                |
+| Network                  | The phone and the main PC online (Wi-Fi)                            | The phone opens the site through the tunnel                     |
+| Optional: a station PC   | A PC with a USB webcam, a monitor facing the operator and Space     | Floor view: the verdict readable from about 2 m                 |
 
 Keep the lighting even and the table plain, so the camera sees the leather the same way all day.
 
 ## Bins
 
-| Bin colour | Label on the bin | What goes in it                            | Who takes it from there |
-| ---------- | ---------------- | ------------------------------------------ | ----------------------- |
-| Green      | **Pass**         | Pieces with no defect, or only usable ones | On to cutting           |
-| Red        | **Reject**       | Pieces with a defect that isn't accepted   | Set aside for salvage   |
+| Bin colour | Label on the bin | What goes in it                           | Who takes it from there |
+| ---------- | ---------------- | ----------------------------------------- | ----------------------- |
+| Green      | **Pass**         | Parts with no defect, or only usable ones | On to cutting           |
+| Red        | **Reject**       | Parts with a defect that isn't accepted   | Set aside for salvage   |
 
-Every piece is Pass or Reject, and the camera's verdict is final (D-093): nobody changes it
-afterwards. A piece with a defect class the system doesn't know yet is a Reject too.
+Every shot is Pass or Reject, and the camera's verdict is final (D-093): nobody changes it
+afterwards. A shot with a defect class the system doesn't know yet is a Reject too.
 
 Put the word on every bin as well as the colour: some people can't tell red from green.
 
 ## One-time setup
 
-1. **Allow the operator.** The Floor Manager opens **Camera → Camera operators** and clicks
-   **Allow capturing** for the Shoe Constructor who runs the station. (The System Admin can do the
-   same under Users → More actions.) The Quality Inspector and the Floor Manager can always capture.
-2. **Open the site on the station.** Use the site's `https://` address from the Cloudflare Tunnel
+1. **Give camera access.** The System Admin opens **Users**, finds the Shoe Constructor and picks
+   **More actions → Give camera access**. Only the System Admin can; the Quality Inspector and the
+   Floor Manager don't capture.
+2. **Open the site on the phone.** Use the site's `https://` address from the Cloudflare Tunnel
    (README, "Reach the site with Cloudflare Tunnel"). A plain `http://` address to the main PC
-   won't open the camera.
-3. **Sign in** as the operator and open **Capture** (`…/camera/capture`). Allow the camera when the
-   browser asks. If there are several cameras, pick the fixed one under **Camera**.
-4. **Press Floor view.** The page fills the screen with the live camera. The station remembers it:
-   next time Capture opens straight in Floor view (press **F11** for full screen).
-5. **Test capturing:** with Floor view open, press **Space** once. You should see "Checking…", then a
-   verdict.
+   won't open the camera. Add it to the home screen to open it like an app.
+3. **Sign in.** A constructor lands straight on **Capture**, their only page. Allow the camera when
+   the phone asks. If there are several cameras, pick the back one under **Camera**.
+4. **Put the phone on the stand** at the fixed spot, the Capture button within reach.
 
-Use the station PC only for this, so the Capture page keeps the keyboard focus for Space.
+## Each roll
 
-## Each piece
+1. **Start a roll.** Choose the **Supplier** (required) and type the number on the supplier's tag
+   under **Roll code** (optional), then **Start roll**. The roll gets a code like `R-2026-0012`.
+2. Check the large line above the camera: "Roll R-2026-0012 · Marikina Leather Trading · 0 shots".
+   That is where the next shot goes. With several rolls open, choose the right one under **Roll**.
+3. **Capture** (or Space on a keyboard). Wait for the colour, about a second: green Pass or red
+   Reject, with each defect marked Usable or Not accepted. Put that part in the bin of its colour.
+4. Move the roll on, edge to edge, and capture again until all of it is in.
+5. **Finish roll.** The app asks "Is all of R-2026-0012 scanned?" with the number of shots. A
+   finished roll can't take more shots.
 
-1. Place the piece flat under the camera.
-2. Press **Space**.
-3. Wait for the colour (about a second): the frame and the band at the bottom turn green or red,
-   with the word and the section number.
-4. Put the piece in the bin of that colour.
+Started a roll by mistake? While it has no shots, **Cancel roll** at Capture. A roll with shots is
+cancelled only by the Floor Manager, with a reason, from Reports → Rolls. Nothing is deleted.
 
-The verdict stays on screen until the next capture, so a late glance still shows the right bin.
+The Floor Manager reads every roll, its shots and its rejects in **Reports → Rolls**.
+
+## Floor view (a station PC)
+
+On a PC, **Floor view** fills the screen with the live camera and shows the chosen roll. Press
+**Space** to capture; the frame and the band turn green or red with the shot number, and stay until
+the next capture. The PC remembers Floor view (press **F11** for full screen). **Esc** leaves it;
+choose or start a roll on the normal page first.
 
 ## When something goes wrong
 
-The band at the bottom says what happened and what to do.
+The page (or the band in Floor view) says what happened and what to do.
 
-| The band says                                     | What to do                                                                         |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| "Capture is off. No batch is at Preparation."     | Ask the Floor Manager to start the batch; the screen picks it up within 20 seconds |
-| "Not sent: the server didn't answer."             | Check the network, then press **Send again**. Nothing is saved twice               |
-| "Another app is using this camera."               | Close the other app, then press **Try again**                                      |
-| "The camera only works on a secure address."      | Open the site through its `https://` tunnel address                                |
-| "The camera model isn't installed on the server." | Tell whoever looks after the main PC (the model files go in `cv/models/`)          |
-
-Esc leaves Floor view and shows the normal Capture page.
+| The page says                                               | What to do                                                          |
+| ----------------------------------------------------------- | ------------------------------------------------------------------- |
+| "Ask the System Admin for camera access."                   | The System Admin gives access under Users → More actions            |
+| "Choose the roll this shot belongs to."                     | Pick the roll under **Roll**, or **Start another roll**             |
+| "R-… was finished or cancelled, so this shot wasn't saved." | Choose another roll, or start one                                   |
+| "Not sent: the server didn't answer."                       | Check the Wi-Fi, then press **Send again**. Nothing is saved twice  |
+| "Another app is using this camera."                         | Close the other app, then press **Try again**                       |
+| "The camera only works on a secure address."                | Open the site through its `https://` tunnel address                 |
+| "The camera model isn't installed on the server."           | Tell whoever looks after the main PC (the files go in `cv/models/`) |

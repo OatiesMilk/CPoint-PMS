@@ -24,7 +24,7 @@ export type SessionUser = {
   role: Role;
   /** Set by an admin reset or for a new account: the user must choose a password first (D-024). */
   mustChangePassword: boolean;
-  /** May capture at the camera (D-075). Read from the database on every request, like the role. */
+  /** Has camera access (D-075, Phase 26). Read from the database on every request, like the role. */
   canCapture: boolean;
 };
 

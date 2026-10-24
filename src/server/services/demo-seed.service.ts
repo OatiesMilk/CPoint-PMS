@@ -11,7 +11,7 @@ import {
 } from "@/server/lib/leather-scan";
 import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import { logger } from "@/server/lib/logger";
-import { countBatches } from "@/server/models/batch.model";
+import { countRolls } from "@/server/models/roll.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
 import {
   ensureSupplier,
@@ -21,7 +21,7 @@ import {
 } from "@/server/models/reference-data.model";
 import { findUserByEmail } from "@/server/models/user.model";
 import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
-import { cancelBatch, createBatch, transitionBatchStage } from "./batch.service";
+import { cancelRoll, finishRoll, startRoll } from "./roll.service";
 import { setCameraOperator } from "./camera.service";
 import { saveCheckIn, saveQuotas } from "./production.service";
 import { createItem, recordMovement } from "./inventory.service";
@@ -32,9 +32,9 @@ import { ingestScan } from "./scan-ingest.service";
  * real services, each with its own `now`, so rolls, scans, the stock ledger, attendance,
  * check-ins and audit rows all agree. Every section is Pass or Reject and nobody changes it
  * (D-093); the newest roll's last section always shows an unknown class (the random mix adds a few
- * more), rejected and listed in Settings (A-12). Scans are Capture page captures (the
- * website camera, D-069) by the QI, or by the Floor Manager on the day the QI is absent. Opt-in
- * (SEED_DEMO_WEEK or `npm run demo:seed`), and only on a database with no batches. The same seed
+ * more), rejected and listed in Settings (A-12). Rolls are started, captured and finished on the
+ * Capture page by demo constructors the System Admin allowed (Phase 26, D-095). Opt-in
+ * (SEED_DEMO_WEEK or `npm run demo:seed`), and only on a database with no rolls. The same seed
  * gives the same week.
  */
 
@@ -52,19 +52,30 @@ export function mulberry32(seed: number): Random {
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
 
-/** Hours a roll spends at Preparation, from start to Finish roll (D-082). */
+/** Hours a roll is captured for, from Start roll to Finish roll. */
 export const PREPARATION_HOURS: [number, number] = [2, 3];
 
-/** Sections the camera checks per roll: about 10 pieces, as the Finish roll hint says (D-082). */
+/** Shots per demo roll (D-090). Real rolls vary: a constructor finishes when all of it is in. */
 export const SECTIONS_PER_ROLL = 10;
+
+/**
+ * The demo constructors who capture (Phase 26): Noel Manalo and three of the twelve, given camera
+ * access by the System Admin. They are never marked absent on a day they capture.
+ */
+export const DEMO_CAPTURERS = [
+  "constructor@cpoint.local",
+  "arnel.bautista@cpoint.local",
+  "jocelyn.reyes@cpoint.local",
+  "rommel.delacruz@cpoint.local",
+] as const;
 
 /** The model the website camera runs (cv/MODEL_CARD.md), named on every demo scan. */
 export const DEMO_MODEL_VERSION = "yolo-v1-1d729fb0";
 
 /**
  * Constructors absent on the demo week's working days before today, oldest first (D-081). On the
- * fourth day (none absent) the Quality Inspector is absent instead, so the Floor Manager captures,
- * and enters that day's check-ins (D-088).
+ * fourth day (none absent) the Quality Inspector is absent instead, so the Floor Manager enters that
+ * day's check-ins (D-088).
  */
 const ABSENT = [0, 1, 5, 0, 3, 2];
 const QI_ABSENT_INDEX = 3;
@@ -129,7 +140,7 @@ export const DEMO_INVENTORY = [
 export type DemoSeedResult =
   | {
       seeded: true;
-      batches: number;
+      rolls: number;
       scans: number;
       attendanceDays: number;
       checkIns: number;
@@ -148,7 +159,7 @@ export async function seedDemoWeek(
   const past = (t: Date) => t.getTime() <= now.getTime() - MINUTE;
   const plus = (t: Date, ms: number) => new Date(t.getTime() + ms);
 
-  if ((await countBatches()) > 0) return { seeded: false, reason: "batches already exist" };
+  if ((await countRolls()) > 0) return { seeded: false, reason: "rolls already exist" };
   const [fm, qi, admin] = await Promise.all([
     findUserByEmail("manager@cpoint.local"),
     findUserByEmail("inspector@cpoint.local"),
@@ -169,6 +180,18 @@ export async function seedDemoWeek(
   );
   const suppliers = demoSuppliers.length > 0 ? demoSuppliers : activeSuppliers;
   if (shoeTypes.length === 0) return { seeded: false, reason: "no shoe types" };
+  if (suppliers.length === 0) return { seeded: false, reason: "no active suppliers" };
+  // The System Admin lets the capturers capture (C-23); each gets it once, as in Users.
+  const capturers = [];
+  for (const email of DEMO_CAPTURERS) {
+    const person = await findUserByEmail(email);
+    if (!person?.isActive) continue;
+    if (!person.canCapture) await setCameraOperator(person.id, true, admin);
+    capturers.push(person);
+  }
+  if (capturers.length === 0)
+    return { seeded: false, reason: "demo constructors are missing (set SEED_DEMO_USERS=true)" };
+  const capturerIds = new Set(capturers.map((c) => c.id));
   // The week's scans show the defect types active in Settings, as the camera's model would.
   const classes = defectTypes
     .filter((t) => t.isActive)
@@ -193,16 +216,10 @@ export async function seedDemoWeek(
     quantity: number,
     reason: string,
     t: Date,
-    batchId?: string,
   ) => {
     if (!past(t)) return;
     try {
-      await recordMovement(
-        itemIds.get(sku)!,
-        type === "IN" ? { type, quantity, reason } : { type, quantity, reason, batchId },
-        fm,
-        t,
-      );
+      await recordMovement(itemIds.get(sku)!, { type, quantity, reason }, fm, t);
     } catch {
       // Not enough on the shelf in this replay: skip, as a real floor would wait for a delivery.
     }
@@ -213,7 +230,8 @@ export async function seedDemoWeek(
   await stock("TH-001", "IN", 10, "Delivery received", at(addDays(firstDay, 2), 14));
   await stock("AD-001", "IN", 3, "Delivery received", at(addDays(firstDay, 3), 14));
 
-  // ── rolls: two a working day (Mon–Sat), each started, scanned at Preparation and finished ──
+  // ── rolls: two a working day (Mon–Sat), each started, captured shot by shot and finished at
+  //    Capture by a demo constructor (Phase 26) ──
   const workingDays: string[] = [];
   for (let d = firstDay; d <= today; d = addDays(d, 1)) {
     if (new Date(`${d}T00:00:00Z`).getUTCDay() !== 0) workingDays.push(d);
@@ -223,12 +241,12 @@ export async function seedDemoWeek(
   const qiAwayDay: string | undefined =
     attendanceDays[QI_ABSENT_INDEX - (ABSENT.length - attendanceDays.length)];
   let qiMarkedAbsent = false;
-  let batches = 0;
+  let rolls = 0;
   let scans = 0;
   let index = 0;
 
   const SLOTS = [8, 10.5];
-  // The last slot whose batch has surely started (a start lands up to 0.3 h after the slot).
+  // The last slot whose roll has surely started (a start lands up to 0.3 h after the slot).
   const newestSlot = workingDays
     .flatMap((day) => SLOTS.map((startHour) => ({ day, startHour })))
     .findLast(({ day, startHour }) => past(at(day, startHour + 0.3)));
@@ -236,61 +254,35 @@ export async function seedDemoWeek(
   for (const day of workingDays) {
     for (const startHour of SLOTS) {
       index += 1;
-      // The newest batch to reach the camera; its last section shows an unknown class (A-12).
+      // The newest roll to reach the camera; its last section shows an unknown class (A-12).
       const newest = day === newestSlot?.day && startHour === newestSlot.startHour;
       const school = index % 3 !== 0;
-      const shoeType = school ? shoeTypes[0] : (shoeTypes[1] ?? shoeTypes[0]);
-      const created = at(day, startHour - between(0.5, 1));
+      const capturer = capturers[index % capturers.length];
+      const created = at(day, startHour + between(0, 0.3));
       if (!past(created)) continue;
       // Rolls alternate between the two tanneries; every sixth comes from the fallback store. The
       // first demo supplier's leather has more defects.
       const supplier =
-        suppliers.length === 0
-          ? undefined
-          : index % 6 === 0 && suppliers.length > 2
-            ? suppliers[2]
-            : suppliers[index % Math.min(2, suppliers.length)];
-      const worseLeather = supplier?.name === DEMO_SUPPLIERS[0].name;
-      const batch = await createBatch(
+        index % 6 === 0 && suppliers.length > 2
+          ? suppliers[2]
+          : suppliers[index % Math.min(2, suppliers.length)];
+      const worseLeather = supplier.name === DEMO_SUPPLIERS[0].name;
+      const roll = await startRoll(
         {
-          rollCode: `LR-${day.slice(2).replaceAll("-", "")}-${String(index).padStart(2, "0")}`,
-          shoeTypeId: shoeType.id,
-          supplierId: supplier?.id,
-          receivedAt: addDays(day, -1),
-          notes: undefined,
-          rollItemId: itemIds.get(school ? "LR-001" : "LR-002"),
+          supplierId: supplier.id,
+          tagCode: `LR-${day.slice(2).replaceAll("-", "")}-${String(index).padStart(2, "0")}`,
         },
-        fm,
+        capturer,
         created,
-      ).catch(() =>
-        // No roll left on the shelf: register the batch without taking one.
-        createBatch(
-          {
-            rollCode: `LR-${day.slice(2).replaceAll("-", "")}-${String(index).padStart(2, "0")}`,
-            shoeTypeId: shoeType.id,
-            supplierId: supplier?.id,
-            receivedAt: addDays(day, -1),
-            notes: undefined,
-            rollItemId: undefined,
-          },
-          fm,
-          created,
-        ),
       );
-      batches += 1;
-      let t = at(day, startHour + between(0, 0.3));
-      if (!past(t)) continue;
-      await transitionBatchStage(
-        batch.id,
-        { action: "start", expectedStage: "PREPARATION" },
-        fm,
-        t,
-      );
+      rolls += 1;
+      // The leather roll leaves the shelf when it is laid out for capture (a plain OUT, A-22).
+      await stock(school ? "LR-001" : "LR-002", "OUT", 1, `Laid out as ${roll.code}`, created);
+      let t = created;
 
-      // Preparation: the camera checks each section before cutting, from the Capture page.
+      // Shot by shot from the Capture page, edge to edge.
       const prep = preparationMs(random);
       const sections = SECTIONS_PER_ROLL;
-      const capturer = day === qiAwayDay ? fm : qi;
       const sectionAt = (i: number) => plus(t, ((i + 0.5) * prep) / sections);
       let captured = 0;
       while (captured < sections && past(sectionAt(captured))) captured += 1;
@@ -311,10 +303,10 @@ export async function seedDemoWeek(
           {
             image: { bytes: new Uint8Array(image), type: { mime: "image/jpeg", ext: "jpg" } },
             detections,
-            source: "WEBCAM",
+            source: "PHONE",
             modelVersion: DEMO_MODEL_VERSION,
             capturedAt: ts,
-            batchId: batch.id,
+            rollId: roll.id,
           },
           { kind: "website", userId: capturer.id },
           ts,
@@ -323,67 +315,36 @@ export async function seedDemoWeek(
       }
       t = plus(t, prep);
 
-      // The roll is used up: Finish roll (D-082). What the line used for it (thread, cement,
-      // nails) is taken from stock the same afternoon, so the ledger still moves. The newest roll
-      // stays at Preparation, so the camera has a roll to feed and its page offers Finish roll.
-      if (past(t) && !newest) {
-        await transitionBatchStage(
-          batch.id,
-          { action: "finish", expectedStage: "PREPARATION" },
-          fm,
-          t,
-        );
-        await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE), batch.id);
-        await stock("AD-001", "OUT", 0.5, "Soling", plus(t, 20 * MINUTE), batch.id);
-        await stock("NL-001", "OUT", 1, "Soling", plus(t, 25 * MINUTE), batch.id);
+      // All of it is in: Finish roll at Capture. What the line used (thread, cement, nails) is
+      // taken from stock the same afternoon, so the ledger still moves. The newest roll stays open,
+      // so Capture opens on a roll.
+      if (past(t) && !newest && captured > 0) {
+        await finishRoll(roll.id, capturer, t);
+        await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE));
+        await stock("AD-001", "OUT", 0.5, "Soling", plus(t, 20 * MINUTE));
+        await stock("NL-001", "OUT", 1, "Soling", plus(t, 25 * MINUTE));
       }
-      logger.info({ batch: batch.code }, "Demo week: roll replayed");
+      logger.info({ roll: roll.code }, "Demo week: roll replayed");
     }
   }
 
-  // ── one batch cancelled before production (its roll goes back on the shelf) ──
+  // ── one roll started by mistake with the wrong supplier: the Floor Manager cancels it with a
+  //    reason (Phase 26); it has no shots ──
   const cancelDay = workingDays[Math.max(0, workingDays.length - 3)];
   const cancelCreated = at(cancelDay, 13);
   if (past(plus(cancelCreated, 2 * HOUR))) {
-    const cancelled = await createBatch(
-      {
-        rollCode: `LR-${cancelDay.slice(2).replaceAll("-", "")}-X`,
-        shoeTypeId: shoeTypes[0].id,
-        supplierId: suppliers[0]?.id,
-        receivedAt: cancelDay,
-        notes: undefined,
-        rollItemId: itemIds.get("LR-001"),
-      },
-      fm,
+    const cancelled = await startRoll(
+      { supplierId: suppliers[0].id, tagCode: `LR-${cancelDay.slice(2).replaceAll("-", "")}-X` },
+      capturers[0],
       cancelCreated,
-    ).catch(() => null);
-    if (cancelled) {
-      batches += 1;
-      await cancelBatch(
-        cancelled.id,
-        { reason: "Order postponed by the client; roll back to storage." },
-        fm,
-        plus(cancelCreated, 2 * HOUR),
-      );
-    }
-  }
-
-  // ── tomorrow's roll, registered but not started ──
-  const plannedAt = new Date(Math.min(at(today, 15).getTime(), now.getTime() - 30 * MINUTE));
-  if (plannedAt.getTime() > at(today, 6).getTime()) {
-    await createBatch(
-      {
-        rollCode: `LR-${today.slice(2).replaceAll("-", "")}-P`,
-        shoeTypeId: shoeTypes[0].id,
-        supplierId: suppliers[0]?.id,
-        receivedAt: today,
-        notes: "For tomorrow's first shift.",
-        rollItemId: undefined,
-      },
-      fm,
-      plannedAt,
     );
-    batches += 1;
+    rolls += 1;
+    await cancelRoll(
+      cancelled.id,
+      { by: "manager", reason: "Started with the wrong supplier; captured again as a new roll." },
+      fm,
+      plus(cancelCreated, 2 * HOUR),
+    );
   }
 
   // ── two more deliveries: thread and tacks on the second working day, leather and tacks on the
@@ -398,11 +359,6 @@ export async function seedDemoWeek(
   await stock("LR-001", "IN", 2, leather, at(workingDay(3), 11));
   await stock("NL-001", "IN", 5, leather, at(workingDay(3), 11));
 
-  // ── the demo constructor may capture at the camera (D-075), as the Floor Manager allowed ──
-  const demoConstructor = await findUserByEmail("constructor@cpoint.local");
-  if (demoConstructor?.isActive && !demoConstructor.canCapture)
-    await setCameraOperator(demoConstructor.id, true, fm).catch(() => undefined);
-
   // ── attendance (D-077, D-081): the past working days, taken by the Floor Manager ──
   const attendanceSaved = await seedAttendance();
 
@@ -411,7 +367,7 @@ export async function seedDemoWeek(
 
   const result: DemoSeedResult = {
     seeded: true,
-    batches,
+    rolls,
     scans,
     attendanceDays: attendanceSaved,
     checkIns,
@@ -440,8 +396,10 @@ export async function seedDemoWeek(
       const constructors = view.roster.filter((p) => p.role === "SHOE_CONSTRUCTOR");
       if (constructors.length === 0) continue;
       const absent = new Set<string>();
-      while (absent.size < Math.min(pattern[i], constructors.length))
-        absent.add(pick(constructors).id);
+      // The capturers are in every day they capture, so the log book and the rolls agree.
+      const mayBeAbsent = constructors.filter((p) => !capturerIds.has(p.id));
+      while (absent.size < Math.min(pattern[i], mayBeAbsent.length))
+        absent.add(pick(mayBeAbsent).id);
       if (day === qiAwayDay && view.roster.some((p) => p.id === qi!.id)) {
         absent.add(qi!.id);
         qiMarkedAbsent = true;

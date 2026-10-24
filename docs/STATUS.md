@@ -3,23 +3,23 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-24
-**Branch:** `main` has Phase 25 (#21) and the QA run 1 fixes (#22), CI green.
-`fix/phase-25-qa-run2` (pushed) has the run 2 test fixes; Dylan adds the run 3 report and these
-doc updates, then opens the PR.
+**Last updated:** 2026-10-24 (Phase 26 built)
+**Branch:** `main` has Phase 25 and its QA fixes. Phase 26 is **uncommitted** in
+`C:\dev\CPoint-PMS`; Dylan commits it after Codex QA passes.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 25, Pass or Reject (D-093, D-094). **QA PASSED** (run 3,
-`qa/reports/2026-10-24-phase-25-run3.md`: production spec 5 of 5 three times in a row, full e2e 75
-passed, 0 failed, 1 skipped). Run 2: R3 to R5 passed (Floor view's early Space,
-the CSV header, the 404s and reports); the D-088 check-in test matched old rows by a fixed note, and
-axe caught a save toast mid-fade. Run 1: 22 of 24 scenarios, e2e 71 passed, 1 failed. No app
-fault in the Pass or Reject rule, the removals, Settings or reports. Migration `pass_or_reject` is
-applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
-**Then: Phases 26 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
+**Current phase:** Phase 26, capture on the constructors' own phones (D-095, D-096). **QA run 1
+FAILED** (`qa/reports/2026-10-24-phase-26-phone-capture.md`: 25 of 29, e2e 57 passed, 18 failed);
+the fixes are in, **run 2 next** (`qa/CODEX_PROMPT_PHASE_26_RUN2.md`). Run 1's faults: the desktop
+sidebar was hidden at every width over 640 px (13 of the e2e failures), the camera-access 403 had
+the generic message, no link from a scan to its roll's scans, and an always-empty Roll column in
+Inventory; three e2e tests used wrong locators or ignored the CSV's byte-order mark. `npm run
+check` passed after the fixes (506 unit tests). Migration `rolls_at_capture` is applied to the dev
+database. Phase 25 passed QA (run 3) on 2026-10-24.
+**Then: Phases 27 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
 `docs/prompts/factory-visit-changes.md`, C-1 to C-41).
-**Overall:** 26 phases built (0 to 25); 6 planned (26 to 31, Phase 30 in two parts)
+**Overall:** 27 phases built (0 to 26); 5 planned (27 to 31, Phase 30 in two parts)
 
 ## Phase progress
 
@@ -54,7 +54,8 @@ applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 - [x] 24. Remove Material Requests and Procurement (QA passed, 18 of 18)
 - [x] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
       (QA passed, run 3)
-- [ ] 26. Capture on the constructors' own phones; rolls start and finish there
+- [x] 26. Capture on the constructors' own phones; rolls start and finish there (QA run 1 failed;
+      fixed, run 2 next)
 - [ ] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
 - [ ] 28. Each role sees only its modules; demo sign-in and reset on the login page
 - [ ] 29. Inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
@@ -63,6 +64,26 @@ applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 
 ## What works right now
 
+- **Rolls at Capture (Phase 26, D-095, D-096):**
+  - `Batch` is `Roll` in the code (tables keep their names). A roll is Open, Finished or
+    Cancelled; new codes `R-YYYY-NNNN`, older rolls keep `B-`; the supplier's code is the
+    optional tag. No stages, quota, notes or shoe type (migration `rolls_at_capture`).
+  - **Capture** (`/camera/capture`) is the Shoe Constructor's home and only page, for those the
+    **System Admin** gives camera access (Users → More actions). The QI, FM and Admin don't
+    capture. Start roll (supplier required), the **Roll** dropdown over every open roll,
+    **Finish roll** (at least one shot), **Cancel roll** for an empty roll. A shot to a closed roll
+    is `409 ROLL_CLOSED`, none chosen `409 NO_ROLL_CHOSEN`, both before the model runs.
+  - Phone layout (D-096): below 640 px a top bar replaces the sidebar; Capture fits 390 × 844 with
+    a bottom Capture button. Other pages stay desktop first.
+  - **Reports → Rolls** (FM): every roll with supplier, start, finish, shots, passed, rejected (for
+    salvage) and status; filters; a roll's page with its shots and claim sheet; **Cancel** any open
+    roll with a reason (nothing deleted). `/batches`, `/constructor`, `/api/v1/batches/**` are 404;
+    Inventory has no "For roll".
+  - Devices and the simulator send `rollId` and go to the roll open longest (`409 NO_OPEN_ROLL`
+    with none). Demo week: four allowed constructors capture on phones (PHONE), the newest roll
+    stays open, one roll is cancelled by the FM.
+  - Where the bullets below mention batches, Start or Finish roll by the FM, the operators panel or
+    the QI and FM capturing, Phase 26 replaced them.
 - **Pass or Reject (Phase 25, D-093, D-094):**
   - every section is **Pass** or **Reject** and the camera's verdict is final: no review, no
     override, no correction (C-21). `aiVerdict` and `finalVerdict` are both kept and always equal;
@@ -219,7 +240,16 @@ applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 - **Quality:**
   - 519 unit tests pass (Vitest; 588 before Phase 25, the difference is the deleted review, repair
     and salvage tests; 716 before Phase 24), plus 81 model-toolkit tests (pytest; they also pass
-    without OpenCV or torch, as in CI). 521 since the Phase 25 QA fixes.
+    without OpenCV or torch, as in CI). 521 since the Phase 25 QA fixes; 506 since Phase 26 (the
+    stage-machine tests went, the roll tests came).
+  - Phase 26 (Codex, 2026-10-24, run 1): FAIL, 25 of 29 scenarios, e2e 57 passed, 18 failed, 1
+    skipped. App faults: the desktop sidebar had `hidden` without `sm:flex` (13 e2e failures and S1);
+    the camera-access 403 lacked "Only the System Admin chooses who can capture."; no link from a
+    scan to its roll's scans; Inventory's Roll column always empty after a reset (now shown only
+    when a row has a roll). Test faults: an ambiguous `getByLabel('Roll')`, a "Shots" table name
+    that only exists when the table scrolls, the CSV's BOM. Dev data: only `constructor@` had
+    camera access (cause unknown; run 2 collects the user rows). All fixed except the data
+    question; `npm run check` passed (506).
   - Phase 25 (Codex, 2026-10-24): runs 2 and 3 after the fixes. Run 2 FAIL, two test faults in
     `production.spec.ts` (a fixed D-088 note; axe on a fading toast), fixed. Run 3 **PASS**: the
     production spec 5 of 5 three times, e2e 75 passed, 0 failed, 1 skipped.
@@ -302,18 +332,19 @@ applied to the dev database. Phase 24 passed QA (18 of 18) on 2026-10-23.
 
 ## Next step (exact)
 
-1. Dylan: commit the run 3 report and the doc updates on `fix/phase-25-qa-run2` (git commands in
-   this session's reply), push and open the PR (D-032).
-2. Dylan: delete the two QA folders Codex couldn't remove
-   (`%TEMP%\cpoint-qa-uploads-phase25-…`).
-3. Back up the dev database, then `npm run demo:reset -- --yes` for a fresh demo week.
-4. Phase 26 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 26. Stop
+1. Codex QA run 2: paste `qa/CODEX_PROMPT_PHASE_26_RUN2.md` (no reset needed; the migration is
+   applied).
+2. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` (Codex's cleanup was blocked), and the two
+   Phase 25 folders if still there.
+3. After PASS, Dylan commits Phase 26 on a new branch from `main`, pushes and opens the PR
+   (D-032). Claude gives the git commands when asked.
+4. Phase 27 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 27. Stop
    for my approval before writing code."
 5. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
    an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the
    "Simulator" token first (it was pasted in chat).
-6. Optional (Dylan's call): delete the backups in `storage/backups/` and the old `certs/` files;
-   `docker image prune -a -f` frees about 8.4 GB of unused Supabase images.
+6. Optional (Dylan's call): delete the two Phase 25 QA folders in `%TEMP%`, the backups in
+   `storage/backups/` and the old `certs/` files; `docker image prune -a -f` frees about 8.4 GB.
 
 Later:
 
@@ -327,6 +358,22 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-10-24, Phase 26 plan): several rolls open at once with a Roll dropdown at
+  Capture; a roll finishes only at Capture once fully scanned; the FM cancels any open roll with a
+  reason, anyone with camera access an empty one; no stages; the supplier is required; Capture is
+  the constructor's home (D-095).
+- Decided (Dylan, 2026-10-24, D-095): the Roll dropdown lists every open roll, not only the person's own, and
+  starts on the one this browser last used (else the newest this person started, else the only
+  one).
+- Decided (Dylan, 2026-10-24, D-095): a cancelled roll's shots are left out of the reports.
+- Decided (Dylan, 2026-10-24, D-095): new roll codes are `R-YYYY-NNNN`; older rolls keep `B-`.
+- ASSUMPTION (D-095): the device and simulator payload's `batchId` is now `rollId`, and without one
+  a scan goes to the roll open longest; the scans filter is `?roll=` (old `?batch=` links don't
+  filter).
+- ASSUMPTION (A-10): old rolls are converted, Planned and In progress → Open, Completed →
+  Finished; who started them stays the FM who created them.
+- ASSUMPTION: the demo week's leather OUT on each roll reads "Laid out as R-…" (demo data only;
+  Phase 29 replaces stock with counts).
 - Decided (Dylan, 2026-10-23, the factory visit; brief C-1 to C-41): the five modules go, Pass or
   Reject only and the camera's verdict is final, allowed constructors capture on their own phones,
   a batch is a check-in interval that carries on after lunch, failed pairs are recorded, stock is
@@ -344,8 +391,7 @@ Later:
   present; with a QI present, or attendance not taken, only the QI can. Tell CPoint.
 - ASSUMPTION (D-084): Late starts 30 minutes after a check-in's time; a check-in can be entered
   until midnight and corrected the same day only.
-- ASSUMPTION (D-082): a roll gives about 10 pieces (the Finish hint). Phase 26 removes the hint:
-  roll sizes vary and a section is a shot (C-33).
+- Closed (D-095, C-33): the 10-pieces hint is gone; roll sizes vary and a section is a shot.
 - ASSUMPTION (D-083): Monday to Saturday are working days for production.
 
 - Closed (D-078; Dylan, 2026-10-23, C-38): every Shoe Constructor gets an account from the System

@@ -17,13 +17,11 @@ const SC: Role = "SHOE_CONSTRUCTOR";
 
 // Mirrors the roles × modules table in docs/prompts/system-rebuild.md. Change both together.
 const EXPECTED: Record<Permission, Role[]> = {
-  "batch:read": [FM, QI, AD],
-  "batch:manage": [FM],
-  "batch:finish": [FM, QI],
+  "roll:read": [FM],
+  "roll:manage": [FM],
   "camera:view": [FM, QI, AD],
-  "camera:manage": [FM, QI],
-  "camera:capture": [FM, QI],
-  "camera:operators": [FM, AD],
+  "camera:capture": [SC],
+  "camera:operators": [AD],
   "scan:read": [FM, QI, AD],
   "inventory:read": [FM, AD],
   "inventory:manage": [FM],
@@ -54,9 +52,9 @@ describe("permissions matrix", () => {
     }
   }
 
-  it("gives the Shoe Constructor no permission in the matrix: Capture comes from the switch (D-075, D-091)", () => {
+  it("gives the Shoe Constructor only Capture, and only with camera access (D-075, Phase 26)", () => {
     const granted = Object.keys(PERMISSIONS).filter((p) => can(SC, p as Permission));
-    expect(granted).toEqual([]);
+    expect(granted).toEqual(["camera:capture"]);
   });
 });
 
@@ -77,10 +75,12 @@ describe("production access (Phase 23, Dylan 3B)", () => {
     expect(can(SC, "production:read")).toBe(false);
   });
 
-  it("lets the QI finish a roll but not start, edit or cancel one (D-082)", () => {
-    expect(can(QI, "batch:finish")).toBe(true);
-    expect(can(QI, "batch:manage")).toBe(false);
-    expect(can(AD, "batch:finish")).toBe(false);
+  it("gives rolls in Reports to the Floor Manager only (Phase 26)", () => {
+    expect(can(FM, "roll:read")).toBe(true);
+    expect(can(QI, "roll:read")).toBe(false);
+    expect(can(AD, "roll:read")).toBe(false);
+    for (const gone of ["roll:finish", "camera:manage"])
+      expect(Object.keys(PERMISSIONS)).not.toContain(gone);
   });
 });
 
@@ -93,27 +93,16 @@ describe("navigationFor", () => {
       "Overview",
       "Production",
       "Attendance",
-      "Batches",
       "Inventory",
       "Camera",
-      "Capture",
       "Scans",
       "Reports",
     ]);
-    expect(labels(QI)).toEqual([
-      "Overview",
-      "Production",
-      "Batches",
-      "Camera",
-      "Capture",
-      "Scans",
-      "Reports",
-    ]);
+    expect(labels(QI)).toEqual(["Overview", "Production", "Camera", "Scans", "Reports"]);
     expect(labels(AD)).toEqual([
       "Overview",
       "Production",
       "Attendance",
-      "Batches",
       "Inventory",
       "Camera",
       "Scans",
@@ -122,19 +111,15 @@ describe("navigationFor", () => {
       "API tokens",
       "Audit log",
     ]);
-    // A constructor without camera access has only Home (D-091).
-    expect(labels(SC)).toEqual(["Home"]);
   });
 
-  it("adds Capture for a constructor allowed to capture, and only Capture (D-075)", () => {
-    const items = navigationFor({ role: SC, canCapture: true }).flatMap((s) =>
-      s.items.map((i) => i.label),
-    );
-    expect(items).toEqual(["Home", "Capture"]);
-    // The switch means nothing for other roles: an admin never gets Capture.
-    expect(
-      navigationFor({ role: AD, canCapture: true }).flatMap((s) => s.items.map((i) => i.label)),
-    ).not.toContain("Capture");
+  it("gives a constructor one page, Capture, which is also their home (Phase 26)", () => {
+    for (const canCapture of [false, true]) {
+      const items = navigationFor({ role: SC, canCapture }).flatMap((s) => s.items);
+      expect(items.map((i) => [i.label, i.href])).toEqual([["Capture", "/camera/capture"]]);
+    }
+    // Nobody else captures, whatever the switch says.
+    for (const role of [FM, QI, AD]) expect(labels(role)).not.toContain("Capture");
   });
 
   it("links each role's first item to its own home", () => {
@@ -156,18 +141,16 @@ describe("the camera's verdict is final (D-093)", () => {
   });
 });
 
-describe("who may capture at the camera (D-075)", () => {
-  it("lets the QI and the Floor Manager capture whatever the switch says", () => {
-    expect(canCaptureFor({ role: QI, canCapture: false })).toBe(true);
-    expect(canCaptureFor({ role: FM, canCapture: false })).toBe(true);
-  });
-
-  it("lets a Shoe Constructor capture only when allowed", () => {
+describe("who may capture (D-075, Phase 26)", () => {
+  it("lets a Shoe Constructor capture only with camera access", () => {
     expect(canCaptureFor({ role: SC, canCapture: false })).toBe(false);
     expect(canCaptureFor({ role: SC, canCapture: true })).toBe(true);
   });
 
-  it("never lets the System Admin capture, even with the switch on", () => {
-    expect(canCaptureFor({ role: AD, canCapture: true })).toBe(false);
+  it("never lets the QI, the Floor Manager or the System Admin capture (C-18)", () => {
+    for (const role of [FM, QI, AD]) {
+      expect(canCaptureFor({ role, canCapture: true })).toBe(false);
+      expect(canCaptureFor({ role, canCapture: false })).toBe(false);
+    }
   });
 });

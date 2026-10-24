@@ -8,7 +8,7 @@ const model = {
 };
 const env = { NODE_ENV: "development", BOOTSTRAP_ADMIN_EMAIL: "Owner@CPoint.local" };
 const recordAudit = vi.fn();
-const seedDemoWeek = vi.fn(async () => ({ seeded: true, batches: 14, scans: 290 }));
+const seedDemoWeek = vi.fn(async () => ({ seeded: true, rolls: 14, scans: 290 }));
 const ensureDemoInventory = vi.fn();
 const ensureDemoConstructors = vi.fn();
 const clearUploadFolders = vi.fn();

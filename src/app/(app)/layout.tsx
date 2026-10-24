@@ -8,11 +8,12 @@ import { signOutAction } from "./actions";
 
 // Everything inside (app) requires a signed-in, active user. Desktop first; the layout adapts to narrower windows (D-034)
 // and pages use the full width beside the sidebar (D-046). Forms and running text keep their own widths.
+// Below 640 px the sidebar becomes a top bar, for Capture on a phone (Phase 26, D-096).
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col sm:flex-row">
       {/* Printing (a claim sheet, Phase 20) leaves the navigation out. */}
       <div className="contents print:hidden">
         <Sidebar

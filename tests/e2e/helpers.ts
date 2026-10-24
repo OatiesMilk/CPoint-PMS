@@ -6,7 +6,7 @@ export const ACCOUNTS = {
   manager: { email: "manager@cpoint.local", home: "/floor-manager" },
   inspector: { email: "inspector@cpoint.local", home: "/quality-inspector" },
   admin: { email: "admin@cpoint.local", home: "/admin" },
-  constructor: { email: "constructor@cpoint.local", home: "/constructor" },
+  constructor: { email: "constructor@cpoint.local", home: "/camera/capture" },
 } as const;
 
 export async function signIn(page: Page, email: string, password = DEMO_PASSWORD) {

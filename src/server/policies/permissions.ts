@@ -5,15 +5,16 @@ import type { Role } from "@/lib/domain";
  * Pure and dependency-free so it can be unit-tested and used to build navigation.
  */
 export const PERMISSIONS = {
-  "batch:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
-  "batch:manage": ["FLOOR_MANAGER"],
-  // Finish a roll once it is used up (D-082). Start, edit and cancel stay with batch:manage.
-  "batch:finish": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
+  // Rolls in Reports (Phase 26, D-095): the Floor Manager reads every roll and may cancel an open
+  // one with a reason. Starting and finishing happen at Capture (camera:capture).
+  "roll:read": ["FLOOR_MANAGER"],
+  "roll:manage": ["FLOOR_MANAGER"],
   "camera:view": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
-  "camera:manage": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"], // choose the batch the camera feeds
-  // Scan from the Capture page (D-066). A Shoe Constructor also needs canCapture (canCaptureFor).
-  "camera:capture": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
-  "camera:operators": ["FLOOR_MANAGER", "SYSTEM_ADMIN"], // which constructors may capture (D-075)
+  // Capture on their own phones (C-23): only Shoe Constructors the System Admin allows
+  // (canCapture, checked by canCaptureFor). Starting, finishing and cancelling an empty roll come
+  // with it. The QI and the Floor Manager no longer capture (C-18).
+  "camera:capture": ["SHOE_CONSTRUCTOR"],
+  "camera:operators": ["SYSTEM_ADMIN"], // Users → More actions → May capture (amends D-075)
   "scan:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "inventory:read": ["FLOOR_MANAGER", "SYSTEM_ADMIN"],
   "inventory:manage": ["FLOOR_MANAGER"],
@@ -42,13 +43,11 @@ export function can(role: Role, permission: Permission): boolean {
 }
 
 /**
- * May this person capture at the camera (D-075)? The QI and the Floor Manager always can; a Shoe
- * Constructor only when the Floor Manager or the System Admin has allowed it (the station
- * operator). The Capture page, the capture API, the current-batch API and the nav all ask this.
+ * May this person capture (D-075, D-095)? A Shoe Constructor the System Admin has allowed. The
+ * Capture page, the capture and roll APIs and the nav all ask this, fresh on every request.
  */
 export function canCaptureFor(user: { role: Role; canCapture: boolean }): boolean {
-  if (can(user.role, "camera:capture")) return true;
-  return user.role === "SHOE_CONSTRUCTOR" && user.canCapture;
+  return can(user.role, "camera:capture") && user.canCapture;
 }
 
 /**

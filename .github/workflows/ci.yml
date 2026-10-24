@@ -129,6 +129,12 @@ jobs:
           # Pass or Reject only (D-093), and one section rejected for an unknown class (A-12).
           q "select count(*) from scans where \"finalVerdict\" is distinct from \"aiVerdict\"" | grep -qx 0
           test "$(q "select count(*) from detections where \"isUnknownClass\"")" -ge 1
+          # Rolls at Capture (Phase 26): constructors with camera access capture on their phones,
+          # the newest roll stays open and the Floor Manager cancelled one with a reason.
+          test "$(q "select count(*) from users where \"canCapture\" and role='SHOE_CONSTRUCTOR'")" -ge 1
+          test "$(q "select count(*) from batches where status='OPEN'")" -ge 1
+          test "$(q "select count(*) from batches where status='CANCELLED' and \"cancelledReason\" is not null")" -eq 1
+          q "select count(*) from scans where source <> 'PHONE'" | grep -qx 0
           # Production progression (Phase 23): the default schedule, a quota per shoe type, check-ins.
           test "$(q "select count(*) from production_schedules")" -eq 1
           test "$(q "select count(*) from daily_quotas")" -eq 2

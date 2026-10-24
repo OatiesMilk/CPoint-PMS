@@ -217,7 +217,7 @@ test("the Floor Manager enters check-ins only on a day no Quality Inspector is p
   const card = page.getByTestId("todays-production-card");
   await expect(card).toBeVisible();
   await expect(card.getByTestId("quota-progress")).toBeVisible();
-  await expect(page.getByText("Batches by stage")).toHaveCount(0);
+  await expect(page.getByText("Rolls by stage")).toHaveCount(0);
 
   // Remember today's attendance, so it can be put back afterwards.
   const day = manilaDay();

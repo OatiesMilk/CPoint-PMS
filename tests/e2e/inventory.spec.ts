@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { managerApi, shoeTypeId } from "./cv-helpers";
+import { managerApi } from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -72,6 +72,8 @@ test("the Floor Manager adds an item, receives, uses (and undoes), and counts st
   // Using more than is on hand is refused in the dialog.
   await page.getByRole("button", { name: "Use stock" }).click();
   const use = page.getByRole("dialog");
+  // Usage names no roll any more (Phase 26).
+  await expect(use.getByLabel(/For roll/)).toHaveCount(0);
   await use.getByLabel("Quantity").fill("9");
   await use.getByRole("button", { name: "Record usage" }).click();
   await expect(use.getByText("Only 8 spools in stock")).toBeVisible();
@@ -126,57 +128,26 @@ test("a low item shows on the Floor Manager home", async ({ browser, page }) => 
   await expect(row.getByRole("link")).toHaveCount(1);
 });
 
-test("creating a batch can take a roll from inventory, and cancelling it before production returns it", async ({
-  browser,
-  page,
-}) => {
+test("using a leather roll from stock links no roll (Phase 26)", async ({ browser }) => {
   const api = await managerApi(browser);
-  const roll = await createItem(api, {
+  const item = await createItem(api, {
     category: "LEATHER_ROLL",
     unit: "roll",
     reorderLevel: 0,
     openingStock: 2,
   });
-  await signInAs(page, ACCOUNTS.manager);
-  await page.goto("/batches/new");
-  await page.getByLabel("Roll code").fill(`E2E-INV-${randomBytes(2).toString("hex")}`);
-  await page.getByLabel("Take a roll from inventory (optional)").selectOption(roll.id);
-  await page.getByLabel("Shoe type").selectOption(await shoeTypeId());
-  await page.getByRole("button", { name: "Create batch" }).click();
-  await expect(page).toHaveURL(/\/batches\/[0-9a-f-]{36}$/);
-  const batchId = page.url().split("/").pop()!;
-  await expect(page.getByText(`${roll.sku} · ${roll.name}`)).toBeVisible();
-  expect(await onHand(api, roll.id)).toBe(1);
-
-  const history = await (await api.get(`/api/v1/inventory/${roll.id}/movements`)).json();
-  expect(history.data.movements[0]).toMatchObject({
-    type: "OUT",
-    quantityDelta: -1,
-    batch: { id: batchId },
-  });
-
-  const cancel = await api.post(`/api/v1/batches/${batchId}/cancel`, {
-    data: { reason: "Order changed" },
-  });
-  expect(cancel.status()).toBe(200);
-  expect(await onHand(api, roll.id)).toBe(2);
-});
-
-test("a batch can't take a roll that's no longer in stock", async ({ browser }) => {
-  const api = await managerApi(browser);
-  const roll = await createItem(api, { category: "LEATHER_ROLL", unit: "roll", reorderLevel: 0 });
-  const res = await api.post("/api/v1/batches", {
+  const res = await api.post(`/api/v1/inventory/${item.id}/movements`, {
     data: {
-      rollCode: "E2E-NOROLL",
-      shoeTypeId: await shoeTypeId(),
-      receivedAt: "2026-01-15",
-      rollItemId: roll.id,
+      type: "OUT",
+      quantity: 1,
+      reason: "Laid out at Capture",
+      rollId: "0199a000-0000-7000-8000-000000000001",
     },
   });
-  expect(res.status()).toBe(422);
-  const body = await res.json();
-  expect(body.error.details[0]).toMatchObject({ path: ["rollItemId"] });
-  expect(body.error.details[0].message).toContain("Only 0 rolls in stock");
+  expect(res.status()).toBe(201);
+  expect(await onHand(api, item.id)).toBe(1);
+  const history = await (await api.get(`/api/v1/inventory/${item.id}/movements`)).json();
+  expect(history.data.movements[0]).toMatchObject({ type: "OUT", quantityDelta: -1, roll: null });
 });
 
 test("the System Admin sees inventory read-only; the Quality Inspector has no access", async ({

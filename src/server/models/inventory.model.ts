@@ -135,7 +135,7 @@ export function insertMovement(
     type: MovementType;
     quantityDelta: number;
     reason: string;
-    batchId?: string | null;
+    rollId?: string | null;
     createdById: string;
     createdAt?: Date;
   },
@@ -151,7 +151,7 @@ const movementSelect = {
   quantityDelta: true,
   reason: true,
   createdAt: true,
-  batch: { select: { id: true, code: true } },
+  roll: { select: { id: true, code: true } },
   createdBy: { select: { name: true } },
 } satisfies Prisma.InventoryMovementSelect;
 
@@ -237,19 +237,10 @@ export async function lowStockItems(take: number, db: Db = defaultDb()) {
   return { rows, count };
 }
 
-/** Active leather-roll items with at least one roll on hand (the batch form's picker). */
-export function listRollItemsInStock(db: Db = defaultDb()) {
-  return db.inventoryItem.findMany({
-    where: { category: "LEATHER_ROLL", isActive: true, quantityOnHand: { gte: 1 } },
-    select: { id: true, sku: true, name: true, unit: true, quantityOnHand: true },
-    orderBy: { name: "asc" },
-  });
-}
-
-/** Leather-roll movements linked to a batch: what was taken for it, and anything returned. */
-export function listRollMovementsForBatch(batchId: string, db: Db = defaultDb()) {
+/** Leather-roll movements linked to a roll: what was taken for it, and anything returned. */
+export function listRollMovementsForRoll(rollId: string, db: Db = defaultDb()) {
   return db.inventoryMovement.findMany({
-    where: { batchId, item: { category: "LEATHER_ROLL" } },
+    where: { rollId, item: { category: "LEATHER_ROLL" } },
     select: {
       id: true,
       type: true,

@@ -1,20 +1,23 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, navLabels, signIn } from "./helpers";
 import {
   adminApi,
-  createBatch,
+  captureApi,
+  createRoll,
   inspectorApi,
   makeConstructor,
   managerApi,
   sampleJpeg,
+  supplierId,
   withDb,
 } from "./cv-helpers";
 
-// The Capture page (Phase 18). The model files are git-ignored, so CI has none: the tests that need
-// a real capture run only where `python -m cpoint_cv export-onnx` has been run (Dylan's laptop).
+// The Capture page (Phase 18; Phase 26: constructors' phones, rolls start and finish there). The
+// model files are git-ignored, so CI has none: the tests that need a real capture run only where
+// `python -m cpoint_cv export-onnx` has been run (Dylan's laptop).
 const MODEL = process.env.CV_MODEL_PATH ?? "cv/models/yolo-v1.onnx";
 const hasModel = existsSync(MODEL) && existsSync(MODEL.replace(/\.onnx$/, ".json"));
 
@@ -27,18 +30,28 @@ test.use({
   },
 });
 
-async function capture(api: Awaited<ReturnType<typeof inspectorApi>>, captureId: string) {
+async function capture(api: APIRequestContext, captureId: string, rollId?: string) {
   return api.post("/api/v1/scans/capture", {
     multipart: {
       image: { name: "capture.jpg", mimeType: "image/jpeg", buffer: await sampleJpeg() },
       captureId,
-      source: "WEBCAM",
+      source: "PHONE",
+      ...(rollId ? { rollId } : {}),
     },
   });
 }
 
-test.describe("capture API", () => {
-  test("only the QI and the FM may capture; fields are named when wrong", async ({
+/** A fresh constructor with camera access, signed in on this page. */
+async function signInCapturer(page: Page) {
+  const sc = await makeConstructor({ canCapture: true });
+  await page.goto("/login");
+  await signIn(page, sc.email);
+  await expect(page).toHaveURL(ACCOUNTS.constructor.home);
+  return sc;
+}
+
+test.describe("capture API (Phase 26)", () => {
+  test("only a constructor with camera access may capture; the QI, the FM and the Admin may not", async ({
     browser,
     request,
   }) => {
@@ -46,12 +59,17 @@ test.describe("capture API", () => {
       multipart: { captureId: randomUUID() },
     });
     expect(anonymous.status()).toBe(401);
+    for (const api of [
+      await adminApi(browser),
+      await inspectorApi(browser),
+      await managerApi(browser),
+    ]) {
+      expect((await capture(api, randomUUID())).status()).toBe(403);
+      expect((await api.post("/api/v1/rolls", { data: {} })).status()).toBe(403);
+    }
 
-    const admin = await adminApi(browser);
-    expect((await capture(admin, randomUUID())).status()).toBe(403);
-
-    const inspector = await inspectorApi(browser);
-    const bad = await inspector.post("/api/v1/scans/capture", {
+    const sc = await captureApi(browser);
+    const bad = await sc.post("/api/v1/scans/capture", {
       multipart: {
         image: { name: "capture.jpg", mimeType: "image/jpeg", buffer: await sampleJpeg() },
         captureId: "capture-7",
@@ -61,30 +79,73 @@ test.describe("capture API", () => {
     expect((await bad.json()).error.message).toMatch(/captureId must be the UUID/);
   });
 
+  test("a shot needs a chosen open roll; a finished roll takes no more shots", async ({
+    browser,
+  }) => {
+    const sc = await captureApi(browser);
+    const none = await capture(sc, randomUUID());
+    // Without the model files the model check comes first (503); with them, the roll is named.
+    if (hasModel) {
+      expect(none.status()).toBe(409);
+      expect((await none.json()).error.code).toBe("NO_ROLL_CHOSEN");
+    } else {
+      expect(none.status()).toBe(503);
+    }
+
+    const roll = await createRoll(sc);
+    const empty = await sc.post(`/api/v1/rolls/${roll.id}/finish`, { data: {} });
+    expect(empty.status()).toBe(409);
+    expect((await empty.json()).error.message).toBe(
+      "A roll needs at least one shot to finish. Cancel it instead.",
+    );
+    const cancel = await sc.post(`/api/v1/rolls/${roll.id}/cancel`, { data: {} });
+    expect(cancel.status()).toBe(200);
+    const late = await capture(sc, randomUUID(), roll.id);
+    expect(late.status()).toBe(hasModel ? 409 : 503);
+  });
+
+  test("start roll needs the supplier, named on its field", async ({ browser }) => {
+    const sc = await captureApi(browser);
+    const res = await sc.post("/api/v1/rolls", { data: { tagCode: "LR-1" } });
+    expect(res.status()).toBe(422);
+    expect((await res.json()).error.details).toEqual([
+      expect.objectContaining({
+        path: ["supplierId"],
+        message: "Choose the supplier this roll came from.",
+      }),
+    ]);
+  });
+
   test("without the model files the app answers 503 with where to put them", async ({
     browser,
   }) => {
     test.skip(hasModel, "The model is installed here.");
-    await createBatch(await managerApi(browser));
-    const res = await capture(await inspectorApi(browser), randomUUID());
+    const sc = await captureApi(browser);
+    const roll = await createRoll(sc);
+    const res = await capture(sc, randomUUID(), roll.id);
     expect(res.status()).toBe(503);
     expect((await res.json()).error.message).toMatch(/yolo-v1\.onnx and yolo-v1\.json/);
   });
 
-  test("a capture is decided by the app; a retry returns the same scan; no person on it", async ({
+  test("a shot is decided by the app; a retry returns the same scan; no person on it", async ({
     browser,
   }) => {
     test.skip(!hasModel, "Needs cv/models/yolo-v1.onnx (export-onnx).");
-    await createBatch(await managerApi(browser));
-    const inspector = await inspectorApi(browser);
+    const sc = await captureApi(browser);
+    const roll = await createRoll(sc);
     const captureId = randomUUID();
 
-    const first = await capture(inspector, captureId);
+    const first = await capture(sc, captureId, roll.id);
     expect(first.status()).toBe(201);
     const data = (await first.json()).data;
-    expect(data).toMatchObject({ duplicate: false, modelVersion: expect.stringMatching(/^yolo-/) });
+    expect(data).toMatchObject({
+      duplicate: false,
+      rollId: roll.id,
+      modelVersion: expect.stringMatching(/^yolo-/),
+      defects: expect.any(Array),
+    });
 
-    const again = await capture(inspector, captureId);
+    const again = await capture(sc, captureId, roll.id);
     expect(again.status()).toBe(200);
     expect((await again.json()).data).toMatchObject({ scanId: data.scanId, duplicate: true });
 
@@ -98,78 +159,144 @@ test.describe("capture API", () => {
       );
       return { scan: scan.rows[0], audit: audit.rows };
     });
-    expect(row.scan).toEqual({ deviceTokenId: null, source: "WEBCAM" });
+    expect(row.scan).toEqual({ deviceTokenId: null, source: "PHONE" });
     expect(row.audit).toEqual([{ actorType: "USER", n: 1 }]);
+
+    // All of it is in: finish it. A finished roll is refused before the model runs.
+    expect((await sc.post(`/api/v1/rolls/${roll.id}/finish`, { data: {} })).status()).toBe(200);
+    const late = await capture(sc, randomUUID(), roll.id);
+    expect(late.status()).toBe(409);
+    expect((await late.json()).error.code).toBe("ROLL_CLOSED");
   });
 });
 
-test.describe("Capture page", () => {
-  test("the QI sees the live camera and the batch, and gets the app's verdict", async ({
-    browser,
+test.describe("Capture on a phone (Phase 26)", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("a constructor starts a roll, sees it in large text, and finishes or cancels it", async ({
     page,
   }) => {
-    await createBatch(await managerApi(browser));
-    await page.goto("/login");
-    await signIn(page, ACCOUNTS.inspector.email);
-    await expect(page).toHaveURL(ACCOUNTS.inspector.home);
-    expect(await navLabels(page)).toContain("Capture");
-
-    await page.getByRole("link", { name: "Capture sections" }).click();
+    await signInCapturer(page);
+    // One page only: no page menu in the phone bar, no sidebar.
+    await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
+    await expect(page.getByRole("button", { name: "Pages" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Capture", level: 1 })).toBeVisible();
-    await expect(page.getByText(/Next scan goes to/)).toBeVisible();
+    // No page scrolls sideways at phone width.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
+
+    // Other tests' rolls may be open (the dropdown lists every open roll); start our own.
+    const start = page.getByRole("button", { name: "Start another roll" });
+    if (await start.isVisible()) await start.click();
+    await expect(page.getByRole("heading", { name: "Start a roll" })).toBeVisible();
+    await page.getByRole("button", { name: "Start roll" }).click();
+    await expect(page.getByText("Choose the supplier this roll came from.")).toBeVisible();
+    await page.getByLabel("Supplier").selectOption(await supplierId());
+    await page.getByLabel(/Roll code/).fill("LR-PHONE-1");
+    await page.getByRole("button", { name: "Start roll" }).click();
+
+    const line = page.getByTestId("capture-roll-line");
+    await expect(line).toContainText(/Roll R-\d{4}-\d{4}/);
+    await expect(line).toContainText("0 shots");
+    const code = (await line.innerText()).match(/R-\d{4}-\d{4}/)![0];
+    await expect(page.getByRole("combobox", { name: "Roll" })).toContainText(code);
+
+    // The Capture button sits at the bottom of the screen, in reach of a thumb.
     const button = page.getByRole("button", { name: "Capture", exact: true });
+    const box = (await button.boundingBox())!;
+    expect(box.y + box.height).toBeGreaterThan(844 - 120);
+    expect(box.height).toBeGreaterThanOrEqual(44);
 
-    if (!hasModel) {
-      await expect(
-        page.getByText(/The camera model isn['’]t installed on the server/),
-      ).toBeVisible();
-      await expect(button).toBeDisabled();
-      return;
-    }
-    await expect(page.getByLabel("Live camera picture")).toBeVisible();
-    await expect(button).toBeEnabled();
-    await button.click();
-    await expect(page.getByText(/Section #\d+/)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("link", { name: "Open scan" })).toBeVisible();
-  });
-
-  test("the page passes axe (WCAG 2.1 A/AA)", async ({ page }) => {
-    await page.goto("/login");
-    await signIn(page, ACCOUNTS.manager.email);
-    await expect(page).toHaveURL(ACCOUNTS.manager.home);
-    await page.goto("/camera/capture");
-    await expect(page.getByRole("heading", { name: "Capture", level: 1 })).toBeVisible();
-    const results = await new AxeBuilder({ page })
+    const axe = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
-    expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+    expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+
+    if (!hasModel) {
+      await expect(button).toBeDisabled();
+      // An empty roll can't be finished, only cancelled.
+      await expect(page.getByRole("button", { name: "Finish roll" })).toBeDisabled();
+      await page.getByRole("button", { name: "Cancel roll" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Cancel roll" }).click();
+      await expect(page.getByText(`${code} is cancelled.`)).toBeVisible();
+      return;
+    }
+
+    await expect(page.getByLabel("Live camera picture")).toBeVisible();
+    await button.click();
+    await expect(page.getByText(new RegExp(`Shot #1 · ${code}`))).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText(/Pass: this part|Reject: this part/)).toBeVisible();
+    await expect(line).toContainText("1 shot");
+    await page.getByRole("button", { name: "Finish roll" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText(`Is all of ${code} scanned?`);
+    await dialog.getByRole("button", { name: "Finish roll" }).click();
+    await expect(page.getByText(`${code} is finished with 1 shot.`)).toBeVisible();
   });
 
-  test("the System Admin has no Capture page", async ({ page }) => {
+  test("a constructor without camera access is told who grants it", async ({ page }) => {
+    const sc = await makeConstructor();
     await page.goto("/login");
-    await signIn(page, ACCOUNTS.admin.email);
-    await expect(page).toHaveURL(ACCOUNTS.admin.home);
-    expect(await navLabels(page)).not.toContain("Capture");
-    await page.goto("/camera/capture");
+    await signIn(page, sc.email);
+    await expect(page).toHaveURL(ACCOUNTS.constructor.home);
+    await expect(page.getByTestId("no-camera-access")).toHaveText(
+      "Ask the System Admin for camera access.",
+    );
+    await expect(page.getByRole("button", { name: "Capture", exact: true })).toHaveCount(0);
+    await page.goto("/scans");
     await expect(page).toHaveURL(/\/forbidden/);
   });
 });
 
-test.describe("Floor view (D-074)", () => {
-  test("fills the screen with the live camera, shows the verdict until the next capture, and Esc leaves", async ({
+test.describe("Capture page on a desktop", () => {
+  test("the QI and the Floor Manager no longer capture (C-18)", async ({ page }) => {
+    for (const account of [ACCOUNTS.inspector, ACCOUNTS.manager, ACCOUNTS.admin]) {
+      await page.goto("/login");
+      await signIn(page, account.email);
+      await expect(page).toHaveURL(account.home);
+      expect(await navLabels(page)).not.toContain("Capture");
+      await page.goto("/camera/capture");
+      await expect(page).toHaveURL(/\/forbidden/);
+      await page.context().clearCookies();
+    }
+  });
+
+  test("the Roll dropdown lists every open roll and says where the shot goes", async ({
     browser,
     page,
   }) => {
-    await createBatch(await managerApi(browser));
-    await page.goto("/login");
-    await signIn(page, ACCOUNTS.inspector.email);
-    await expect(page).toHaveURL(ACCOUNTS.inspector.home);
+    const other = await captureApi(browser);
+    const theirs = await createRoll(other, { tagCode: "LR-OTHER" });
+    await signInCapturer(page);
     await page.goto("/camera/capture");
+    const select = page.getByRole("combobox", { name: "Roll" });
+    await expect(select.locator("option", { hasText: theirs.code })).toHaveCount(1);
+    await select.selectOption(theirs.id);
+    await expect(page.getByTestId("capture-roll-line")).toContainText(`Roll ${theirs.code}`);
+    // Remembered on this browser.
+    await page.reload();
+    await expect(page.getByTestId("capture-roll-line")).toContainText(`Roll ${theirs.code}`);
+  });
+});
+
+test.describe("Floor view (D-074)", () => {
+  test("fills the screen with the live camera, shows the chosen roll and Esc leaves", async ({
+    browser,
+    page,
+  }) => {
+    await signInCapturer(page);
+    // A roll to capture into (started by another constructor; the dropdown lists every open roll).
+    const roll = await createRoll(await captureApi(browser));
+    await page.goto("/camera/capture");
+    await page.getByRole("combobox", { name: "Roll" }).selectOption(roll.id);
     await page.getByRole("button", { name: "Floor view" }).click();
 
     const floor = page.getByRole("region", { name: "Floor view" });
     await expect(floor).toBeVisible();
-    await expect(floor.getByText(/Next scan goes to/)).toBeVisible();
+    await expect(floor.getByText(`Roll ${roll.code}`)).toBeVisible();
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
@@ -178,7 +305,7 @@ test.describe("Floor view (D-074)", () => {
     if (hasModel) {
       await expect(floor.getByLabel("Live camera picture")).toBeVisible();
       await page.keyboard.press("Space"); // the station's capture key
-      const band = floor.getByRole("status").filter({ hasText: /Section #\d+/ });
+      const band = floor.getByRole("status").filter({ hasText: /Shot #\d+/ });
       await expect(band).toContainText(/Pass|Reject/, { timeout: 30_000 });
     } else {
       await expect(floor.getByRole("alert")).toContainText("Capture is off.");
@@ -192,44 +319,34 @@ test.describe("Floor view (D-074)", () => {
   });
 });
 
-test.describe("constructors at the camera (D-075)", () => {
-  test("a constructor can't capture until allowed, then gets Capture and the capture API", async ({
+test.describe("camera access is given by the System Admin (D-075, Phase 26)", () => {
+  test("the Admin gives a constructor camera access in Users; the FM can't", async ({
     browser,
     page,
   }) => {
     const sc = await makeConstructor();
+    const fm = await managerApi(browser);
+    const refused = await fm.put(`/api/v1/camera/operators/${sc.id}`, {
+      data: { canCapture: true },
+    });
+    expect(refused.status()).toBe(403);
     await page.goto("/login");
-    await signIn(page, sc.email);
-    await expect(page).toHaveURL(ACCOUNTS.constructor.home);
-    // Their home says who grants camera access (D-091).
-    await expect(page.getByText("Ask the System Admin for camera access.")).toBeVisible();
-    expect(await navLabels(page)).not.toContain("Capture");
-    await page.goto("/camera/capture");
-    await expect(page).toHaveURL(/\/forbidden/);
-    expect((await capture(page.request, randomUUID())).status()).toBe(403);
+    await signIn(page, ACCOUNTS.admin.email);
+    await expect(page).toHaveURL(ACCOUNTS.admin.home);
+    await page.goto("/admin/users");
+    await page.getByLabel("Search").fill(sc.email);
+    const row = page.getByRole("row", { name: sc.email });
+    await row.getByRole("button", { name: /More actions/ }).click();
+    await page.getByRole("menuitem", { name: "Give camera access" }).click();
+    await expect(page.getByText(/can now capture rolls on their phone/)).toBeVisible();
+    await expect(row).toContainText("Camera");
 
-    // The Floor Manager allows them on the Camera page.
-    const fm = await browser.newPage();
-    await fm.goto("/login");
-    await signIn(fm, ACCOUNTS.manager.email);
-    await expect(fm).toHaveURL(ACCOUNTS.manager.home);
-    await fm.goto("/camera");
-    await fm.getByLabel("Find a Shoe Constructor").fill(sc.email);
-    const row = fm.getByRole("row").filter({ hasText: sc.email });
-    await row.getByRole("button", { name: "Allow capturing" }).click();
-    await expect(row).toContainText("Can capture");
-    await fm.close();
-
-    await page.goto(ACCOUNTS.constructor.home);
-    expect(await navLabels(page)).toContain("Capture");
-    await page.getByRole("link", { name: "Open Capture" }).click();
-    await expect(page.getByRole("heading", { name: "Capture", level: 1 })).toBeVisible();
-    // Allowed now: the API answers with the scan, or 503 when this machine has no model files.
-    await createBatch(await managerApi(browser));
-    expect([201, 503]).toContain((await capture(page.request, randomUUID())).status());
-    // Still no Scans or Reports for them.
-    await page.goto("/scans");
-    await expect(page).toHaveURL(/\/forbidden/);
+    const allowed = await withDb(
+      async (db) =>
+        (await db.query(`SELECT "canCapture" FROM users WHERE id = $1`, [sc.id])).rows[0]
+          .canCapture,
+    );
+    expect(allowed).toBe(true);
     await withDb((db) => db.query(`UPDATE users SET "isActive" = false WHERE id = $1`, [sc.id]));
   });
 });

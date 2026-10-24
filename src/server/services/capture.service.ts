@@ -1,14 +1,13 @@
 /**
  * A capture from the website's Capture page (Phase 18, D-064 to D-067): the browser sends only the
- * photo; the app runs the model and then the same `ingestScan` and decision engine the camera
- * station uses. Nothing here decides a verdict.
+ * photo and the roll chosen in the Roll dropdown (Phase 26); the app runs the model and then the
+ * same `ingestScan` and decision engine as every scan. Nothing here decides a verdict.
  */
-import { AppError } from "@/server/lib/errors";
 import type { ImageType } from "@/server/lib/image-type";
 import type { MappedDetection } from "@/server/lib/cv/mapper";
 import { getModelRunner, modelUnavailable, type ModelRunner } from "@/server/lib/cv/model-runner";
 import type { CaptureFields } from "@/server/validators/scan.validator";
-import { NO_BATCH_MESSAGE, resolveCameraBatch, type CameraBatch } from "./camera.service";
+import { resolveCaptureRoll } from "./roll.service";
 import { earlierCapture, ingestScan, type IngestResult } from "./scan-ingest.service";
 
 export type CaptureResult = IngestResult & {
@@ -17,40 +16,6 @@ export type CaptureResult = IngestResult & {
   modelVersion: string | null;
   inferenceMs: number | null;
 };
-
-export const batchSummary = (batch: CameraBatch | null) =>
-  batch
-    ? {
-        batchId: batch.id,
-        batchCode: batch.code,
-        rollCode: batch.rollCode,
-        shoeType: batch.shoeType.name,
-        /** Sections scanned so far, for "All 10 pieces scanned. Finish this roll?" (D-082). */
-        scanned: batch._count.scans,
-      }
-    : null;
-
-/**
- * The batch this capture goes to: the one the page showed, like the station (D-050). When that
- * batch has left Preparation the capture is refused before the model runs, with the batch the next
- * scan goes to, so the page can update and the person can press Capture again.
- */
-async function checkBatch(shownBatchId: string | undefined): Promise<void> {
-  const current = await resolveCameraBatch();
-  if (!current) throw new AppError(409, "NO_BATCH_AT_PREPARATION", NO_BATCH_MESSAGE);
-  if (!shownBatchId || shownBatchId === current.id) return;
-  try {
-    await resolveCameraBatch(shownBatchId);
-  } catch (error) {
-    if (!(error instanceof AppError) || error.status !== 409) throw error;
-    throw new AppError(
-      409,
-      "BATCH_MOVED",
-      `This roll was finished, so this section wasn't saved. The next scan goes to ${current.code}. Press Capture again.`,
-      { current: batchSummary(current) },
-    );
-  }
-}
 
 export async function captureScan(
   image: { bytes: Uint8Array; type: ImageType },
@@ -67,14 +32,15 @@ export async function captureScan(
 
   const model = await runner.status();
   if (model.state !== "ready") throw modelUnavailable(model.message);
-  await checkBatch(fields.batchId);
+  // A roll finished or cancelled since the page loaded is refused before the model runs.
+  await resolveCaptureRoll(fields.rollId, "website");
 
   const seen = await runner.detect(image.bytes);
   const result = await ingestScan(
     {
       image,
       detections: seen.detections,
-      batchId: fields.batchId,
+      rollId: fields.rollId,
       captureId: fields.captureId,
       modelVersion: seen.modelVersion,
       source: fields.source,

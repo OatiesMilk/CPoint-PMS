@@ -2,9 +2,10 @@
  * Camera simulator: posts realistic scans to POST /api/v1/scans exactly as the real YOLO service
  * will, so dashboards can be demoed without a camera.
  *
- *   npm run cv:simulate -- --count 20 --interval 3 [--batch <batchId>] [--classes <list>]
+ *   npm run cv:simulate -- --count 20 --interval 3 [--roll <rollId>] [--classes <list>]
  *
- * Needs CV_DEVICE_TOKEN (create one: `npm run cv:token`) and optionally CV_BASE_URL in .env.
+ * Without --roll each scan goes to the roll open the longest, so start a roll at Capture first
+ * (Phase 26). Needs CV_DEVICE_TOKEN (create one: `npm run cv:token`) and optionally CV_BASE_URL in .env.
  * Mix: about 82% Pass (clean, a faint mark, or a found Usable defect), 13% Reject (a found Not
  * accepted defect) and 5% an unknown class ("sim-unknown"), which is rejected and listed in
  * Settings → Unknown classes (A-12). Classes default to the yolo-v1 ones with the outcomes
@@ -25,7 +26,7 @@ function arg(name: string, fallback?: string): string | undefined {
 
 const count = Number(arg("count", "20"));
 const intervalMs = Number(arg("interval", "3")) * 1000;
-const batchId = arg("batch");
+const rollId = arg("roll");
 const baseUrl = (process.env.CV_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const token = process.env.CV_DEVICE_TOKEN;
 const classesArg = arg("classes");
@@ -53,7 +54,7 @@ async function sendOne(n: number) {
   form.set("detections", JSON.stringify(detections));
   form.set("source", "SIMULATOR");
   form.set("modelVersion", "simulator-1");
-  if (batchId) form.set("batchId", batchId);
+  if (rollId) form.set("rollId", rollId);
 
   const res = await fetch(`${baseUrl}/api/v1/scans`, {
     method: "POST",
@@ -73,7 +74,7 @@ async function sendOne(n: number) {
   const top = [...detections].sort((a, b) => b.confidence - a.confidence)[0];
   const d = body.data!;
   console.log(
-    `#${String(n).padStart(3)}  ${d.batchCode} · section ${String(d.sequence).padStart(3)}  ${String(d.verdict).padEnd(12)} ${top ? `${top.classKey} ${top.confidence.toFixed(2)}` : "no defects"}`,
+    `#${String(n).padStart(3)}  ${d.rollCode} · section ${String(d.sequence).padStart(3)}  ${String(d.verdict).padEnd(12)} ${top ? `${top.classKey} ${top.confidence.toFixed(2)}` : "no defects"}`,
   );
 }
 
@@ -85,7 +86,7 @@ async function main() {
     process.exit(1);
   }
   console.log(
-    `Sending ${count} scans to ${baseUrl} every ${intervalMs / 1000}s${batchId ? ` (batch ${batchId})` : ""}…\n`,
+    `Sending ${count} scans to ${baseUrl} every ${intervalMs / 1000}s${rollId ? ` (roll ${rollId})` : ""}…\n`,
   );
   for (let n = 1; n <= count; n++) {
     await sendOne(n);

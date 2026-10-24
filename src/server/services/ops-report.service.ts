@@ -9,10 +9,10 @@ import {
 } from "@/lib/ops-rules";
 import { previousRange, toCsv, type ReportRange } from "@/lib/report-rules";
 import { belowQuotaAttention, ATTENTION_DAYS } from "@/lib/production-rules";
-import { countRollsByStatus } from "@/server/models/batch.model";
+import { countOpenRolls } from "@/server/models/roll.model";
 import {
-  countBatchVerdicts,
-  findClaimBatch,
+  countRollVerdicts,
+  findClaimRoll,
   rollsWithMostRejects,
   stockPosition,
   supplierDefects,
@@ -22,7 +22,7 @@ import { productionReport, recentProductionDays } from "./production.service";
 import { qualityReport, rollFlow } from "./report.service";
 
 // Operations report (D-033): what is happening on the floor, in resources, flow, stock and supply.
-// Aggregates per day, shoe type, batch, item or supplier. Nothing here carries a user id, name or
+// Aggregates per day, shoe type, roll, item or supplier. Nothing here carries a user id, name or
 // email (D-008); tests/unit/ops-report.service.test.ts checks that.
 
 const share = (part: number, whole: number) => (whole > 0 ? part / whole : null);
@@ -52,7 +52,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     productionReport(prev, now),
     rollFlow(range),
     rollFlow(prev),
-    countRollsByStatus(),
+    countOpenRolls(),
     recentProductionDays(ATTENTION_DAYS, now),
     qualityReport(range),
     qualityReport(prev),
@@ -118,7 +118,6 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
       return {
         id: r.id,
         supplier: r.name,
-        batches: r.batches,
         rolls: r.rolls,
         sections: r.scanned,
         decided,
@@ -140,7 +139,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     pairs: compare(production.totals.pairs, prevProduction.totals.pairs),
     ofQuota: compare(production.totals.share, prevProduction.totals.share),
     rollsFinished: compare(rolls.totals.completed, prevRolls.totals.completed),
-    rollsAtPreparation: rollsNow.atPreparation,
+    rollsOpen: rollsNow,
     firstPassYield: compare(fpy(qt), fpy(pt)),
     rejectRate: compare(share(qt.reject, qt.scanned), share(pt.reject, pt.scanned)),
     sectionsScanned: compare(qt.scanned, pt.scanned),
@@ -229,7 +228,6 @@ export async function suppliersCsv(range: ReportRange) {
   return toCsv(r.suppliers, [
     { header: "Supplier", value: (s) => s.supplier },
     { header: "Rolls", value: (s) => s.rolls },
-    { header: "Batches", value: (s) => s.batches },
     { header: "Sections scanned", value: (s) => s.sections },
     { header: "Pass", value: (s) => s.pass },
     { header: "Reject (for salvage)", value: (s) => s.reject },
@@ -245,7 +243,7 @@ export async function supplierRollsCsv(range: ReportRange) {
   const rolls = await rollsWithMostRejects(range, ROLLS_CSV);
   return toCsv(rolls, [
     { header: "Roll", value: (r) => r.rollCode },
-    { header: "Batch", value: (r) => r.batchCode },
+    { header: "Tag number", value: (r) => r.tagCode ?? "" },
     { header: "Supplier", value: (r) => r.supplier },
     { header: "Sections", value: (r) => r.sections },
     { header: "Rejected (for salvage)", value: (r) => r.rejected },
@@ -279,29 +277,26 @@ export type ClaimSheet = NonNullable<Awaited<ReturnType<typeof claimSheet>>>;
 /**
  * Everything a supplier claim for one roll needs: the roll, its supplier, the counts and each
  * rejected section with its photo and defects (Phase 20). Per roll, never per person: no one who
- * captured a section is named (D-008). Null when the batch doesn't exist.
+ * captured a section is named (D-008). Null when the roll doesn't exist.
  */
-export async function claimSheet(batchId: string) {
-  const [batch, verdicts] = await Promise.all([
-    findClaimBatch(batchId),
-    countBatchVerdicts(batchId),
-  ]);
-  if (!batch) return null;
+export async function claimSheet(rollId: string) {
+  const [roll, verdicts] = await Promise.all([findClaimRoll(rollId), countRollVerdicts(rollId)]);
+  if (!roll) return null;
   const count = (v: string) => verdicts.find((g) => g.finalVerdict === v)?._count._all ?? 0;
   const sections = verdicts.reduce((sum, g) => sum + g._count._all, 0);
   return {
-    batchId: batch.id,
-    batchCode: batch.code,
-    rollCode: batch.rollCode,
-    receivedAt: batch.receivedAt.toISOString().slice(0, 10),
-    shoeType: batch.shoeType.name,
-    supplier: batch.supplier,
+    rollId: roll.id,
+    rollCode: roll.code,
+    tagCode: roll.tagCode,
+    receivedAt: roll.receivedAt?.toISOString().slice(0, 10) ?? null,
+    startedAt: roll.startedAt.toISOString(),
+    supplier: roll.supplier,
     totals: {
       sections,
       pass: count("PASS"),
       reject: count("REJECT"),
     },
-    rejected: batch.scans.map((scan) => ({
+    rejected: roll.scans.map((scan) => ({
       scanId: scan.id,
       sequence: scan.sequence,
       capturedAt: scan.capturedAt.toISOString(),

@@ -69,10 +69,10 @@ export function OperationsView({
           testid="kpi-rolls"
         />
         <KpiTile
-          label="Rolls at Preparation"
-          value={String(kpis.rollsAtPreparation)}
-          sub={kpis.rollsAtPreparation === 1 ? "roll being cut now" : "rolls being cut now"}
-          testid="kpi-preparation"
+          label="Rolls open"
+          value={String(kpis.rollsOpen)}
+          sub={kpis.rollsOpen === 1 ? "roll being captured now" : "rolls being captured now"}
+          testid="kpi-rolls-open"
         />
         <KpiTile
           label="First-pass yield"

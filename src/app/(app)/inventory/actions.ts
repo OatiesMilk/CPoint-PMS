@@ -26,7 +26,7 @@ const NOT_FOUND = { ok: false as const, error: "This item doesn't exist." };
 function refresh(id?: string) {
   revalidatePath("/inventory");
   revalidatePath("/floor-manager");
-  revalidatePath("/batches/new");
+  revalidatePath("/rolls/new");
   if (id) revalidatePath(`/inventory/${id}`);
 }
 

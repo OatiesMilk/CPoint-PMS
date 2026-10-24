@@ -31,7 +31,7 @@ function stationToken(): string | undefined {
 const LABELS: Record<string, string> = {
   users: "test accounts",
   tokens: "device tokens",
-  batches: "batches",
+  rolls: "rolls",
   scans: "scans",
   inventoryItems: "inventory items (the demo ones come back with opening stock)",
   movements: "stock movements",
@@ -73,7 +73,7 @@ async function main() {
   if (result.demoWeek)
     console.log(
       result.demoWeek.seeded
-        ? `Seeded a fresh demo week: ${result.demoWeek.batches} batches, ${result.demoWeek.scans} scans, ${result.demoWeek.attendanceDays} days of attendance.`
+        ? `Seeded a fresh demo week: ${result.demoWeek.rolls} rolls, ${result.demoWeek.scans} scans, ${result.demoWeek.attendanceDays} days of attendance.`
         : `The demo week wasn't seeded: ${result.demoWeek.reason}.`,
     );
 }

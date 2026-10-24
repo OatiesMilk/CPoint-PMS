@@ -65,41 +65,36 @@ answer within 2 s):
 
 `status` is `"degraded"` and `checks.database` is `"down"` in the 503 case.
 
-## Batches (`/api/v1/batches`)
+## Rolls (`/api/v1/rolls`, Phase 26)
 
-A batch is one leather roll (D-005, D-082). Reads need `batch:read` (Floor Manager, Quality
-Inspector, System Admin). Writes need `batch:manage` (Floor Manager), except **finish**, which needs
-`batch:finish` (Floor Manager, Quality Inspector). All writes are audited.
+A roll is one leather roll from a supplier (D-095). A Shoe Constructor with camera access starts it
+at Capture, captures it shot by shot and finishes it once all of it is in; several rolls may be
+open at once. The Floor Manager reads every roll (Reports → Rolls) and may cancel an open one with
+a reason. Nothing is deleted: a cancelled roll keeps its shots, which the reports leave out. Every
+write is audited (`roll.start`, `roll.finish`, `roll.cancel`). No response names a person (D-008).
 
-| Method & path                      | Body                                             | Returns                                                                          |
-| ---------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `GET /api/v1/batches`              | query: `status`, `shoeTypeId`, `q`, `page`       | `{ data: Batch[], meta: { total, page, pageCount } }`, 15 per page, newest first |
-| `POST /api/v1/batches`             | `BatchForm`                                      | `201 { data: Batch }`, status `PLANNED`                                          |
-| `GET /api/v1/batches/{id}`         | —                                                | `{ data: { batch, actions, rollFromInventory } }`                                |
-| `PATCH /api/v1/batches/{id}`       | `BatchForm`                                      | `{ data: Batch }`                                                                |
-| `POST /api/v1/batches/{id}/stages` | `{ action: "start" \| "finish", expectedStage }` | `{ data: { code, status, currentStage } }`                                       |
-| `POST /api/v1/batches/{id}/cancel` | `{ reason, expectedStage? }`                     | `{ data: { code, status, currentStage } }`                                       |
+| Method & path                    | Who                                                             | Body / query                                            | Returns                                                                                                     |
+| -------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/rolls`              | `roll:read` (Floor Manager)                                     | `status`, `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
+| `GET /api/v1/rolls/{id}`         | `roll:read`                                                     | —                                                       | the roll with its shots and their detections                                                                |
+| `POST /api/v1/rolls`             | a Shoe Constructor with camera access                           | `{ supplierId, tagCode? }`                              | `201 { data: OpenRoll }`, status `OPEN`, code `R-YYYY-NNNN`                                                 |
+| `GET /api/v1/rolls/open`         | a Shoe Constructor with camera access                           | —                                                       | `{ data: OpenRoll[] }`, every open roll (the Capture page's Roll dropdown)                                  |
+| `POST /api/v1/rolls/{id}/finish` | a Shoe Constructor with camera access                           | `{}`                                                    | `{ data: { id, code, status: "FINISHED", shots } }`                                                         |
+| `POST /api/v1/rolls/{id}/cancel` | camera access (an empty roll), or `roll:manage` (any open roll) | `{}`, or `{ reason }` from the Floor Manager            | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
+| `GET /api/v1/rolls/current`      | a device token (`scans:create`)                                 | —                                                       | the roll open the longest, or `404 NO_OPEN_ROLL`                                                            |
 
-**`BatchForm`**: `rollCode` (1–50 chars), `shoeTypeId` (uuid), `supplierId?` (uuid),
-`receivedAt` (`YYYY-MM-DD`, not in the future in Manila time), `notes?` (≤ 500), `rollItemId?` (create only: a leather-roll inventory item; one roll is recorded as
-used for the batch in the same transaction, or `422` on `rollItemId` if none is left). The shoe
-type can't change once the roll has started. Cancelling a **planned** batch returns its roll.
-`targetQuotaPairs` is no longer taken (Phase 23: the daily quota replaced it); old values stay in
-the table.
+**`OpenRoll`**: `{ id, code, tagCode, supplier, shots, startedAt, mine }`; `mine` only says whether
+the person asking started it, to start the dropdown on their own roll. `/current` leaves it out.
 
-**Roll actions (D-082):** `start` (Planned → At Preparation, `batch:manage`) and `finish` (At
-Preparation, or an older batch still past it → Finished, `batch:finish`). `expectedStage` is the
-stage the caller last saw:
-
-- `advance`, `move_back` or `complete` → `422` "Choose start or finish. A roll no longer moves
-  through stages."
-- If the batch has changed since, `409 { error: { code: "STALE" } }` "This roll was already changed
-  by someone else. Refresh to see where it is now."
-- A move the rules don't allow → `409 CONFLICT` ("This roll is already finished.", "Start the roll
-  first.", "This roll was cancelled.").
-
-`GET /api/v1/batches/current` (the camera's next roll) also returns `scanned`, the sections scanned
-so far, for the "All 10 pieces scanned. Finish this roll?" hint.
+- `supplierId` is required and must be an active supplier (`422` on `supplierId`, "Choose the
+  supplier this roll came from."). `tagCode` is the number on the supplier's tag, up to 40.
+- Finish needs at least one shot (`409` "A roll needs at least one shot to finish. Cancel it
+  instead."). At Capture only an empty roll can be cancelled; the Floor Manager's cancel needs a
+  `reason` of 1 to 200 characters.
+- A roll that is already finished or cancelled answers `409 CONFLICT`; if someone else closed it
+  between the read and the write, `409 STALE` (D-019).
+- Removed (`404`): `/api/v1/batches/**`, `POST …/stages`, `PATCH` of a roll. Rolls from before
+  Phase 26 keep their `B-` codes; their stage history went with the migration `rolls_at_capture`.
 
 ## Camera ingestion (device token)
 
@@ -121,7 +116,7 @@ camera station app was retired in Phase 20 (D-069). The simulator is the token c
 | `source`       | no       | `SIMULATOR`, `PHONE`, `WEBCAM` (default), `DEDICATED_CAMERA`                                                                                                                                                                                                       |
 | `modelVersion` | no       | e.g. `yolov8n-cpoint-2026-10`, shown on the scan                                                                                                                                                                                                                   |
 | `capturedAt`   | no       | ISO 8601 with offset; defaults to the time received                                                                                                                                                                                                                |
-| `batchId`      | no       | Only for multi-camera setups. Normally omitted (see "Which batch")                                                                                                                                                                                                 |
+| `rollId`       | no       | The roll the scan belongs to. Omitted: the roll open the longest (see "Which roll")                                                                                                                                                                                |
 | `captureId`    | no       | A UUID the camera makes for each capture. Send the same one on every retry: a repeat returns the first scan instead of making a second one (D-051). `cpoint_cv` always sends it                                                                                    |
 
 **Decision (D-093):** every section is `PASS` or `REJECT`, final at once. A detection of an
@@ -133,21 +128,22 @@ classes. Class keys are matched exactly. A new database gets `crease` and `scrat
 under Admin → Settings (D-052, `cv/README.md`). Add new ones there when the model is retrained.
 A rejected section is reported for salvage; nothing else is created.
 
-**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "duplicate": false } }`.
+**`201`** `{ "data": { "scanId", "rollId", "rollCode", "sequence", "verdict", "duplicate": false, "defects": [{ "label", "confidence", "unknown", "effect": "USABLE" | "NOT_ACCEPTED" | null }] } }`.
 
-**`200`** the same body with `"duplicate": true` when this device already sent the `captureId`:
-nothing new is stored or audited, even if the batch has since left Preparation.
+**`200`** the same body with `"duplicate": true` (and `defects: []`) when this device already sent
+the `captureId`: nothing new is stored or audited, even if the roll has since been finished.
 
-`409` when no batch is at Preparation, when the `batchId` sent isn't in progress at Preparation, or
-when another device already used the `captureId` (`message` says which). `413` over 10 MB. `422`
+`409` `NO_OPEN_ROLL` when no roll is open, `ROLL_CLOSED` when the `rollId` sent was finished or
+cancelled (checked again under the row lock, so no shot lands on a closed roll), or `CONFLICT` when
+another device already used the `captureId` (`message` says which). `413` over 10 MB. `422`
 for invalid fields (`details` names each one).
 
 ### `POST /api/v1/scans/capture` (the website's Capture page, Phase 18)
 
 The Capture page (`/camera/capture`) sends the frame on screen here. It uses the **signed-in
-session**, not a device token, and needs someone who may capture: the Floor Manager and the
-Quality Inspector (`camera:capture`, D-066), or a Shoe Constructor the Floor Manager or System
-Admin allowed (`canCapture`, D-075). The app runs the model itself (ONNX Runtime, D-064) and then decides exactly as for
+session**, not a device token, and needs a Shoe Constructor the System Admin gave camera access
+(`camera:capture` + `canCapture`, D-075, Phase 26). The Quality Inspector and the Floor Manager no
+longer capture. The app runs the model itself (ONNX Runtime, D-064) and then decides exactly as for
 `POST /api/v1/scans`: the same `ingestScan` and decision engine.
 
 `multipart/form-data`:
@@ -156,45 +152,42 @@ Admin allowed (`canCapture`, D-075). The app runs the model itself (ONNX Runtime
 | ------------ | -------- | ------------------------------------------------------------------------------------------------------------ |
 | `image`      | yes      | JPEG, PNG or WebP (checked by content), ≤ 10 MB. The page sends the camera frame as a JPEG                   |
 | `captureId`  | yes      | A UUID the page makes for each press. A retry with the same one returns the first scan without running again |
-| `batchId`    | no       | The batch the page showed. Kept while it is at Preparation, like the station (D-050)                         |
-| `source`     | no       | `WEBCAM` (default) or `PHONE`                                                                                |
+| `rollId`     | yes      | The roll chosen in the Roll dropdown. It must still be open                                                  |
+| `source`     | no       | `WEBCAM` (default) or `PHONE` (the page sends `PHONE` from a phone or tablet)                                |
 | `capturedAt` | no       | ISO 8601 with offset: when Capture was pressed                                                               |
 
 There is no `detections` or `modelVersion` field: the server produces both.
 
-**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "duplicate": false, "detections": [...], "modelVersion", "inferenceMs" } }`.
+**`201`** `{ "data": { "scanId", "rollId", "rollCode", "sequence", "verdict", "duplicate": false, "defects": [...], "detections": [...], "modelVersion", "inferenceMs" } }`.
 **`200`** the same with `"duplicate": true` (and `detections: []`) for a repeated `captureId`.
 
-| Status | `code`                    | When                                                                                       |
-| ------ | ------------------------- | ------------------------------------------------------------------------------------------ |
-| `401`  | `UNAUTHENTICATED`         | Not signed in                                                                              |
-| `403`  | `FORBIDDEN`               | Not allowed to capture (System Admin, or a Shoe Constructor without `canCapture`)          |
-| `409`  | `NO_BATCH_AT_PREPARATION` | No batch is at Preparation                                                                 |
-| `409`  | `BATCH_MOVED`             | The batch shown has left Preparation. `details.current` is the batch the next scan goes to |
-| `409`  | `CONFLICT`                | The `captureId` was already used by a device-token scan                                    |
-| `413`  | `PAYLOAD_TOO_LARGE`       | Over 10 MB                                                                                 |
-| `422`  | `VALIDATION_FAILED`       | A field is wrong; `message` names it                                                       |
-| `503`  | `MODEL_UNAVAILABLE`       | The model files aren't on the server (the message says where to put them)                  |
+| Status | `code`              | When                                                                      |
+| ------ | ------------------- | ------------------------------------------------------------------------- |
+| `401`  | `UNAUTHENTICATED`   | Not signed in                                                             |
+| `403`  | `FORBIDDEN`         | Not allowed to capture (anyone but a Shoe Constructor with camera access) |
+| `409`  | `NO_ROLL_CHOSEN`    | No `rollId`: choose the roll this shot belongs to                         |
+| `409`  | `ROLL_CLOSED`       | The chosen roll was finished or cancelled; checked before the model runs  |
+| `409`  | `CONFLICT`          | The `captureId` was already used by a device-token scan                   |
+| `413`  | `PAYLOAD_TOO_LARGE` | Over 10 MB                                                                |
+| `422`  | `VALIDATION_FAILED` | A field is wrong; `message` names it                                      |
+| `503`  | `MODEL_UNAVAILABLE` | The model files aren't on the server (the message says where to put them) |
 
 The scan stores no person (D-008): `deviceTokenId` is null for a website scan, and the audit row
 `scan.create` names the signed-in user as the actor with `origin: "website"`.
 
-### Which batch: `GET /api/v1/batches/current`
+### Which roll
 
-The single Preparation camera feeds **the batch picked on the Camera page**. If none is picked, or
-it has left Preparation, it feeds **the batch that has been at Preparation the longest** (D-020).
-Call this before capturing to show the operator where scans will go. It accepts a device token or
-a signed-in session with `camera:view` or capture rights (an allowed constructor, D-075).
+A shot from the Capture page goes to the roll chosen in its Roll dropdown (`rollId`). A device token
+(the simulator) may name a roll; without one its scan goes to **the roll open the longest**
+(D-020's fallback). `GET /api/v1/rolls/current` tells a device which roll that is.
 
 ### Who may capture: `PUT /api/v1/camera/operators/{userId}`
 
-`camera:operators` (Floor Manager, System Admin). Body `{ "canCapture": true | false }` for an
-active Shoe Constructor (D-075). `200 { "data": { "id", "canCapture" } }`; `404` for an unknown
-person, `409` for anyone who isn't an active Shoe Constructor. Audited as
-`camera.capture_access.grant` / `.revoke`. Applies on the person's next request.
-
-`200 { "data": { "batchId", "batchCode", "rollCode", "shoeType", "selection": "selected" | "oldest", "stageStartedAt" } }`,
-or `404 NO_BATCH_AT_PREPARATION`.
+`camera:operators` (System Admin only since Phase 26; the Floor Manager gets `403`). Body
+`{ "canCapture": true | false }` for an active Shoe Constructor (D-075). `200 { "data": { "id",
+"canCapture" } }`; `404` for an unknown person, `409` for anyone who isn't an active Shoe
+Constructor. Audited as `camera.capture_access.grant` / `.revoke`. Applies on the person's next
+request. In the app: Users → More actions → Give camera access.
 
 Any use of a device token is recorded (at most once a minute, shown under API tokens). The
 station check-in that used it (D-054) was retired with the station app in Phase 20 (D-069).
@@ -206,11 +199,11 @@ from before 24 Oct 2026 keep the earlier shape (`rejectAtOrAbove`, `reworkAtOrAb
 
 ## Scans (session)
 
-| Method & path                  | Permission  | Notes                                                                                                      |
-| ------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/scans`            | `scan:read` | filters `verdict` (`PASS` or `REJECT`), `source`, `batch` (code), `defect`, `page`; or `limit=1…50` (live) |
-| `GET /api/v1/scans/{id}`       | `scan:read` | scan and detections (with boxes); no person                                                                |
-| `GET /api/v1/scans/{id}/image` | `scan:read` | the captured image (`Cache-Control: private`)                                                              |
+| Method & path                  | Permission  | Notes                                                                                                     |
+| ------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/scans`            | `scan:read` | filters `verdict` (`PASS` or `REJECT`), `source`, `roll` (code), `defect`, `page`; or `limit=1…50` (live) |
+| `GET /api/v1/scans/{id}`       | `scan:read` | scan and detections (with boxes); no person                                                               |
+| `GET /api/v1/scans/{id}/image` | `scan:read` | the captured image (`Cache-Control: private`)                                                             |
 
 The camera's verdict is final (D-093): there is no decision endpoint. The Review Queue, the Repair
 Station and Salvage, with `/api/v1/rework/**`, `/api/v1/salvage/**` and
@@ -238,8 +231,8 @@ never edited or deleted. Quantities are numbers with at most 2 decimals.
 **`Movement`**:
 
 - `{ "type": "IN", "quantity": 3, "reason"? }`: stock received (default note "Delivery received").
-- `{ "type": "OUT", "quantity": 1, "reason"?, "batchId"? }`: stock used. `409` if it would go below
-  zero ("Only 2 rolls in stock…").
+- `{ "type": "OUT", "quantity": 1, "reason"? }`: stock used. `409` if it would go below zero
+  ("Only 2 rolls in stock…"). Usage names no roll since Phase 26; older movements keep their link.
 - `{ "type": "ADJUST", "counted": 4, "expectedQuantity": 5, "reason" }`: a stock count. The stored
   change is `counted − current`; `409 STALE` if the stock isn't `expectedQuantity` any more.
 
@@ -351,7 +344,7 @@ constructorsOnRoster, pairsPerConstructor, shortfall }] }`, from the first day a
 
 ## Reports (session)
 
-Aggregates per Manila day, shoe type, defect type or batch, never per person (D-025, D-008). Range params:
+Aggregates per Manila day, shoe type, defect type, supplier or roll, never per person (D-025, D-008). Shots of a cancelled roll are left out (Phase 26). Range params:
 `?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
 default is the last 14 days, at most 92, and never past today.
 
@@ -365,8 +358,8 @@ default is the last 14 days, at most 92, and never past today.
 | `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], stock, suppliers[], rejectedRolls[], lineRejectShare, forSalvage, checkpoint }` |
 | `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, sections scanned, Pass, Reject (for salvage)                                 |
 | `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                                       |
-| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, batches, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072)            |
-| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, batch, supplier, sections, rejected, main defects (D-072)                      |
+| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072)                     |
+| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, tag number, supplier, sections, rejected, main defects (D-072)                 |
 
 - **Verdicts** are Pass and Reject (D-093); the final verdict is the camera's.
 - **For salvage** (`forSalvage`): `{ total, byDefect: [{ key, label, known, sections }] }`, the

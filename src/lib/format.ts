@@ -62,3 +62,15 @@ export function formatDayLabel(day: string): string {
     day: "numeric",
   }).format(new Date(`${day}T00:00:00Z`));
 }
+
+/** "Tue, 22 Oct" in Manila time, for a roll left open from an earlier day (Phase 26). */
+export function formatManilaWeekdayDate(value: Date | string): string {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: APP_TIME_ZONE,
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).formatToParts(new Date(value));
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${part("weekday")}, ${part("day")} ${part("month")}`;
+}
