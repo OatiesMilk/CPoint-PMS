@@ -1,11 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { decide, type DecisionSnapshot } from "@/lib/decision-engine";
+import {
+  decide,
+  detectionOutcome,
+  type DecisionSnapshot,
+  type DefectOutcome,
+} from "@/lib/decision-engine";
 import type { ScanSource } from "@/lib/domain";
-import { Errors } from "@/server/lib/errors";
+import { AppError, Errors } from "@/server/lib/errors";
 import type { ImageType } from "@/server/lib/image-type";
 import { logger } from "@/server/lib/logger";
 import { getStorage, type StorageService } from "@/server/lib/storage";
-import { lockBatchRow } from "@/server/models/batch.model";
+import { lockOpenRoll } from "@/server/models/roll.model";
+import { rollClosedMessage } from "@/lib/roll-rules";
 import { getCvSettings } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
 import { listDefectTypes } from "@/server/models/reference-data.model";
@@ -16,12 +22,12 @@ import {
 } from "@/server/models/scan.model";
 import type { DetectionValues } from "@/server/validators/scan.validator";
 import { recordAudit } from "./audit.service";
-import { NO_BATCH_MESSAGE, resolveCameraBatch } from "./camera.service";
+import { resolveCaptureRoll } from "./roll.service";
 
 export type IngestInput = {
   image: { bytes: Uint8Array; type: ImageType };
   detections: DetectionValues[];
-  batchId?: string;
+  rollId?: string;
   captureId?: string;
   modelVersion?: string;
   source: ScanSource;
@@ -30,12 +36,24 @@ export type IngestInput = {
 
 export type IngestResult = {
   scanId: string;
-  batchId: string;
-  batchCode: string;
+  rollId: string;
+  rollCode: string;
   sequence: number;
   verdict: string;
   /** True when this captureId was already received: nothing new was written (D-051). */
   duplicate: boolean;
+  /**
+   * What each found defect did to the section, for the Capture page's last result (Phase 26):
+   * Usable or Not accepted, or null below found-at. Empty for a repeat.
+   */
+  defects: ScanDefect[];
+};
+
+export type ScanDefect = {
+  label: string;
+  confidence: number;
+  unknown: boolean;
+  effect: DefectOutcome | null;
 };
 
 /**
@@ -62,11 +80,12 @@ export async function earlierCapture(captureId: string, origin: ScanOrigin) {
   }
   return {
     scanId: scan.id,
-    batchId: scan.batch.id,
-    batchCode: scan.batch.code,
+    rollId: scan.roll.id,
+    rollCode: scan.roll.code,
     sequence: scan.sequence,
     verdict: scan.aiVerdict,
     duplicate: true,
+    defects: [],
   } satisfies IngestResult;
 }
 
@@ -77,7 +96,7 @@ function storageKey(now: Date, ext: string): string {
 }
 
 /**
- * One camera capture → one scan (D-005, D-020). The verdict, Pass or Reject, is made here with the
+ * One camera capture → one scan, a shot of a roll (D-005, D-095). The verdict, Pass or Reject, is made here with the
  * rule in force right now (snapshotted on the scan) and is final: nobody changes it (D-093). A
  * captureId the same origin already sent returns the first scan instead, so a camera's retry
  * never makes a second one (D-051).
@@ -93,8 +112,11 @@ export async function ingestScan(
     if (earlier) return earlier;
   }
 
-  const batch = await resolveCameraBatch(input.batchId);
-  if (!batch) throw Errors.conflict(NO_BATCH_MESSAGE);
+  // Phase 26: the roll chosen at Capture, or for a device token the roll open the longest.
+  const roll = await resolveCaptureRoll(
+    input.rollId,
+    origin.kind === "website" ? "website" : "device",
+  );
 
   const [settings, defectTypes] = await Promise.all([getCvSettings(), listDefectTypes()]);
   if (!settings)
@@ -110,16 +132,30 @@ export async function ingestScan(
     ),
   };
 
+  const defects: ScanDefect[] = input.detections.map((d) => {
+    const type = byKey.get(d.classKey);
+    const active = type?.isActive ? type : undefined;
+    return {
+      label: type?.label ?? d.classKey,
+      confidence: d.confidence,
+      unknown: !type,
+      effect: type && !active ? null : detectionOutcome(d.confidence, active?.outcome, rule),
+    };
+  });
+
   const key = storageKey(now, input.image.type.ext);
   await storage.put(key, input.image.bytes);
 
   try {
     return await runInTransaction(async (tx) => {
-      await lockBatchRow(batch.id, tx);
-      const sequence = await nextScanSequence(batch.id, tx);
+      // Finished or cancelled since it was chosen: refuse, so no shot lands on a closed roll.
+      if (!(await lockOpenRoll(roll.id, tx))) {
+        throw new AppError(409, "ROLL_CLOSED", rollClosedMessage(roll.code));
+      }
+      const sequence = await nextScanSequence(roll.id, tx);
       const scan = await insertScanWithDetections(
         {
-          batchId: batch.id,
+          rollId: roll.id,
           sequence,
           imagePath: key,
           imageMime: input.image.type.mime,
@@ -158,23 +194,24 @@ export async function ingestScan(
         entity: "Scan",
         entityId: scan.id,
         after: {
-          batch: batch.code,
+          roll: roll.code,
           sequence,
           verdict: decision.verdict,
           maxConfidence: decision.maxConfidence,
           detections: input.detections.length,
           unknownKeys: decision.unknownKeys,
-          batchSelection: batch.selection,
+          rollSelection: roll.selection,
           ...(origin.kind === "website" ? { origin: "website" } : {}),
         },
       });
       return {
         scanId: scan.id,
-        batchId: batch.id,
-        batchCode: batch.code,
+        rollId: roll.id,
+        rollCode: roll.code,
         sequence,
         verdict: decision.verdict,
         duplicate: false,
+        defects,
       };
     });
   } catch (error) {

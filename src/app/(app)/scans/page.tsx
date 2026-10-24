@@ -1,7 +1,7 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   Quality Inspector and Floor Manager (Admin reads), checking the camera's work.
- * What:  find scans by batch or verdict and open one to see why it is Pass or Reject.
+ * What:  find scans by roll or verdict and open one to see why it is Pass or Reject.
  * Worst: a rejected section nobody can explain. Each scan shows the rule it was decided by.
  */
 import type { Metadata } from "next";
@@ -38,7 +38,7 @@ export default async function ScansPage({ searchParams }: PageProps<"/scans">) {
   await requirePermission("scan:read");
   await connection();
   const query = scanListQuerySchema.parse(await searchParams);
-  const filtered = Boolean(query.verdict || query.source || query.batch || query.defect);
+  const filtered = Boolean(query.verdict || query.source || query.roll || query.defect);
   const { rows, total, page, pageCount } = await listScans(query);
 
   const pageHref = (p: number) => {
@@ -91,7 +91,7 @@ export default async function ScansPage({ searchParams }: PageProps<"/scans">) {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Captured</TableHead>
-                <TableHead>Batch · section</TableHead>
+                <TableHead>Roll · section</TableHead>
                 <TableHead>Verdict</TableHead>
                 <TableHead>Top defect</TableHead>
                 <TableHead numeric>Confidence</TableHead>
@@ -107,7 +107,7 @@ export default async function ScansPage({ searchParams }: PageProps<"/scans">) {
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <span className="font-mono">{s.batchCode}</span>
+                    <span className="font-mono">{s.rollCode}</span>
                     <span className="text-muted-foreground"> · #{s.sequence}</span>
                   </TableCell>
                   <TableCell>

@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const batchModel = {
-  findPreparationBatchById: vi.fn(),
-  listBatchesAtPreparation: vi.fn(async () => []),
-};
-const cv = { getCvSettings: vi.fn(), updateActiveBatch: vi.fn() };
+const rollModel = { countOpenRolls: vi.fn(async () => 0) };
+const cv = { getCvSettings: vi.fn() };
 const scans = { findLatestScan: vi.fn() };
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
-vi.mock("@/server/models/batch.model", () => batchModel);
+vi.mock("@/server/models/roll.model", () => rollModel);
 vi.mock("@/server/models/cv-settings.model", () => cv);
 vi.mock("@/server/models/scan.model", () => scans);
 vi.mock("@/server/models/db", () => ({ runInTransaction: vi.fn() }));
@@ -28,14 +25,19 @@ const scan = (source: string, s: number, device: string | null = null) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  cv.getCvSettings.mockResolvedValue({ activeBatchId: null, earlyModelNotice: true });
+  cv.getCvSettings.mockResolvedValue({ earlyModelNotice: true });
   scans.findLatestScan.mockResolvedValue(null);
 });
 
 describe("cameraStatus (Phase 20: no station check-in)", () => {
   it("is idle with no scans", async () => {
     const s = await cameraStatus(now);
-    expect(s).toMatchObject({ state: "idle", lastScan: null });
+    expect(s).toMatchObject({ state: "idle", lastScan: null, openRolls: 0 });
+  });
+
+  it("counts the rolls being captured (Phase 26)", async () => {
+    rollModel.countOpenRolls.mockResolvedValue(3);
+    expect((await cameraStatus(now)).openRolls).toBe(3);
   });
 
   it("is capturing when a Capture page scan arrived in the last minute", async () => {
@@ -64,7 +66,7 @@ describe("cameraStatus (Phase 20: no station check-in)", () => {
   });
 
   it("passes the early-model setting through", async () => {
-    cv.getCvSettings.mockResolvedValue({ activeBatchId: null, earlyModelNotice: false });
+    cv.getCvSettings.mockResolvedValue({ earlyModelNotice: false });
     expect((await cameraStatus(now)).earlyModelNotice).toBe(false);
   });
 });

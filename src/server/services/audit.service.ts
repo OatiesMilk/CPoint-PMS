@@ -7,7 +7,7 @@ export type AuditActor =
 
 export type AuditEntry = {
   actor: AuditActor;
-  action: string; // "<entity>.<verb>", e.g. "batch.create", "user.login_failed"
+  action: string; // "<entity>.<verb>", e.g. "roll.create", "user.login_failed"
   entity: string;
   entityId?: string | null;
   before?: unknown;

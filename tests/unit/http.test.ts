@@ -5,13 +5,13 @@ import { handle, toErrorResponse } from "@/server/lib/http";
 
 describe("API error shape", () => {
   it("maps AppError to its status and code", async () => {
-    const res = toErrorResponse(Errors.notFound("Batch B-2026-0001"));
+    const res = toErrorResponse(Errors.notFound("Roll B-2026-0001"));
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({
       error: {
         code: "NOT_FOUND",
         message:
-          "Batch B-2026-0001 was not found. It may have been removed. Go back to the list and open it again.",
+          "Roll B-2026-0001 was not found. It may have been removed. Go back to the list and open it again.",
       },
     });
   });

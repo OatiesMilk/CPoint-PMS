@@ -32,7 +32,7 @@ import {
 } from "@/lib/inventory-rules";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
-import { getItemDetail, usageBatchOptions } from "@/server/services/inventory.service";
+import { getItemDetail } from "@/server/services/inventory.service";
 import { isInventoryId } from "@/server/validators/inventory.validator";
 import { StockActions } from "./stock-actions";
 
@@ -54,7 +54,9 @@ export default async function InventoryItemPage({
   if (!detail) notFound();
   const { item, movements, total, pageCount } = detail;
   const canManage = can(user.role, "inventory:manage");
-  const openBatches = canManage ? await usageBatchOptions() : [];
+  const canReadRolls = can(user.role, "roll:read");
+  // Only stock used before Phase 26 names a roll (D-095), so the column shows only when one does.
+  const showRoll = movements.some((m) => m.roll);
 
   return (
     <>
@@ -89,7 +91,7 @@ export default async function InventoryItemPage({
             </p>
           </div>
         </div>
-        {canManage && <StockActions item={item} openBatches={openBatches} />}
+        {canManage && <StockActions item={item} />}
       </header>
 
       <Card>
@@ -118,7 +120,7 @@ export default async function InventoryItemPage({
                     <TableHead numeric>Change</TableHead>
                     <TableHead numeric>Balance</TableHead>
                     <TableHead>Note</TableHead>
-                    <TableHead>Batch</TableHead>
+                    {showRoll && <TableHead>Roll</TableHead>}
                     <TableHead>Recorded by</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -138,18 +140,22 @@ export default async function InventoryItemPage({
                       <TableCell className="max-w-72 truncate" title={m.reason}>
                         {m.reason}
                       </TableCell>
-                      <TableCell>
-                        {m.batch ? (
-                          <Link
-                            href={`/batches/${m.batch.id}`}
-                            className="font-mono underline-offset-4 hover:underline"
-                          >
-                            {m.batch.code}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
+                      {showRoll && (
+                        <TableCell>
+                          {m.roll && canReadRolls ? (
+                            <Link
+                              href={`/reports/rolls/${m.roll.id}`}
+                              className="font-mono underline-offset-4 hover:underline"
+                            >
+                              {m.roll.code}
+                            </Link>
+                          ) : m.roll ? (
+                            <span className="font-mono">{m.roll.code}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="text-muted-foreground">{m.createdBy.name}</TableCell>
                     </TableRow>
                   ))}

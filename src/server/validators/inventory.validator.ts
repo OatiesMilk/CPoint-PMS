@@ -73,7 +73,6 @@ export const movementSchema = z.discriminatedUnion(
       type: z.literal("OUT"),
       quantity: quantity({ min: 0, exclusiveMin: true, label: "quantity" }),
       reason: note,
-      batchId: z.preprocess(blankToUndefined, z.uuid("Choose a batch from the list.").optional()),
     }),
     z.object({
       type: z.literal("ADJUST"),

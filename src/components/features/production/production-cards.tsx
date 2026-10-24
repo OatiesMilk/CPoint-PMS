@@ -29,7 +29,7 @@ function nextLine(today: ProductionToday): string {
 
 /**
  * The Floor Manager's home (D-086): today against the quota per shoe type, the next check-in, and
- * any late or missed ones. Replaces "Batches by stage".
+ * any late or missed ones. Replaces "Rolls by stage".
  */
 export function TodaysProductionCard({ today }: { today: ProductionToday }) {
   return (

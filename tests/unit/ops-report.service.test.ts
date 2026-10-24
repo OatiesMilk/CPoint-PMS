@@ -11,8 +11,8 @@ const ops = {
   supplierQuality: vi.fn(),
   supplierDefects: vi.fn(),
   rollsWithMostRejects: vi.fn(),
-  findClaimBatch: vi.fn(),
-  countBatchVerdicts: vi.fn(),
+  findClaimRoll: vi.fn(),
+  countRollVerdicts: vi.fn(),
 };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/report.model", () => report);
@@ -43,8 +43,8 @@ const production = {
   recentProductionDays: vi.fn(),
 };
 vi.mock("@/server/services/production.service", () => production);
-vi.mock("@/server/models/batch.model", () => ({
-  countRollsByStatus: vi.fn(async () => ({ atPreparation: 2, planned: 1 })),
+vi.mock("@/server/models/roll.model", () => ({
+  countOpenRolls: vi.fn(async () => 2),
 }));
 
 const svc = await import("@/server/services/ops-report.service");
@@ -136,7 +136,6 @@ beforeEach(() => {
     {
       id: "s2",
       name: "Tannery B",
-      batches: 1,
       rolls: 1,
       scanned: 10,
       pass: 10,
@@ -145,7 +144,6 @@ beforeEach(() => {
     {
       id: "s1",
       name: "Tannery A",
-      batches: 2,
       rolls: 2,
       scanned: 40,
       pass: 20,
@@ -158,9 +156,9 @@ beforeEach(() => {
   ]);
   ops.rollsWithMostRejects.mockResolvedValue([
     {
-      batchId: "b9",
-      batchCode: "B-2026-0009",
-      rollCode: "R-0412",
+      rollId: "b9",
+      rollCode: "B-2026-0009",
+      tagCode: "R-0412",
       supplier: "Tannery A",
       sections: 40,
       rejected: 6,
@@ -200,7 +198,7 @@ describe("operationsReport", () => {
     expect(r.kpis.pairs.change).toBeCloseTo(0.6);
     expect(r.kpis.ofQuota.value).toBeCloseTo(160 / 170);
     expect(r.kpis.rollsFinished.value).toBe(2);
-    expect(r.kpis.rollsAtPreparation).toBe(2);
+    expect(r.kpis.rollsOpen).toBe(2);
     expect(r.kpis.rejectRate.value).toBeCloseTo(0.4);
     expect(r.kpis).not.toHaveProperty("repairsOpen");
     expect(r.production.days).toHaveLength(2);
@@ -230,17 +228,17 @@ describe("operationsReport", () => {
     });
     expect(r.suppliers[1]).toMatchObject({ rejectShare: 0, topDefect: null, high: false });
     expect(r.lineRejectShare).toBeCloseTo(0.4); // 20 of 50 rejected
-    expect(r.rejectedRolls[0]).toMatchObject({ rollCode: "R-0412", rejected: 6 });
+    expect(r.rejectedRolls[0]).toMatchObject({ tagCode: "R-0412", rejected: 6 });
     expect(ops.rollsWithMostRejects).toHaveBeenCalledWith(range, 5);
   });
 
   it("builds a claim sheet per roll, with no person on it (D-008)", async () => {
-    ops.findClaimBatch.mockResolvedValue({
+    ops.findClaimRoll.mockResolvedValue({
       id: "b9",
       code: "B-2026-0009",
-      rollCode: "R-0412",
-      receivedAt: new Date("2026-10-01T00:00:00Z"),
-      shoeType: { name: "School Shoe" },
+      tagCode: "R-0412",
+      receivedAt: null,
+      startedAt: new Date("2026-10-01T00:30:00Z"),
       supplier: { name: "Tannery A", contactPerson: null, phone: null },
       scans: [
         {
@@ -252,21 +250,22 @@ describe("operationsReport", () => {
         },
       ],
     });
-    ops.countBatchVerdicts.mockResolvedValue([
+    ops.countRollVerdicts.mockResolvedValue([
       { finalVerdict: "PASS", _count: { _all: 30 } },
       { finalVerdict: "REJECT", _count: { _all: 6 } },
     ]);
     const sheet = await svc.claimSheet("b9");
     expect(sheet).toMatchObject({
-      rollCode: "R-0412",
-      receivedAt: "2026-10-01",
+      tagCode: "R-0412",
+      receivedAt: null,
+      startedAt: "2026-10-01T00:30:00.000Z",
       totals: { sections: 36, pass: 30, reject: 6 },
       rejected: [{ sequence: 3, hasImage: true, defects: [{ label: "Hole", confidence: 0.94 }] }],
     });
     const keys = keysDeep(sheet);
     for (const k of ["userId", "user", "email", "decidedBy", "decidedById", "createdBy"])
       expect(keys.has(k)).toBe(false);
-    ops.findClaimBatch.mockResolvedValue(null);
+    ops.findClaimRoll.mockResolvedValue(null);
     expect(await svc.claimSheet("nope")).toBeNull();
   });
 
@@ -345,6 +344,6 @@ describe("CSV", () => {
 
   it("suppliers CSV gives percentages", async () => {
     const csv = await svc.suppliersCsv(range);
-    expect(csv).toContain("Tannery A,2,2,40,20,20,50.0,50.0,Hole,yes");
+    expect(csv).toContain("Tannery A,2,40,20,20,50.0,50.0,Hole,yes");
   });
 });

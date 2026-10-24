@@ -5,15 +5,14 @@
 export {
   ActorType,
   DefectOutcome,
-  BatchStatus,
+  RollStatus,
   InventoryCategory,
   MovementType,
   Role,
   ScanSource,
-  Stage,
   Verdict,
 } from "@/generated/prisma/enums";
-import type { BatchStatus, Role, Stage } from "@/generated/prisma/enums";
+import type { RollStatus, Role } from "@/generated/prisma/enums";
 
 export const ROLE_LABELS: Record<Role, string> = {
   FLOOR_MANAGER: "Floor Manager",
@@ -27,26 +26,12 @@ export const ROLE_HOME: Record<Role, string> = {
   FLOOR_MANAGER: "/floor-manager",
   QUALITY_INSPECTOR: "/quality-inspector",
   SYSTEM_ADMIN: "/admin",
-  SHOE_CONSTRUCTOR: "/constructor",
+  // A constructor's one page is Capture (Phase 26, D-095).
+  SHOE_CONSTRUCTOR: "/camera/capture",
 };
 
-export const STAGE_ORDER: readonly Stage[] = [
-  "PREPARATION",
-  "UPPER_MAKING",
-  "SOLEING",
-  "FINISHING",
-] as const;
-
-export const STAGE_LABELS: Record<Stage, string> = {
-  PREPARATION: "Preparation",
-  UPPER_MAKING: "Upper Making",
-  SOLEING: "Sole-ing",
-  FINISHING: "Finishing",
-};
-
-export const BATCH_STATUS_LABELS: Record<BatchStatus, string> = {
-  PLANNED: "Planned",
-  IN_PROGRESS: "At Preparation",
-  COMPLETED: "Finished",
+export const ROLL_STATUS_LABELS: Record<RollStatus, string> = {
+  OPEN: "Open",
+  FINISHED: "Finished",
   CANCELLED: "Cancelled",
 };

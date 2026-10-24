@@ -478,8 +478,8 @@ was never built. Each phase gets its own criteria here when its plan is approved
       `docs/phase-24-qa`)
 - [x] Phase 25: Pass or Reject, a final verdict; remove the Review Queue, Repair Station and
       Salvage (merged #21; QA passed, run 3, 2026-10-24)
-- [ ] Phase 26: capture on the constructors' own phones; rolls start and finish there; Reports →
-      Rolls
+- [x] Phase 26: capture on the constructors' own phones; rolls start and finish there; Reports →
+      Rolls (built; Codex QA next)
 - [ ] Phase 27: batches are the check-in intervals (lunch break, on-screen notices, pairs finished
       and failed, no shoe types)
 - [ ] Phase 28: each role sees only its modules; demo sign-in and reset on the login page
@@ -538,3 +538,25 @@ Brief: `docs/prompts/factory-visit-changes.md`, Phase 25. Plan: `docs/prompts/pl
 - [x] `npm run check` (519 unit tests) and the `cv/` checks (81 tests) pass; e2e specs updated,
       not run
 - [ ] Codex QA from `qa/CODEX_PROMPT_PHASE_25.md`
+
+## Phase 26 — Capture on the constructors' own phones; rolls start and finish there
+
+Brief: `docs/prompts/factory-visit-changes.md`, Phase 26. Plan: `docs/prompts/plans/phase-26-plan.md`
+(approved 2026-10-24, "go"). Decisions: D-095, D-096.
+
+- [x] `Batch` is `Roll` in the code; migration `rolls_at_capture` converts first (OPEN, FINISHED,
+      CANCELLED; start and finish from the stage log), then drops stages, the stage log, the
+      quota, notes, the shoe type and the camera's chosen batch
+- [x] Capture: Start roll (supplier required, tag optional), the Roll dropdown over every open
+      roll, Finish roll (at least one shot), Cancel an empty roll; shots to a closed roll are
+      refused before the model runs
+- [x] Capture is the Shoe Constructor's home and only page; the QI, FM and Admin don't capture;
+      only the System Admin gives camera access
+- [x] Phone layout (D-096): the top bar below 640 px; Capture fits 390 × 844
+- [x] Reports → Rolls (FM): list, filters, a roll's page with its shots, cancel with a reason
+- [x] `/batches`, `/constructor` and `/api/v1/batches/**` gone (404); Inventory without "For roll"
+- [x] Demo week, `demo:reset`, the simulator and the `cv/` contract on rolls
+- [x] `npm run check` (506 unit tests) and the `cv/` checks (81 tests) pass; e2e specs updated,
+      not run
+- [ ] Codex QA from `qa/CODEX_PROMPT_PHASE_26.md`: run 1 FAIL (sidebar hidden on desktop, three
+      small faults, three test locators); fixed, run 2 from `qa/CODEX_PROMPT_PHASE_26_RUN2.md`

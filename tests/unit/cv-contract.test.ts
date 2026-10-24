@@ -26,6 +26,6 @@ describe("camera station contract (cv-payload.json)", () => {
     expect(parsed.source).toBe("WEBCAM");
     expect(parsed.capturedAt?.toISOString()).toBe("2026-10-01T01:30:00.000Z");
     expect(parsed.captureId).toBe("0199f0a1-7c2e-4a51-9d3f-2b8c4e6a1f00");
-    expect(parsed.batchId).toBe("0199e2b4-1f00-7c3a-8d21-5e6f7a8b9c0d");
+    expect(parsed.rollId).toBe("0199e2b4-1f00-7c3a-8d21-5e6f7a8b9c0d");
   });
 });

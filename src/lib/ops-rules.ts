@@ -2,7 +2,7 @@ export { stockLevel, type StockLevel } from "./inventory-rules";
 
 /**
  * Operations report rules (D-033), pure and client-safe. Everything is an aggregate per day,
- * shoe type, batch, item or supplier, never per person (D-008). The thresholds below are
+ * shoe type, roll, item or supplier, never per person (D-008). The thresholds below are
  * operational defaults for what the report calls "needs attention"; they are named here so a
  * later settings screen can take them over.
  */

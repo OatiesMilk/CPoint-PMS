@@ -2,7 +2,8 @@ import { randomInt } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
 import {
-  createBatch,
+  captureApi,
+  createRoll,
   createDeviceToken,
   e2eKey,
   ensureRuleTypes,
@@ -25,7 +26,7 @@ const day = `2025-${String(randomInt(1, 13)).padStart(2, "0")}-${String(randomIn
 async function scanOn(
   request: APIRequestContext,
   token: string,
-  batchId: string,
+  rollId: string,
   classKey: string,
   confidence: number,
 ) {
@@ -41,7 +42,7 @@ async function scanOn(
           box: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
         },
       ]),
-      batchId,
+      rollId,
       source: "SIMULATOR",
       capturedAt: `${day}T10:00:00+08:00`,
     },
@@ -60,12 +61,12 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
     (await (await api.get(`/api/v1/reports/quality?from=${day}&to=${day}`)).json()).data;
   const before = await report();
 
-  const batch = await createBatch(api);
+  const roll = await createRoll(await captureApi(browser));
   const { token } = await createDeviceToken();
-  await scanOn(request, token, batch.id, "cut", 0.3); // below found-at: PASS
-  await scanOn(request, token, batch.id, "abrasion", 0.7); // Usable: PASS
-  await scanOn(request, token, batch.id, "cut", 0.95); // Not accepted: REJECT
-  const unknown = await scanOn(request, token, batch.id, "e2e-report-class", 0.9);
+  await scanOn(request, token, roll.id, "cut", 0.3); // below found-at: PASS
+  await scanOn(request, token, roll.id, "abrasion", 0.7); // Usable: PASS
+  await scanOn(request, token, roll.id, "cut", 0.95); // Not accepted: REJECT
+  const unknown = await scanOn(request, token, roll.id, "e2e-report-class", 0.9);
   expect(unknown.verdict).toBe("REJECT"); // an unknown class rejects (A-12)
 
   const after = await report();
@@ -131,7 +132,7 @@ test("the Floor Manager sees production against the quota in place of stage time
   await expect(page.getByTestId("for-salvage")).toContainText("For salvage");
   await expect(page.getByTestId("stock-risk")).toBeVisible();
   await expect(page.getByTestId("supplier-quality")).toBeVisible();
-  for (const kpi of ["kpi-pairs", "kpi-quota", "kpi-rolls", "kpi-preparation", "kpi-reject"])
+  for (const kpi of ["kpi-pairs", "kpi-quota", "kpi-rolls", "kpi-rolls-open", "kpi-reject"])
     await expect(page.getByTestId(kpi)).toBeVisible();
   await expect(page.getByTestId("kpi-wip")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Stages CSV" })).toHaveCount(0);

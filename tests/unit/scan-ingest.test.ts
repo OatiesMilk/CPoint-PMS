@@ -6,12 +6,9 @@ import { sniffImageType } from "@/server/lib/image-type";
 import { createLocalStorage } from "@/server/lib/storage";
 import { ingestFieldsSchema } from "@/server/validators/scan.validator";
 
-const batchModel = {
-  findPreparationBatchById: vi.fn(),
-  listBatchesAtPreparation: vi.fn(),
-  lockBatchRow: vi.fn(),
-};
-const cv = { getCvSettings: vi.fn(), updateActiveBatch: vi.fn() };
+const rollModel = { lockOpenRoll: vi.fn(async (..._args: unknown[]) => true) };
+const rollService = { resolveCaptureRoll: vi.fn() };
+const cv = { getCvSettings: vi.fn() };
 const scans = {
   nextScanSequence: vi.fn(async () => 4),
   insertScanWithDetections: vi.fn(
@@ -26,7 +23,8 @@ const scans = {
 const recordAudit = vi.fn();
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
-vi.mock("@/server/models/batch.model", () => batchModel);
+vi.mock("@/server/models/roll.model", () => rollModel);
+vi.mock("@/server/services/roll.service", () => rollService);
 vi.mock("@/server/models/cv-settings.model", () => cv);
 vi.mock("@/server/models/scan.model", () => scans);
 vi.mock("@/server/models/reference-data.model", () => ({
@@ -42,18 +40,8 @@ vi.mock("@/server/models/db", () => ({
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 
 const { ingestScan } = await import("@/server/services/scan-ingest.service");
-const { resolveCameraBatch } = await import("@/server/services/camera.service");
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
-const prep = (id: string, startedAt = "2026-10-02T01:00:00Z") => ({
-  id,
-  code: `B-2026-${id}`,
-  rollCode: "LR-1",
-  status: "IN_PROGRESS",
-  currentStage: "PREPARATION",
-  shoeType: { name: "School Shoe" },
-  stageLogs: [{ startedAt: new Date(startedAt) }],
-});
 const memoryStorage = () => {
   const files = new Map<string, Uint8Array>();
   return {
@@ -72,8 +60,13 @@ const det = (classKey: string, confidence: number) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  cv.getCvSettings.mockResolvedValue({ foundAtOrAbove: 0.5, activeBatchId: null });
-  batchModel.listBatchesAtPreparation.mockResolvedValue([prep("0001")]);
+  cv.getCvSettings.mockResolvedValue({ foundAtOrAbove: 0.5 });
+  rollService.resolveCaptureRoll.mockResolvedValue({
+    id: "0001",
+    code: "R-2026-0001",
+    selection: "oldest",
+  });
+  rollModel.lockOpenRoll.mockResolvedValue(true);
 });
 
 describe("image checks", () => {
@@ -126,33 +119,6 @@ describe("local storage", () => {
   });
 });
 
-describe("resolveCameraBatch (D-020)", () => {
-  it("prefers the batch picked on the Camera page", async () => {
-    cv.getCvSettings.mockResolvedValue({ activeBatchId: "0002" });
-    batchModel.findPreparationBatchById.mockResolvedValue(prep("0002"));
-    expect(await resolveCameraBatch()).toMatchObject({ id: "0002", selection: "selected" });
-  });
-
-  it("falls back to the oldest batch at Preparation when the picked one has moved on", async () => {
-    cv.getCvSettings.mockResolvedValue({ activeBatchId: "0002" });
-    batchModel.findPreparationBatchById.mockResolvedValue({
-      ...prep("0002"),
-      currentStage: "UPPER_MAKING",
-    });
-    expect(await resolveCameraBatch()).toMatchObject({ id: "0001", selection: "oldest" });
-  });
-
-  it("returns null when nothing is at Preparation", async () => {
-    batchModel.listBatchesAtPreparation.mockResolvedValue([]);
-    expect(await resolveCameraBatch()).toBeNull();
-  });
-
-  it("refuses an explicit batch that isn't at Preparation", async () => {
-    batchModel.findPreparationBatchById.mockResolvedValue({ ...prep("0003"), status: "PLANNED" });
-    await expect(resolveCameraBatch("0003")).rejects.toMatchObject({ status: 409 });
-  });
-});
-
 describe("ingestScan", () => {
   const ingest = (detections: ReturnType<typeof det>[], storage = memoryStorage()) =>
     ingestScan(
@@ -171,13 +137,15 @@ describe("ingestScan", () => {
     const result = await ingest([det("cut", 0.3)], storage);
     expect(result).toEqual({
       scanId: "scan1",
-      batchId: "0001",
-      batchCode: "B-2026-0001",
+      rollId: "0001",
+      rollCode: "R-2026-0001",
       sequence: 4,
       verdict: "PASS",
       duplicate: false,
+      defects: [{ label: "Cut", confidence: 0.3, unknown: false, effect: null }],
     });
-    expect(batchModel.lockBatchRow).toHaveBeenCalledWith("0001", "tx");
+    expect(rollService.resolveCaptureRoll).toHaveBeenCalledWith(undefined, "device");
+    expect(rollModel.lockOpenRoll).toHaveBeenCalledWith("0001", "tx");
     const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
     expect(data).toMatchObject({
       imagePath: expect.stringMatching(/^scans\/2026\/10\/[0-9a-f-]{36}\.jpg$/),
@@ -223,11 +191,30 @@ describe("ingestScan", () => {
     });
   });
 
-  it("answers 409 without storing anything when no batch is at Preparation", async () => {
-    batchModel.listBatchesAtPreparation.mockResolvedValue([]);
+  it("says what each found defect did, for the Capture page (Phase 26)", async () => {
+    const result = await ingest([det("hole", 0.7), det("crease", 0.6), det("stain", 0.9)]);
+    expect(result.defects).toEqual([
+      { label: "Hole", confidence: 0.7, unknown: false, effect: "NOT_ACCEPTED" },
+      { label: "Crease", confidence: 0.6, unknown: false, effect: "USABLE" },
+      { label: "stain", confidence: 0.9, unknown: true, effect: "NOT_ACCEPTED" },
+    ]);
+  });
+
+  it("answers 409 without storing anything when no roll is open", async () => {
+    rollService.resolveCaptureRoll.mockRejectedValue(
+      Object.assign(new Error("No roll is open."), { status: 409, code: "NO_OPEN_ROLL" }),
+    );
     const storage = memoryStorage();
     await expect(ingest([], storage)).rejects.toMatchObject({ status: 409 });
     expect(storage.put).not.toHaveBeenCalled();
+  });
+
+  it("refuses a shot when the roll was finished or cancelled meanwhile, and keeps no image", async () => {
+    rollModel.lockOpenRoll.mockResolvedValue(false);
+    const storage = memoryStorage();
+    await expect(ingest([], storage)).rejects.toMatchObject({ status: 409, code: "ROLL_CLOSED" });
+    expect(scans.insertScanWithDetections).not.toHaveBeenCalled();
+    expect(storage.files.size).toBe(0);
   });
 
   it("removes the stored image when the database write fails", async () => {
@@ -269,7 +256,7 @@ describe("ingestScan with a captureId (D-051)", () => {
     sequence: 2,
     aiVerdict: "REJECT",
     deviceTokenId: "tok1",
-    batch: { id: "0001", code: "B-2026-0001" },
+    roll: { id: "0001", code: "R-2026-0001" },
   };
 
   it("stores the captureId on a new scan", async () => {
@@ -283,20 +270,21 @@ describe("ingestScan with a captureId (D-051)", () => {
     const storage = memoryStorage();
     expect(await ingest(storage)).toEqual({
       scanId: "scan-first",
-      batchId: "0001",
-      batchCode: "B-2026-0001",
+      rollId: "0001",
+      rollCode: "R-2026-0001",
       sequence: 2,
       verdict: "REJECT",
       duplicate: true,
+      defects: [],
     });
     expect(storage.put).not.toHaveBeenCalled();
     expect(scans.insertScanWithDetections).not.toHaveBeenCalled();
     expect(recordAudit).not.toHaveBeenCalled();
   });
 
-  it("returns the first scan even when its batch has since left Preparation", async () => {
+  it("returns the first scan even when its roll has since been finished", async () => {
     scans.findScanByCaptureId.mockResolvedValueOnce(earlier);
-    batchModel.listBatchesAtPreparation.mockResolvedValue([]);
+    rollService.resolveCaptureRoll.mockRejectedValue(new Error("closed"));
     expect(await ingest()).toMatchObject({ scanId: "scan-first", duplicate: true });
   });
 
@@ -321,7 +309,7 @@ describe("ingestScan with a captureId (D-051)", () => {
 
 describe("ingestScan from the website's Capture page (Phase 18)", () => {
   const CAPTURE = "0199f0a1-7c2e-7a51-9d3f-2b8c4e6a1f01";
-  const website = { kind: "website", userId: "user-qi" } as const;
+  const website = { kind: "website", userId: "user-sc" } as const;
   const ingest = () =>
     ingestScan(
       {
@@ -335,13 +323,17 @@ describe("ingestScan from the website's Capture page (Phase 18)", () => {
       now,
       memoryStorage(),
     );
+
+  it("needs the roll chosen at Capture (Phase 26)", async () => {
+    await ingest();
+    expect(rollService.resolveCaptureRoll).toHaveBeenCalledWith(undefined, "website");
+  });
   const earlier = {
     id: "scan-first",
     sequence: 2,
     aiVerdict: "REJECT",
-    status: "DECIDED",
     deviceTokenId: null,
-    batch: { id: "0001", code: "B-2026-0001" },
+    roll: { id: "0001", code: "R-2026-0001" },
   };
 
   it("stores no device token and no person on the scan (D-008)", async () => {
@@ -356,7 +348,7 @@ describe("ingestScan from the website's Capture page (Phase 18)", () => {
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
       expect.objectContaining({
-        actor: { type: "USER", userId: "user-qi" },
+        actor: { type: "USER", userId: "user-sc" },
         action: "scan.create",
         after: expect.objectContaining({ origin: "website", verdict: "REJECT" }),
       }),

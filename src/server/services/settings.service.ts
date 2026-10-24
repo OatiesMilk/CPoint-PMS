@@ -201,7 +201,7 @@ export async function updateReferenceRow(
 }
 
 /**
- * No deletes: batches and scans reference these rows. An inactive one disappears
+ * No deletes: rolls and scans reference these rows. An inactive one disappears
  * from pickers (and an inactive defect type is ignored by the decision engine, D-093).
  */
 export async function setReferenceActive(

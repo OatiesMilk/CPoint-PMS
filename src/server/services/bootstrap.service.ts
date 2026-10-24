@@ -85,7 +85,7 @@ export const DEMO_USERS: { email: string; name: string; role: Role }[] = [
   { email: "manager@cpoint.local", name: "Rodel Pascual", role: "FLOOR_MANAGER" },
   { email: "inspector@cpoint.local", name: "Maricel Dizon", role: "QUALITY_INSPECTOR" },
   { email: "admin@cpoint.local", name: "Jerome Salazar", role: "SYSTEM_ADMIN" },
-  // The demo week lets this constructor capture at the camera (D-075).
+  // The demo week gives this constructor camera access (D-075, Phase 26).
   { email: "constructor@cpoint.local", name: "Noel Manalo", role: "SHOE_CONSTRUCTOR" },
 ];
 
@@ -245,7 +245,7 @@ export async function ensureDemoInventory(): Promise<number> {
 
 /**
  * A past week of production for demos (D-026). Opt-in with SEED_DEMO_WEEK; runs only on a
- * database with no batches, so restarts never add another week.
+ * database with no rolls, so restarts never add another week.
  */
 export async function ensureDemoWeek(): Promise<void> {
   const { SEED_DEMO_WEEK, SEED_DEMO_USERS } = getEnv();

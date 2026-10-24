@@ -13,7 +13,7 @@ type Target =
   | { onPage: (page: number) => void; href?: never };
 
 /**
- * The pager under every paginated table (D-047): "Showing 16–30 of 42 batches", Previous, Next.
+ * The pager under every paginated table (D-047): "Showing 16–30 of 42 rolls", Previous, Next.
  * A list that fits on one page shows just its count.
  */
 export function TablePager({
@@ -31,7 +31,7 @@ export function TablePager({
   page: number;
   pageCount: number;
   total: number;
-  /** Singular and plural, e.g. ["batch", "batches"]. */
+  /** Singular and plural, e.g. ["roll", "rolls"]. */
   noun: readonly [string, string];
   /** Appended to the count; a pair when it agrees with it, e.g. [" that matches", " that match"]. */
   suffix?: string | readonly [string, string];

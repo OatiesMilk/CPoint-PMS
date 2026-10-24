@@ -7,7 +7,7 @@ import {
   type DefectRow,
 } from "@/server/models/report.model";
 
-// Reports (D-025): aggregates per Manila day, defect type or batch. Nothing here carries a
+// Reports (D-025): aggregates per Manila day, defect type or roll. Nothing here carries a
 // user id, name or email (D-008); tests/unit/report.service.test.ts checks that. A section is
 // Pass or Reject (D-093); a rejected section is reported "for salvage" (A-11).
 

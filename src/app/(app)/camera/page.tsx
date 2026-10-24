@@ -1,34 +1,26 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   Floor Manager / Quality Inspector setting up or checking the Preparation camera.
- * What:  know whether sections are being captured, which batch the scans go to, which model
- *        judged the last section, and where to capture from.
- * Worst: scans landing in the wrong roll's batch, or an early model's verdicts trusted blindly.
- *        The target batch is the biggest thing on the page; the early-model notice sits beside it.
+ * Who:   Floor Manager, Quality Inspector or System Admin checking the camera before cutting.
+ * What:  know whether sections are being captured, how many rolls are open, which model judged
+ *        the last section, and who captures (Phase 26: constructors on their own phones).
+ * Worst: an early model's verdicts trusted blindly. The early-model notice sits beside the model.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { Aperture, Camera, CircleDot, Cpu, PauseCircle } from "lucide-react";
+import { Camera, CircleDot, Cpu, PauseCircle } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { modelName } from "@/lib/camera-rules";
 import { readSnapshot } from "@/lib/decision-engine";
 import { formatDuration, formatManilaDateTime } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
-import {
-  cameraStatus,
-  listCameraOperators,
-  type CameraStatus,
-} from "@/server/services/camera.service";
+import { cameraStatus, type CameraStatus } from "@/server/services/camera.service";
 import { getScanDetail } from "@/server/services/scan-query.service";
 import { ScanImage } from "@/components/features/scans/scan-image";
-import { ActiveBatchForm } from "./active-batch-form";
-import { OperatorsPanel } from "./operators-panel";
 
 export const metadata: Metadata = { title: "Camera" };
 
@@ -68,9 +60,8 @@ export default async function CameraPage() {
     status.state === "capturing" && status.lastScan?.device
       ? { ...STATE.capturing, label: "Scans arriving" }
       : STATE[status.state];
-  const canManage = can(user.role, "camera:manage");
-  const canCapture = can(user.role, "camera:capture");
-  const operators = can(user.role, "camera:operators") ? await listCameraOperators() : null;
+  const canReadRolls = can(user.role, "roll:read");
+  const canGrant = can(user.role, "camera:operators");
   const lastModel = modelName(status.lastScan?.modelVersion);
   const fromSimulator = status.lastScan?.source === "SIMULATOR";
   const snapshot = last ? readSnapshot(last.thresholdsSnapshot) : null;
@@ -79,22 +70,12 @@ export default async function CameraPage() {
     <>
       <PageHeader
         title="Camera"
-        description="The camera at Preparation checks each leather section before cutting."
+        description="The constructors’ phones check each part of a roll before cutting."
         actions={
-          <>
-            <Badge tone={state.tone}>
-              <state.Icon aria-hidden />
-              {state.label}
-            </Badge>
-            {canCapture && (
-              <Button asChild variant="secondary">
-                <Link href="/camera/capture">
-                  <Aperture aria-hidden />
-                  Capture from this browser
-                </Link>
-              </Button>
-            )}
-          </>
+          <Badge tone={state.tone}>
+            <state.Icon aria-hidden />
+            {state.label}
+          </Badge>
         }
       />
 
@@ -104,7 +85,7 @@ export default async function CameraPage() {
             <>
               <ScanImage
                 src={`/api/v1/scans/${last.id}/image`}
-                alt={`Last capture: section #${last.sequence} of ${last.batch.code}`}
+                alt={`Last capture: section #${last.sequence} of ${last.roll.code}`}
                 rule={snapshot}
                 detections={last.detections.map((d) => ({
                   id: d.id,
@@ -116,7 +97,7 @@ export default async function CameraPage() {
                 }))}
               />
               <p className="text-sm text-muted-foreground">
-                Last capture: {last.batch.code} · section #{last.sequence},{" "}
+                Last capture: {last.roll.code} · section #{last.sequence},{" "}
                 {formatManilaDateTime(last.createdAt)}.{" "}
                 <Link href={`/scans/${last.id}`} className="underline underline-offset-4">
                   Open scan
@@ -138,52 +119,29 @@ export default async function CameraPage() {
         <div className="flex flex-col gap-4">
           <Card>
             <CardHeader>
-              <CardTitle>Scans go to</CardTitle>
+              <CardTitle>Rolls being captured</CardTitle>
               <CardDescription>{stateText(status, now)}</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              {status.current ? (
-                <div>
-                  <Link
-                    href={`/batches/${status.current.id}`}
-                    className="font-mono text-2xl font-semibold underline-offset-4 hover:underline"
-                  >
-                    {status.current.code}
-                  </Link>
-                  <p className="text-muted-foreground">
-                    {status.current.shoeType.name} · roll {status.current.rollCode}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {status.current.selection === "selected"
-                      ? "Chosen on this page."
-                      : "Automatic: the batch that has been at Preparation the longest."}
-                  </p>
-                </div>
-              ) : (
-                <p className="rounded-md bg-caution-soft p-3 text-sm">
-                  No batch is at Preparation, so Capture stays off.{" "}
-                  <Link href="/batches?status=PLANNED" className="underline underline-offset-4">
-                    Start a batch
-                  </Link>{" "}
-                  first.
-                </p>
-              )}
-              {canManage && status.candidates.length > 0 && (
-                <ActiveBatchForm
-                  selectedId={
-                    status.selectedBatchId &&
-                    status.candidates.some((c) => c.id === status.selectedBatchId)
-                      ? status.selectedBatchId
-                      : null
-                  }
-                  options={status.candidates.map((c) => ({
-                    id: c.id,
-                    code: c.code,
-                    rollCode: c.rollCode,
-                    shoeType: c.shoeType.name,
-                  }))}
-                />
-              )}
+            <CardContent>
+              <p className="text-2xl font-semibold tabular-nums">
+                {status.openRolls === 0
+                  ? "No roll open"
+                  : `${status.openRolls} ${status.openRolls === 1 ? "roll" : "rolls"} open`}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Constructors start, capture and finish each roll on the Capture page.
+                {canReadRolls && (
+                  <>
+                    {" "}
+                    <Link
+                      href="/reports/rolls?status=OPEN"
+                      className="underline underline-offset-4"
+                    >
+                      See open rolls
+                    </Link>
+                  </>
+                )}
+              </p>
             </CardContent>
           </Card>
 
@@ -212,19 +170,23 @@ export default async function CameraPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex flex-col gap-1 text-sm">
-                <p className="font-medium">From the Capture page</p>
+                <p className="font-medium">On a constructor&rsquo;s own phone</p>
                 <p>
-                  Open{" "}
-                  {canCapture ? (
-                    <Link href="/camera/capture" className="underline underline-offset-4">
-                      Capture
-                    </Link>
+                  Shoe Constructors with camera access open <strong>Capture</strong> on their phone,
+                  set on a stand at a fixed position, through the site&rsquo;s https:// link (the
+                  Cloudflare Tunnel; see the README). A PC with a monitor can use{" "}
+                  <strong>Floor view</strong> there.{" "}
+                  {canGrant ? (
+                    <>
+                      Give or remove camera access in{" "}
+                      <Link href="/admin/users" className="underline underline-offset-4">
+                        Users
+                      </Link>
+                      .
+                    </>
                   ) : (
-                    <strong>Capture</strong>
-                  )}{" "}
-                  on the PC at Preparation, with the fixed camera. Use <strong>Floor view</strong>{" "}
-                  there for a monitor facing the operator. On another computer, open the site
-                  through its https:// link (the Cloudflare Tunnel; see the README).
+                    "The System Admin gives camera access."
+                  )}
                 </p>
               </div>
               <div className="flex flex-col gap-1 text-sm">
@@ -238,8 +200,6 @@ export default async function CameraPage() {
           </Card>
         </div>
       </div>
-
-      {operators && <OperatorsPanel people={operators} />}
     </>
   );
 }

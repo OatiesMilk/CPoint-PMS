@@ -13,24 +13,14 @@ test("health endpoint reports app and database up", async ({ request }) => {
   expect((await res.json()).checks).toEqual({ app: "up", database: "up" });
 });
 
+// Phase 26: rolls moved to Reports (the FM), and only constructors capture.
 const EXPECTED_NAV = {
-  manager: [
-    "Overview",
-    "Production",
-    "Attendance",
-    "Batches",
-    "Inventory",
-    "Camera",
-    "Capture",
-    "Scans",
-    "Reports",
-  ],
-  inspector: ["Overview", "Production", "Batches", "Camera", "Capture", "Scans", "Reports"],
+  manager: ["Overview", "Production", "Attendance", "Inventory", "Camera", "Scans", "Reports"],
+  inspector: ["Overview", "Production", "Camera", "Scans", "Reports"],
   admin: [
     "Overview",
     "Production",
     "Attendance",
-    "Batches",
     "Inventory",
     "Camera",
     "Scans",
@@ -39,20 +29,9 @@ const EXPECTED_NAV = {
     "API tokens",
     "Audit log",
   ],
-  constructor: ["Home"],
+  // Capture is a constructor's only page and home, with or without camera access.
+  constructor: ["Capture"],
 } as const;
-
-/** Whether this account may capture at the camera, read from the database the app uses. */
-async function canCapture(email: string): Promise<boolean> {
-  const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
-  await db.connect();
-  try {
-    const { rows } = await db.query('SELECT "canCapture" FROM users WHERE email = $1', [email]);
-    return rows[0]?.canCapture === true;
-  } finally {
-    await db.end();
-  }
-}
 
 for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
   const account = ACCOUNTS[role];
@@ -60,10 +39,7 @@ for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
     await page.goto("/login");
     await signIn(page, account.email);
     await expect(page).toHaveURL(account.home);
-    // A constructor allowed to capture also gets Capture (D-075); the dev data may allow the demo one.
-    const expected: string[] = [...EXPECTED_NAV[role]];
-    if (role === "constructor" && (await canCapture(account.email))) expected.push("Capture");
-    expect(await navLabels(page)).toEqual(expected);
+    expect(await navLabels(page)).toEqual([...EXPECTED_NAV[role]]);
   });
 }
 

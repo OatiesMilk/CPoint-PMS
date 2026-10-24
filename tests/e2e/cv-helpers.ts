@@ -32,9 +32,12 @@ export async function createDeviceToken(
   return { token, id };
 }
 
-export async function shoeTypeId(): Promise<string> {
+/** The first active supplier: Start roll needs one (Phase 26). */
+export async function supplierId(): Promise<string> {
   return withDb(
-    async (db) => (await db.query(`SELECT id FROM shoe_types WHERE code = 'SCH'`)).rows[0].id,
+    async (db) =>
+      (await db.query(`SELECT id FROM suppliers WHERE "isActive" ORDER BY name LIMIT 1`)).rows[0]
+        .id,
   );
 }
 
@@ -46,7 +49,7 @@ export async function shoeTypeId(): Promise<string> {
  */
 async function apiAs(
   browser: Browser,
-  account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS],
+  account: { email: string; home: string },
 ): Promise<APIRequestContext> {
   const page = await browser.newPage();
   try {
@@ -74,26 +77,35 @@ export function inspectorApi(browser: Browser): Promise<APIRequestContext> {
   return apiAs(browser, ACCOUNTS.inspector);
 }
 
-export async function createBatch(
+/**
+ * An API client for a fresh Shoe Constructor with camera access (Phase 26: only they start, capture
+ * and finish rolls). Each call makes its own account, so parallel tests never share one.
+ */
+export async function captureApi(browser: Browser): Promise<APIRequestContext> {
+  const sc = await makeConstructor({ canCapture: true });
+  return apiAs(browser, { email: sc.email, home: "/camera/capture" });
+}
+
+/** Start roll at Capture, as a constructor with camera access. The roll is open. */
+export async function createRoll(
   api: APIRequestContext,
-  start = true,
+  options: { supplierId?: string; tagCode?: string } = {},
 ): Promise<{ id: string; code: string }> {
-  const res = await api.post("/api/v1/batches", {
+  const res = await api.post("/api/v1/rolls", {
     data: {
-      rollCode: `E2E-CV-${randomBytes(3).toString("hex").toUpperCase()}`,
-      shoeTypeId: await shoeTypeId(),
-      receivedAt: "2026-01-15",
+      supplierId: options.supplierId ?? (await supplierId()),
+      tagCode: options.tagCode ?? `E2E-${randomBytes(3).toString("hex").toUpperCase()}`,
     },
   });
   expect(res.status()).toBe(201);
   const { id, code } = (await res.json()).data;
-  if (start) {
-    const s = await api.post(`/api/v1/batches/${id}/stages`, {
-      data: { action: "start", expectedStage: "PREPARATION" },
-    });
-    expect(s.status()).toBe(200);
-  }
   return { id, code };
+}
+
+/** Finish roll at Capture (it needs at least one shot). */
+export async function finishRoll(api: APIRequestContext, id: string) {
+  const res = await api.post(`/api/v1/rolls/${id}/finish`, { data: {} });
+  expect(res.status()).toBe(200);
 }
 
 let jpeg: Buffer | undefined;
@@ -142,7 +154,7 @@ export type Det = {
 export async function postScan(
   request: APIRequestContext,
   token: string,
-  batchId: string,
+  rollId: string,
   detections: Det[],
   image?: Buffer,
 ) {
@@ -158,7 +170,7 @@ export async function postScan(
           box: d.box ?? { x: 0.1 + i * 0.3, y: 0.2, width: 0.2, height: 0.2 },
         })),
       ),
-      batchId,
+      rollId,
       source: "SIMULATOR",
     },
   });
@@ -169,15 +181,17 @@ export async function postScan(
  * constructor). It reuses the demo constructor's password hash, so it signs in with the demo
  * password.
  */
-export async function makeConstructor(): Promise<{ id: string; email: string }> {
+export async function makeConstructor(
+  options: { canCapture?: boolean } = {},
+): Promise<{ id: string; email: string }> {
   const id = randomUUID();
   const email = `sc-${randomBytes(4).toString("hex")}@e2e.local`;
   await withDb((db) =>
     db.query(
-      `INSERT INTO users (id, name, email, "passwordHash", role, "updatedAt")
-       SELECT $1, $2, $3, "passwordHash", 'SHOE_CONSTRUCTOR', now() FROM users
+      `INSERT INTO users (id, name, email, "passwordHash", role, "canCapture", "updatedAt")
+       SELECT $1, $2, $3, "passwordHash", 'SHOE_CONSTRUCTOR', $4, now() FROM users
        WHERE email = 'constructor@cpoint.local'`,
-      [id, `E2E Constructor ${email.slice(3, 11)}`, email],
+      [id, `E2E Constructor ${email.slice(3, 11)}`, email, options.canCapture ?? false],
     ),
   );
   return { id, email };

@@ -17,8 +17,8 @@ export const SCAN_PAGE_SIZE = PAGE_SIZE;
 export type ScanListItem = {
   id: string;
   sequence: number;
-  batchId: string;
-  batchCode: string;
+  rollId: string;
+  rollCode: string;
   aiVerdict: Verdict;
   finalVerdict: Verdict;
   maxConfidence: number | null;
@@ -33,8 +33,8 @@ function toItem(row: ScanListRow): ScanListItem {
   return {
     id: row.id,
     sequence: row.sequence,
-    batchId: row.batch.id,
-    batchCode: row.batch.code,
+    rollId: row.roll.id,
+    rollCode: row.roll.code,
     aiVerdict: row.aiVerdict,
     finalVerdict: row.finalVerdict,
     maxConfidence: row.maxConfidence,
@@ -54,7 +54,7 @@ function filtersFrom(q: ScanListQuery): ScanFilters {
   return {
     verdict: q.verdict,
     source: q.source,
-    batchCode: q.batch,
+    rollCode: q.roll,
     defectKey: q.defect,
   };
 }
@@ -95,10 +95,10 @@ export async function inspectorSummary(now: Date = new Date()) {
 }
 
 /** A roll's sections: passed, rejected (reported for salvage, A-11) and the total. */
-export type BatchYield = { passed: number; rejected: number; scanned: number };
+export type RollYield = { passed: number; rejected: number; scanned: number };
 
-export async function batchYield(batchId: string): Promise<BatchYield> {
-  const groups = await countScansByVerdict(batchId);
+export async function rollYield(rollId: string): Promise<RollYield> {
+  const groups = await countScansByVerdict(rollId);
   const scans = (v: Verdict) => groups.find((g) => g.finalVerdict === v)?._count._all ?? 0;
   const passed = scans("PASS");
   const rejected = scans("REJECT");

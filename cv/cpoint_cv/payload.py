@@ -27,9 +27,9 @@ def build_fields(
     captured_at: datetime,
     *,
     capture_id: str | None = None,
-    batch_id: str | None = None,
+    roll_id: str | None = None,
 ) -> dict[str, str]:
-    """``capture_id`` makes a retry safe (D-051); ``batch_id`` pins the batch shown at capture."""
+    """``capture_id`` makes a retry safe (D-051); ``roll_id`` names the roll the shot belongs to."""
     if source not in SOURCES:
         raise ValueError(f"source must be one of {', '.join(SOURCES)}; got {source!r}.")
     if captured_at.tzinfo is None or captured_at.utcoffset() is None:
@@ -49,6 +49,6 @@ def build_fields(
     }
     if capture_id is not None:
         fields["captureId"] = capture_id
-    if batch_id is not None:
-        fields["batchId"] = batch_id
+    if roll_id is not None:
+        fields["rollId"] = roll_id
     return fields

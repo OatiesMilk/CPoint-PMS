@@ -67,10 +67,16 @@ export async function requireApiCapture(): Promise<SessionUser> {
   return user;
 }
 
-/** Route handlers: same checks, but as 401/403 JSON errors instead of redirects. */
-export async function requireApiPermission(permission: Permission): Promise<SessionUser> {
+/**
+ * Route handlers: same checks, but as 401/403 JSON errors instead of redirects. `message` replaces
+ * the generic 403 sentence where a route says who may do it instead.
+ */
+export async function requireApiPermission(
+  permission: Permission,
+  message?: string,
+): Promise<SessionUser> {
   const user = await requireApiUser();
-  if (!can(user.role, permission)) throw Errors.forbidden();
+  if (!can(user.role, permission)) throw Errors.forbidden(message);
   return user;
 }
 

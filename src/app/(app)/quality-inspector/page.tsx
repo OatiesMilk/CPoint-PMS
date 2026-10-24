@@ -1,19 +1,18 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   the Quality Inspector, at a desk next to the line, through the whole shift.
- * What:  capture sections at the camera, whose Pass or Reject is final (D-093), and count the
- *        pairs finished at each production check-in (D-084).
- * Worst: a check-in is missed. Capturing is the primary action; today's sections are context.
+ * What:  count the pairs finished at each production check-in (D-084) and follow today's
+ *        sections, whose Pass or Reject is final (D-093). The constructors capture (Phase 26).
+ * Worst: a check-in is missed. The next check-in comes first; today's sections are context.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { Aperture, CircleX, ScanLine } from "lucide-react";
+import { CircleX, ScanLine } from "lucide-react";
 import { DefectsTodayCard } from "@/components/features/reports/home-cards";
 import { PageHeader } from "@/components/features/page-header";
 import { NextCheckInCard } from "@/components/features/production/production-cards";
 import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/server/policies/guard";
 import { productionToday } from "@/server/services/production.service";
@@ -53,14 +52,6 @@ export default async function QualityInspectorHome() {
       <PageHeader
         title={`Good day, ${user.name.split(" ")[0]}`}
         description="Today’s inspection work."
-        actions={
-          <Button asChild>
-            <Link href="/camera/capture">
-              <Aperture aria-hidden />
-              Capture sections
-            </Link>
-          </Button>
-        }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <NextCheckInCard today={production} />

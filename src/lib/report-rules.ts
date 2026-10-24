@@ -2,7 +2,7 @@ import { manilaToday } from "./format";
 
 /**
  * Report rules (D-025), pure and client-safe. Every report is an aggregate per day, shoe type, defect
- * type or batch, never per person (D-008). Days are Manila calendar days (UTC+8, no DST).
+ * type or roll, never per person (D-008). Days are Manila calendar days (UTC+8, no DST).
  */
 
 export const MAX_RANGE_DAYS = 92;

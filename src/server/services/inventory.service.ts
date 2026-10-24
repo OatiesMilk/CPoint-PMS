@@ -12,7 +12,6 @@ import {
   type StockLevel,
 } from "@/lib/inventory-rules";
 import { Errors } from "@/server/lib/errors";
-import { listOpenBatches } from "@/server/models/batch.model";
 import { runInTransaction } from "@/server/models/db";
 import {
   applyStockDelta,
@@ -25,7 +24,6 @@ import {
   listInventoryItems,
   listItemCodes,
   listMovements,
-  listRollItemsInStock,
   lowStockItems,
   sumNewerDeltas,
   updateInventoryItem,
@@ -129,18 +127,6 @@ export async function lowStockSummary(take = 5) {
   return { count, items: rows.map(toItem) };
 }
 
-/** Batches stock can be used for: planned or in progress. */
-export async function usageBatchOptions() {
-  const rows = await listOpenBatches();
-  return rows.map((b) => ({ id: b.id, code: b.code }));
-}
-
-/** Leather-roll items the batch form can take a roll from. */
-export async function rollItemOptions() {
-  const rows = await listRollItemsInStock();
-  return rows.map((r) => ({ ...r, quantityOnHand: Number(r.quantityOnHand) }));
-}
-
 // ───────────── item writes ─────────────
 
 async function assertCodeFree(sku: string, exceptId?: string) {
@@ -242,12 +228,12 @@ const STALE_COUNT =
 /**
  * Writes one movement and its stock change in the caller's transaction (D-023). The update is
  * conditional: usage can't take stock below zero, and a count only applies to the stock it saw.
- * Other services (batch roll consumption) use this too, so the ledger has one write path.
+ * The Undo keeps an old movement's roll link (from before Phase 26); new usage names no roll.
  */
 export async function postMovement(
   tx: Tx,
   item: Pick<InventoryItem, "id" | "sku" | "name" | "unit" | "quantityOnHand">,
-  input: { type: MovementType; delta: number; reason: string; batchId?: string | null },
+  input: { type: MovementType; delta: number; reason: string; rollId?: string | null },
   actor: Actor,
   now: Date,
 ) {
@@ -271,7 +257,7 @@ export async function postMovement(
       type: input.type,
       quantityDelta: input.delta,
       reason: input.reason,
-      batchId: input.batchId ?? null,
+      rollId: input.rollId ?? null,
       createdById: actor.id,
       createdAt: now,
     },
@@ -289,7 +275,7 @@ export async function postMovement(
       change: input.delta,
       quantityOnHand: onHandAfter,
       reason: input.reason,
-      batchId: input.batchId ?? null,
+      rollId: input.rollId ?? null,
     },
   });
   return { movementId: movement.id, onHandAfter };
@@ -317,7 +303,6 @@ export async function recordMovement(
         type: body.type,
         delta: plan.delta,
         reason: plan.reason,
-        batchId: body.type === "OUT" ? body.batchId : undefined,
       },
       actor,
       now,
@@ -356,7 +341,7 @@ export async function reverseMovement(movementId: string, actor: Actor, now = ne
         type: reversal.type,
         delta: -delta,
         reason: `Undo: ${movement.reason}`,
-        batchId: movement.batch?.id,
+        rollId: movement.roll?.id,
       },
       actor,
       now,

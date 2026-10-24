@@ -189,7 +189,7 @@ export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"
 }
 
 /**
- * Supplier quality (Phase 20): how each supplier's leather scanned at Preparation, worst first, and
+ * Supplier quality (Phase 20): how each supplier's leather scanned before cutting, worst first, and
  * the rolls with the most rejects, each with a claim sheet. Grouped by supplier and roll, never by
  * person (D-008).
  */
@@ -212,8 +212,8 @@ export function SupplierQualityCard({
           <div>
             <CardTitle>Supplier quality</CardTitle>
             <CardDescription>
-              Sections scanned at Preparation in this range, grouped by the supplier of each roll.
-              Use it as evidence when raising a claim.
+              Shots captured in this range, grouped by the supplier of each roll. Use it as evidence
+              when raising a claim.
               {lineRejectShare !== null &&
                 ` Across all suppliers, ${formatPercent(lineRejectShare)} were rejected.`}
             </CardDescription>
@@ -283,7 +283,7 @@ export function SupplierQualityCard({
             <Table data-testid="rejected-rolls">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Roll · batch</TableHead>
+                  <TableHead>Roll · tag</TableHead>
                   <TableHead>Supplier</TableHead>
                   <TableHead numeric>Rejected</TableHead>
                   <TableHead>Defects</TableHead>
@@ -294,9 +294,10 @@ export function SupplierQualityCard({
               </TableHeader>
               <TableBody>
                 {rolls.map((r) => (
-                  <TableRow key={r.batchId}>
+                  <TableRow key={r.rollId}>
                     <TableCell className="font-mono whitespace-nowrap">
-                      {r.rollCode} · {r.batchCode}
+                      {r.rollCode}
+                      {r.tagCode && ` · ${r.tagCode}`}
                     </TableCell>
                     <TableCell>{r.supplier}</TableCell>
                     <TableCell numeric className="whitespace-nowrap">
@@ -308,8 +309,8 @@ export function SupplierQualityCard({
                     <TableCell className="text-right">
                       <Button asChild size="sm" variant="secondary">
                         <Link
-                          href={`/reports/claims/${r.batchId}`}
-                          aria-label={`Claim sheet for roll ${r.rollCode}, batch ${r.batchCode}`}
+                          href={`/reports/claims/${r.rollId}`}
+                          aria-label={`Claim sheet for roll ${r.rollCode}`}
                         >
                           <FileText aria-hidden />
                           Claim sheet

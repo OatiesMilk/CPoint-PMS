@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { outcomeGroups, readSnapshot } from "@/lib/decision-engine";
 import { formatManilaDateTime, formatPercent } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
+import { can } from "@/server/policies/permissions";
 import { getScanDetail } from "@/server/services/scan-query.service";
 import { isScanId } from "@/server/validators/scan.validator";
 import { ScanViewer } from "./scan-viewer";
@@ -30,7 +31,9 @@ const SOURCE: Record<string, string> = {
 };
 
 export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]">) {
-  await requirePermission("scan:read");
+  const user = await requirePermission("scan:read");
+  // Roll pages are in Reports → Rolls, for the Floor Manager only (Phase 26).
+  const canOpenRoll = can(user.role, "roll:read");
   const { id } = await params;
   if (!isScanId(id)) notFound();
   const scan = await getScanDetail(id);
@@ -55,7 +58,7 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
       </div>
       <PageHeader
         title={`Section #${scan.sequence}`}
-        description={`Batch ${scan.batch.code} · ${scan.batch.shoeType.name} · captured ${formatManilaDateTime(scan.capturedAt)}`}
+        description={`Roll ${scan.roll.code} · captured ${formatManilaDateTime(scan.capturedAt)}`}
         actions={<VerdictBadge verdict={scan.finalVerdict} />}
       />
 
@@ -77,7 +80,7 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
         <div className="xl:col-span-2">
           <ScanViewer
             src={`/api/v1/scans/${scan.id}/image`}
-            alt={`Leather section #${scan.sequence} of batch ${scan.batch.code}`}
+            alt={`Leather section #${scan.sequence} of roll ${scan.roll.code}`}
             rule={rule}
             detections={scan.detections.map((d) => ({
               id: d.id,
@@ -150,13 +153,24 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                 <dd>{scan.deviceToken?.name ?? "—"}</dd>
                 <dt className="text-muted-foreground">Model</dt>
                 <dd>{scan.modelVersion ?? "—"}</dd>
-                <dt className="text-muted-foreground">Batch</dt>
+                <dt className="text-muted-foreground">Roll</dt>
                 <dd>
+                  {canOpenRoll ? (
+                    <Link
+                      href={`/reports/rolls/${scan.roll.id}`}
+                      className="font-mono underline underline-offset-4"
+                    >
+                      {scan.roll.code}
+                    </Link>
+                  ) : (
+                    <span className="font-mono">{scan.roll.code}</span>
+                  )}
+                  {" · "}
                   <Link
-                    href={`/batches/${scan.batch.id}`}
-                    className="font-mono underline underline-offset-4"
+                    href={`/scans?roll=${encodeURIComponent(scan.roll.code)}`}
+                    className="underline underline-offset-4"
                   >
-                    {scan.batch.code}
+                    Scans of this roll
                   </Link>
                 </dd>
               </dl>

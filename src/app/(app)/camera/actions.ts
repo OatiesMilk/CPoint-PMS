@@ -4,21 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { toActionError, type ActionResult } from "@/server/lib/action-result";
 import { requirePermission } from "@/server/policies/guard";
-import { setActiveBatch, setCameraOperator } from "@/server/services/camera.service";
+import { setCameraOperator } from "@/server/services/camera.service";
 import { cameraOperatorSchema } from "@/server/validators/scan.validator";
 
-export async function setActiveBatchAction(batchId: string | null): Promise<ActionResult> {
-  const user = await requirePermission("camera:manage");
-  try {
-    await setActiveBatch(batchId ? z.uuid().parse(batchId) : null, user);
-    revalidatePath("/camera");
-    return { ok: true };
-  } catch (error) {
-    return toActionError(error, "Camera batch change");
-  }
-}
-
-/** Allow or stop a Shoe Constructor capturing at the camera (Floor Manager or System Admin, D-075). */
+/** Allow or stop a Shoe Constructor capturing (the System Admin only, D-075, D-095). */
 export async function setCameraOperatorAction(
   userId: string,
   canCapture: boolean,
@@ -30,10 +19,9 @@ export async function setCameraOperatorAction(
       cameraOperatorSchema.parse({ canCapture }).canCapture,
       user,
     );
-    revalidatePath("/camera");
     revalidatePath("/admin/users");
     return { ok: true };
   } catch (error) {
-    return toActionError(error, "Camera operator change");
+    return toActionError(error, "Camera access change");
   }
 }

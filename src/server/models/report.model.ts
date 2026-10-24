@@ -24,8 +24,10 @@ export async function dailyScanStats(range: Range, db: Db = defaultDb()): Promis
       count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
       count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
     FROM scans s
+    JOIN batches b ON b.id = s."batchId"
     WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
       AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+      AND b.status <> 'CANCELLED' -- a cancelled roll never went on to cutting (Phase 26)
     GROUP BY 1`;
   return rows.map((r) => ({
     day: String(r.day),
@@ -35,15 +37,13 @@ export async function dailyScanStats(range: Range, db: Db = defaultDb()): Promis
   }));
 }
 
-/** Batches started (first Preparation log) and completed (last log closed) per Manila day. */
+/** Rolls started and finished per Manila day (Phase 26: the roll's own start and finish times). */
 export async function dailyProduction(range: Range, db: Db = defaultDb()) {
   const rows = await db.$queryRaw<{ day: string; started: bigint; completed: bigint }[]>`
     WITH started AS (
-      SELECT min(l."startedAt") AS at FROM batch_stage_logs l GROUP BY l."batchId"
+      SELECT b."startedAt" AS at FROM batches b WHERE b.status <> 'CANCELLED'
     ), completed AS (
-      SELECT max(l."endedAt") AS at
-      FROM batch_stage_logs l JOIN batches b ON b.id = l."batchId"
-      WHERE b.status = 'COMPLETED' GROUP BY l."batchId"
+      SELECT b."finishedAt" AS at FROM batches b WHERE b.status = 'FINISHED'
     ), events AS (
       SELECT at, 1 AS s, 0 AS c FROM started UNION ALL SELECT at, 0, 1 FROM completed
     )
@@ -77,8 +77,10 @@ export async function defectBreakdown(range: Range, db: Db = defaultDb()): Promi
     WITH top AS (
       SELECT DISTINCT ON (d."scanId") d."scanId", d."rawClassKey", d."defectTypeId"
       FROM detections d JOIN scans s ON s.id = d."scanId"
+      JOIN batches b ON b.id = s."batchId"
       WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
         AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+        AND b.status <> 'CANCELLED' 
       ORDER BY d."scanId", d.confidence DESC
     )
     SELECT coalesce(t.key, top."rawClassKey") AS key,

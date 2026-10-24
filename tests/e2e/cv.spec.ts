@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
 import {
-  createBatch,
+  captureApi,
+  createRoll,
   createDeviceToken,
+  finishRoll,
   inspectorApi,
-  managerApi,
   postScan,
   withDb,
 } from "./cv-helpers";
@@ -14,8 +15,7 @@ test.describe("camera ingestion API", () => {
     browser,
     request,
   }) => {
-    const api = await managerApi(browser);
-    const batch = await createBatch(api);
+    const roll = await createRoll(await captureApi(browser));
     const { token } = await createDeviceToken();
 
     const cases = [
@@ -26,10 +26,10 @@ test.describe("camera ingestion API", () => {
       { dets: [{ classKey: "sim-unknown", confidence: 0.8 }], verdict: "REJECT" },
     ];
     for (const [i, c] of cases.entries()) {
-      const res = await postScan(request, token, batch.id, c.dets);
+      const res = await postScan(request, token, roll.id, c.dets);
       expect(res.status()).toBe(201);
       const data = (await res.json()).data;
-      expect(data).toMatchObject({ batchCode: batch.code, sequence: i + 1, verdict: c.verdict });
+      expect(data).toMatchObject({ rollCode: roll.code, sequence: i + 1, verdict: c.verdict });
       expect(data).not.toHaveProperty("status");
     }
 
@@ -37,13 +37,13 @@ test.describe("camera ingestion API", () => {
       final: (
         await db.query(
           `SELECT "finalVerdict"::text v FROM scans WHERE "batchId" = $1 ORDER BY sequence`,
-          [batch.id],
+          [roll.id],
         )
       ).rows.map((r) => r.v),
       unknown: (
         await db.query(
           `SELECT count(*)::int n FROM detections d JOIN scans s ON s.id = d."scanId" WHERE s."batchId" = $1 AND d."isUnknownClass"`,
-          [batch.id],
+          [roll.id],
         )
       ).rows[0].n,
     }));
@@ -53,14 +53,16 @@ test.describe("camera ingestion API", () => {
     });
   });
 
-  test("refuses missing or revoked tokens, non-images, and batches not at Preparation", async ({
+  test("refuses missing or revoked tokens, non-images, and finished rolls", async ({
     browser,
     request,
   }) => {
-    const api = await managerApi(browser);
-    const planned = await createBatch(api, false);
-    const active = await createBatch(api);
+    const api = await captureApi(browser);
+    const finished = await createRoll(api);
+    const active = await createRoll(api);
     const { token, id } = await createDeviceToken();
+    expect((await postScan(request, token, finished.id, [])).status()).toBe(201);
+    await finishRoll(api, finished.id);
 
     expect((await request.post("/api/v1/scans")).status()).toBe(401);
     expect((await postScan(request, "cpt_not-a-real-token", active.id, [])).status()).toBe(401);
@@ -74,8 +76,9 @@ test.describe("camera ingestion API", () => {
     );
     expect(notImage.status()).toBe(422);
 
-    const notAtPrep = await postScan(request, token, planned.id, []);
-    expect(notAtPrep.status()).toBe(409);
+    const closed = await postScan(request, token, finished.id, []);
+    expect(closed.status()).toBe(409);
+    expect((await closed.json()).error.code).toBe("ROLL_CLOSED");
 
     await withDb((db) => db.query(`UPDATE api_tokens SET "revokedAt" = now() WHERE id = $1`, [id]));
     expect((await postScan(request, token, active.id, [])).status()).toBe(401);
@@ -86,10 +89,9 @@ test("a section's page draws the boxes, explains the verdict and offers no chang
   browser,
   request,
 }) => {
-  const api = await managerApi(browser);
-  const batch = await createBatch(api);
+  const roll = await createRoll(await captureApi(browser));
   const { token } = await createDeviceToken();
-  const res = await postScan(request, token, batch.id, [
+  const res = await postScan(request, token, roll.id, [
     { classKey: "cut", confidence: 0.94 },
     { classKey: "dirt", confidence: 0.4 },
   ]);
@@ -133,28 +135,21 @@ test("the removed pages answer 404 (D-094)", async ({ page }) => {
     await expect(nav.getByRole("link", { name: label })).toHaveCount(0);
 });
 
-test("the Floor Manager chooses which batch the camera feeds", async ({ browser, page }) => {
-  const api = await managerApi(browser);
-  await createBatch(api);
-  const chosen = await createBatch(api);
-
-  await page.goto("/login");
-  await signIn(page, ACCOUNTS.manager.email);
-  await expect(page).toHaveURL(ACCOUNTS.manager.home);
-  await page.goto("/camera");
-  await page.getByLabel("Batch the camera feeds").selectOption({ value: chosen.id });
-  await page.getByRole("button", { name: "Use this batch" }).click();
-  await expect(page.getByText("Chosen on this page.")).toBeVisible();
-
-  const current = await page.request.get("/api/v1/batches/current");
-  expect((await current.json()).data).toMatchObject({ batchId: chosen.id, selection: "selected" });
-
-  // Back to automatic so other tests aren't affected.
-  await page.getByLabel("Batch the camera feeds").selectOption({ value: "" });
-  await page.getByRole("button", { name: "Use this batch" }).click();
-  await expect(
-    page.getByText("Automatic: the batch that has been at Preparation the longest."),
-  ).toBeVisible();
+test("a device token without a roll is told the roll open the longest (D-020's fallback)", async ({
+  browser,
+  request,
+}) => {
+  await createRoll(await captureApi(browser));
+  const { token } = await createDeviceToken();
+  expect((await request.get("/api/v1/rolls/current")).status()).toBe(401);
+  const current = await request.get("/api/v1/rolls/current", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(current.status()).toBe(200);
+  const data = (await current.json()).data;
+  expect(data).toMatchObject({ rollId: expect.any(String), code: expect.stringMatching(/^[RB]-/) });
+  // No person is named, not even "mine" (D-008).
+  expect(data).not.toHaveProperty("mine");
 });
 
 test("an admin creates a device token, sees it once, and revokes it", async ({
@@ -162,8 +157,7 @@ test("an admin creates a device token, sees it once, and revokes it", async ({
   page,
   request,
 }) => {
-  const api = await managerApi(browser);
-  const batch = await createBatch(api);
+  const roll = await createRoll(await captureApi(browser));
   const name = `E2E camera ${Date.now()}`;
 
   await page.goto("/login");
@@ -179,7 +173,7 @@ test("an admin creates a device token, sees it once, and revokes it", async ({
   await expect(page.getByText("You won’t see it again.")).toBeVisible();
   await page.getByRole("button", { name: "Done" }).click();
 
-  expect((await postScan(request, token, batch.id, [])).status()).toBe(201);
+  expect((await postScan(request, token, roll.id, [])).status()).toBe(201);
 
   const row = page.getByRole("row", { name: new RegExp(name) });
   await row.getByRole("button", { name: "Revoke…" }).click();
@@ -187,7 +181,7 @@ test("an admin creates a device token, sees it once, and revokes it", async ({
   // Revoked tokens sort after the active ones, so with more than 15 tokens this row moves past
   // page 1 (D-047): the toast confirms it, and the camera API refusing it is the real check.
   await expect(page.getByText(`“${name}” revoked.`)).toBeVisible();
-  expect((await postScan(request, token, batch.id, [])).status()).toBe(401);
+  expect((await postScan(request, token, roll.id, [])).status()).toBe(401);
 });
 
 test("the live feed on the inspector's home shows a new scan within seconds", async ({
@@ -195,16 +189,15 @@ test("the live feed on the inspector's home shows a new scan within seconds", as
   page,
   request,
 }) => {
-  const api = await managerApi(browser);
-  const batch = await createBatch(api);
+  const roll = await createRoll(await captureApi(browser));
   const { token } = await createDeviceToken();
 
   await page.goto("/login");
   await signIn(page, ACCOUNTS.inspector.email);
   await expect(page.getByText(/Updated \d+s ago/)).toBeVisible();
 
-  await postScan(request, token, batch.id, [{ classKey: "hole", confidence: 0.66 }]);
-  await expect(page.getByRole("link", { name: new RegExp(`${batch.code} · #1`) })).toBeVisible({
+  await postScan(request, token, roll.id, [{ classKey: "hole", confidence: 0.66 }]);
+  await expect(page.getByRole("link", { name: new RegExp(`${roll.code} · #1`) })).toBeVisible({
     timeout: 8_000,
   });
 });

@@ -19,17 +19,10 @@ enum Role {
   SHOE_CONSTRUCTOR
 }
 
-enum Stage {
-  PREPARATION
-  UPPER_MAKING
-  SOLEING
-  FINISHING
-}
-
-enum BatchStatus {
-  PLANNED
-  IN_PROGRESS
-  COMPLETED
+/// A roll is captured shot by shot at Capture until all of it is in (Phase 26, D-095).
+enum RollStatus {
+  OPEN
+  FINISHED
   CANCELLED
 }
 
@@ -88,15 +81,15 @@ model User {
   failedLoginCount   Int       @default(0)
   lockedUntil        DateTime?
   lastLoginAt        DateTime?
-  /// May capture at the camera (the Capture page and its Floor view). Shoe Constructors only;
-  /// the QI and the Floor Manager always can (D-075).
+  /// Has camera access: may start, capture and finish rolls at Capture on their phone. Shoe
+  /// Constructors only, granted by the System Admin (D-075, Phase 26).
   canCapture         Boolean   @default(false)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  batchesCreated    Batch[]              @relation("BatchCreatedBy")
-  stageLogsStarted  BatchStageLog[]      @relation("StageStartedBy")
-  stageLogsEnded    BatchStageLog[]      @relation("StageEndedBy")
+  rollsCreated      Roll[]               @relation("RollCreatedBy")
+  rollsFinished     Roll[]               @relation("RollFinishedBy")
+  rollsCancelled    Roll[]               @relation("RollCancelledBy")
   movements         InventoryMovement[]
   apiTokensCreated  ApiToken[]
   cvSettingsUpdates CvSettings[]
@@ -153,8 +146,8 @@ model AuditLog {
   actorType    ActorType
   actorUserId  String?   @db.Uuid
   actorTokenId String?   @db.Uuid
-  action       String // "user.login", "batch.create", "scan.override", ...
-  entity       String // "User", "Batch", "Scan", ...
+  action       String // "user.login", "roll.create", "scan.override", ...
+  entity       String // "User", "Roll", "Scan", ...
   entityId     String?
   before       Json?
   after        Json?
@@ -181,9 +174,8 @@ model ShoeType {
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
-  batches Batch[]
-  quotas  DailyQuota[]
-  counts  ProductionCount[]
+  quotas DailyQuota[]
+  counts ProductionCount[]
 
   @@map("shoe_types")
 }
@@ -197,22 +189,22 @@ model Supplier {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
-  batches Batch[]
+  rolls Roll[]
 
   @@map("suppliers")
 }
 
 model DefectType {
-  id          String         @id @default(uuid(7)) @db.Uuid
-  key         String         @unique // YOLO class key: "cut", "hole", "abrasion", "dirt"
+  id          String        @id @default(uuid(7)) @db.Uuid
+  key         String        @unique // YOLO class key: "cut", "hole", "abrasion", "dirt"
   label       String
   description String?
-  isActive    Boolean        @default(true) // inactive types are ignored by the decision engine
+  isActive    Boolean       @default(true) // inactive types are ignored by the decision engine
   /// Usable or Not accepted once found (confidence ≥ CvSettings.foundAtOrAbove, D-093)
   outcome     DefectOutcome
-  sortOrder   Int            @default(0)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  sortOrder   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   detections Detection[]
 
@@ -225,87 +217,67 @@ model CvSettings {
   foundAtOrAbove   Float    @default(0.5)
   /// Show the early-model notice on the Camera page (D-055).
   earlyModelNotice Boolean  @default(true)
-  /// The batch the single Preparation camera feeds (D-020). Null = oldest batch at Preparation.
-  activeBatchId    String?  @db.Uuid
   updatedById      String?  @db.Uuid
   updatedAt        DateTime @updatedAt
 
-  activeBatch Batch? @relation("CameraActiveBatch", fields: [activeBatchId], references: [id], onDelete: SetNull)
-  updatedBy   User?  @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
 
-  @@index([activeBatchId])
   @@index([updatedById])
   @@map("cv_settings")
 }
 
 // ───────────── production ─────────────
-model BatchSequence {
+model RollSequence {
   year      Int @id
   lastValue Int @default(0)
 
   @@map("batch_sequences")
 }
 
-model Batch {
-  id               String      @id @default(uuid(7)) @db.Uuid
-  code             String      @unique
-  rollCode         String
-  supplierId       String?     @db.Uuid
-  shoeTypeId       String      @db.Uuid
-  receivedAt       DateTime    @db.Date
-  targetQuotaPairs Int?
-  status           BatchStatus @default(PLANNED)
-  currentStage     Stage       @default(PREPARATION)
-  notes            String?
-  cancelledReason  String?
-  createdById      String      @db.Uuid
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+/// One leather roll from a supplier (the table keeps its old name, D-095). A Shoe Constructor
+/// with camera access starts it at Capture, captures it shot by shot and finishes it.
+model Roll {
+  id              String     @id @default(uuid(7)) @db.Uuid
+  code            String     @unique // R-YYYY-NNNN; rolls from before Phase 26 keep B-YYYY-NNNN
+  /// The number on the supplier's tag, optional.
+  tagCode         String?    @map("rollCode")
+  supplierId      String?    @db.Uuid // required at Start roll; older rolls may have none
+  receivedAt      DateTime?  @db.Date // older rolls only
+  status          RollStatus @default(OPEN)
+  /// Who started it: kept to default the Roll dropdown and in the audit log, never shown or
+  /// totalled per person (D-008).
+  createdById     String     @db.Uuid
+  startedAt       DateTime   @default(now())
+  finishedAt      DateTime?
+  finishedById    String?    @db.Uuid
+  cancelledAt     DateTime?
+  cancelledById   String?    @db.Uuid
+  cancelledReason String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-  supplier        Supplier?           @relation(fields: [supplierId], references: [id])
-  shoeType        ShoeType            @relation(fields: [shoeTypeId], references: [id])
-  createdBy       User                @relation("BatchCreatedBy", fields: [createdById], references: [id])
-  stageLogs       BatchStageLog[]
-  scans           Scan[]
-  cameraSettings  CvSettings[]        @relation("CameraActiveBatch")
-  movements       InventoryMovement[]
+  supplier    Supplier?           @relation(fields: [supplierId], references: [id])
+  createdBy   User                @relation("RollCreatedBy", fields: [createdById], references: [id])
+  finishedBy  User?               @relation("RollFinishedBy", fields: [finishedById], references: [id])
+  cancelledBy User?               @relation("RollCancelledBy", fields: [cancelledById], references: [id])
+  scans       Scan[]
+  movements   InventoryMovement[] // history only: rolls taken from stock before Phase 26
 
-  @@index([status, currentStage])
+  @@index([status, startedAt])
+  @@index([status, createdById])
   @@index([supplierId])
-  @@index([shoeTypeId])
   @@index([createdById])
+  @@index([finishedById])
+  @@index([cancelledById])
   @@index([createdAt])
   @@map("batches")
-}
-
-model BatchStageLog {
-  id          String    @id @default(uuid(7)) @db.Uuid
-  batchId     String    @db.Uuid
-  stage       Stage
-  startedAt   DateTime  @default(now())
-  endedAt     DateTime? // null = stage in progress (one open log per batch, enforced in service)
-  startedById String    @db.Uuid
-  endedById   String?   @db.Uuid
-  isRollback  Boolean   @default(false)
-  reason      String? // required when isRollback
-  notes       String?
-
-  batch     Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  startedBy User  @relation("StageStartedBy", fields: [startedById], references: [id])
-  endedBy   User? @relation("StageEndedBy", fields: [endedById], references: [id])
-
-  @@index([batchId, startedAt])
-  @@index([stage, startedAt])
-  @@index([startedById])
-  @@index([endedById])
-  @@map("batch_stage_logs")
 }
 
 // ───────────── computer vision ─────────────
 model Scan {
   id                 String     @id @default(uuid(7)) @db.Uuid
-  batchId            String     @db.Uuid
-  sequence           Int // 1..n within the batch
+  rollId             String     @map("batchId") @db.Uuid
+  sequence           Int // 1..n within the roll
   imagePath          String?
   imageMime          String?
   source             ScanSource
@@ -319,11 +291,11 @@ model Scan {
   capturedAt         DateTime   @default(now())
   createdAt          DateTime   @default(now())
 
-  batch         Batch          @relation(fields: [batchId], references: [id], onDelete: Restrict)
-  deviceToken   ApiToken?      @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
+  roll        Roll        @relation(fields: [rollId], references: [id], onDelete: Restrict)
+  deviceToken ApiToken?   @relation(fields: [deviceTokenId], references: [id], onDelete: SetNull)
   detections  Detection[]
 
-  @@unique([batchId, sequence])
+  @@unique([rollId, sequence])
   @@index([createdAt])
   @@index([finalVerdict])
   @@index([deviceTokenId])
@@ -375,16 +347,16 @@ model InventoryMovement {
   type          MovementType
   quantityDelta Decimal      @db.Decimal(12, 2) // + for IN, - for OUT, either sign for ADJUST
   reason        String
-  batchId       String?      @db.Uuid
+  rollId        String?      @map("batchId") @db.Uuid
   createdById   String       @db.Uuid
   createdAt     DateTime     @default(now())
 
   item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  batch     Batch?        @relation(fields: [batchId], references: [id])
+  roll      Roll?         @relation(fields: [rollId], references: [id])
   createdBy User          @relation(fields: [createdById], references: [id])
 
   @@index([itemId, createdAt])
-  @@index([batchId])
+  @@index([rollId])
   @@index([createdById])
   @@map("inventory_movements")
 }

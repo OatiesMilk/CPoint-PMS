@@ -1,8 +1,8 @@
 import type { Prisma, Verdict } from "@/generated/prisma/client";
 import { type Db, defaultDb } from "./db";
 
-export async function nextScanSequence(batchId: string, db: Db): Promise<number> {
-  const { _max } = await db.scan.aggregate({ where: { batchId }, _max: { sequence: true } });
+export async function nextScanSequence(rollId: string, db: Db): Promise<number> {
+  const { _max } = await db.scan.aggregate({ where: { rollId }, _max: { sequence: true } });
   return (_max.sequence ?? 0) + 1;
 }
 
@@ -23,7 +23,7 @@ export function findScanByCaptureId(captureId: string, db: Db = defaultDb()) {
       sequence: true,
       aiVerdict: true,
       deviceTokenId: true,
-      batch: { select: { id: true, code: true } },
+      roll: { select: { id: true, code: true } },
     },
   });
 }
@@ -31,7 +31,7 @@ export function findScanByCaptureId(captureId: string, db: Db = defaultDb()) {
 export function findScanById(id: string, db: Db = defaultDb()) {
   return db.scan.findUnique({
     where: { id },
-    include: { batch: { select: { id: true, code: true, status: true } } },
+    include: { roll: { select: { id: true, code: true, status: true } } },
   });
 }
 
@@ -46,7 +46,7 @@ const listSelect = {
   source: true,
   capturedAt: true,
   createdAt: true,
-  batch: { select: { id: true, code: true } },
+  roll: { select: { id: true, code: true } },
   detections: {
     orderBy: { confidence: "desc" },
     take: 1,
@@ -64,8 +64,8 @@ export type ScanListRow = Prisma.ScanGetPayload<{ select: typeof listSelect }>;
 export type ScanFilters = {
   verdict?: Verdict;
   source?: Prisma.ScanWhereInput["source"];
-  batchCode?: string;
-  batchId?: string;
+  rollCode?: string;
+  rollId?: string;
   since?: Date;
   defectKey?: string;
 };
@@ -73,9 +73,9 @@ export type ScanFilters = {
 function scanWhere(f: ScanFilters): Prisma.ScanWhereInput {
   return {
     source: f.source,
-    batchId: f.batchId,
+    rollId: f.rollId,
     ...(f.verdict ? { finalVerdict: f.verdict } : {}),
-    ...(f.batchCode ? { batch: { code: { contains: f.batchCode, mode: "insensitive" } } } : {}),
+    ...(f.rollCode ? { roll: { code: { contains: f.rollCode, mode: "insensitive" } } } : {}),
     ...(f.defectKey ? { detections: { some: { rawClassKey: f.defectKey } } } : {}),
     ...(f.since ? { createdAt: { gte: f.since } } : {}),
   };
@@ -105,13 +105,12 @@ export function countScans(filters: ScanFilters, db: Db = defaultDb()) {
 }
 
 const detailInclude = {
-  batch: {
+  roll: {
     select: {
       id: true,
       code: true,
-      rollCode: true,
+      tagCode: true,
       status: true,
-      shoeType: { select: { name: true } },
     },
   },
   deviceToken: { select: { name: true } },
@@ -127,8 +126,8 @@ export function findScanDetail(id: string, db: Db = defaultDb()): Promise<ScanDe
   return db.scan.findUnique({ where: { id }, include: detailInclude });
 }
 
-export function countScansByVerdict(batchId: string, db: Db = defaultDb()) {
-  return db.scan.groupBy({ by: ["finalVerdict"], where: { batchId }, _count: { _all: true } });
+export function countScansByVerdict(rollId: string, db: Db = defaultDb()) {
+  return db.scan.groupBy({ by: ["finalVerdict"], where: { rollId }, _count: { _all: true } });
 }
 
 export function findLatestScan(db: Db = defaultDb()) {

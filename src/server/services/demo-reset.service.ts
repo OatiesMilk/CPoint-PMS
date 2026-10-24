@@ -27,7 +27,7 @@ import { seedDemoWeek } from "./demo-seed.service";
  *
  * Keeps the bootstrap System Admin and the demo accounts, the device tokens given to it (so the
  * camera station keeps working), the bootstrap shoe types and suppliers, and the defect types.
- * Removes everything else: test accounts and tokens, batches, scans, stock
+ * Removes everything else: test accounts and tokens, rolls, scans, stock
  * movements and items, attendance, check-ins, the audit log, and the files on disk. Then it sets
  * the camera model's classes and their outcomes (D-052, A-13) and, unless told not to, seeds a fresh demo week,
  * which puts the demo inventory back at its opening stock.

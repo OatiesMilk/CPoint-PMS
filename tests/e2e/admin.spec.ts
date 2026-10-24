@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { createBatch, createDeviceToken, managerApi, postScan } from "./cv-helpers";
+import { captureApi, createRoll, createDeviceToken, managerApi, postScan } from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -156,9 +156,9 @@ test.describe("camera settings", () => {
     expect(old.status()).toBe(422);
 
     const api = await managerApi(browser);
-    const batch = await createBatch(api);
+    const roll = await createRoll(await captureApi(browser));
     const { token } = await createDeviceToken();
-    const res = await postScan(request, token, batch.id, [{ classKey: "cut", confidence: 0.47 }]);
+    const res = await postScan(request, token, roll.id, [{ classKey: "cut", confidence: 0.47 }]);
     expect(res.status()).toBe(201);
     const scan = (await res.json()).data;
     expect(scan.verdict).toBe("REJECT"); // a Not accepted cut found at 45%
@@ -173,10 +173,9 @@ test.describe("camera settings", () => {
     request,
   }) => {
     const key = `e2e-${suffix()}`;
-    const api = await managerApi(browser);
-    const batch = await createBatch(api);
+    const roll = await createRoll(await captureApi(browser));
     const { token } = await createDeviceToken();
-    const before = await postScan(request, token, batch.id, [{ classKey: key, confidence: 0.95 }]);
+    const before = await postScan(request, token, roll.id, [{ classKey: key, confidence: 0.95 }]);
     expect((await before.json()).data.verdict).toBe("REJECT"); // unknown classes reject (A-12)
 
     await signInAs(page, ACCOUNTS.admin);
@@ -201,7 +200,7 @@ test.describe("camera settings", () => {
     ).toBeVisible();
     await expect(page.getByTestId("unknown-classes").getByText(key)).toHaveCount(0);
 
-    const after = await postScan(request, token, batch.id, [{ classKey: key, confidence: 0.95 }]);
+    const after = await postScan(request, token, roll.id, [{ classKey: key, confidence: 0.95 }]);
     expect((await after.json()).data.verdict).toBe("PASS");
 
     // Leave it inactive so it doesn't change other runs.
@@ -211,7 +210,7 @@ test.describe("camera settings", () => {
   });
 });
 
-test("a deactivated shoe type or supplier disappears from the batch form", async ({
+test("a deactivated supplier disappears from the roll supplier lists (Phase 26)", async ({
   browser,
   page,
 }) => {
@@ -238,12 +237,10 @@ test("a deactivated shoe type or supplier disappears from the batch form", async
   await admin.getByLabel("Find supplier").fill(supplier);
   await expect(admin.getByRole("row", { name: supplier })).toContainText("0917 123 4567");
 
+  // Rolls no longer carry a shoe type; the supplier is listed at Start roll and in Reports → Rolls.
   await signInAs(page, ACCOUNTS.manager);
-  await page.goto("/batches/new");
-  await expect(page.getByLabel("Shoe type").getByRole("option", { name: shoe })).toHaveCount(1);
-  await expect(
-    page.getByLabel("Supplier (optional)").getByRole("option", { name: supplier }),
-  ).toHaveCount(1);
+  await page.goto("/reports/rolls?status=OPEN");
+  await expect(page.getByLabel("Supplier").getByRole("option", { name: supplier })).toHaveCount(1);
 
   await admin
     .getByRole("row", { name: supplier })
@@ -256,10 +253,7 @@ test("a deactivated shoe type or supplier disappears from the batch form", async
   await expect(admin.getByRole("row", { name: shoe })).toContainText("Inactive");
 
   await page.reload();
-  await expect(page.getByLabel("Shoe type").getByRole("option", { name: shoe })).toHaveCount(0);
-  await expect(
-    page.getByLabel("Supplier (optional)").getByRole("option", { name: supplier }),
-  ).toHaveCount(0);
+  await expect(page.getByLabel("Supplier").getByRole("option", { name: supplier })).toHaveCount(0);
   await admin.close();
 });
 

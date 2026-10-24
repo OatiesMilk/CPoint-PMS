@@ -18,13 +18,13 @@ const SOURCES = [
   ["DEDICATED_CAMERA", "Dedicated camera"],
 ] as const;
 
-/** URL-backed filters, like the batch list. Changing one resets to page 1. */
+/** URL-backed filters, like the roll list. Changing one resets to page 1. */
 export function ScanFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const [, startTransition] = useTransition();
-  const [batch, setBatch] = useState(params.get("batch") ?? "");
+  const [roll, setRoll] = useState(params.get("roll") ?? "");
   const debounce = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(debounce.current), []);
 
@@ -39,23 +39,23 @@ export function ScanFilters() {
   return (
     <div className="flex items-end gap-3">
       <div className="flex w-56 flex-col gap-1.5">
-        <Label htmlFor="filter-batch">Batch</Label>
+        <Label htmlFor="filter-roll">Roll</Label>
         <div className="relative">
           <Search
             aria-hidden
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
           />
           <Input
-            id="filter-batch"
+            id="filter-roll"
             type="search"
             className="pl-9"
             placeholder="e.g. B-2026-0003"
-            value={batch}
+            value={roll}
             onChange={(e) => {
-              setBatch(e.target.value);
+              setRoll(e.target.value);
               clearTimeout(debounce.current);
               const value = e.target.value.trim();
-              debounce.current = setTimeout(() => update("batch", value), 300);
+              debounce.current = setTimeout(() => update("roll", value), 300);
             }}
           />
         </div>

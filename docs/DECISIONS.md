@@ -1689,3 +1689,62 @@ of D-033.
 `src/app/(app)/{floor-manager,quality-inspector}/page.tsx`, `src/server/services/audit-query.service.ts`.
 **Consequences:** the dev database loses its repair tickets and salvage items when the migration
 runs. Tell CPoint the three screens are gone.
+
+### D-095 · 2026-10-24 · Accepted — Rolls start, are captured and finish at Capture; Batch becomes Roll in the code (Phase 26)
+
+**Context:** CPoint captures on the constructors' own phones, and only the constructors the System
+Admin allows (C-18, C-23, C-33). A leather roll has no production stages; it is scanned before it
+goes on (Dylan, 24 Oct). DQ-1 renames the leather-roll `Batch` to `Roll` so Phase 27 can use
+"batch" for the check-in interval.
+**Decision:**
+
+- `Batch` is `Roll` in the code (model, services, controller, validator, routes `/api/v1/rolls`,
+  permissions `roll:read` and `roll:manage`). The table stays `batches` (`@@map`), the scan column
+  stays `batchId`. New codes are `R-YYYY-NNNN`; older rolls keep `B-`. A roll's own code from the
+  supplier is the optional "tag".
+- A roll is OPEN, FINISHED or CANCELLED. Stages, the stage log, the target quota, notes, the shoe
+  type and the camera's chosen batch are gone (migration `rolls_at_capture`, converting first:
+  PLANNED and IN_PROGRESS → OPEN, COMPLETED → FINISHED, start and finish from the stage log).
+- **Start roll** is at Capture; the supplier is required, the tag optional. Several rolls may be
+  open at once; Capture's **Roll** dropdown says where each shot goes. It lists every
+  open roll, starting on the one this browser last used, else the newest this person started,
+  else the only one; with several and none of those, nobody's shot goes to a guess.
+- **Finish roll** is at Capture only, and needs at least one shot. The Floor Manager doesn't
+  finish rolls.
+- **Cancel:** at Capture, anyone with camera access cancels an **empty** roll. The Floor Manager
+  cancels **any** open roll from Reports → Rolls, with a required reason. Nothing is deleted; a
+  cancelled roll keeps its shots, which are left out of the reports.
+- A shot sent to a roll that was finished or cancelled meanwhile is refused before the model runs
+  (`409 ROLL_CLOSED`); a website capture with no roll is `409 NO_ROLL_CHOSEN`. The simulator and a
+  device token send to the roll open longest (`409 NO_OPEN_ROLL` with none).
+- **Capture is the Shoe Constructor's only page and their home**, and only theirs: `camera:capture`
+  is the constructor's alone, still behind `canCapture`. The QI, the FM and the Admin no longer
+  capture (C-18). **Only the System Admin** gives or removes camera access (Users → More actions);
+  the Camera page's operators panel is gone (`camera:operators` is the Admin's).
+- **Reports → Rolls** (FM, `roll:read`): every roll with its supplier, start, finish, shots,
+  passed, rejected (for salvage) and status, filters by text, supplier, status and start; a roll's
+  page lists its shots and links its claim sheet. `/batches`, `/batches/new`, `/constructor` and
+  `/api/v1/batches/**` answer 404. Inventory loses the "For roll" link on stock OUT.
+
+**Confirmed:** Dylan kept the dropdown, the cancelled-roll and the `R-` code rules on 2026-10-24.
+**Supersedes:** D-082 (Start and Finish roll by the FM; the 10-pieces hint), the batch parts of
+D-005, the capture roles of D-064 and D-075 (FM and Admin granting), D-055's active batch.
+**Where:** `prisma/schema.prisma`, `prisma/migrations/20261025090000_rolls_at_capture/`,
+`src/lib/roll-rules.ts`, `src/server/{models,services,controllers,validators}/roll.*`,
+`src/app/api/v1/rolls/**`, `src/app/(app)/camera/capture/**`, `src/app/(app)/reports/rolls/**`,
+`src/server/policies/{permissions,navigation}.ts`.
+**Consequences:** the dev database's rolls are converted when the migration runs (back up first,
+then `demo:reset`). Tell CPoint: constructors start and finish rolls on their phones, and the
+System Admin chooses who.
+
+### D-096 · 2026-10-24 · Accepted — Phone layouts for Capture now, and for Batches in Phase 27
+
+**Context:** D-034 says desktop first with no phone design. The constructors capture on their own
+phones (C-23), and the QI will finish batches on a phone (C-18).
+**Decision:** below 640 px the app shows a top bar (logo, page name, a Pages menu when a role has
+more than one page, the account menu and theme) instead of the sidebar. Capture is designed for a
+phone held upright: the roll line in large text, a full-width Capture button at the bottom at
+least 44 px tall, dialogs that fit 390 × 844. Batches gets the same care in Phase 27. Every other
+page stays desktop first (D-034 still holds for them).
+**Where:** `src/components/features/app-shell/sidebar.tsx`, `src/app/(app)/layout.tsx`,
+`src/app/(app)/camera/capture/**`, `DESIGN.md` → "Phone layout (D-096)", `CLAUDE.md`.

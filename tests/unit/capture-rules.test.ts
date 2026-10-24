@@ -78,8 +78,8 @@ describe("sending", () => {
 
   it("says nothing was saved twice when it can be sent again", () => {
     expect(sendFailureMessage("network")).toMatch(/Nothing was saved twice/);
-    expect(sendFailureMessage(409, "No batch is at Preparation.")).toBe(
-      "No batch is at Preparation.",
+    expect(sendFailureMessage(409, "No roll is at Preparation.")).toBe(
+      "No roll is at Preparation.",
     );
   });
 

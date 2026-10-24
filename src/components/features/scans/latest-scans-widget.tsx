@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 type Item = {
   id: string;
   sequence: number;
-  batchCode: string;
+  rollCode: string;
   aiVerdict: Verdict;
   finalVerdict: Verdict | null;
   createdAt: string;
@@ -35,7 +35,7 @@ function useNow(intervalMs: number) {
 }
 
 /**
- * Live feed from the Preparation camera. Polls every 5 s while the tab is visible (no animation on
+ * Live feed of the shots taken at Capture. Polls every 5 s while the tab is visible (no animation on
  * refresh: this updates constantly). Keeps the last data on errors and says it's stale.
  */
 export function LatestScansWidget({ className }: { className?: string }) {
@@ -54,7 +54,7 @@ export function LatestScansWidget({ className }: { className?: string }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle>Latest scans</CardTitle>
-            <CardDescription>Preparation camera, newest first.</CardDescription>
+            <CardDescription>Shots from Capture, newest first.</CardDescription>
           </div>
           <span
             className={cn(
@@ -111,9 +111,9 @@ export function LatestScansWidget({ className }: { className?: string }) {
                   >
                     {formatManilaTime(s.createdAt)}
                   </time>
-                  {/* The batch and section always show in full; the defect may truncate (audit). */}
+                  {/* The roll and section always show in full; the defect may truncate (audit). */}
                   <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
-                    <span className="font-mono text-sm whitespace-nowrap">{s.batchCode}</span>{" "}
+                    <span className="font-mono text-sm whitespace-nowrap">{s.rollCode}</span>{" "}
                     <span className="whitespace-nowrap text-muted-foreground">· #{s.sequence}</span>
                     {s.topDefect && (
                       <span className="min-w-0 truncate text-sm text-muted-foreground">

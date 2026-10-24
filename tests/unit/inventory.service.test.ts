@@ -12,7 +12,7 @@ const inventory = {
   listItemCodes: vi.fn(async () => [] as string[]),
   listMovements: vi.fn(),
   listRollItemsInStock: vi.fn(async () => []),
-  listRollMovementsForBatch: vi.fn(async () => []),
+  listRollMovementsForRoll: vi.fn(async () => []),
   lowStockItems: vi.fn(),
   sumNewerDeltas: vi.fn(async () => 0),
   updateInventoryItem: vi.fn(),
@@ -164,7 +164,7 @@ describe("reverseMovement (Undo)", () => {
     quantityDelta: 3,
     reason: "Delivery received",
     createdAt: new Date(now.getTime() - 5_000),
-    batch: null,
+    roll: null,
     createdBy: { name: "FM" },
     item: row({ quantityOnHand: 7 }),
     ...overrides,
@@ -209,7 +209,7 @@ describe("getItemDetail", () => {
       quantityDelta,
       reason: "x",
       createdAt: now,
-      batch: null,
+      roll: null,
       createdBy: { name: "FM" },
     });
     inventory.listMovements.mockResolvedValue({

@@ -1,40 +1,59 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Quality Inspector, the Floor Manager, or a Shoe Constructor allowed to capture
- *        (D-075), at the fixed camera at Preparation, capturing one leather section after another.
- * What:  point the camera at the section, press Capture, see the app's verdict for that section.
- * Worst: a section saved to the wrong roll's batch, a capture saved twice, or a verdict trusted
- *        when the model never ran. The batch line sits above the camera; one press makes one scan;
- *        Capture is off whenever the model or a batch is missing, and says why.
+ * Who:   a Shoe Constructor the System Admin allows (C-23), with their own phone on a stand at a
+ *        fixed position (C-24), or at a PC with Floor view; capturing one roll shot by shot.
+ * What:  start a roll, choose it, capture it edge to edge, see Pass or Reject for each shot,
+ *        finish it once all of it is in (Phase 26, D-095).
+ * Worst: a shot sent to the wrong roll, a capture saved twice, or a verdict trusted when the model
+ *        never ran. The chosen roll is repeated in large text; one press makes one scan; Capture is
+ *        off whenever the model or a roll is missing, and says why.
  */
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { PageHeader } from "@/components/features/page-header";
-import { requireCapture } from "@/server/policies/guard";
-import { can } from "@/server/policies/permissions";
+import { requireRole } from "@/server/policies/guard";
+import { canCaptureFor } from "@/server/policies/permissions";
 import { cameraStatus } from "@/server/services/camera.service";
-import { batchSummary, captureModelStatus } from "@/server/services/capture.service";
+import { captureModelStatus } from "@/server/services/capture.service";
+import { openRollsForCapture, supplierOptions } from "@/server/services/roll.service";
 import { CaptureClient } from "./capture-client";
 
 export const metadata: Metadata = { title: "Capture" };
 
 export default async function CapturePage() {
-  const user = await requireCapture();
+  // Only Shoe Constructors capture (C-18); the QI and the Floor Manager get the forbidden page.
+  const user = await requireRole("SHOE_CONSTRUCTOR");
   await connection();
-  const [status, model] = await Promise.all([cameraStatus(), captureModelStatus()]);
+
+  if (!canCaptureFor(user)) {
+    return (
+      <>
+        <PageHeader title="Capture" />
+        <p className="text-lg" data-testid="no-camera-access">
+          Ask the System Admin for camera access.
+        </p>
+      </>
+    );
+  }
+
+  const [status, model, rolls, suppliers] = await Promise.all([
+    cameraStatus(),
+    captureModelStatus(),
+    openRollsForCapture(user),
+    supplierOptions(),
+  ]);
 
   return (
     <>
       <PageHeader
         title="Capture"
-        description="Point the camera at one leather section and press Capture. The app checks it and gives the verdict."
+        description="Start a roll, then capture it shot by shot. The app checks each shot and gives the verdict."
       />
       <CaptureClient
-        initialBatch={batchSummary(status.current)}
+        initialRolls={rolls}
+        suppliers={suppliers}
         model={model}
         earlyModelNotice={status.earlyModelNotice}
-        canSeeScans={can(user.role, "scan:read")}
-        canFinish={can(user.role, "batch:finish")}
       />
     </>
   );

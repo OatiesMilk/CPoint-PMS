@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ZodError, type ZodType } from "zod";
 import { passwordChangeSchema, loginSchema } from "@/server/validators/auth.validator";
-import {
-  batchFormSchema,
-  cancelSchema as batchCancelSchema,
-  transitionSchema,
-} from "@/server/validators/batch.validator";
+import { managerCancelSchema, startRollSchema } from "@/server/validators/roll.validator";
 import {
   activeSchema,
   inventoryItemFormSchema,
@@ -81,36 +77,14 @@ const CASES: [string, ZodType, unknown[]][] = [
     ],
   ],
   [
-    "batch form",
-    batchFormSchema,
-    [
-      {},
-      { rollCode: "", shoeTypeId: "", receivedAt: "" },
-      {
-        rollCode: long(51),
-        shoeTypeId: "nope",
-        supplierId: "nope",
-        receivedAt: "2999-01-01",
-        notes: long(501),
-        rollItemId: "nope",
-      },
-      { rollCode: "R1", shoeTypeId: "nope", receivedAt: "soon" },
-    ],
+    "start roll",
+    startRollSchema,
+    [{}, { supplierId: "", tagCode: "" }, { supplierId: "nope", tagCode: long(41) }],
   ],
   [
-    "roll start or finish",
-    transitionSchema,
-    [
-      {},
-      { action: "fly", expectedStage: "MOON" },
-      { action: "advance", expectedStage: "PREPARATION" },
-      { action: "move_back", expectedStage: "PREPARATION" },
-    ],
-  ],
-  [
-    "batch cancel",
-    batchCancelSchema,
-    [{}, { reason: "x" }, { reason: long(301), expectedStage: "X" }],
+    "roll cancel (Floor Manager)",
+    managerCancelSchema,
+    [{}, { reason: "  " }, { reason: long(201) }],
   ],
   [
     "inventory item",
@@ -140,7 +114,7 @@ const CASES: [string, ZodType, unknown[]][] = [
       { type: "IN", quantity: "" },
       { type: "IN", quantity: "0" },
       { type: "IN", quantity: "abc", reason: long(301) },
-      { type: "OUT", quantity: "1.999", batchId: "nope" },
+      { type: "OUT", quantity: "1.999" },
       { type: "OUT", quantity: "99999999" },
       { type: "ADJUST", counted: "-1", expectedQuantity: "abc", reason: "" },
       { type: "ADJUST", counted: "1", expectedQuantity: 1 },
@@ -159,7 +133,7 @@ const CASES: [string, ZodType, unknown[]][] = [
         detections: JSON.stringify([
           { classKey: long(51), confidence: -1, box: { x: 0.9, y: 0.9, width: 0.5, height: 0.5 } },
         ]),
-        batchId: "nope",
+        rollId: "nope",
         modelVersion: long(61),
         source: "DRONE",
         capturedAt: "yesterday",
@@ -430,9 +404,10 @@ describe("production messages (D-038, Phase 23)", () => {
     ).toEqual(["Say why you're correcting this check-in, at least 5 characters."]);
   });
 
-  it("refuses the old stage moves with one sentence", () => {
-    expect(messages(transitionSchema, { action: "advance", expectedStage: "PREPARATION" })).toEqual(
-      ["Choose start or finish. A roll no longer moves through stages."],
-    );
+  it("asks for the supplier at Start roll, and a reason to cancel (Phase 26)", () => {
+    expect(messages(startRollSchema, {})).toEqual(["Choose the supplier this roll came from."]);
+    expect(messages(managerCancelSchema, { reason: "" })).toEqual([
+      "Write why this roll is cancelled.",
+    ]);
   });
 });

@@ -63,15 +63,7 @@ export function findFirstActiveUserWithRole(role: Role, db: Db = defaultDb()) {
 
 // ───────────── camera operators (D-075) ─────────────
 
-/** Active Shoe Constructors, for the "Can capture at the camera" switches. */
-export function listCameraOperatorCandidates(db: Db = defaultDb()) {
-  return db.user.findMany({
-    where: { role: "SHOE_CONSTRUCTOR", isActive: true },
-    select: { id: true, name: true, email: true, canCapture: true },
-    orderBy: { name: "asc" },
-  });
-}
-
+/** Give or remove a Shoe Constructor's camera access (the System Admin, Phase 26). */
 export function setCanCapture(userId: string, canCapture: boolean, db: Db = defaultDb()) {
   return db.user.update({ where: { id: userId }, data: { canCapture }, select: { id: true } });
 }

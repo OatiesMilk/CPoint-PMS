@@ -1,6 +1,6 @@
 import { type Db, defaultDb } from "./db";
 
-// Operations report queries (D-033). Like report.model.ts these are aggregates per batch,
+// Operations report queries (D-033). Like report.model.ts these are aggregates per roll,
 // item or supplier. No query here selects or groups by a person (D-008).
 
 type Range = { start: Date; end: Date };
@@ -65,19 +65,17 @@ export async function stockPosition(range: Range, db: Db = defaultDb()): Promise
 export type SupplierRow = {
   id: string | null;
   name: string;
-  batches: number;
-  /** Distinct roll codes: one batch is cut from one roll (Phase 20). */
   rolls: number;
   scanned: number;
   pass: number;
   reject: number;
 };
 
-/** Scanned sections by the supplier of the batch's leather, split by final verdict. */
+/** Scanned sections by the supplier of the roll's leather, split by final verdict. */
 export async function supplierQuality(range: Range, db: Db = defaultDb()): Promise<SupplierRow[]> {
   const rows = await db.$queryRaw<Record<string, bigint | string | null>[]>`
     SELECT b."supplierId" AS id, coalesce(sp.name, 'No supplier recorded') AS name,
-      count(DISTINCT b.id) AS batches, count(DISTINCT b."rollCode") AS rolls, count(*) AS scanned,
+      count(DISTINCT b.id) AS rolls, count(*) AS scanned,
       count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
       count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
     FROM scans s
@@ -85,12 +83,12 @@ export async function supplierQuality(range: Range, db: Db = defaultDb()): Promi
     LEFT JOIN suppliers sp ON sp.id = b."supplierId"
     WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
       AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+      AND b.status <> 'CANCELLED' -- a cancelled roll never went on to cutting (Phase 26)
     GROUP BY 1, 2
     ORDER BY count(*) DESC, 2`;
   return rows.map((r) => ({
     id: r.id === null ? null : String(r.id),
     name: String(r.name),
-    batches: n(r.batches as bigint),
     rolls: n(r.rolls as bigint),
     scanned: n(r.scanned as bigint),
     pass: n(r.pass as bigint),
@@ -100,14 +98,14 @@ export async function supplierQuality(range: Range, db: Db = defaultDb()): Promi
 
 /**
  * Each scan's strongest detection, for scans with a final verdict in `verdicts`, as
- * (supplier or batch, defect label) counts. One count per section, never per detection, so "Hole 4"
+ * (supplier or roll, defect label) counts. One count per section, never per detection, so "Hole 4"
  * means four sections whose main defect was a hole.
  */
 async function mainDefects(
   range: Range,
   verdicts: string[],
-  groupBy: "supplier" | "batch",
-  batchIds: string[] | null,
+  groupBy: "supplier" | "roll",
+  rollIds: string[] | null,
   db: Db,
 ) {
   const rows = await db.$queryRaw<{ groupId: string | null; label: string; sections: bigint }[]>`
@@ -122,8 +120,9 @@ async function mainDefects(
     LEFT JOIN defect_types dt ON dt.id = d."defectTypeId"
     WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
       AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+      AND b.status <> 'CANCELLED' -- a cancelled roll never went on to cutting (Phase 26)
       AND s."finalVerdict"::text = ANY(${verdicts})
-      AND (${batchIds}::uuid[] IS NULL OR b.id = ANY(${batchIds}::uuid[]))
+      AND (${rollIds}::uuid[] IS NULL OR b.id = ANY(${rollIds}::uuid[]))
     GROUP BY 1, 2
     ORDER BY 3 DESC, 2`;
   return rows.map((r) => ({ groupId: r.groupId, label: r.label, sections: n(r.sections) }));
@@ -135,23 +134,23 @@ export function supplierDefects(range: Range, db: Db = defaultDb()) {
 }
 
 export type RollRejectRow = {
-  batchId: string;
-  batchCode: string;
+  rollId: string;
   rollCode: string;
+  tagCode: string | null;
   supplier: string;
   sections: number;
   rejected: number;
   defects: { label: string; sections: number }[];
 };
 
-/** The rolls (one per batch) with the most rejected sections in the range, worst first. */
+/** The rolls (one per roll) with the most rejected sections in the range, worst first. */
 export async function rollsWithMostRejects(
   range: Range,
   limit: number,
   db: Db = defaultDb(),
 ): Promise<RollRejectRow[]> {
   const rows = await db.$queryRaw<Record<string, bigint | string>[]>`
-    SELECT b.id AS "batchId", b.code AS "batchCode", b."rollCode" AS "rollCode",
+    SELECT b.id AS "rollId", b.code AS "rollCode", b."rollCode" AS "tagCode",
       coalesce(sp.name, 'No supplier recorded') AS supplier,
       count(*) AS sections,
       count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS rejected
@@ -160,36 +159,37 @@ export async function rollsWithMostRejects(
     LEFT JOIN suppliers sp ON sp.id = b."supplierId"
     WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
       AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+      AND b.status <> 'CANCELLED' -- a cancelled roll never went on to cutting (Phase 26)
     GROUP BY b.id, b.code, b."rollCode", sp.name
     HAVING count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') > 0
     ORDER BY 6 DESC, 5 DESC, b.code
     LIMIT ${limit}`;
   if (rows.length === 0) return [];
-  const ids = rows.map((r) => String(r.batchId));
-  const defects = await mainDefects(range, ["REJECT"], "batch", ids, db);
+  const ids = rows.map((r) => String(r.rollId));
+  const defects = await mainDefects(range, ["REJECT"], "roll", ids, db);
   return rows.map((r) => ({
-    batchId: String(r.batchId),
-    batchCode: String(r.batchCode),
+    rollId: String(r.rollId),
     rollCode: String(r.rollCode),
+    tagCode: r.tagCode == null ? null : String(r.tagCode),
     supplier: String(r.supplier),
     sections: n(r.sections as bigint),
     rejected: n(r.rejected as bigint),
     defects: defects
-      .filter((d) => d.groupId === String(r.batchId))
+      .filter((d) => d.groupId === String(r.rollId))
       .map((d) => ({ label: d.label, sections: d.sections })),
   }));
 }
 
-/** One roll's batch, its supplier and every rejected section with its defects, for a claim sheet. */
-export function findClaimBatch(batchId: string, db: Db = defaultDb()) {
-  return db.batch.findUnique({
-    where: { id: batchId },
+/** One roll, its supplier and every rejected section with its defects, for a claim sheet. */
+export function findClaimRoll(rollId: string, db: Db = defaultDb()) {
+  return db.roll.findUnique({
+    where: { id: rollId },
     select: {
       id: true,
       code: true,
-      rollCode: true,
+      tagCode: true,
       receivedAt: true,
-      shoeType: { select: { name: true } },
+      startedAt: true,
       supplier: { select: { name: true, contactPerson: true, phone: true } },
       scans: {
         where: { finalVerdict: "REJECT" },
@@ -213,7 +213,7 @@ export function findClaimBatch(batchId: string, db: Db = defaultDb()) {
   });
 }
 
-/** Sections of one batch by final verdict, for the claim sheet's totals. */
-export function countBatchVerdicts(batchId: string, db: Db = defaultDb()) {
-  return db.scan.groupBy({ by: ["finalVerdict"], where: { batchId }, _count: { _all: true } });
+/** Sections of one roll by final verdict, for the claim sheet's totals. */
+export function countRollVerdicts(rollId: string, db: Db = defaultDb()) {
+  return db.scan.groupBy({ by: ["finalVerdict"], where: { rollId }, _count: { _all: true } });
 }

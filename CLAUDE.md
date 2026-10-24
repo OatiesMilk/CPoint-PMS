@@ -34,8 +34,9 @@ configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 - MVC layering: `app/api/v1/**/route.ts` (one-liner) → `server/controllers` → `server/services`
   → `server/models` (the only place that imports Prisma). Pages call services, never Prisma.
 - Desktop web first. The layout adapts to narrower windows (D-034): no fixed column counts,
-  use auto-fit grids and `xl:`/`sm:` stacking, and never let the page scroll sideways. No
-  touch or phone design.
+  use auto-fit grids and `xl:`/`sm:` stacking, and never let the page scroll sideways. Phone
+  layouts only for Capture (Phase 26) and Batches (Phase 27), as in `DESIGN.md` → "Phone layout"
+  (D-096); every other page stays desktop.
 - No per-person workforce rankings or scores anywhere (client sensitivity, see the survey).
 - Defect types, CV thresholds and class keys are **data**, never hardcoded.
 - Docker: one compose file, two services (`app`, `db`). Don't add containers.

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Aperture,
-  Boxes,
   CalendarCheck,
   Camera,
   ChartColumn,
@@ -14,6 +13,7 @@ import {
   LayoutDashboard,
   LockKeyhole,
   LogOut,
+  Menu,
   Package,
   ScanLine,
   ScrollText,
@@ -40,7 +40,6 @@ type NavIcon =
   | "overview"
   | "production"
   | "attendance"
-  | "batches"
   | "camera"
   | "capture"
   | "scans"
@@ -57,7 +56,6 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   overview: LayoutDashboard,
   production: Gauge,
   attendance: CalendarCheck,
-  batches: Boxes,
   camera: Camera,
   capture: Aperture,
   scans: ScanLine,
@@ -95,7 +93,66 @@ export function Sidebar({ sections, user, signOutAction }: Props) {
   const current = activeHref(pathname, sections);
 
   return (
-    <aside className="sticky top-0 flex h-screen w-14 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:w-60">
+    <>
+      <PhoneBar sections={sections} current={current} user={user} signOutAction={signOutAction} />
+      <DesktopSidebar
+        sections={sections}
+        current={current}
+        user={user}
+        signOutAction={signOutAction}
+      />
+    </>
+  );
+}
+
+type BarProps = Props & { current: string | null };
+
+/**
+ * Below 640 px (a phone, Phase 26, D-096): a top bar with the logo, the page's name, a page menu
+ * when the role has more than one page, and the account menu. A Shoe Constructor has only Capture.
+ */
+function PhoneBar({ sections, current, user, signOutAction }: BarProps) {
+  const items = sections.flatMap((s) => s.items).filter((i) => !i.phase);
+  const title = items.find((i) => i.href === current)?.label ?? "CPoint";
+  return (
+    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-sidebar-border bg-sidebar px-3 text-sidebar-foreground sm:hidden">
+      <Image src={logo} alt="CPoint" className="size-8 rounded-md" priority />
+      <p className="min-w-0 flex-1 truncate text-lg font-semibold">{title}</p>
+      {items.length > 1 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Pages"
+            className="flex size-11 items-center justify-center rounded-md hover:bg-accent"
+          >
+            <Menu aria-hidden className="size-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-w-[calc(100vw-1rem)]">
+            {items.map((item) => {
+              const Icon = ICONS[item.icon];
+              return (
+                <DropdownMenuItem key={item.href} asChild>
+                  <Link
+                    href={item.href}
+                    aria-current={item.href === current ? "page" : undefined}
+                    className={cn(item.href === current && "font-medium")}
+                  >
+                    <Icon aria-hidden />
+                    {item.label}
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <AccountMenu user={user} signOutAction={signOutAction} compact />
+    </header>
+  );
+}
+
+function DesktopSidebar({ sections, current, user, signOutAction }: BarProps) {
+  return (
+    <aside className="sticky top-0 hidden h-screen w-14 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground sm:flex lg:w-60">
       <div className="flex items-center justify-center gap-2.5 px-2 py-4 lg:justify-start lg:px-4">
         <Image src={logo} alt="" className="size-8 rounded-md" priority />
         <div className="hidden leading-tight lg:block">
@@ -165,42 +222,65 @@ export function Sidebar({ sections, user, signOutAction }: Props) {
       </nav>
 
       <div className="flex flex-col items-center gap-1 border-t border-sidebar-border p-1.5 lg:flex-row lg:p-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            title={user.name}
-            className="flex min-w-0 items-center justify-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent lg:flex-1 lg:justify-start"
-          >
-            <UserRound aria-hidden className="size-4 shrink-0 lg:hidden" />
-            <span className="sr-only min-w-0 flex-1 lg:not-sr-only">
-              <span className="block truncate font-medium">{user.name}</span>
-              <span className="block truncate text-xs text-muted-foreground">{user.roleLabel}</span>
-            </span>
-            <ChevronsUpDown aria-hidden className="hidden size-4 text-muted-foreground lg:block" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="max-w-[calc(100vw-1rem)]">
-            <DropdownMenuLabel>
-              <span className="block font-medium">{user.name}</span>
-              <span className="block text-sm text-muted-foreground">{user.email}</span>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/account/password">
-                <LockKeyhole aria-hidden />
-                Change password
-              </Link>
-            </DropdownMenuItem>
-            <form action={signOutAction}>
-              <DropdownMenuItem asChild>
-                <button type="submit" className="w-full">
-                  <LogOut aria-hidden />
-                  Sign out
-                </button>
-              </DropdownMenuItem>
-            </form>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <AccountMenu user={user} signOutAction={signOutAction} />
         <ThemeToggle />
       </div>
     </aside>
+  );
+}
+
+/** The signed-in person: change password, sign out, and the theme. */
+function AccountMenu({
+  user,
+  signOutAction,
+  compact = false,
+}: Pick<Props, "user" | "signOutAction"> & { compact?: boolean }) {
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          title={user.name}
+          className={cn(
+            "flex min-w-0 items-center justify-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent",
+            compact ? "size-11" : "lg:flex-1 lg:justify-start",
+          )}
+        >
+          <UserRound aria-hidden className={cn("size-4 shrink-0", !compact && "lg:hidden")} />
+          <span className={cn("sr-only min-w-0 flex-1", !compact && "lg:not-sr-only")}>
+            <span className="block truncate font-medium">{user.name}</span>
+            <span className="block truncate text-xs text-muted-foreground">{user.roleLabel}</span>
+          </span>
+          {!compact && (
+            <ChevronsUpDown aria-hidden className="hidden size-4 text-muted-foreground lg:block" />
+          )}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          side={compact ? "bottom" : "top"}
+          align={compact ? "end" : "start"}
+          className="max-w-[calc(100vw-1rem)]"
+        >
+          <DropdownMenuLabel>
+            <span className="block font-medium">{user.name}</span>
+            <span className="block text-sm text-muted-foreground">{user.email}</span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link href="/account/password">
+              <LockKeyhole aria-hidden />
+              Change password
+            </Link>
+          </DropdownMenuItem>
+          <form action={signOutAction}>
+            <DropdownMenuItem asChild>
+              <button type="submit" className="w-full">
+                <LogOut aria-hidden />
+                Sign out
+              </button>
+            </DropdownMenuItem>
+          </form>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {compact && <ThemeToggle />}
+    </>
   );
 }
