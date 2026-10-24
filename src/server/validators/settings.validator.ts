@@ -10,25 +10,34 @@ const sortOrder = z.preprocess(
     .max(999, "The sort order can't be above 999. Enter 999 or less."),
 );
 
-/** Thresholds as percentages in the form; the service stores fractions (D-011). */
-const percent = (label: string) =>
-  z.coerce
-    .number({ error: `Enter the ${label} as a percentage, like 90.` })
-    .refine(
-      (n) => Number.isFinite(n) && n > 0 && n <= 100,
-      `The ${label} must be above 0 and at most 100.`,
-    )
-    .refine(
-      (n) => Math.abs(n * 10 - Math.round(n * 10)) < 1e-6,
-      `The ${label} can have at most one decimal place, like 87.5.`,
-    );
+const FOUND_AT = "Enter the found-at value as a percentage from 1 to 100, like 50.";
 
-export const thresholdsSchema = z.object({
-  rejectPercent: percent("reject threshold"),
-  reworkPercent: percent("rework threshold"),
-  /** Optional, so API callers from before D-053 keep working; left out = unchanged. */
-  foundPercent: percent("found-at value").optional(),
-});
+/**
+ * "A defect counts as found at" as a percentage (the service stores a fraction, D-053), and the
+ * early-model notice when the API sends it (D-055). The two old thresholds are refused by name
+ * (Phase 25, D-093), so an old caller learns why instead of being silently ignored.
+ */
+export const thresholdsSchema = z
+  .object({
+    foundPercent: z.coerce
+      .number({ error: FOUND_AT })
+      .refine((n) => Number.isFinite(n) && n >= 1 && n <= 100, FOUND_AT)
+      .refine((n) => Math.abs(n * 10 - Math.round(n * 10)) < 1e-6, FOUND_AT),
+    earlyModelNotice: z.boolean({ error: OUT_OF_DATE }).optional(),
+    rejectPercent: z.unknown().optional(),
+    reworkPercent: z.unknown().optional(),
+  })
+  .superRefine((v, ctx) => {
+    for (const key of ["rejectPercent", "reworkPercent"] as const)
+      if (v[key] !== undefined)
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message:
+            "The two confidence thresholds were removed: a section is Pass or Reject from each defect type's outcome. Send foundPercent only, like 50.",
+        });
+  })
+  .transform(({ foundPercent, earlyModelNotice }) => ({ foundPercent, earlyModelNotice }));
 
 /** The early-model notice on the Camera page (D-055). */
 export const modelNoticeSchema = z.object({
@@ -38,7 +47,7 @@ export const modelNoticeSchema = z.object({
 export type ThresholdsInput = z.output<typeof thresholdsSchema>;
 export type ModelNoticeInput = z.output<typeof modelNoticeSchema>;
 
-export const defectTypeCreateSchema = z.object({
+const defectTypeCreateFields = z.object({
   key: z
     .string({ error: "Enter the class key exactly as the camera model sends it, e.g. scratch." })
     .trim()
@@ -53,26 +62,35 @@ export const defectTypeCreateSchema = z.object({
     .min(1, "Enter a label people will read, e.g. Scratch.")
     .max(40, "Keep the label under 40 characters."),
   description: optionalText(200, "description"),
-  /** What a found defect of this type means (D-053); blank = by confidence (D-011). */
-  action: z.preprocess(
+  /** Usable or Not accepted once found (D-093). Required; the message names the type. */
+  outcome: z.preprocess(
     blankToUndefined,
     z
-      .enum(["REWORK", "REJECT"], {
-        error: "Choose what a found defect means: By confidence, Fixable or Reject.",
+      .enum(["USABLE", "NOT_ACCEPTED"], {
+        error: "Choose Usable or Not accepted for When found; nothing else is allowed.",
       })
       .optional(),
   ),
-  /** How a Fixable section of this type is made usable (D-070); blank = cut around. */
-  handling: z.preprocess(
-    (v) => blankToUndefined(v) ?? "CUT_AROUND",
-    z.enum(["CLEAN", "CUT_AROUND"], {
-      error: "Choose how a Fixable section is handled: Cut around the marked area, or Clean.",
-    }),
-  ),
   sortOrder,
 });
+/** "Choose whether a found Crease is Usable or Not accepted." with the type's own label. */
+function requireOutcome<T extends { label: string; outcome?: "USABLE" | "NOT_ACCEPTED" }>(
+  schema: z.ZodType<T>,
+) {
+  return schema.superRefine((v, ctx) => {
+    if (!v.outcome)
+      ctx.addIssue({
+        code: "custom",
+        path: ["outcome"],
+        message: `Choose whether a found ${v.label} is Usable or Not accepted.`,
+      });
+  });
+}
+
+const defectTypeBase = defectTypeCreateFields;
+export const defectTypeCreateSchema = requireOutcome(defectTypeBase);
 /** The key is fixed after creation: the camera sends it, and past detections reference it. */
-export const defectTypeUpdateSchema = defectTypeCreateSchema.omit({ key: true });
+export const defectTypeUpdateSchema = requireOutcome(defectTypeBase.omit({ key: true }));
 
 export const shoeTypeSchema = z.object({
   code: z

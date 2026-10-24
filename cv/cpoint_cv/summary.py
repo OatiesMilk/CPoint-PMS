@@ -1,5 +1,5 @@
 """Per-folder numbers for ``predict``: detections per class, their confidence spread, and how many
-images the app would pass, rework, reject or flag under the preview's settings. Pure."""
+images the app would pass or reject under the preview's settings. Pure."""
 
 from __future__ import annotations
 
@@ -8,10 +8,8 @@ from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from .preview import PreviewDecision
+from .preview import VERDICTS, PreviewDecision
 from .types import Detection
-
-VERDICTS = ("PASS", "REWORK", "REJECT", "NEEDS_REVIEW")
 
 
 @dataclass(frozen=True)

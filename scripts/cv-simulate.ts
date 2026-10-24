@@ -5,9 +5,10 @@
  *   npm run cv:simulate -- --count 20 --interval 3 [--batch <batchId>] [--classes <list>]
  *
  * Needs CV_DEVICE_TOKEN (create one: `npm run cv:token`) and optionally CV_BASE_URL in .env.
- * Mix: ~60% pass, ~22% rework, ~13% reject, ~5% an unknown class ("sim-unknown") that needs review.
- * Classes default to the yolo-v1 ones with the actions `npm run demo:reset` sets; give your own as
- * --classes crease:REWORK,cut:REJECT,stain (a type with no action goes by confidence).
+ * Mix: about 82% Pass (clean, a faint mark, or a found Usable defect), 13% Reject (a found Not
+ * accepted defect) and 5% an unknown class ("sim-unknown"), which is rejected and listed in
+ * Settings → Unknown classes (A-12). Classes default to the yolo-v1 ones with the outcomes
+ * `npm run demo:reset` sets; give your own as --classes crease:USABLE,cut:NOT_ACCEPTED,stain.
  */
 import "dotenv/config";
 import {
@@ -34,13 +35,13 @@ const classes: SceneClass[] = classesArg
       .map((c) => c.trim())
       .filter(Boolean)
       .map((c) => {
-        const [key, action] = c.split(":");
-        const upper = action?.trim().toUpperCase();
-        if (upper && upper !== "REWORK" && upper !== "REJECT") {
-          console.error(`--classes: "${c}" must be key, key:REWORK or key:REJECT.`);
+        const [key, outcome] = c.split(":");
+        const upper = outcome?.trim().toUpperCase();
+        if (upper && upper !== "USABLE" && upper !== "NOT_ACCEPTED") {
+          console.error(`--classes: "${c}" must be key, key:USABLE or key:NOT_ACCEPTED.`);
           process.exit(2);
         }
-        return { key: key.trim(), action: (upper as SceneClass["action"]) ?? null };
+        return { key: key.trim(), outcome: (upper as SceneClass["outcome"]) ?? null };
       })
   : MODEL_CLASSES;
 

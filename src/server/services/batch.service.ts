@@ -29,11 +29,6 @@ import {
   listActiveShoeTypes,
   listActiveSuppliers,
 } from "@/server/models/reference-data.model";
-import {
-  cancelLiveReworkForBatch,
-  countLiveReworkByBatch,
-  countLiveReworkForBatch,
-} from "@/server/models/outcome.model";
 import { closeOpenStageLog, openStageLog } from "@/server/models/stage-log.model";
 import { findInventoryItem, listRollMovementsForBatch } from "@/server/models/inventory.model";
 import type { BatchFormValues } from "@/server/validators/batch.validator";
@@ -51,10 +46,7 @@ const STALE_MESSAGE =
 
 // ───────────── reads ─────────────
 
-export type BatchListItem = BatchListRow & {
-  /** Sections still at the repair station (D-022 "In repair" tag). */
-  openRepairs: number;
-};
+export type BatchListItem = BatchListRow;
 
 export async function listBatches(
   filters: BatchListFilters,
@@ -64,9 +56,8 @@ export async function listBatches(
     skip: (page - 1) * PAGE_SIZE,
     take: PAGE_SIZE,
   });
-  const repairs = await countLiveReworkByBatch(rows.map((r) => r.id));
   return {
-    rows: rows.map((row) => ({ ...row, openRepairs: repairs.get(row.id) ?? 0 })),
+    rows,
     total,
     page,
     pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
@@ -76,8 +67,6 @@ export async function listBatches(
 export type BatchDetail = {
   batch: BatchDetailRow;
   actions: BatchActions;
-  /** Sections still at the repair station; a completed batch with any is tagged "In repair". */
-  openRepairs: number;
   /** The inventory roll recorded as used for this batch (D-023), if any. */
   rollFromInventory: { itemId: string; label: string; returned: boolean } | null;
   /** The "now" the page shows open history rows against. */
@@ -90,15 +79,11 @@ export async function getBatchDetail(
 ): Promise<BatchDetail | null> {
   const batch = await findBatchDetail(id);
   if (!batch) return null;
-  const [openRepairs, rollMovements] = await Promise.all([
-    batch.status === "CANCELLED" ? 0 : countLiveReworkForBatch(id),
-    listRollMovementsForBatch(id),
-  ]);
+  const rollMovements = await listRollMovementsForBatch(id);
   const taken = rollMovements.find((m) => m.type === "OUT");
   return {
     batch,
     actions: availableActions(batch),
-    openRepairs,
     rollFromInventory: taken
       ? {
           itemId: taken.item.id,
@@ -275,8 +260,8 @@ async function applyPlan(
 }
 
 /**
- * Start a planned roll (Preparation) or finish one (D-082). Finishing is allowed with sections
- * still at the Repair Station (D-022) and for a batch started before rolls were tracked. Who may
+ * Start a planned roll (Preparation) or finish one (D-082). Finishing is allowed for a batch
+ * started before rolls were tracked. Who may
  * do which is checked by the caller: start needs batch:manage, finish batch:finish.
  */
 export async function transitionBatchStage(
@@ -326,17 +311,6 @@ export async function cancelBatch(
     { cancelledReason: input.reason },
     async (tx, before) => {
       if (before.status === "PLANNED") await returnRolls(tx, id, before.code, actor, now);
-      // The roll is gone, so its unfinished repairs are moot (D-021). Salvage stays: the leather exists.
-      const { count } = await cancelLiveReworkForBatch(id, now, tx);
-      if (count > 0) {
-        await recordAudit(tx, {
-          actor: { type: "USER", userId: actor.id },
-          action: "rework.cancel",
-          entity: "Batch",
-          entityId: id,
-          after: { cancelledRepairs: count, reason: "Batch cancelled" },
-        });
-      }
     },
   );
 }

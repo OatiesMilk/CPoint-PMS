@@ -53,7 +53,7 @@ export function TodaysProductionCard({ today }: { today: ProductionToday }) {
         <QuotaProgress progress={today.progress} />
         {(today.late > 0 || today.missed > 0) && (
           <p className="flex items-center gap-2 text-sm">
-            <CircleAlert aria-hidden className="size-4 text-rework" />
+            <CircleAlert aria-hidden className="size-4 text-caution" />
             {[
               today.late > 0 && `${today.late} check-in${today.late === 1 ? " is" : "s are"} late`,
               today.missed > 0 && `${today.missed} missed`,

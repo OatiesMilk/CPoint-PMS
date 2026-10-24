@@ -91,7 +91,7 @@ test("Supplier quality lists the supplier and its roll, and the claim sheet show
   const card = page.getByTestId("supplier-quality");
   await expect(card.getByText("Supplier quality", { exact: true })).toBeVisible();
   const row = card.getByTestId("supplier-table").getByRole("row", { name: new RegExp(supplier) });
-  // Rolls 1, Sections 3, Fixable 0%, Reject 67%, top defect "E2E hole".
+  // Rolls 1, Sections 3, Pass 33%, Reject 67%, top defect "E2E hole".
   await expect(row).toContainText("67%");
   await expect(row).toContainText("E2E hole");
   const roll = card.getByTestId("rejected-rolls").getByRole("row", { name: new RegExp(rollCode) });

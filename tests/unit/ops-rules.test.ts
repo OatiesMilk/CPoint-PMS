@@ -9,8 +9,6 @@ import {
 } from "@/lib/ops-rules";
 import { parseRange, previousRange } from "@/lib/report-rules";
 
-const H = 3_600_000;
-
 describe("compare / describeChange", () => {
   it("computes the change and says it in words", () => {
     expect(compare(12, 10).change).toBeCloseTo(0.2);
@@ -60,11 +58,9 @@ describe("paretoShares", () => {
 describe("buildAttention", () => {
   const quiet: AttentionInput = {
     belowQuota: null,
-    repairs: { waitingOverDay: 0, open: 0, oldestWaitingMs: null },
     stock: { out: 0, low: 0, shortCover: [] },
     suppliers: [],
-    lineProblemShare: null,
-    flaggedScans: 0,
+    lineRejectShare: null,
   };
 
   it("is empty when nothing is wrong", () => {
@@ -76,14 +72,12 @@ describe("buildAttention", () => {
       ...quiet,
       belowQuota: { below: 3, of: 5 },
       stock: { out: 1, low: 2, shortCover: [{ item: "Thread", days: 1.2 }] },
-      flaggedScans: 3,
     });
     expect(items.map((i) => i.id)).toEqual([
       "stock-out",
       "stock-low",
       "stock-cover",
       "below-quota",
-      "flagged",
     ]);
     expect(items[0].severity).toBe("critical");
     expect(items.find((i) => i.id === "below-quota")).toMatchObject({
@@ -93,13 +87,13 @@ describe("buildAttention", () => {
   });
 
   it("flags a supplier only with enough sections and a clear gap", () => {
-    const base = { ...quiet, lineProblemShare: 0.2 };
+    const base = { ...quiet, lineRejectShare: 0.2 };
     const flagged = buildAttention({
       ...base,
       suppliers: [
-        { supplier: "Tannery A", sections: 60, problemShare: 0.4 },
-        { supplier: "Tannery B", sections: 10, problemShare: 0.9 }, // too few sections
-        { supplier: "Tannery C", sections: 80, problemShare: 0.25 }, // not far enough above
+        { supplier: "Tannery A", sections: 60, rejectShare: 0.4 },
+        { supplier: "Tannery B", sections: 10, rejectShare: 0.9 }, // too few sections
+        { supplier: "Tannery C", sections: 80, rejectShare: 0.25 }, // not far enough above
       ],
     });
     expect(flagged).toHaveLength(1);
@@ -110,17 +104,15 @@ describe("buildAttention", () => {
     const items = buildAttention({
       ...quiet,
       belowQuota: { below: 3, of: 5 },
-      repairs: { waitingOverDay: 2, open: 4, oldestWaitingMs: 30 * H },
       stock: { out: 1, low: 2, shortCover: [{ item: "Thread", days: 1.2 }] },
-      suppliers: [{ supplier: "Tannery A", sections: 60, problemShare: 0.4 }],
-      lineProblemShare: 0.2,
-      flaggedScans: 1,
+      suppliers: [{ supplier: "Tannery A", sections: 60, rejectShare: 0.4 }],
+      lineRejectShare: 0.2,
     });
-    expect(items).toHaveLength(7);
+    expect(items).toHaveLength(5);
     expect(items.find((i) => i.id === "stock-low")?.detail).toBe(
       "Restock them before they run out.",
     );
-    const screens = ["/inventory", "/production", "/rework", "/reports", "/review"];
+    const screens = ["/inventory", "/production", "/reports"];
     for (const item of items) expect(screens).toContain(item.href.split(/[?#]/)[0]);
   });
 });
@@ -128,10 +120,10 @@ describe("buildAttention", () => {
 describe("supplierIsHigh (Phase 20)", () => {
   it("needs enough sections and a clear gap above the line", async () => {
     const { supplierIsHigh } = await import("@/lib/ops-rules");
-    expect(supplierIsHigh({ sections: 60, problemShare: 0.4 }, 0.2)).toBe(true);
-    expect(supplierIsHigh({ sections: 10, problemShare: 0.9 }, 0.2)).toBe(false);
-    expect(supplierIsHigh({ sections: 80, problemShare: 0.25 }, 0.2)).toBe(false);
-    expect(supplierIsHigh({ sections: 80, problemShare: null }, 0.2)).toBe(false);
-    expect(supplierIsHigh({ sections: 80, problemShare: 0.9 }, null)).toBe(false);
+    expect(supplierIsHigh({ sections: 60, rejectShare: 0.4 }, 0.2)).toBe(true);
+    expect(supplierIsHigh({ sections: 10, rejectShare: 0.9 }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ sections: 80, rejectShare: 0.25 }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ sections: 80, rejectShare: null }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ sections: 80, rejectShare: 0.9 }, null)).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Check, FileText, TriangleAlert } from "lucide-react";
+import { ArrowRight, FileText, TriangleAlert } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDuration, formatPercent } from "@/lib/format";
+import { formatPercent } from "@/lib/format";
 import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
 import { cn } from "@/lib/utils";
 import type { InventoryCategory } from "@/lib/domain";
-import type { OperationsReport, RepairStation } from "@/server/services/ops-report.service";
+import type { OperationsReport } from "@/server/services/ops-report.service";
 
 function SectionLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
@@ -30,133 +30,65 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
   );
 }
 
-const STEPS = ["Waiting", "Being handled", "Done"] as const;
+const SALVAGE_ROWS = 8;
 
-/** Where a section is in its repair: three steps, the current one marked in words and style. */
-function RepairProgress({ status }: { status: "OPEN" | "IN_PROGRESS" }) {
-  const current = status === "OPEN" ? 0 : 1;
+/**
+ * Rejected sections, reported "for salvage" (A-11): how many in this range and the main defect of
+ * each. Per roll and per supplier are in Supplier quality, per day in the Daily summary. The report
+ * moves no leather (C-20).
+ */
+export function ForSalvageCard({
+  salvage,
+  scanned,
+}: {
+  salvage: OperationsReport["forSalvage"];
+  scanned: number;
+}) {
   return (
-    <ol className="flex items-center gap-1 text-xs" aria-label="Progress on the board">
-      {STEPS.map((step, i) => (
-        <li
-          key={step}
-          aria-current={i === current ? "step" : undefined}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 whitespace-nowrap",
-            i === current && "bg-accent font-semibold text-accent-foreground",
-            i < current && "text-foreground",
-            i > current && "text-muted-foreground",
-          )}
-        >
-          {i < current && <Check aria-hidden className="size-3" />}
-          {step}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-const REPAIR_ROWS = 10;
-
-/** Sections at the Repair Station right now and how far each has got. Same for FM and QI. */
-export function RepairStationCard({ repairs, days }: { repairs: RepairStation; days: number }) {
-  return (
-    <Card data-testid="repair-station">
+    <Card data-testid="for-salvage">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle>Repair Station</CardTitle>
+            <CardTitle>For salvage</CardTitle>
             <CardDescription>
-              Fixable leather sections being cleaned or cut around, with how far each has got.
-              Updated live, not by the range.
+              Sections the camera rejected in this range, by the main defect of each. They are set
+              aside for salvage; per roll and per supplier are in Supplier quality below.
             </CardDescription>
           </div>
-          <SectionLink href="/rework">Open the board</SectionLink>
+          <SectionLink href="/scans?verdict=REJECT">Rejected scans</SectionLink>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <dl className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-4 text-sm">
-          <div>
-            <dt className="text-muted-foreground">Waiting</dt>
-            <dd className="text-2xl font-semibold tabular-nums" data-testid="repairs-waiting">
-              {repairs.waiting}
-            </dd>
-            <dd className="text-xs text-muted-foreground">
-              {repairs.oldestWaitingMs === null
-                ? "none waiting"
-                : `oldest ${formatDuration(repairs.oldestWaitingMs)}`}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Being handled</dt>
-            <dd className="text-2xl font-semibold tabular-nums" data-testid="repairs-active">
-              {repairs.beingRepaired}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">
-              Done, last {days === 1 ? "day" : `${days} days`}
-            </dt>
-            <dd className="text-2xl font-semibold tabular-nums">{repairs.doneInRange}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Typical time to handle</dt>
-            <dd className="text-2xl font-semibold tabular-nums">
-              {repairs.medianTurnaroundMs === null
-                ? "—"
-                : formatDuration(repairs.medianTurnaroundMs)}
-            </dd>
-            <dd className="text-xs text-muted-foreground">from found to done</dd>
-          </div>
+      <CardContent className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_2fr]">
+        <dl className="text-sm">
+          <dt className="text-muted-foreground">Rejected sections</dt>
+          <dd className="text-2xl font-semibold tabular-nums" data-testid="salvage-total">
+            {salvage.total}
+          </dd>
+          <dd className="text-muted-foreground tabular-nums">
+            {formatPercent(scanned > 0 ? salvage.total / scanned : null)} of {scanned} scanned
+          </dd>
         </dl>
-        {repairs.total === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nothing to clean or cut around. Sections the camera marks Fixable appear here.
-          </p>
+        {salvage.byDefect.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No section was rejected in this range.</p>
         ) : (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Batch</TableHead>
-                  <TableHead numeric>Section</TableHead>
-                  <TableHead>Defect</TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead numeric>Time so far</TableHead>
+          <Table data-testid="salvage-table">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Main defect</TableHead>
+                <TableHead numeric>Sections</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {salvage.byDefect.slice(0, SALVAGE_ROWS).map((d) => (
+                <TableRow key={d.key}>
+                  <TableCell className={cn(!d.known && "text-muted-foreground")}>
+                    {d.known ? d.label : `${d.label} (unknown)`}
+                  </TableCell>
+                  <TableCell numeric>{d.sections}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {repairs.rows.slice(0, REPAIR_ROWS).map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-mono">
-                      <Link
-                        href={`/batches/${r.batchId}`}
-                        className="underline-offset-4 hover:underline"
-                      >
-                        {r.batchCode}
-                      </Link>
-                    </TableCell>
-                    <TableCell numeric>#{r.sequence}</TableCell>
-                    <TableCell>{r.defect ?? "—"}</TableCell>
-                    <TableCell>
-                      <RepairProgress status={r.status} />
-                    </TableCell>
-                    <TableCell numeric>
-                      {r.status === "OPEN"
-                        ? `waiting ${formatDuration(r.waitingMs)}`
-                        : `being handled ${formatDuration(r.repairingMs ?? 0)}`}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {repairs.total > REPAIR_ROWS && (
-              <p className="text-sm text-muted-foreground">
-                Showing the {REPAIR_ROWS} that have waited longest of {repairs.total}. The rest are
-                on the board.
-              </p>
-            )}
-          </>
+              ))}
+            </TableBody>
+          </Table>
         )}
       </CardContent>
     </Card>
@@ -264,12 +196,12 @@ export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"
 export function SupplierQualityCard({
   suppliers,
   rolls,
-  lineProblemShare,
+  lineRejectShare,
   rangeQuery,
 }: {
   suppliers: OperationsReport["suppliers"];
   rolls: OperationsReport["rejectedRolls"];
-  lineProblemShare: number | null;
+  lineRejectShare: number | null;
   /** `from=…&to=…`, so the CSVs cover the range on screen. */
   rangeQuery: string;
 }) {
@@ -282,8 +214,8 @@ export function SupplierQualityCard({
             <CardDescription>
               Sections scanned at Preparation in this range, grouped by the supplier of each roll.
               Use it as evidence when raising a claim.
-              {lineProblemShare !== null &&
-                ` Across all suppliers, ${formatPercent(lineProblemShare)} were Fixable or rejected.`}
+              {lineRejectShare !== null &&
+                ` Across all suppliers, ${formatPercent(lineRejectShare)} were rejected.`}
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -308,7 +240,7 @@ export function SupplierQualityCard({
                 <TableHead>Supplier</TableHead>
                 <TableHead numeric>Rolls</TableHead>
                 <TableHead numeric>Sections</TableHead>
-                <TableHead numeric>Fixable</TableHead>
+                <TableHead numeric>Pass</TableHead>
                 <TableHead numeric>Reject</TableHead>
                 <TableHead>Top defect</TableHead>
               </TableRow>
@@ -322,7 +254,7 @@ export function SupplierQualityCard({
                       {s.high && (
                         <Badge
                           tone="danger"
-                          title="Fixable and rejected sections are well above the other suppliers'."
+                          title="Rejected sections are well above the other suppliers'."
                         >
                           <TriangleAlert aria-hidden />
                           High
@@ -332,7 +264,7 @@ export function SupplierQualityCard({
                   </TableCell>
                   <TableCell numeric>{s.rolls}</TableCell>
                   <TableCell numeric>{s.sections}</TableCell>
-                  <TableCell numeric>{formatPercent(s.reworkShare)}</TableCell>
+                  <TableCell numeric>{formatPercent(s.passShare)}</TableCell>
                   <TableCell numeric>{formatPercent(s.rejectShare)}</TableCell>
                   <TableCell>{s.topDefect ?? "None"}</TableCell>
                 </TableRow>

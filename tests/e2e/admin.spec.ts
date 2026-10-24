@@ -116,53 +116,56 @@ test("the admin can't lock themselves out", async ({ page }) => {
 });
 
 test.describe("camera settings", () => {
-  // Other specs post scans in parallel. 85% / 50% decides every confidence they use the same way
-  // as 90% / 60% (nothing between 0.80 and 0.92, or between 0.40 and 0.65), so they're unaffected.
+  // Other specs post scans in parallel. Found at 45% decides every confidence they use the same
+  // way as 50% (none between 0.45 and 0.50), so they're unaffected.
   test.describe.configure({ mode: "serial" });
 
   test.afterAll(async ({ browser }) => {
     const admin = await adminPage(browser);
-    await admin.request.put("/api/v1/settings/cv", {
-      data: { rejectPercent: 90, reworkPercent: 60 },
-    });
+    await admin.request.put("/api/v1/settings/cv", { data: { foundPercent: 50 } });
     await admin.close();
   });
 
-  test("thresholds are validated, and new scans use the saved ones (old scans keep theirs)", async ({
+  test("the found-at value is validated, and new scans use the saved one (D-093)", async ({
     browser,
     page,
     request,
   }) => {
     await signInAs(page, ACCOUNTS.admin);
     await page.goto("/admin/settings");
-    await page.getByLabel("Reject at or above").fill("80");
-    await page.getByLabel("Fixable at or above").fill("80");
-    await page.getByRole("button", { name: "Save thresholds" }).click();
-    await expect(page.getByText("Fixable must start below Reject (80%).")).toBeVisible();
+    await expect(page.getByLabel("Reject at or above")).toHaveCount(0);
+    await expect(page.getByLabel("Fixable at or above")).toHaveCount(0);
+    const found = page.getByLabel("A defect counts as found at");
+    await found.fill("0");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(
+      page.getByText("Enter the found-at value as a percentage from 1 to 100, like 50."),
+    ).toBeVisible();
 
-    await page.getByLabel("Reject at or above").fill("85");
-    await page.getByLabel("Fixable at or above").fill("50");
-    await expect(page.getByText("85% and above")).toBeVisible();
-    await page.getByRole("button", { name: "Save thresholds" }).click();
-    await expect(page.getByText("Thresholds saved")).toBeVisible();
+    await found.fill("45");
+    await expect(page.getByText("What the camera will decide")).toContainText("from 45%");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Saved. New scans use it from now on.")).toBeVisible();
+
+    // The API refuses the two old thresholds by name.
+    const old = await page.request.put("/api/v1/settings/cv", {
+      data: { foundPercent: 45, rejectPercent: 90, reworkPercent: 60 },
+    });
+    expect(old.status()).toBe(422);
 
     const api = await managerApi(browser);
     const batch = await createBatch(api);
     const { token } = await createDeviceToken();
-    const res = await postScan(request, token, batch.id, [{ classKey: "cut", confidence: 0.87 }]);
+    const res = await postScan(request, token, batch.id, [{ classKey: "cut", confidence: 0.47 }]);
     expect(res.status()).toBe(201);
     const scan = (await res.json()).data;
-    expect(scan.verdict).toBe("REJECT");
+    expect(scan.verdict).toBe("REJECT"); // a Not accepted cut found at 45%
     const detail = await (await api.get(`/api/v1/scans/${scan.scanId}`)).json();
-    // Since D-053 the snapshot also keeps foundAtOrAbove and the actions in force; this test only
-    // owns the two thresholds.
-    expect(detail.data.thresholdsSnapshot).toMatchObject({
-      rejectAtOrAbove: 0.85,
-      reworkAtOrAbove: 0.5,
-    });
+    expect(detail.data.thresholdsSnapshot).toMatchObject({ foundAtOrAbove: 0.45 });
+    expect(detail.data.thresholdsSnapshot).not.toHaveProperty("rejectAtOrAbove");
   });
 
-  test("an unknown class can be added as a defect type, and later scans are decided automatically", async ({
+  test("an unknown class can be added as a Usable defect type, and later sections pass", async ({
     browser,
     page,
     request,
@@ -172,7 +175,7 @@ test.describe("camera settings", () => {
     const batch = await createBatch(api);
     const { token } = await createDeviceToken();
     const before = await postScan(request, token, batch.id, [{ classKey: key, confidence: 0.95 }]);
-    expect((await before.json()).data.verdict).toBe("NEEDS_REVIEW");
+    expect((await before.json()).data.verdict).toBe("REJECT"); // unknown classes reject (A-12)
 
     await signInAs(page, ACCOUNTS.admin);
     await page.goto("/admin/settings?tab=defects");
@@ -184,6 +187,10 @@ test.describe("camera settings", () => {
     await unknown.getByRole("link", { name: "Add as defect type" }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByLabel("Class key")).toHaveValue(key);
+    // The outcome is required (D-093).
+    await dialog.getByRole("button", { name: "Add defect type" }).click();
+    await expect(dialog.getByText(/is Usable or Not accepted\./)).toBeVisible();
+    await dialog.getByLabel("When found").selectOption({ value: "USABLE" });
     await dialog.getByRole("button", { name: "Add defect type" }).click();
     // Found, not browsed: other runs add defect types that can push this one past page 1 (D-047).
     await page.getByLabel("Find defect type").fill(key.replace("-", " "));
@@ -193,7 +200,7 @@ test.describe("camera settings", () => {
     await expect(page.getByTestId("unknown-classes").getByText(key)).toHaveCount(0);
 
     const after = await postScan(request, token, batch.id, [{ classKey: key, confidence: 0.95 }]);
-    expect((await after.json()).data.verdict).toBe("REJECT");
+    expect((await after.json()).data.verdict).toBe("PASS");
 
     // Leave it inactive so it doesn't change other runs.
     const row = page.getByRole("row", { name: new RegExp(key.replace("-", " "), "i") });

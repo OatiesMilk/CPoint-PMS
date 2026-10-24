@@ -9,8 +9,8 @@ import { connection } from "next/server";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, CircleAlert } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
+import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { describeThresholds } from "@/lib/admin-rules";
 import { ROLE_LABELS, type Role } from "@/lib/domain";
 import { requireRole } from "@/server/policies/guard";
 import { auditCountLastDay } from "@/server/services/audit-query.service";
@@ -50,12 +50,31 @@ export default async function AdminHome() {
     unknownClasses(),
     auditCountLastDay(),
   ]);
-  const bands = describeThresholds(thresholds);
   const dbUp = health.checks.database === "up";
 
   return (
     <>
       <PageHeader title="System overview" description="Health, accounts and settings." />
+      {unknown.length > 0 && (
+        <Alert tone="info" data-testid="unknown-classes-alert">
+          <p>
+            The camera sent {unknown.length} defect class{unknown.length === 1 ? "" : "es"} the
+            system doesn’t know (
+            {unknown
+              .slice(0, 3)
+              .map((u) => u.rawClassKey)
+              .join(", ")}
+            {unknown.length > 3 ? "…" : ""}). Those sections are rejected until you add the type and
+            choose whether it is Usable or Not accepted.
+          </p>
+          <Link
+            href="/admin/settings?tab=defects"
+            className="font-medium underline underline-offset-4"
+          >
+            Set up the defect types
+          </Link>
+        </Alert>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>System health</CardTitle>
@@ -108,7 +127,9 @@ export default async function AdminHome() {
               ))}
             </dl>
             {users.locked > 0 && (
-              <p className="text-sm font-medium text-rework">{users.locked} locked out right now</p>
+              <p className="text-sm font-medium text-caution">
+                {users.locked} locked out right now
+              </p>
             )}
             <CardLink href={users.locked > 0 ? "/admin/users?status=locked" : "/admin/users"}>
               Manage users
@@ -117,21 +138,22 @@ export default async function AdminHome() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Decision thresholds</CardTitle>
+            <CardTitle>Pass or Reject</CardTitle>
             <CardDescription>What the camera decides.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <dl className="flex flex-col gap-1 text-sm">
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Reject</dt>
-                <dd className="font-medium">{bands.reject}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">Fixable</dt>
-                <dd className="font-medium">{bands.rework}</dd>
+                <dt className="text-muted-foreground">A defect counts as found at</dt>
+                <dd className="font-medium tabular-nums">
+                  {Math.round(thresholds.foundAtOrAbove * 1000) / 10}%
+                </dd>
               </div>
             </dl>
-            <CardLink href="/admin/settings?tab=thresholds">Change thresholds</CardLink>
+            <p className="text-sm text-muted-foreground">
+              Each defect type is Usable or Not accepted when found.
+            </p>
+            <CardLink href="/admin/settings?tab=defects">Defect types</CardLink>
           </CardContent>
         </Card>
         <Card>
@@ -146,7 +168,7 @@ export default async function AdminHome() {
             <p className="text-sm text-muted-foreground">
               {unknown.length === 0
                 ? "Every class the camera sends is known."
-                : `Their scans go to review: ${unknown
+                : `Sections with these are rejected until you set them up: ${unknown
                     .slice(0, 3)
                     .map((u) => u.rawClassKey)
                     .join(", ")}${unknown.length > 3 ? "…" : ""}`}

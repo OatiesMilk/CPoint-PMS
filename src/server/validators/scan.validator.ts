@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ScanSource, Verdict } from "@/lib/domain";
-import { blankToUndefined, OUT_OF_DATE } from "./shared";
+import { OUT_OF_DATE } from "./shared";
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_DETECTIONS = 50;
@@ -92,32 +92,10 @@ export const ingestFieldsSchema = z.object({
 
 export type IngestFields = z.infer<typeof ingestFieldsSchema>;
 
-/** Human decision on a scan: resolve a NEEDS_REVIEW scan or override an automatic one. */
-export const decisionSchema = z.object({
-  verdict: z.enum(["PASS", "REWORK", "REJECT"], {
-    error: "Choose a verdict for this section: Pass, Fixable or Reject.",
-  }),
-  reason: z.preprocess(
-    blankToUndefined,
-    z
-      .string({ error: "Enter the reason for this decision as text." })
-      .trim()
-      .min(3, "Enter a reason of at least 3 characters for this decision, or leave it empty.")
-      .max(300, "Keep the reason under 300 characters.")
-      .optional(),
-  ),
-  /** The final verdict the person was looking at (null = pending review). Mismatch → 409 STALE. */
-  expectedFinalVerdict: z.enum(Verdict, { error: OUT_OF_DATE }).nullable(),
-});
-
-export type DecisionInput = z.infer<typeof decisionSchema>;
-
 export const scanListQuerySchema = z.object({
   verdict: z.enum(Verdict).optional().catch(undefined),
-  status: z.enum(["PENDING_REVIEW", "DECIDED"]).optional().catch(undefined),
   source: z.enum(ScanSource).optional().catch(undefined),
   batch: z.string().trim().max(30).optional().catch(undefined), // batch code, e.g. B-2026-0001
-  override: z.enum(["1"]).optional().catch(undefined),
   /** A defect class key (from Reports → Defects by type): scans with a detection of it. */
   defect: z
     .string()

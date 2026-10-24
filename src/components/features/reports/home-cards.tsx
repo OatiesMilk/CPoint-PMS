@@ -18,11 +18,11 @@ function CardLink({ href, children }: { href: string; children: React.ReactNode 
   );
 }
 
-type Totals = { scanned: number; pass: number; rework: number; reject: number; pending: number };
+type Totals = { scanned: number; pass: number; reject: number };
 
 /** FM home: today's sections by final verdict, as counts with a 100% bar. */
 export function InspectionSplitCard({ totals }: { totals: Totals }) {
-  const decided = totals.pass + totals.rework + totals.reject;
+  const decided = totals.pass + totals.reject;
   return (
     <Card data-testid="inspection-split">
       <CardHeader>
@@ -32,7 +32,7 @@ export function InspectionSplitCard({ totals }: { totals: Totals }) {
             <CardDescription>
               {totals.scanned === 0
                 ? "No sections scanned yet today."
-                : `${totals.scanned} sections scanned, by final verdict.`}
+                : `${totals.scanned} sections scanned, by verdict. Rejected ones are for salvage.`}
             </CardDescription>
           </div>
           <CardLink href="/reports?preset=today">Report</CardLink>
@@ -49,16 +49,14 @@ export function InspectionSplitCard({ totals }: { totals: Totals }) {
                   className="size-2.5 shrink-0 rounded-sm"
                   style={{ background: s.color }}
                 />
-                {s.key === "pending" ? "Review" : s.label}
+                {s.label}
               </dt>
               <dd className="text-xl font-semibold tabular-nums" data-testid={`split-${s.key}`}>
                 {totals[s.key]}
               </dd>
-              {s.key !== "pending" && (
-                <dd className="text-xs text-muted-foreground tabular-nums">
-                  {formatPercent(decided > 0 ? totals[s.key] / decided : null)}
-                </dd>
-              )}
+              <dd className="text-xs text-muted-foreground tabular-nums">
+                {formatPercent(decided > 0 ? totals[s.key] / decided : null)}
+              </dd>
             </div>
           ))}
         </dl>
@@ -67,16 +65,14 @@ export function InspectionSplitCard({ totals }: { totals: Totals }) {
   );
 }
 
-type Day = Totals & { day: string; agreement: number | null; repairsDone: number };
+type Day = Totals & { day: string };
 
 /** FM home: yesterday next to today, with the way to the full report and CSV. */
 export function DailySummaryCard({ yesterday, today }: { yesterday: Day; today: Day }) {
   const rows: { label: string; value: (d: Day) => string }[] = [
     { label: "Scanned", value: (d) => String(d.scanned) },
-    { label: "Rejected", value: (d) => String(d.reject) },
-    { label: "Marked Fixable", value: (d) => String(d.rework) },
-    { label: "Cleaned or cut around", value: (d) => String(d.repairsDone) },
-    { label: "AI agreement", value: (d) => formatPercent(d.agreement) },
+    { label: "Passed", value: (d) => String(d.pass) },
+    { label: "Rejected (for salvage)", value: (d) => String(d.reject) },
   ];
   return (
     <Card>
@@ -149,39 +145,6 @@ export function DefectsTodayCard({ defects }: { defects: Defect[] }) {
             }))}
           />
         )}
-      </CardContent>
-    </Card>
-  );
-}
-
-type Agreement = { rate: number | null; agreed: number; aiDecided: number };
-
-/** QI home: how often people kept the camera's call, today and over 7 days. */
-export function AgreementCard({ today, week }: { today: Agreement; week: Agreement }) {
-  return (
-    <Card data-testid="agreement-card">
-      <CardHeader>
-        <CardTitle>AI agreement rate</CardTitle>
-        <CardDescription>
-          Camera calls kept after review. Unknown classes don’t count.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <dl className="grid grid-cols-2 gap-4">
-          {[
-            { label: "Today", a: today },
-            { label: "Last 7 days", a: week },
-          ].map(({ label, a }) => (
-            <div key={label}>
-              <dt className="text-sm text-muted-foreground">{label}</dt>
-              <dd className="text-3xl font-semibold tabular-nums">{formatPercent(a.rate)}</dd>
-              <dd className="text-xs text-muted-foreground">
-                {a.aiDecided === 0 ? "No camera calls yet" : `${a.agreed} of ${a.aiDecided} kept`}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        <CardLink href="/reports?preset=7d">See where they differ</CardLink>
       </CardContent>
     </Card>
   );

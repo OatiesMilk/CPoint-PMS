@@ -1,15 +1,15 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   Quality Inspector and Floor Manager (Admin reads), checking the camera's work.
- * What:  find scans by batch or outcome and open one to verify it.
- * Worst: missing that the camera is wrong. Overrides are marked and filterable.
+ * What:  find scans by batch or verdict and open one to see why it is Pass or Reject.
+ * Worst: a rejected section nobody can explain. Each scan shows the rule it was decided by.
  */
 import type { Metadata } from "next";
 import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
 import { PageHeader } from "@/components/features/page-header";
-import { VerdictFlow } from "@/components/features/scans/verdict-flow";
+import { VerdictBadge } from "@/components/features/verdict-badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -38,9 +38,7 @@ export default async function ScansPage({ searchParams }: PageProps<"/scans">) {
   await requirePermission("scan:read");
   await connection();
   const query = scanListQuerySchema.parse(await searchParams);
-  const filtered = Boolean(
-    query.verdict || query.status || query.source || query.batch || query.override || query.defect,
-  );
+  const filtered = Boolean(query.verdict || query.source || query.batch || query.defect);
   const { rows, total, page, pageCount } = await listScans(query);
 
   const pageHref = (p: number) => {
@@ -113,15 +111,11 @@ export default async function ScansPage({ searchParams }: PageProps<"/scans">) {
                     <span className="text-muted-foreground"> · #{s.sequence}</span>
                   </TableCell>
                   <TableCell>
-                    <VerdictFlow
-                      aiVerdict={s.aiVerdict}
-                      finalVerdict={s.finalVerdict}
-                      isOverride={s.isOverride}
-                    />
+                    <VerdictBadge verdict={s.finalVerdict} />
                   </TableCell>
                   <TableCell>
                     {s.topDefect ? (
-                      <span className={s.topDefect.unknown ? "text-review" : undefined}>
+                      <span className={s.topDefect.unknown ? "text-reject" : undefined}>
                         {s.topDefect.label}
                         {s.topDefect.unknown && " (unknown class)"}
                       </span>

@@ -4,14 +4,12 @@
  */
 export {
   ActorType,
+  DefectOutcome,
   BatchStatus,
   InventoryCategory,
   MovementType,
-  ReworkStatus,
   Role,
-  SalvageStatus,
   ScanSource,
-  ScanStatus,
   Stage,
   Verdict,
 } from "@/generated/prisma/enums";

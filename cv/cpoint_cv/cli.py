@@ -31,33 +31,34 @@ __all__ = ["build_parser", "collect_images", "main"]
 
 def settings_line(config: Config) -> str:
     p = config.preview
-    active = ", ".join(sorted(p.active_keys)) or "none"
+
+    def keys(outcome: str) -> str:
+        return ", ".join(sorted(k for k in p.active_keys if p.outcomes.get(k) == outcome)) or "none"
+
     inactive = ", ".join(sorted(p.inactive_keys)) or "none"
-    actions = ", ".join(f"{k} {v.lower()}" for k, v in sorted(p.actions.items()))
-    when_found = (
-        f"; when found at {p.found_at_or_above:.2f}: {actions}"
-        if actions
-        else '; no "When found" actions (by confidence only)'
-    )
     return (
-        f"Preview settings: reject at {p.reject_at_or_above:.2f}, rework at "
-        f"{p.rework_at_or_above:.2f}{when_found}; active types: {active}; inactive: {inactive}. "
+        f"Preview settings: found at {p.found_at_or_above:.2f}; Not accepted (Reject): "
+        f"{keys('NOT_ACCEPTED')}; Usable (Pass): {keys('USABLE')}; inactive: {inactive}; "
+        "unknown classes: Reject. "
         f"Confidence floor {config.mapper.confidence_floor:.2f}, imgsz {config.model.imgsz}, "
         f"device {config.model.device}."
     )
 
 
-NO_ACTIONS_WARNING = (
-    "warning: [preview.actions] is empty, so the preview decides by confidence only. If any "
-    'defect type has a "When found" action in Admin > Settings, copy found_at_or_above and '
-    "[preview.actions] into the config (cv/config.example.toml has the demo's), or the preview "
+NO_TYPES_WARNING = (
+    "warning: [preview] active_keys is empty, so the preview rejects every detection as an "
+    "unknown class. Copy the defect types and their outcomes from Admin > Settings into "
+    "[preview] and [preview.outcomes] (cv/config.example.toml has the demo's), or the preview "
     "won't match the app."
 )
 
 
-def preview_warning(config: Config) -> str | None:
-    """A warning when the preview has no actions: since D-053 the app usually has some."""
-    return None if config.preview.actions else NO_ACTIONS_WARNING
+def preview_warnings(config: Config) -> list[str]:
+    """Warnings about the preview settings: retired keys by name, and no defect types at all."""
+    found = list(config.warnings)
+    if not config.preview.active_keys:
+        found.append(NO_TYPES_WARNING)
+    return found
 
 
 def _model_version(config: Config) -> str | None:
@@ -105,7 +106,7 @@ def _predict(args: argparse.Namespace) -> int:
         return 2
 
     versions = ", ".join(f"{k} {v}" for k, v in runtime_versions().items())
-    if warning := preview_warning(config):
+    for warning in preview_warnings(config):
         print(warning, file=sys.stderr)
     if not args.json:
         print(f"Model {version} ({detector.task}), classes {dict(detector.names)}")
@@ -207,7 +208,7 @@ def _evaluate(args: argparse.Namespace) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
-    if warning := preview_warning(config):
+    for warning in preview_warnings(config):
         print(warning, file=sys.stderr)
     today = date.today().isoformat()
     cases = run_cases(args.folder, labels, detector, config.mapper)

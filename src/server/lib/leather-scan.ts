@@ -7,22 +7,24 @@
 export type Box = { x: number; y: number; width: number; height: number };
 export type Detection = { classKey: string; confidence: number; box: Box };
 export type Random = () => number;
-/** A defect class the scans may show, with its "When found" action if it has one (D-053). */
-export type SceneClass = { key: string; action?: "REWORK" | "REJECT" | null };
+/** A defect class the scans may show, with its outcome when found (D-093). */
+export type SceneClass = { key: string; outcome?: "USABLE" | "NOT_ACCEPTED" | null };
 
 /**
- * The yolo-v1 classes with the actions `npm run demo:reset` sets. The simulator uses them unless
- * told otherwise; the demo week reads the active defect types from the database instead.
+ * The yolo-v1 classes with the outcomes the bootstrap and `npm run demo:reset` set (A-13). The
+ * simulator uses them unless told otherwise; the demo week reads the active defect types from the
+ * database instead.
  */
 export const MODEL_CLASSES: SceneClass[] = [
-  { key: "crease", action: "REWORK" },
-  { key: "cut", action: "REJECT" },
-  { key: "hole", action: "REJECT" },
-  { key: "scratch", action: "REWORK" },
+  { key: "crease", outcome: "USABLE" },
+  { key: "cut", outcome: "NOT_ACCEPTED" },
+  { key: "hole", outcome: "NOT_ACCEPTED" },
+  { key: "scratch", outcome: "USABLE" },
 ];
 /**
- * A class no defect type covers, so its scans go to the review queue. No camera model emits it:
- * `scratch` was used before it became a real class of yolo-v1 (D-052).
+ * A class no defect type covers, so its sections are rejected and the key is listed in Settings →
+ * Unknown classes (A-12). No camera model emits it: `scratch` was used before it became a real
+ * class of yolo-v1 (D-052).
  */
 export const UNKNOWN_CLASS = "sim-unknown";
 
@@ -41,11 +43,10 @@ export function randomBox(random: Random): Box {
 }
 
 /**
- * One section's detections: ~30% clean, ~30% a low-confidence mark (Pass), ~22% Rework,
- * ~13% Reject, ~5% an unknown class that needs review. The confidences suit both rules: the
- * default thresholds (90% / 60%) and "when found" actions at 50% (D-053). A Rework section
- * draws from the classes that rework, a Reject section from those that reject, so the mix holds
- * whichever rule a type uses.
+ * One section's detections: ~30% clean, ~30% a mark below "counts as found at" (50%, so Pass),
+ * ~22% a found Usable defect (Pass), ~13% a found Not accepted one (Reject), ~5% an unknown class
+ * (Reject, A-12). A found section draws from the classes with that outcome, so the mix holds
+ * whatever the types are set to; with none of an outcome it draws from all of them.
  */
 export function scenario(
   random: Random = Math.random,
@@ -60,8 +61,8 @@ export function scenario(
     box: randomBox(random),
   });
   const keys = classes.map((c) => c.key);
-  const pool = (action: "REWORK" | "REJECT") => {
-    const fit = classes.filter((c) => !c.action || c.action === action).map((c) => c.key);
+  const pool = (outcome: "USABLE" | "NOT_ACCEPTED") => {
+    const fit = classes.filter((c) => !c.outcome || c.outcome === outcome).map((c) => c.key);
     return fit.length > 0 ? fit : keys;
   };
   const r = random();
@@ -69,10 +70,10 @@ export function scenario(
   if (r < 0.6) return [det(pick(keys), 0.15, 0.45)];
   if (r < 0.82)
     return [
-      det(pick(pool("REWORK")), 0.6, 0.89),
+      det(pick(pool("USABLE")), 0.6, 0.89),
       ...(random() < 0.3 ? [det(pick(keys), 0.2, 0.45)] : []),
     ];
-  if (r < 0.95) return [det(pick(pool("REJECT")), 0.9, 0.99)];
+  if (r < 0.95) return [det(pick(pool("NOT_ACCEPTED")), 0.9, 0.99)];
   return [det(UNKNOWN_CLASS, 0.7, 0.95)];
 }
 

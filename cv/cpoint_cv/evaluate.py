@@ -6,11 +6,11 @@ The expected results live in ``labels.csv`` beside the photos::
     IMG_6742.jpg,REJECT,cut;scratch
     IMG_6750.jpg,PASS,
 
-``expected_verdict`` is PASS, REWORK, REJECT or NEEDS_REVIEW; ``classes`` lists the defect types a
-person sees on the photo (separated by ``;``, empty when it's clean). The report shows a verdict
-table, per-class precision and recall by photo, and how the verdicts shift as the found-at value
-or the thresholds move. It changes nothing in the app: Settings stay what the admin sets. Pure,
-apart from ``run_cases``, which calls the detector.
+``expected_verdict`` is PASS or REJECT (D-093); ``classes`` lists the defect types a person sees on
+the photo (separated by ``;``, empty when it's clean). The report shows a verdict table, per-class
+precision and recall by photo, and how the verdicts shift as the found-at value moves. It changes
+nothing in the app: Settings stay what the admin sets. Pure, apart from ``run_cases``, which calls
+the detector.
 """
 
 from __future__ import annotations
@@ -24,11 +24,12 @@ from pathlib import Path
 
 from .detector import Detector
 from .mapper import MapperConfig, map_detections
-from .preview import PreviewConfig, preview_verdict
-from .summary import VERDICTS
+from .preview import VERDICTS, PreviewConfig, preview_verdict
 from .types import Detection
 
 LABELS_FILE = "labels.csv"
+# The verdicts before Phase 25 and what they became (Fixable → Pass, Needs review → Reject).
+RETIRED_VERDICTS = {"REWORK": "PASS", "NEEDS_REVIEW": "REJECT"}
 SWEEP = (0.5, 0.6, 0.7, 0.8, 0.9)
 # Photos up to this many make the report a small check, said in its first line.
 SMALL_CHECK = 30
@@ -74,6 +75,11 @@ def parse_labels(text: str) -> list[Label]:
             raise LabelError(f"{LABELS_FILE} line {line}: the file name is empty.")
         if file in seen:
             raise LabelError(f"{LABELS_FILE} line {line}: {file} is listed twice.")
+        if expected in RETIRED_VERDICTS:
+            raise LabelError(
+                f"{LABELS_FILE} line {line}: {expected} for {file} is no longer a verdict (D-093). "
+                f"Write {RETIRED_VERDICTS[expected]} instead: a section is PASS or REJECT."
+            )
         if expected not in VERDICTS:
             raise LabelError(
                 f"{LABELS_FILE} line {line}: expected_verdict for {file} must be one of "
@@ -160,9 +166,8 @@ class SweepRow:
     matches: int
 
 
-def sweep(cases: Sequence[Case], preview: PreviewConfig) -> tuple[list[SweepRow], list[SweepRow]]:
-    """How the verdicts shift: the found-at value with today's actions (when there are any), and
-    the confidence rule alone (D-011, no actions) with Rework at t and Reject 0.30 above it."""
+def sweep(cases: Sequence[Case], preview: PreviewConfig) -> list[SweepRow]:
+    """How the verdicts shift as "A defect counts as found at" moves, with today's outcomes."""
     expected = [c.label.expected for c in cases]
 
     def row(setting: str, config: PreviewConfig) -> SweepRow:
@@ -171,24 +176,7 @@ def sweep(cases: Sequence[Case], preview: PreviewConfig) -> tuple[list[SweepRow]
             setting, Counter(got), sum(g == e for g, e in zip(got, expected, strict=True))
         )
 
-    found_rows = (
-        [row(f"Found at {t:.2f}", replace(preview, found_at_or_above=t)) for t in SWEEP]
-        if preview.actions
-        else []
-    )
-    confidence_rows = [
-        row(
-            f"Rework {t:.2f}, Reject {min(t + 0.3, 0.99):.2f}",
-            replace(
-                preview,
-                actions={},
-                rework_at_or_above=t,
-                reject_at_or_above=min(t + 0.3, 0.99),
-            ),
-        )
-        for t in SWEEP
-    ]
-    return found_rows, confidence_rows
+    return [row(f"Found at {t:.2f}", replace(preview, found_at_or_above=t)) for t in SWEEP]
 
 
 def _pct(value: float | None) -> str:
@@ -219,7 +207,8 @@ def to_markdown(
         settings_line,
         "",
         f"The preview matched the expected verdict on **{matched} of {n}** photos. Nothing here "
-        "changes the app: thresholds and actions stay what the System Admin sets in Settings.",
+        "changes the app: the found-at value and the outcomes stay what the System Admin sets in "
+        "Settings.",
         "",
         "## Per photo",
         "",
@@ -264,30 +253,23 @@ def to_markdown(
             f"{_pct(s.precision)} | {_pct(s.recall)} |"
         )
 
-    found_rows, confidence_rows = sweep(cases, preview)
+    rows = sweep(cases, preview)
     header = "| Setting | " + " | ".join(VERDICTS) + " | Match |"
     rule = "| ------- | " + " | ".join("---:" for _ in VERDICTS) + " | ---: |"
-
-    def table(rows: list[SweepRow]) -> list[str]:
-        return [header, rule] + [
+    lines += [
+        "",
+        "## How the verdicts shift",
+        "",
+        "With today's outcomes, moving “A defect counts as found at”:",
+        "",
+        header,
+        rule,
+        *(
             f"| {r.setting} | "
             + " | ".join(str(r.counts.get(v, 0)) for v in VERDICTS)
             + f" | {r.matches} of {n} |"
             for r in rows
-        ]
-
-    lines += ["", "## How the verdicts shift", ""]
-    if found_rows:
-        lines += [
-            "With today's actions, moving “A defect counts as found at”:",
-            "",
-            *table(found_rows),
-            "",
-        ]
-    lines += [
-        "With the confidence rule alone (no actions, D-011):",
-        "",
-        *table(confidence_rows),
+        ),
         "",
     ]
     return "\n".join(lines)

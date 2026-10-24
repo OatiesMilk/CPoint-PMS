@@ -11,13 +11,7 @@ import {
   inventoryItemFormSchema,
   movementSchema,
 } from "@/server/validators/inventory.validator";
-import {
-  reworkMoveSchema,
-  salvageAssignSchema,
-  salvageDiscardSchema,
-  salvageUnassignSchema,
-} from "@/server/validators/outcome.validator";
-import { decisionSchema, ingestFieldsSchema } from "@/server/validators/scan.validator";
+import { ingestFieldsSchema } from "@/server/validators/scan.validator";
 import {
   defectTypeCreateSchema,
   referenceActiveSchema,
@@ -155,36 +149,6 @@ const CASES: [string, ZodType, unknown[]][] = [
   ],
   ["item active", activeSchema, [{}, { isActive: "yes" }]],
   [
-    "repair move",
-    reworkMoveSchema,
-    [
-      {},
-      { move: "fly", expectedStatus: "X" },
-      { move: "start", expectedStatus: "OPEN", note: long(301) },
-    ],
-  ],
-  [
-    "salvage assign",
-    salvageAssignSchema,
-    [{}, { batchId: "", expectedStatus: "AVAILABLE" }, { batchId: "nope", expectedStatus: "X" }],
-  ],
-  ["salvage unassign", salvageUnassignSchema, [{}, { expectedStatus: "X" }]],
-  [
-    "salvage discard",
-    salvageDiscardSchema,
-    [{}, { reason: "x", expectedStatus: "AVAILABLE" }, { reason: long(301), expectedStatus: "X" }],
-  ],
-  [
-    "scan decision",
-    decisionSchema,
-    [
-      {},
-      { verdict: "MAYBE", expectedFinalVerdict: "X" },
-      { verdict: "PASS", reason: "x", expectedFinalVerdict: null },
-      { verdict: "PASS", reason: long(301), expectedFinalVerdict: null },
-    ],
-  ],
-  [
     "scan ingest (device)",
     ingestFieldsSchema,
     [
@@ -209,9 +173,11 @@ const CASES: [string, ZodType, unknown[]][] = [
     thresholdsSchema,
     [
       {},
-      { rejectPercent: "abc", reworkPercent: "" },
-      { rejectPercent: "0", reworkPercent: "101" },
-      { rejectPercent: "90.55", reworkPercent: "60.123" },
+      { foundPercent: "abc" },
+      { foundPercent: "0" },
+      { foundPercent: "101" },
+      { foundPercent: "50.55" },
+      { foundPercent: "50", rejectPercent: "90", reworkPercent: "60" },
     ],
   ],
   [
@@ -220,6 +186,7 @@ const CASES: [string, ZodType, unknown[]][] = [
     [
       {},
       { key: "Has Spaces!", label: "", sortOrder: "abc" },
+      { key: "ok", label: "Ok", outcome: "REWORK" },
       { key: "ok", label: long(41), description: long(201), sortOrder: "-1" },
       { key: "ok", label: "Ok", sortOrder: "1000" },
       { key: "ok", label: "Ok", sortOrder: "1.5" },

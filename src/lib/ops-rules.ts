@@ -1,5 +1,3 @@
-import { formatDuration } from "./format";
-
 export { stockLevel, type StockLevel } from "./inventory-rules";
 
 /**
@@ -9,34 +7,29 @@ export { stockLevel, type StockLevel } from "./inventory-rules";
  * later settings screen can take them over.
  */
 
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
-
 export const ATTENTION = {
-  /** A repair that nobody has started after this long is "waiting". */
-  repairWaitingMs: DAY,
   /** Stock that would run out within this many days at the recent pace. */
   coverDays: 3,
-  /** A supplier is flagged when its Fixable + reject share is this far above the line's. */
+  /** A supplier is flagged when its reject share is this far above the line's. */
   supplierGap: 0.1,
   /** Sections needed before a supplier's share means anything. */
   supplierMinSections: 30,
 } as const;
 
 /**
- * A supplier whose Fixable + reject share is well above the whole line's, over enough sections to
- * mean something. The Supplier quality "High" badge and the attention item use this one rule, so
- * they never disagree (Phase 20).
+ * A supplier whose reject share (sections for salvage) is well above the whole line's, over enough
+ * sections to mean something. The Supplier quality "High" badge and the attention item use this
+ * one rule, so they never disagree (Phase 20; reject only since Phase 25, D-093).
  */
 export function supplierIsHigh(
-  s: { sections: number; problemShare: number | null },
-  lineProblemShare: number | null,
+  s: { sections: number; rejectShare: number | null },
+  lineRejectShare: number | null,
 ): boolean {
   return (
-    lineProblemShare !== null &&
-    s.problemShare !== null &&
+    lineRejectShare !== null &&
+    s.rejectShare !== null &&
     s.sections >= ATTENTION.supplierMinSections &&
-    s.problemShare >= lineProblemShare + ATTENTION.supplierGap
+    s.rejectShare >= lineRejectShare + ATTENTION.supplierGap
   );
 }
 
@@ -108,11 +101,9 @@ const RANK = { critical: 0, warning: 1, info: 2 } as const;
 export type AttentionInput = {
   /** "3 of the last 5 working days were below quota" (Phase 23); null when fewer than 2 were. */
   belowQuota: { below: number; of: number } | null;
-  repairs: { waitingOverDay: number; open: number; oldestWaitingMs: number | null };
   stock: { out: number; low: number; shortCover: { item: string; days: number }[] };
-  suppliers: { supplier: string; sections: number; problemShare: number | null }[];
-  lineProblemShare: number | null;
-  flaggedScans: number;
+  suppliers: { supplier: string; sections: number; rejectShare: number | null }[];
+  lineRejectShare: number | null;
 };
 
 /**
@@ -163,40 +154,19 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
       href: "/production",
     });
 
-  if (i.repairs.waitingOverDay > 0)
-    out.push({
-      id: "repairs-waiting",
-      severity: "warning",
-      title: `${plural(i.repairs.waitingOverDay, "section")} waiting over a day to be cleaned or cut around`,
-      detail:
-        i.repairs.oldestWaitingMs !== null
-          ? `The oldest has waited ${formatDuration(i.repairs.oldestWaitingMs)} without being started.`
-          : "Nobody has started them yet.",
-      href: "/rework",
-    });
-
-  if (i.lineProblemShare !== null) {
+  if (i.lineRejectShare !== null) {
     const worst = i.suppliers
-      .filter((s) => supplierIsHigh(s, i.lineProblemShare))
-      .sort((a, b) => (b.problemShare ?? 0) - (a.problemShare ?? 0))[0];
+      .filter((s) => supplierIsHigh(s, i.lineRejectShare))
+      .sort((a, b) => (b.rejectShare ?? 0) - (a.rejectShare ?? 0))[0];
     if (worst)
       out.push({
         id: "supplier",
         severity: "warning",
         title: `Leather from ${worst.supplier} has more defects than the rest`,
-        detail: `${Math.round((worst.problemShare ?? 0) * 100)}% of its sections were Fixable or rejected, against ${Math.round(i.lineProblemShare * 100)}% overall.`,
+        detail: `${Math.round((worst.rejectShare ?? 0) * 100)}% of its sections were rejected (for salvage), against ${Math.round(i.lineRejectShare * 100)}% overall.`,
         href: "/reports?view=operations#supplier-quality",
       });
   }
-
-  if (i.flaggedScans > 0)
-    out.push({
-      id: "flagged",
-      severity: "info",
-      title: `${plural(i.flaggedScans, "flagged scan")} waiting for the Quality Inspector`,
-      detail: "The camera found a defect it doesn’t know. They wait until a QI decides.",
-      href: "/review",
-    });
 
   return out.sort((a, b) => RANK[a.severity] - RANK[b.severity]);
 }

@@ -10,29 +10,32 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Thresholds } from "@/lib/decision-engine";
+import { detectionOutcome, OUTCOME_LABELS, type RuleSettings } from "@/lib/decision-engine";
 import { cn } from "@/lib/utils";
 
 type Props = {
   src: string;
   alt: string;
   detections: (OverlayDetection & { inactive: boolean })[];
-  thresholds: Thresholds;
+  rule: RuleSettings;
 };
 
+/** What one detection did to the section, in words (colour is never alone). */
+function effect(d: OverlayDetection & { inactive: boolean }, rule: RuleSettings): string {
+  if (d.unknown) return "Unknown class: rejects the section";
+  if (d.inactive) return "Type turned off: ignored";
+  if (!d.outcome) return "Decided by the earlier rule";
+  const outcome = detectionOutcome(d.confidence, d.outcome, rule);
+  return outcome ? OUTCOME_LABELS[outcome] : "Below found-at: not counted";
+}
+
 /** Image + detections table; hovering a row highlights its box and vice versa. */
-export function ScanViewer({ src, alt, detections, thresholds }: Props) {
+export function ScanViewer({ src, alt, detections, rule }: Props) {
   const [highlight, setHighlight] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
-      <ScanImage
-        src={src}
-        alt={alt}
-        detections={detections}
-        thresholds={thresholds}
-        highlightId={highlight}
-      />
+      <ScanImage src={src} alt={alt} detections={detections} rule={rule} highlightId={highlight} />
       {detections.length === 0 ? (
         <p className="text-muted-foreground">The camera found no defects on this section.</p>
       ) : (
@@ -41,6 +44,7 @@ export function ScanViewer({ src, alt, detections, thresholds }: Props) {
             <TableRow className="hover:bg-transparent">
               <TableHead>Defect</TableHead>
               <TableHead numeric>Confidence</TableHead>
+              <TableHead>When found</TableHead>
               <TableHead>Position (x, y)</TableHead>
               <TableHead>Size</TableHead>
             </TableRow>
@@ -53,14 +57,9 @@ export function ScanViewer({ src, alt, detections, thresholds }: Props) {
                 onMouseLeave={() => setHighlight(null)}
                 className={cn(highlight === d.id && "bg-accent")}
               >
-                <TableCell>
-                  {d.label}
-                  {d.unknown && <span className="ml-2 text-sm text-review">unknown class</span>}
-                  {d.inactive && (
-                    <span className="ml-2 text-sm text-muted-foreground">deactivated, ignored</span>
-                  )}
-                </TableCell>
+                <TableCell>{d.label}</TableCell>
                 <TableCell numeric>{Math.round(d.confidence * 100)}%</TableCell>
+                <TableCell>{effect(d, rule)}</TableCell>
                 <TableCell className="text-muted-foreground tabular-nums">
                   {Math.round(d.box.x * 100)}%, {Math.round(d.box.y * 100)}%
                 </TableCell>

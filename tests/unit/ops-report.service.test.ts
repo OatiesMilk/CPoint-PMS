@@ -3,14 +3,10 @@ import { parseRange } from "@/lib/report-rules";
 
 const report = {
   dailyScanStats: vi.fn(),
-  dailyRepairsDone: vi.fn(),
   dailyProduction: vi.fn(),
   defectBreakdown: vi.fn(),
-  verdictMatrix: vi.fn(),
 };
 const ops = {
-  repairQueue: vi.fn(),
-  repairTurnaround: vi.fn(),
   stockPosition: vi.fn(),
   supplierQuality: vi.fn(),
   supplierDefects: vi.fn(),
@@ -54,7 +50,6 @@ vi.mock("@/server/models/batch.model", () => ({
 const svc = await import("@/server/services/ops-report.service");
 const now = new Date("2026-10-08T04:00:00.000Z");
 const range = parseRange({ from: "2026-10-02", to: "2026-10-08" }, now);
-const H = 3_600_000;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -63,30 +58,13 @@ beforeEach(() => {
       day: "2026-10-07",
       scanned: 50,
       pass: 30,
-      rework: 10,
-      reject: 10,
-      pending: 2,
-      overridden: 1,
-      aiDecided: 48,
-      agreed: 47,
-      personResolved: 0,
+      reject: 20,
     },
   ]);
-  report.dailyRepairsDone.mockResolvedValue([]);
   report.defectBreakdown.mockResolvedValue([
-    { key: "cut", label: "Cut", known: true, scans: 6, pass: 0, rework: 3, reject: 3, pending: 0 },
-    {
-      key: "hole",
-      label: "Hole",
-      known: true,
-      scans: 2,
-      pass: 0,
-      rework: 1,
-      reject: 1,
-      pending: 0,
-    },
+    { key: "cut", label: "Cut", known: true, scans: 6, pass: 3, reject: 3 },
+    { key: "hole", label: "Hole", known: true, scans: 2, pass: 1, reject: 1 },
   ]);
-  report.verdictMatrix.mockResolvedValue([]);
   report.dailyProduction.mockResolvedValue([{ day: "2026-10-06", started: 3, completed: 2 }]);
   production.productionReport.mockImplementation(async (r: { from: string }) =>
     r.from === "2026-10-02"
@@ -119,29 +97,6 @@ beforeEach(() => {
       productionDay("2026-10-07", 90, 85, null),
     ],
   });
-  ops.repairQueue.mockResolvedValue([
-    {
-      id: "r1",
-      status: "OPEN",
-      batchId: "b1",
-      batchCode: "B-1",
-      sequence: 4,
-      defect: "Cut",
-      openedAt: new Date(now.getTime() - 30 * H),
-      startedAt: null,
-    },
-    {
-      id: "r2",
-      status: "IN_PROGRESS",
-      batchId: "b1",
-      batchCode: "B-1",
-      sequence: 7,
-      defect: "Hole",
-      openedAt: new Date(now.getTime() - 5 * H),
-      startedAt: new Date(now.getTime() - 1 * H),
-    },
-  ]);
-  ops.repairTurnaround.mockResolvedValue({ done: 4, medianMs: 6 * H });
   ops.stockPosition.mockResolvedValue([
     {
       id: "i1",
@@ -185,7 +140,6 @@ beforeEach(() => {
       rolls: 1,
       scanned: 10,
       pass: 10,
-      rework: 0,
       reject: 0,
     },
     {
@@ -195,8 +149,7 @@ beforeEach(() => {
       rolls: 2,
       scanned: 40,
       pass: 20,
-      rework: 10,
-      reject: 10,
+      reject: 20,
     },
   ]);
   ops.supplierDefects.mockResolvedValue([
@@ -240,28 +193,6 @@ const PERSON_KEYS = [
   "actor",
 ];
 
-describe("repairStation", () => {
-  it("shows how far each section has got and how long it has been there", async () => {
-    const r = await svc.repairStation(range, now);
-    expect(r).toMatchObject({
-      waiting: 1,
-      beingRepaired: 1,
-      total: 2,
-      waitingOverDay: 1,
-      doneInRange: 4,
-      medianTurnaroundMs: 6 * H,
-    });
-    expect(r.oldestWaitingMs).toBe(30 * H);
-    expect(r.rows[0]).toMatchObject({
-      status: "OPEN",
-      sequence: 4,
-      waitingMs: 30 * H,
-      repairingMs: null,
-    });
-    expect(r.rows[1]).toMatchObject({ status: "IN_PROGRESS", repairingMs: 1 * H });
-  });
-});
-
 describe("operationsReport", () => {
   it("puts production against the quota and the rolls together (Phase 23)", async () => {
     const r = await svc.operationsReport(range, now);
@@ -270,7 +201,8 @@ describe("operationsReport", () => {
     expect(r.kpis.ofQuota.value).toBeCloseTo(160 / 170);
     expect(r.kpis.rollsFinished.value).toBe(2);
     expect(r.kpis.rollsAtPreparation).toBe(2);
-    expect(r.kpis.repairsOpen).toBe(2);
+    expect(r.kpis.rejectRate.value).toBeCloseTo(0.4);
+    expect(r.kpis).not.toHaveProperty("repairsOpen");
     expect(r.production.days).toHaveLength(2);
     expect(r.days).toHaveLength(7);
     expect(r.days.find((d) => d.day === "2026-10-06")).toMatchObject({ started: 3, completed: 2 });
@@ -291,15 +223,13 @@ describe("operationsReport", () => {
     expect(r.suppliers[0]).toMatchObject({
       supplier: "Tannery A",
       rolls: 2,
-      problemShare: 0.5,
-      cleanShare: 0.5,
-      reworkShare: 0.25,
-      rejectShare: 0.25,
+      passShare: 0.5,
+      rejectShare: 0.5,
       topDefect: "Hole",
-      high: true, // 50% against 40% for the line, over 40 sections
+      high: true, // 50% rejected against 40% for the line, over 40 sections
     });
-    expect(r.suppliers[1]).toMatchObject({ problemShare: 0, topDefect: null, high: false });
-    expect(r.lineProblemShare).toBeCloseTo(0.4); // 20 of 50 decided
+    expect(r.suppliers[1]).toMatchObject({ rejectShare: 0, topDefect: null, high: false });
+    expect(r.lineRejectShare).toBeCloseTo(0.4); // 20 of 50 rejected
     expect(r.rejectedRolls[0]).toMatchObject({ rollCode: "R-0412", rejected: 6 });
     expect(ops.rollsWithMostRejects).toHaveBeenCalledWith(range, 5);
   });
@@ -318,7 +248,6 @@ describe("operationsReport", () => {
           sequence: 3,
           capturedAt: new Date("2026-10-02T01:00:00Z"),
           imagePath: "a.jpg",
-          isOverride: false,
           detections: [{ confidence: 0.94, rawClassKey: "hole", defectType: { label: "Hole" } }],
         },
       ],
@@ -326,13 +255,12 @@ describe("operationsReport", () => {
     ops.countBatchVerdicts.mockResolvedValue([
       { finalVerdict: "PASS", _count: { _all: 30 } },
       { finalVerdict: "REJECT", _count: { _all: 6 } },
-      { finalVerdict: null, _count: { _all: 1 } },
     ]);
     const sheet = await svc.claimSheet("b9");
     expect(sheet).toMatchObject({
       rollCode: "R-0412",
       receivedAt: "2026-10-01",
-      totals: { sections: 37, pass: 30, rework: 0, reject: 6, pending: 1 },
+      totals: { sections: 36, pass: 30, reject: 6 },
       rejected: [{ sequence: 3, hasImage: true, defects: [{ label: "Hole", confidence: 0.94 }] }],
     });
     const keys = keysDeep(sheet);
@@ -350,9 +278,9 @@ describe("operationsReport", () => {
       "3 of the last 5 working days were below quota",
     );
     expect(ids).not.toContain("bottleneck");
-    expect(ids).toEqual(
-      expect.arrayContaining(["below-quota", "repairs-waiting", "supplier", "flagged"]),
-    );
+    expect(ids).toEqual(expect.arrayContaining(["below-quota", "supplier"]));
+    expect(ids).not.toContain("repairs-waiting");
+    expect(ids).not.toContain("flagged");
   });
 
   it("answers with the floor's sections only (D-091)", async () => {
@@ -362,13 +290,13 @@ describe("operationsReport", () => {
       "attention",
       "checkpoint",
       "days",
+      "forSalvage",
       "kpis",
-      "lineProblemShare",
+      "lineRejectShare",
       "previous",
       "production",
       "range",
       "rejectedRolls",
-      "repairs",
       "stock",
       "suppliers",
     ]);
@@ -380,11 +308,20 @@ describe("operationsReport", () => {
     expect(checkpoint.defects[0]).toMatchObject({ key: "cut", share: 0.75, cumulative: 0.75 });
   });
 
+  it("reports rejected sections for salvage, by main defect (A-11)", async () => {
+    const { forSalvage } = await svc.operationsReport(range, now);
+    expect(forSalvage).toEqual({
+      total: 20,
+      byDefect: [
+        { key: "cut", label: "Cut", known: true, sections: 3 },
+        { key: "hole", label: "Hole", known: true, sections: 1 },
+      ],
+    });
+  });
+
   it("never carries a person", async () => {
     const keys = keysDeep(await svc.operationsReport(range, now));
     for (const k of PERSON_KEYS) expect(keys.has(k)).toBe(false);
-    const repairKeys = keysDeep(await svc.repairStation(range, now));
-    for (const k of PERSON_KEYS) expect(repairKeys.has(k)).toBe(false);
   });
 });
 
@@ -393,7 +330,7 @@ describe("CSV", () => {
     const lines = (await svc.operationsCsv(range)).trim().split("\r\n");
     expect(lines).toHaveLength(8);
     expect(lines[0]).toContain("Rolls started,Rolls finished");
-    expect(lines.find((l) => l.startsWith("2026-10-06"))).toBe("2026-10-06,3,2,0,0,0,0,0");
+    expect(lines.find((l) => l.startsWith("2026-10-06"))).toBe("2026-10-06,3,2,0,0,0");
   });
 
   it("stock CSV lists every item, riskiest first", async () => {
@@ -408,6 +345,6 @@ describe("CSV", () => {
 
   it("suppliers CSV gives percentages", async () => {
     const csv = await svc.suppliersCsv(range);
-    expect(csv).toContain("Tannery A,2,2,40,20,10,10,50.0,25.0,25.0,50.0,Hole,yes");
+    expect(csv).toContain("Tannery A,2,2,40,20,20,50.0,50.0,Hole,yes");
   });
 });

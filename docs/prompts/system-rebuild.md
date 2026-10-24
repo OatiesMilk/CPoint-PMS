@@ -132,8 +132,7 @@ src/
         batches/[id]/route.ts
         batches/[id]/stages/route.ts
         scans/route.ts              # POST = CV ingestion (token auth), GET list
-        scans/[id]/decision/route.ts
-        rework/...  salvage/...  inventory/...  users/...  defect-types/...  settings/cv/...  reports/...
+        inventory/...  users/...  defect-types/...  settings/cv/...  reports/...
   server/
     controllers/                    # CONTROLLER: parse+validate request → call service → shape response
     services/                       # business rules (decision engine, batch counts, stage flow)
@@ -177,38 +176,29 @@ is audited.
 
 - One **scan = one leather section** of the batch's roll, captured before the cutting guides are applied.
 - A scan has 0..n **detections** (defect type, confidence 0–1, bounding box as fractions 0–1).
-- **Defect types are configurable data, not code.** Seed `cut`, `hole`, `abrasion`, `dirt`. Each
-  has `key`, `label`, `isActive`, `sortOrder`. The same confidence rule applies to **every** defect
-  type; there are no per-type actions. The YOLO class list will change after the new training
-  photos, so unknown class keys from the CV service must be stored and flagged, not rejected.
-- **Decision engine** (`server/services/decision-engine.ts`, pure function, fully unit-tested).
-  It uses the **highest confidence among detections of active defect types**. The two thresholds
-  are admin-editable `CvSettings`, seeded at `rejectAtOrAbove = 0.90` and `reworkAtOrAbove = 0.60`
-  (team decision D-011):
-  1. max confidence ≥ 0.90 → **REJECT** (automatic)
-  2. 0.60 ≤ max confidence < 0.90 → **REWORK** (automatic)
-  3. max confidence < 0.60, or no detections → **PASS** (automatic; `ASSUMPTION` until confirmed)
-  4. Any detection with an **unknown class key** → **NEEDS_REVIEW** instead, because the system
-     can't trust a class it doesn't know.
-     Compare boundaries on the raw float (0.8999 = REWORK, 0.90 = REJECT). Validate that
-     `reworkAtOrAbove < rejectAtOrAbove` when an admin saves settings. Store the thresholds used on
-     each scan (`thresholdsSnapshot`) so old decisions stay explainable after the settings change.
-- **Human-in-the-loop:** the **Quality Inspector or the Floor Manager**, whoever is available, can
-  **override** any automatic decision (PASS / REWORK / REJECT) from scan detail or the "Recent
-  decisions" list, and resolves NEEDS_REVIEW scans in the review queue. Overrides require a reason
-  and are tracked (`isOverride`, `aiVerdict` vs `finalVerdict`). An override also updates the linked
-  ReworkTicket/SalvageItem: it cancels the old one and opens the new one. Overrides feed an
-  "AI agreement rate" metric.
-- **Outcomes:**
-  - **PASS** → the section continues to cutting.
-  - **REWORK** → a `ReworkTicket` is opened (`OPEN → IN_PROGRESS → DONE`) for the separate repair
-    station. When the Floor Manager or Quality Inspector marks it DONE, the section **counts as
-    usable in the batch**. It doesn't get re-scanned.
-  - **REJECT** → removed from the line but **kept as a `SalvageItem`** linked to its origin batch
-    (`AVAILABLE → ASSIGNED (to a later batch) | DISCARDED`). This reflects the client's practice of
-    reusing leftover material.
+- **Defect types are configurable data, not code.** Each has `key`, `label`, `isActive`,
+  `sortOrder` and an **outcome**, Usable or Not accepted (Phase 25, D-093). A new database gets
+  crease and scratch Usable, cut, hole, abrasion and dirt Not accepted. The YOLO class list will
+  change after the new training photos, so unknown class keys from the CV service must be stored
+  and flagged, not dropped.
+- **Decision engine** (`src/lib/decision-engine.ts`, pure function, fully unit-tested). Every
+  section is **PASS** or **REJECT**, and the camera's verdict is final (D-093, replacing D-011's two
+  thresholds and D-028's review):
+  1. A detection of an active, known type at or above **A defect counts as found at** (admin-
+     editable `CvSettings.foundAtOrAbove`, 0.5, D-053) gives its type's outcome; below it, it
+     counts for nothing. Inactive types are ignored.
+  2. Any Not accepted → **REJECT**; otherwise, or with no detections → **PASS**.
+  3. Any detection with an **unknown class key** → **REJECT** (A-12); the class is listed under
+     Settings → Unknown classes until the admin sets it up.
+     Store the rule used on each scan (`thresholdsSnapshot`: found-at and the outcomes) so old
+     decisions stay explainable after the settings change.
+- **No human override** (C-21): nobody changes a verdict afterwards. `aiVerdict` and
+  `finalVerdict` are both kept and always equal.
+- **Outcomes:** PASS → the section continues to cutting. REJECT → set aside and reported **for
+  salvage** (A-11); the system moves no leather. The Review Queue, the Repair Station and Salvage
+  were removed in Phase 25 (D-094).
 - **Batch counts** (derived in a service, never stored redundantly): total scanned, passed,
-  rework open, rework done, rejected, **usable = passed + rework done**, pending review.
+  rejected (for salvage).
 
 **Inventory (basic):** items with category (`LEATHER_ROLL | NAILS | ADHESIVE | THREAD | EQUIPMENT |
 OTHER`), unit, quantity on hand, reorder level. Changes happen only through `InventoryMovement`
@@ -238,11 +228,7 @@ Seed one demo account per role (password from `.env`, documented in README).
 | Camera (CV placeholder page)                               | ✅             | ✅                | ✅                 | —                  |
 | Capture page and Floor view (Phase 18, D-066; Phase 21)    | ✅             | ✅                | —                  | if allowed (D-075) |
 | "Latest scans" widget (polls every 5s)                     | ✅ on overview | ✅ on overview    | —                  | —                  |
-| Recent decisions + override                                | ✅             | ✅                | —                  | —                  |
-| Review queue: decide flagged scans (D-028)                 | view           | ✅                | —                  | —                  |
 | Scan history + detail (image + boxes)                      | ✅             | ✅                | view               | —                  |
-| Rework board                                               | ✅             | ✅                | —                  | —                  |
-| Salvage                                                    | ✅             | view              | —                  | —                  |
 | Attendance: one day at a time (Phase 22, D-077 to D-079)   | ✅             | —                 | view               | —                  |
 | Inventory + movements                                      | ✅             | —                 | view               | —                  |
 | Reports: production vs quota, daily summary, defects, CSV  | ✅             | ✅ (quality only) | —                  | —                  |
@@ -253,11 +239,11 @@ Seed one demo account per role (password from `.env`, documented in README).
 | Constructor home: Capture once allowed, else who grants it | —              | —                 | —                  | ✅                 |
 
 **Floor Manager overview:** today's production against the quota (Phase 23; replaced batches per
-stage), today's attendance, today's scans and pass/rework/reject split, open reworks, low-stock
-alerts, and Latest scans.
-**Quality Inspector overview:** today's REWORK/REJECT decisions to verify, with override (the primary
-action), the flagged-scan count, the next production check-in (Phase 23), today's defect breakdown
-by type, AI agreement rate, and Latest scans.
+stage), today's attendance, today's scans and Pass/Reject split, low-stock alerts, and Latest
+scans.
+**Quality Inspector overview:** Capture sections (the primary action), sections scanned and
+rejected today, the next production check-in (Phase 23), today's defect breakdown by type, and
+Latest scans.
 
 **Camera page (placeholder):** shows the connected source as "Not connected" with a
 "Simulator active" state when demo scans are arriving. It has a batch selector (the open batch at
@@ -293,11 +279,11 @@ This contract is what the real YOLO service will call later, so keep it stable a
   `DESIGN.md` + `src/styles/tokens.css`.
   - Brand **red must not be the general accent.** It collides with the Reject/danger meaning on a
     QC screen. Use yellow as the brand mark/highlight, a warm-tinted neutral ramp, and a distinct
-    accent. Semantic colors are fixed: PASS = success, REWORK = warning, REJECT = danger,
-    NEEDS_REVIEW = info. Never rely on color alone; always pair it with a label or icon.
+    accent. Semantic colors are fixed: PASS = success, REJECT = danger (Phase 25: there
+    are no other verdicts). Never rely on color alone; always pair it with a label or icon.
 - Density: these are desk users working all day, so use compact tables, right-aligned numbers and
   sortable columns.
-- Destructive actions (reject override, deactivate user, revoke token, discard salvage) need a
+- Destructive actions (cancel a batch, deactivate user, revoke token) need a
   confirmation that names the item. Reversible actions use an undo toast.
 - Accessibility: keyboard reachable, visible focus, contrast ≥ 4.5:1, honors `prefers-reduced-motion`.
 - Language: English UI.
@@ -306,12 +292,10 @@ This contract is what the real YOLO service will call later, so keep it stable a
 <data_model_outline>
 Prisma models (refine as needed and record changes in DECISIONS):
 `User(role enum, isActive)`, `ShoeType`, `Supplier`, `Batch`, `BatchStageLog`,
-`Scan(batchId, sequence, imagePath, source, modelVersion, aiVerdict, finalVerdict, status,
-maxConfidence, thresholdsSnapshot Json, isOverride, overrideReason, decidedById, decidedAt)`,
+`Scan(batchId, sequence, imagePath, source, modelVersion, aiVerdict, finalVerdict,
+maxConfidence, thresholdsSnapshot Json)` (verdicts PASS or REJECT, Phase 25),
 `Detection(scanId, defectTypeId?, rawClassKey, confidence, x, y, width, height)`,
-`DefectType(key unique, label, isActive, sortOrder)`, `CvSettings(rejectAtOrAbove, reworkAtOrAbove)` (singleton),
-`ReworkTicket(scanId unique, status, notes, completedById, completedAt)`,
-`SalvageItem(scanId unique, originBatchId, status, assignedBatchId?)`,
+`DefectType(key unique, label, isActive, sortOrder, outcome)`, `CvSettings(foundAtOrAbove, earlyModelNotice)` (singleton),
 `InventoryItem`, `InventoryMovement`, `ComponentType` (placeholder),
 `ApiToken(name, tokenHash, scopes, lastUsedAt, revokedAt)`,
 `AuditLog(actorId?, actorType USER|DEVICE|SYSTEM, action, entity, entityId, before Json?, after Json?, createdAt)`.

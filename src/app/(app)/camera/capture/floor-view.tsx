@@ -4,24 +4,15 @@
  * Intent brief (ui-craft §1)
  * Who:   the constructor feeding the fixed camera at Preparation, glancing up from the leather at a
  *        monitor about 2 m away. Space on the station's keyboard captures.
- * What:  see the live camera, then which bin the piece goes in: Pass, Fixable, Reject or Needs
- *        review, in colour, word and icon (D-074).
+ * What:  see the live camera, then where the piece goes: Pass or Reject, in colour, word and
+ *        icon (D-074, D-093).
  * Worst: a piece sorted into the wrong bin because the verdict was unclear or stale, or a capture
  *        that silently failed. The verdict stays until the next capture, "Checking…" shows while
  *        the model runs, and every problem fills the band with what to do.
  */
 import type { RefObject } from "react";
 import { useEffect, useRef } from "react";
-import {
-  CameraOff,
-  CircleCheck,
-  CircleHelp,
-  CircleX,
-  LoaderCircle,
-  Minimize2,
-  Send,
-  Wrench,
-} from "lucide-react";
+import { CameraOff, CircleCheck, CircleX, LoaderCircle, Minimize2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Verdict } from "@/components/features/verdict-badge";
 import { FLOOR_VERDICT } from "@/lib/capture-rules";
@@ -29,9 +20,7 @@ import { cn } from "@/lib/utils";
 
 const TONE: Record<Verdict, { frame: string; band: string; Icon: typeof CircleCheck }> = {
   PASS: { frame: "border-pass", band: "bg-pass-soft text-pass", Icon: CircleCheck },
-  REWORK: { frame: "border-rework", band: "bg-rework-soft text-rework", Icon: Wrench },
   REJECT: { frame: "border-reject", band: "bg-reject-soft text-reject", Icon: CircleX },
-  NEEDS_REVIEW: { frame: "border-review", band: "bg-review-soft text-review", Icon: CircleHelp },
 };
 
 export type FloorResult = {

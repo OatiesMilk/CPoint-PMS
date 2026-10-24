@@ -92,15 +92,14 @@ describe("sending", () => {
 });
 
 describe("Floor view verdicts (D-074)", () => {
-  it("names every verdict with the system's words and the bin it goes to", () => {
+  it("names both verdicts (D-093) with the system's words and the bin it goes to", () => {
     expect(FLOOR_VERDICT.PASS).toEqual({ word: "Pass", next: "Goes on to cutting" });
-    expect(FLOOR_VERDICT.REWORK).toEqual({ word: "Fixable", next: "To the Repair Station" });
-    expect(FLOOR_VERDICT.REJECT).toEqual({ word: "Reject", next: "To salvage" });
-    expect(FLOOR_VERDICT.NEEDS_REVIEW.word).toBe("Needs review");
+    expect(FLOOR_VERDICT.REJECT).toEqual({ word: "Reject", next: "Set aside for salvage" });
+    expect(Object.keys(FLOOR_VERDICT).sort()).toEqual(["PASS", "REJECT"]);
   });
 
-  it("never says Rework or Hold on the floor", () => {
+  it("never says Rework, Fixable or Hold on the floor", () => {
     const words = Object.values(FLOOR_VERDICT).flatMap((v) => [v.word, v.next]);
-    expect(words.join(" ")).not.toMatch(/rework|hold/i);
+    expect(words.join(" ")).not.toMatch(/rework|fixable|hold/i);
   });
 });

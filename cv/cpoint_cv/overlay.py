@@ -13,8 +13,8 @@ from typing import Any
 
 from .types import Detection, RawDetection
 
-# Box colours (OpenCV's BGR order) chosen away from the verdict hues: no green (pass), orange
-# (rework), red (reject) or blue (review), and no brand yellow. A class always gets the same one.
+# Box colours (OpenCV's BGR order) chosen away from the app's status hues: no green (pass), red
+# (reject), orange (caution) or blue (info), and no brand yellow. A class always gets the same one.
 BOX_COLOURS = (
     (238, 211, 34),  # cyan
     (250, 139, 167),  # violet

@@ -93,16 +93,14 @@ export function spaceCaptures(target: { tagName?: string; isContentEditable?: bo
   );
 }
 
-/** What the Floor view says for a verdict (D-074): the word and where the piece goes next. */
+/**
+ * What the Floor view says for a verdict (D-074, two results since D-093): the word and where the
+ * piece goes next. A rejected section is reported for salvage (A-11).
+ */
 export const FLOOR_VERDICT = {
   PASS: { word: "Pass", next: "Goes on to cutting" },
-  REWORK: { word: "Fixable", next: "To the Repair Station" },
-  REJECT: { word: "Reject", next: "To salvage" },
-  NEEDS_REVIEW: { word: "Needs review", next: "Set aside for the Quality Inspector" },
-} as const satisfies Record<
-  "PASS" | "REWORK" | "REJECT" | "NEEDS_REVIEW",
-  { word: string; next: string }
->;
+  REJECT: { word: "Reject", next: "Set aside for salvage" },
+} as const satisfies Record<"PASS" | "REJECT", { word: string; next: string }>;
 
 /** The line under a failed send, by what happened. */
 export function sendFailureMessage(status: number | "network", appMessage?: string): string {

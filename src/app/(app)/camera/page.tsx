@@ -105,13 +105,13 @@ export default async function CameraPage() {
               <ScanImage
                 src={`/api/v1/scans/${last.id}/image`}
                 alt={`Last capture: section #${last.sequence} of ${last.batch.code}`}
-                thresholds={snapshot}
+                rule={snapshot}
                 detections={last.detections.map((d) => ({
                   id: d.id,
                   label: d.defectType?.label ?? d.rawClassKey,
                   confidence: d.confidence,
                   unknown: d.isUnknownClass,
-                  action: snapshot.actions?.[d.rawClassKey] ?? null,
+                  outcome: snapshot.outcomes[d.rawClassKey] ?? null,
                   box: { x: d.x, y: d.y, width: d.width, height: d.height },
                 }))}
               />
@@ -160,7 +160,7 @@ export default async function CameraPage() {
                   </p>
                 </div>
               ) : (
-                <p className="rounded-md bg-rework-soft p-3 text-sm">
+                <p className="rounded-md bg-caution-soft p-3 text-sm">
                   No batch is at Preparation, so Capture stays off.{" "}
                   <Link href="/batches?status=PLANNED" className="underline underline-offset-4">
                     Start a batch
@@ -199,8 +199,8 @@ export default async function CameraPage() {
             {status.earlyModelNotice && !fromSimulator && (
               <CardContent>
                 <Alert tone="info">
-                  Early model{lastModel ? ` (${lastModel})` : ""}. Results are for testing; the
-                  Quality Inspector checks every flagged section.
+                  Early model{lastModel ? ` (${lastModel})` : ""}. It is still being trained, so
+                  some verdicts may be wrong.
                 </Alert>
               </CardContent>
             )}

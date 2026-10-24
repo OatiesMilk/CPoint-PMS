@@ -75,7 +75,7 @@ Inspector, System Admin). Writes need `batch:manage` (Floor Manager), except **f
 | ---------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------- |
 | `GET /api/v1/batches`              | query: `status`, `shoeTypeId`, `q`, `page`       | `{ data: Batch[], meta: { total, page, pageCount } }`, 15 per page, newest first |
 | `POST /api/v1/batches`             | `BatchForm`                                      | `201 { data: Batch }`, status `PLANNED`                                          |
-| `GET /api/v1/batches/{id}`         | —                                                | `{ data: { batch, actions, openRepairs, rollFromInventory } }`                   |
+| `GET /api/v1/batches/{id}`         | —                                                | `{ data: { batch, actions, rollFromInventory } }`                                |
 | `PATCH /api/v1/batches/{id}`       | `BatchForm`                                      | `{ data: Batch }`                                                                |
 | `POST /api/v1/batches/{id}/stages` | `{ action: "start" \| "finish", expectedStage }` | `{ data: { code, status, currentStage } }`                                       |
 | `POST /api/v1/batches/{id}/cancel` | `{ reason, expectedStage? }`                     | `{ data: { code, status, currentStage } }`                                       |
@@ -88,8 +88,8 @@ type can't change once the roll has started. Cancelling a **planned** batch retu
 the table.
 
 **Roll actions (D-082):** `start` (Planned → At Preparation, `batch:manage`) and `finish` (At
-Preparation, or an older batch still past it → Finished, `batch:finish`). Finishing is allowed with
-sections at the Repair Station. `expectedStage` is the stage the caller last saw:
+Preparation, or an older batch still past it → Finished, `batch:finish`). `expectedStage` is the
+stage the caller last saw:
 
 - `advance`, `move_back` or `complete` → `422` "Choose start or finish. A roll no longer moves
   through stages."
@@ -124,16 +124,16 @@ camera station app was retired in Phase 20 (D-069). The simulator is the token c
 | `batchId`      | no       | Only for multi-camera setups. Normally omitted (see "Which batch")                                                                                                                                                                                                 |
 | `captureId`    | no       | A UUID the camera makes for each capture. Send the same one on every retry: a repeat returns the first scan instead of making a second one (D-051). `cpoint_cv` always sends it                                                                                    |
 
-**Decision (D-011):** the highest confidence among _active_ defect types decides, using the
-thresholds set by the admin (default ≥ 0.90 → `REJECT`, ≥ 0.60 → `REWORK`, otherwise `PASS`).
-Any `classKey` the system doesn't know → `NEEDS_REVIEW` (the scan waits in the review queue, and the
-class is stored and flagged). Class keys are matched exactly. The bootstrap creates `cut`, `hole`,
-`abrasion` and `dirt`; for yolo-v1, add `crease` and `scratch` and turn `abrasion` and `dirt` off
+**Decision (D-093):** every section is `PASS` or `REJECT`, final at once. A detection of an
+_active_ defect type at or above `foundAtOrAbove` (Settings, default 0.5) gives its type's outcome:
+`USABLE` or `NOT_ACCEPTED`. Any `NOT_ACCEPTED` → `REJECT`, otherwise `PASS`. Any `classKey` the
+system doesn't know → `REJECT` (A-12), and the class is stored and listed under Settings → Unknown
+classes. Class keys are matched exactly. A new database gets `crease` and `scratch` Usable and
+`cut`, `hole`, `abrasion` and `dirt` Not accepted; for yolo-v1 turn `abrasion` and `dirt` off
 under Admin → Settings (D-052, `cv/README.md`). Add new ones there when the model is retrained.
+A rejected section is reported for salvage; nothing else is created.
 
-**Outcome rows:** `REWORK` opens a repair ticket; `REJECT` creates a salvage item (D-007).
-
-**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "status", "duplicate": false } }`.
+**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "duplicate": false } }`.
 
 **`200`** the same body with `"duplicate": true` when this device already sent the `captureId`:
 nothing new is stored or audited, even if the batch has since left Preparation.
@@ -148,7 +148,7 @@ The Capture page (`/camera/capture`) sends the frame on screen here. It uses the
 session**, not a device token, and needs someone who may capture: the Floor Manager and the
 Quality Inspector (`camera:capture`, D-066), or a Shoe Constructor the Floor Manager or System
 Admin allowed (`canCapture`, D-075). The app runs the model itself (ONNX Runtime, D-064) and then decides exactly as for
-`POST /api/v1/scans`: the same `ingestScan`, decision engine and outcome rows.
+`POST /api/v1/scans`: the same `ingestScan` and decision engine.
 
 `multipart/form-data`:
 
@@ -162,7 +162,7 @@ Admin allowed (`canCapture`, D-075). The app runs the model itself (ONNX Runtime
 
 There is no `detections` or `modelVersion` field: the server produces both.
 
-**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "status", "duplicate": false, "detections": [...], "modelVersion", "inferenceMs" } }`.
+**`201`** `{ "data": { "scanId", "batchId", "batchCode", "sequence", "verdict", "duplicate": false, "detections": [...], "modelVersion", "inferenceMs" } }`.
 **`200`** the same with `"duplicate": true` (and `detections: []`) for a repeated `captureId`.
 
 | Status | `code`                    | When                                                                                       |
@@ -199,61 +199,22 @@ or `404 NO_BATCH_AT_PREPARATION`.
 Any use of a device token is recorded (at most once a minute, shown under API tokens). The
 station check-in that used it (D-054) was retired with the station app in Phase 20 (D-069).
 
-**How a scan is decided (D-011, D-053).** Each detection of an active defect type gives a result
-and the worst decides: a type with a **When found** action (`REWORK` or `REJECT`) gives it from
-`foundAtOrAbove` (Settings, default 0.5) up; other types use `reworkAtOrAbove` and
-`rejectAtOrAbove`; an unknown class key sends the scan to review. The scan keeps the rule in
-`thresholdsSnapshot`: `{ rejectAtOrAbove, reworkAtOrAbove, foundAtOrAbove, actions: { key: action } }`
-(the last two are missing on scans from before D-053).
+**How a scan is decided (D-053, D-093).** See "Decision" above. The scan keeps the rule in
+`thresholdsSnapshot`: `{ foundAtOrAbove, outcomes: { key: "USABLE" | "NOT_ACCEPTED" } }`. Scans
+from before 24 Oct 2026 keep the earlier shape (`rejectAtOrAbove`, `reworkAtOrAbove`, sometimes
+`actions`); their REWORK verdicts were converted to `PASS` and NEEDS_REVIEW to `REJECT`.
 
 ## Scans (session)
 
-| Method & path                      | Permission                                      | Notes                                                                                                                               |
-| ---------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/scans`                | `scan:read`                                     | filters `verdict`, `status`, `source`, `batch` (code), `override=1`, `page`; or `limit=1…50` for the latest scans (the live widget) |
-| `GET /api/v1/scans/{id}`           | `scan:read`                                     | scan, detections (with boxes), rework/salvage history, who decided                                                                  |
-| `GET /api/v1/scans/{id}/image`     | `scan:read`                                     | the captured image (`Cache-Control: private`)                                                                                       |
-| `POST /api/v1/scans/{id}/decision` | `scan:decide`; `scan:review` for a flagged scan | `{ verdict: PASS\|REWORK\|REJECT, reason?, expectedFinalVerdict }`                                                                  |
+| Method & path                  | Permission  | Notes                                                                                                      |
+| ------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/scans`            | `scan:read` | filters `verdict` (`PASS` or `REJECT`), `source`, `batch` (code), `defect`, `page`; or `limit=1…50` (live) |
+| `GET /api/v1/scans/{id}`       | `scan:read` | scan and detections (with boxes); no person                                                                |
+| `GET /api/v1/scans/{id}/image` | `scan:read` | the captured image (`Cache-Control: private`)                                                              |
 
-**Decisions:**
-
-- A scan the camera flagged (`aiVerdict: NEEDS_REVIEW`) is decided only by a Quality Inspector
-  (`scan:review`), both while it waits and after it's resolved. Anyone else gets `403 FORBIDDEN`
-  (D-028). Other scans can be overridden by the Floor Manager or the Quality Inspector.
-- Resolving a `NEEDS_REVIEW` scan needs no reason. Changing an existing decision (an override)
-  needs a `reason` (3–300 characters).
-- `expectedFinalVerdict` is the verdict the person saw (`null` for pending). If it changed, the
-  answer is `409 STALE`.
-- The repair ticket or salvage item is swapped to match the new verdict.
-- `409` once the batch is closed, or once the material has moved on (repair started, salvage
-  reused or discarded).
-
-## Rework and salvage (session)
-
-Every REWORK verdict (shown as **Fixable**, D-070) opens a ticket on the **Repair Station**
-board (D-073); every REJECT keeps the section as **salvage**
-(D-007). These endpoints move them along. Each takes `expectedStatus` (what the caller last saw)
-and answers `409 STALE` if it changed. All moves are audited.
-
-| Method & path                        | Permission       | Body / query                                                                                       |
-| ------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/rework`                 | `rework:manage`  | `?batch=` → `{ waiting, inProgress, done }` (done = last 7 days)                                   |
-| `POST /api/v1/rework/{id}/status`    | `rework:manage`  | `{ move: start\|done\|reopen\|unstart, expectedStatus, note? }`                                    |
-| `GET /api/v1/salvage`                | `salvage:read`   | `?status=AVAILABLE\|ASSIGNED\|DISCARDED&batch=&page=` → `{ rows, total, page, pageCount, counts }` |
-| `POST /api/v1/salvage/{id}/assign`   | `salvage:manage` | `{ batchId, expectedStatus, note? }`, another planned or in-progress batch                         |
-| `POST /api/v1/salvage/{id}/unassign` | `salvage:manage` | `{ expectedStatus }`, only while the receiving batch is open                                       |
-| `POST /api/v1/salvage/{id}/discard`  | `salvage:manage` | `{ reason, expectedStatus }`; final                                                                |
-
-**Repair Station (the "rework" endpoints, D-070, D-073):**
-
-- **Flow:** `start` (OPEN → IN_PROGRESS) and `done` (IN_PROGRESS → DONE). Each can be undone one
-  step: `unstart` (IN_PROGRESS → OPEN) and `reopen` (DONE → IN_PROGRESS).
-- **What it needs:** each card carries `handling`, `CLEAN` or `CUT_AROUND`, from its defect
-  types' "When Fixable" setting: `CLEAN` only when every defect on the section is cleaned.
-- **Usable count:** a done section counts as usable in its batch (usable = passed + done).
-- **Closing a batch:** a batch can be completed while repairs are open (D-022). Its repairs stay
-  workable, and `GET /api/v1/batches` rows carry `openRepairs` for the "Being handled" tag. Only a
-  cancelled batch freezes its repairs (`409`): cancelling cancels the unfinished ones.
+The camera's verdict is final (D-093): there is no decision endpoint. The Review Queue, the Repair
+Station and Salvage, with `/api/v1/rework/**`, `/api/v1/salvage/**` and
+`POST /api/v1/scans/{id}/decision`, were removed in Phase 25 (D-094) and answer `404`.
 
 ## Inventory (session)
 
@@ -304,16 +265,16 @@ duplicate email is `422` on `email`.
 
 **Settings**
 
-| Method & path                      | Body                                                                                                                                                             |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET / PUT /api/v1/settings/cv`    | `{ rejectPercent, reworkPercent, foundPercent? }`, e.g. `90`, `60`, `50`; rework below reject (D-053)                                                            |
-| `GET /api/v1/defect-types/unknown` | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }`                                                                   |
-| `GET / POST /api/v1/defect-types`  | `{ key, label, action?, handling?, description?, sortOrder? }` (key fixed; `action` REWORK or REJECT, D-053; `handling` CLEAN or CUT_AROUND, the default, D-070) |
-| `GET / POST /api/v1/shoe-types`    | `{ code, name, sortOrder? }`                                                                                                                                     |
-| `GET / POST /api/v1/suppliers`     | `{ name, contactPerson?, phone?, notes? }`                                                                                                                       |
-| `PATCH /api/v1/<list>/{id}`        | the same fields, or `{ isActive }`. There are no deletes.                                                                                                        |
+| Method & path                      | Body                                                                                                                                                 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET / PUT /api/v1/settings/cv`    | `{ foundPercent, earlyModelNotice? }`, e.g. `50` (1 to 100, one decimal). `rejectPercent` or `reworkPercent` is refused with a named message (D-093) |
+| `GET /api/v1/defect-types/unknown` | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }`                                                       |
+| `GET / POST /api/v1/defect-types`  | `{ key, label, outcome, description?, sortOrder? }` (key fixed; `outcome` `USABLE` or `NOT_ACCEPTED`, required, D-093)                               |
+| `GET / POST /api/v1/shoe-types`    | `{ code, name, sortOrder? }`                                                                                                                         |
+| `GET / POST /api/v1/suppliers`     | `{ name, contactPerson?, phone?, notes? }`                                                                                                           |
+| `PATCH /api/v1/<list>/{id}`        | the same fields, or `{ isActive }`. There are no deletes.                                                                                            |
 
-New thresholds apply to new scans only; each scan keeps its `thresholdsSnapshot`.
+A new found-at value or outcome applies to new scans only; each scan keeps its `thresholdsSnapshot`.
 
 **Audit log**: `GET /api/v1/audit-logs?actor=&action=&entity=&entityId=&from=&to=&page=`
 (`from`/`to` are Manila calendar days) → `{ entries, total, page, pageCount }`, newest first, 15
@@ -394,23 +355,22 @@ Aggregates per Manila day, shoe type, defect type or batch, never per person (D-
 `?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
 default is the last 14 days, at most 92, and never past today.
 
-| Method & path                            | Permission          | Returns                                                                                                              |
-| ---------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals, days[], defects[], matrix[] }`                                                                     |
-| `GET /api/v1/reports/production`         | `report:production` | `{ shoeTypes[], days[], totals: { pairs, share, daysBelow, daysWithQuota } }` (Phase 23)                             |
-| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: scanned, verdicts, pending, overridden, agreement %, repairs                                        |
-| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection), by final verdict                                             |
-| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day and shoe type: pairs, quota, % of quota, check-ins, constructors present, line average, shortfall    |
-| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], repairs, stock, suppliers[], rejectedRolls[], checkpoint }` (D-033, D-072) |
-| `GET /api/v1/reports/repairs`            | `report:quality`    | `{ waiting, beingRepaired, doneInRange, medianTurnaroundMs, rows[] }` repair station now                             |
-| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, scans by verdict, repairs done                                          |
-| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                                  |
-| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, batches, sections, verdict counts, pass %, Fixable %, reject %, top defect, High (D-072)        |
-| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, batch, supplier, sections, rejected, main defects (D-072)                 |
+| Method & path                            | Permission          | Returns                                                                                                                   |
+| ---------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals: { scanned, pass, reject }, days[], defects[] }`                                                         |
+| `GET /api/v1/reports/production`         | `report:production` | `{ shoeTypes[], days[], totals: { pairs, share, daysBelow, daysWithQuota } }` (Phase 23)                                  |
+| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: Scanned, Pass, Reject (for salvage)                                                                      |
+| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection): Scans, Pass, Reject (for salvage)                                 |
+| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day and shoe type: pairs, quota, % of quota, check-ins, constructors present, line average, shortfall         |
+| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], stock, suppliers[], rejectedRolls[], lineRejectShare, forSalvage, checkpoint }` |
+| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, sections scanned, Pass, Reject (for salvage)                                 |
+| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                                       |
+| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, batches, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072)            |
+| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, batch, supplier, sections, rejected, main defects (D-072)                      |
 
-- **Verdicts** count the **final** verdict.
-- **AI agreement** = scans the AI decided whose final verdict is the same / scans the AI decided
-  (NEEDS_REVIEW excluded).
+- **Verdicts** are Pass and Reject (D-093); the final verdict is the camera's.
+- **For salvage** (`forSalvage`): `{ total, byDefect: [{ key, label, known, sections }] }`, the
+  rejected sections by main defect (A-11). `/api/v1/reports/repairs` was removed (D-094).
 - **CSV:** UTF-8 with a BOM and CRLF, so it opens correctly in Excel. Text cells starting with
   `= + - @` are prefixed with `'`.
 

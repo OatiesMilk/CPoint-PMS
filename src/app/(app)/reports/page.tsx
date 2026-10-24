@@ -3,7 +3,7 @@
  * Who:   the Floor Manager, who runs the production floor (Operations), and the Quality
  *        Inspector, who needs the inspection numbers (Quality). Desktop, end of shift or all day.
  * What:  Floor Manager: what is happening on the floor in these days and right now, and what is
- *        wrong. Quality Inspector: how the checkpoint before cutting did, and the repair station.
+ *        wrong. Quality Inspector: how the checkpoint before cutting did: Pass, Reject (for salvage) and the defects.
  * Worst: a problem hidden under averages (a short day, an empty shelf), a number read as
  *        something else, or anyone singled out. Every figure says what it counts; everything is
  *        per day, shoe type, batch, item, supplier or defect type, never per person (D-008, D-033).
@@ -21,7 +21,7 @@ import { PRESETS, parseRange } from "@/lib/report-rules";
 import { cn } from "@/lib/utils";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
-import { operationsReport, repairStation } from "@/server/services/ops-report.service";
+import { operationsReport } from "@/server/services/ops-report.service";
 import { qualityReport } from "@/server/services/report.service";
 import { reportQuerySchema } from "@/server/validators/report.validator";
 
@@ -37,10 +37,9 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   const view = canOperations && query.view !== "quality" ? "operations" : "quality";
   const now = new Date();
 
-  const [operations, quality, repairs] = await Promise.all([
+  const [operations, quality] = await Promise.all([
     view === "operations" ? operationsReport(range, now) : null,
     view === "quality" ? qualityReport(range) : null,
-    view === "quality" ? repairStation(range, now) : null,
   ]);
 
   const qs = `from=${range.from}&to=${range.to}`;
@@ -68,7 +67,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         description={
           view === "operations"
             ? "What is happening on the floor, and what needs attention. Never per person."
-            : "The checkpoint before cutting, and the Repair Station. Never per person."
+            : "The checkpoint before cutting: Pass, Reject (for salvage) and the defects. Never per person."
         }
         actions={
           <div className="flex flex-wrap gap-2">
@@ -159,7 +158,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
       </p>
 
       {operations && <OperationsView report={operations} range={range} />}
-      {quality && repairs && <QualityView quality={quality} repairs={repairs} days={range.days} />}
+      {quality && <QualityView quality={quality} />}
     </>
   );
 }

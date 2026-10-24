@@ -6,7 +6,6 @@ import {
   createDeviceToken,
   e2eKey,
   ensureRuleTypes,
-  inspectorApi,
   managerApi,
   sampleJpeg,
 } from "./cv-helpers";
@@ -63,65 +62,32 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
 
   const batch = await createBatch(api);
   const { token } = await createDeviceToken();
-  await scanOn(request, token, batch.id, "cut", 0.3); // PASS
-  await scanOn(request, token, batch.id, "hole", 0.7); // REWORK
-  const reject = await scanOn(request, token, batch.id, "cut", 0.95); // REJECT → overridden to REWORK
-  const unknown = await scanOn(request, token, batch.id, "e2e-report-class", 0.9); // NEEDS_REVIEW → PASS
-  expect(unknown.verdict).toBe("NEEDS_REVIEW");
-
-  const override = await api.post(`/api/v1/scans/${reject.scanId}/decision`, {
-    data: {
-      verdict: "REWORK",
-      reason: "Cut is shallow, can be repaired",
-      expectedFinalVerdict: "REJECT",
-    },
-  });
-  expect(override.status()).toBe(200);
-  // A flagged scan is the Quality Inspector's to decide (D-028).
-  const resolve = await (
-    await inspectorApi(browser)
-  ).post(`/api/v1/scans/${unknown.scanId}/decision`, {
-    data: { verdict: "PASS", expectedFinalVerdict: null },
-  });
-  expect(resolve.status()).toBe(200);
+  await scanOn(request, token, batch.id, "cut", 0.3); // below found-at: PASS
+  await scanOn(request, token, batch.id, "abrasion", 0.7); // Usable: PASS
+  await scanOn(request, token, batch.id, "cut", 0.95); // Not accepted: REJECT
+  const unknown = await scanOn(request, token, batch.id, "e2e-report-class", 0.9);
+  expect(unknown.verdict).toBe("REJECT"); // an unknown class rejects (A-12)
 
   const after = await report();
   const delta = (k: string) => after.totals[k] - before.totals[k];
-  expect({
-    scanned: delta("scanned"),
-    pass: delta("pass"),
-    rework: delta("rework"),
-    reject: delta("reject"),
-    pending: delta("pending"),
-    overridden: delta("overridden"),
-    aiDecided: delta("aiDecided"),
-    agreed: delta("agreed"),
-    personResolved: delta("personResolved"),
-  }).toEqual({
+  expect({ scanned: delta("scanned"), pass: delta("pass"), reject: delta("reject") }).toEqual({
     scanned: 4,
     pass: 2,
-    rework: 2,
-    reject: 0,
-    pending: 0,
-    overridden: 1,
-    aiDecided: 3,
-    agreed: 2,
-    personResolved: 1,
+    reject: 2,
   });
-  const cell = (r: typeof after, ai: string, f: string) =>
-    r.matrix.find((m: { ai: string }) => m.ai === ai).counts[f];
-  expect(cell(after, "REJECT", "REWORK") - cell(before, "REJECT", "REWORK")).toBe(1);
+  expect(after).not.toHaveProperty("matrix");
   const defects = (r: typeof after, key: string) =>
     r.defects.find((d: { key: string }) => d.key === e2eKey(key))?.scans ?? 0;
   expect(defects(after, "cut") - defects(before, "cut")).toBe(2);
-  expect(defects(after, "hole") - defects(before, "hole")).toBe(1);
+  expect(defects(after, "abrasion") - defects(before, "abrasion")).toBe(1);
 
   // The page shows the same numbers for that day.
   await signInAs(page, ACCOUNTS.manager);
   await page.goto(`/reports?view=quality&from=${day}&to=${day}`);
   await expect(page.getByTestId("total-scanned")).toHaveText(String(after.totals.scanned));
+  await expect(page.getByTestId("total-reject")).toContainText(`${after.totals.reject} sections`);
   await expect(page.getByTestId("daily-table").getByRole("row", { name: day })).toContainText(
-    String(after.totals.overridden),
+    String(after.totals.reject),
   );
 
   // The CSV: BOM, header, one row for the day, as a download.
@@ -131,9 +97,9 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
   const body = (await csv.body()).toString("utf8");
   expect(body.charCodeAt(0)).toBe(0xfeff);
   const lines = body.slice(1).trim().split("\r\n");
-  expect(lines[0]).toMatch(/^Date \(Manila\),Scanned,Pass,Fixable,Reject/);
-  expect(lines[1]).toMatch(
-    new RegExp(`^${day},${after.totals.scanned},${after.totals.pass},${after.totals.rework},`),
+  expect(lines[0]).toBe("Date (Manila),Scanned,Pass,Reject (for salvage)");
+  expect(lines[1]).toBe(
+    `${day},${after.totals.scanned},${after.totals.pass},${after.totals.reject}`,
   );
 });
 
@@ -157,16 +123,19 @@ test("the Floor Manager sees production against the quota in place of stage time
   await expect(page.getByText("On the floor now")).toHaveCount(0);
   await expect(page.getByTestId("flow-lanes")).toHaveCount(0);
   await expect(page.getByTestId("attention")).toContainText("What needs attention");
-  await expect(page.getByTestId("repair-station")).toBeVisible();
+  await expect(page.getByTestId("repair-station")).toHaveCount(0);
+  await expect(page.getByTestId("for-salvage")).toContainText("For salvage");
   await expect(page.getByTestId("stock-risk")).toBeVisible();
   await expect(page.getByTestId("supplier-quality")).toBeVisible();
-  for (const kpi of ["kpi-pairs", "kpi-quota", "kpi-rolls", "kpi-preparation"])
+  for (const kpi of ["kpi-pairs", "kpi-quota", "kpi-rolls", "kpi-preparation", "kpi-reject"])
     await expect(page.getByTestId(kpi)).toBeVisible();
   await expect(page.getByTestId("kpi-wip")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Stages CSV" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Production CSV" })).toBeVisible();
-  for (const path of ["operations", "repairs", "production"])
+  for (const path of ["operations", "production"])
     expect((await page.request.get(`/api/v1/reports/${path}?preset=today`)).status()).toBe(200);
+  // The repairs report left with the Repair Station (D-094).
+  expect((await page.request.get("/api/v1/reports/repairs?preset=today")).status()).toBe(404);
   for (const csv of ["operations", "stock", "suppliers", "supplier-rolls", "production"])
     expect((await page.request.get(`/api/v1/reports/${csv}.csv?preset=today`)).status()).toBe(200);
   // stages.csv is gone with stage monitoring.
@@ -192,21 +161,20 @@ test("the Quality Inspector gets quality reports only, and both homes show live 
   page,
 }) => {
   await signInAs(page, ACCOUNTS.inspector);
-  await expect(page.getByTestId("agreement-card")).toContainText("Last 7 days");
+  await expect(page.getByTestId("agreement-card")).toHaveCount(0);
   await expect(page.getByTestId("defects-today")).toBeVisible();
   await expect(page.getByText(/Phase 7/)).toHaveCount(0);
 
   await page.goto("/reports");
   await expect(page.getByTestId("report-range")).toBeVisible();
-  // The Quality Inspector gets the quality report plus the repair station, with no Operations tab.
+  // The Quality Inspector gets the quality report, with no Operations tab.
   await expect(page.getByTestId("total-scanned")).toBeVisible();
-  await expect(page.getByTestId("repair-station")).toBeVisible();
+  await expect(page.getByTestId("repair-station")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveCount(0);
   await page.goto("/reports?view=operations");
   await expect(page.getByTestId("total-scanned")).toBeVisible();
   await expect(page.getByTestId("attention")).toHaveCount(0);
   expect((await page.request.get("/api/v1/reports/operations")).status()).toBe(403);
-  expect((await page.request.get("/api/v1/reports/repairs")).status()).toBe(200);
   await expect(page.getByTestId("production-section")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Production CSV" })).toHaveCount(0);
   expect((await page.request.get("/api/v1/reports/production")).status()).toBe(403);

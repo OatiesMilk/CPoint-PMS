@@ -1,4 +1,4 @@
-import type { Prisma, ScanStatus, Verdict } from "@/generated/prisma/client";
+import type { Prisma, Verdict } from "@/generated/prisma/client";
 import { type Db, defaultDb } from "./db";
 
 export async function nextScanSequence(batchId: string, db: Db): Promise<number> {
@@ -22,7 +22,6 @@ export function findScanByCaptureId(captureId: string, db: Db = defaultDb()) {
       id: true,
       sequence: true,
       aiVerdict: true,
-      status: true,
       deviceTokenId: true,
       batch: { select: { id: true, code: true } },
     },
@@ -36,23 +35,6 @@ export function findScanById(id: string, db: Db = defaultDb()) {
   });
 }
 
-export function updateScanDecision(
-  id: string,
-  data: {
-    finalVerdict: Verdict;
-    status: ScanStatus;
-    isOverride: boolean;
-    overrideReason: string | null;
-    decidedById: string;
-    decidedAt: Date;
-  },
-  expected: { finalVerdict: Verdict | null },
-  db: Db = defaultDb(),
-) {
-  // Conditional on the verdict the person saw, so two simultaneous decisions can't both apply.
-  return db.scan.updateMany({ where: { id, finalVerdict: expected.finalVerdict }, data });
-}
-
 // ───────────── reads ─────────────
 
 const listSelect = {
@@ -60,8 +42,6 @@ const listSelect = {
   sequence: true,
   aiVerdict: true,
   finalVerdict: true,
-  status: true,
-  isOverride: true,
   maxConfidence: true,
   source: true,
   capturedAt: true,
@@ -83,29 +63,19 @@ export type ScanListRow = Prisma.ScanGetPayload<{ select: typeof listSelect }>;
 
 export type ScanFilters = {
   verdict?: Verdict;
-  status?: ScanStatus;
   source?: Prisma.ScanWhereInput["source"];
   batchCode?: string;
   batchId?: string;
-  overridesOnly?: boolean;
   since?: Date;
-  aiVerdictIn?: Verdict[];
   defectKey?: string;
 };
 
 function scanWhere(f: ScanFilters): Prisma.ScanWhereInput {
   return {
-    status: f.status,
     source: f.source,
     batchId: f.batchId,
-    ...(f.verdict === "NEEDS_REVIEW"
-      ? { aiVerdict: "NEEDS_REVIEW" }
-      : f.verdict
-        ? { finalVerdict: f.verdict }
-        : {}),
-    ...(f.aiVerdictIn ? { aiVerdict: { in: f.aiVerdictIn } } : {}),
+    ...(f.verdict ? { finalVerdict: f.verdict } : {}),
     ...(f.batchCode ? { batch: { code: { contains: f.batchCode, mode: "insensitive" } } } : {}),
-    ...(f.overridesOnly ? { isOverride: true } : {}),
     ...(f.defectKey ? { detections: { some: { rawClassKey: f.defectKey } } } : {}),
     ...(f.since ? { createdAt: { gte: f.since } } : {}),
   };
@@ -145,18 +115,9 @@ const detailInclude = {
     },
   },
   deviceToken: { select: { name: true } },
-  decidedBy: { select: { name: true } },
   detections: {
     orderBy: { confidence: "desc" },
     include: { defectType: { select: { label: true, isActive: true } } },
-  },
-  reworkTickets: {
-    orderBy: { openedAt: "asc" },
-    select: { id: true, status: true, openedAt: true },
-  },
-  salvageItems: {
-    orderBy: { createdAt: "asc" },
-    select: { id: true, status: true, createdAt: true },
   },
 } satisfies Prisma.ScanInclude;
 

@@ -20,7 +20,7 @@ cpoint_cv/
   detector.py       the Detector port and FakeDetector (no torch)
   yolo_detector.py  YoloDetector, the only module that imports ultralytics/torch
   mapper.py         model output → the app's detections (class keys, boxes, floor, top 50)
-  preview.py        Python port of the app's rule (D-011, D-053), for the preview only
+  preview.py        Python port of the app's rule (D-053, D-093), for the preview only
   evaluate.py       labels.csv, the verdict table, per-class scores and the sweep (D-058)
   onnx_export.py    the ONNX file and the JSON beside it
   config.py         config.toml + environment overrides
@@ -57,14 +57,17 @@ SHA-256 doesn't match `[model] sha256`.
 
 Per photo it prints the time taken, each detection (class key, confidence, box) and the preview
 verdict, then a summary: detections per class with their confidence spread, and how many photos
-would be PASS, REWORK, REJECT or NEEDS_REVIEW. `--json` prints one JSON line per photo instead
+would be PASS or REJECT (D-093). `--json` prints one JSON line per photo instead
 (what `npm run cv:parity` compares). Keep photos and `out/` out of git (`out/` is ignored).
 
-The preview copies the app's rule using the thresholds, actions and defect types under
-`[preview]` in the config. Copy them from Admin → Settings to match the app. The app decides the
-real verdict.
+The preview copies the app's rule using the found-at value, the defect types and their outcomes
+under `[preview]` and `[preview.outcomes]` in the config: a found Not accepted type, or a class
+the app doesn't know, rejects the section; otherwise it passes. Copy them from Admin → Settings
+to match the app. The app decides the real verdict. A config from before Phase 25 with
+`reject_at_or_above`, `rework_at_or_above` or `[preview.actions]` still loads, with a warning that
+names each one; replace them with `[preview.outcomes]`.
 
-## Defect types for yolo-v1 (D-052, D-053)
+## Defect types for yolo-v1 (D-052, D-053, D-093)
 
 The model reports `crease`, `cut`, `hole` and `scratch`. On the demo database `npm run demo:reset`
 sets the defect types for it. On any other database, do it by hand once, signed in as the System
@@ -74,12 +77,13 @@ Admin, in **Admin → Settings → Defect types**:
    `Scratch`, "Scratch on the grain"), with the keys exactly as the model reports them.
 2. **Turn off** `abrasion` and `dirt` (the model never reports them). Past scans are kept.
 3. Leave `cut` and `hole` on.
-4. Set **When found**: `cut` and `hole` → **Reject when found**, `crease` and `scratch` →
-   **Rework when found**. Keep **A defect counts as found at** at 50% under **Thresholds**.
+4. Set **When found**: `cut` and `hole` → **Not accepted (Reject)**, `crease` and `scratch` →
+   **Usable (Pass)**. Keep **A defect counts as found at** at 50% under **Thresholds**.
 
-Until step 1, every `crease` or `scratch` sends the scan to the Quality Inspector's review queue.
-Then copy the same lists, `found_at_or_above` and `[preview.actions]` into `config.toml` (the
-example already has them) so `predict` and `evaluate` preview what the app will decide.
+Until step 1, every `crease` or `scratch` is an unknown class, so its section is rejected and the
+class is listed under Settings → Unknown classes (A-12). Then copy the same lists,
+`found_at_or_above` and `[preview.outcomes]` into `config.toml` (the example already has them) so
+`predict` and `evaluate` preview what the app will decide.
 
 ## Settings
 
@@ -103,11 +107,12 @@ Put a `labels.csv` beside the photos, one line per photo, saying what a person s
 
 ```
 file,expected_verdict,classes
-IMG_6320.jpg,REWORK,crease
+IMG_6320.jpg,PASS,crease
 IMG_6742.jpg,REJECT,cut;scratch
 ```
 
-`expected_verdict` is PASS, REWORK, REJECT or NEEDS_REVIEW; `classes` lists the defect types on
+`expected_verdict` is PASS or REJECT; an old REWORK or NEEDS_REVIEW is refused with the value to
+write instead (Fixable became Pass, Needs review became Reject). `classes` lists the defect types on
 the photo, separated by `;` (empty when it's clean). Then:
 
 ```bash
@@ -116,11 +121,12 @@ the photo, separated by `;` (empty when it's clean). Then:
 
 It writes `reports/<date>-<model>.md`: each photo's expected and preview verdict, a verdict table,
 per-class precision and recall by photo, and how the verdicts shift as **A defect counts as found
-at** or the thresholds move. With 30 photos or fewer the report says it's a small check: it shows
+at** moves. With 30 photos or fewer the report says it's a small check: it shows
 the model working with the app's rules, not how accurate it is. It changes nothing in the app.
 
 The current report is `reports/2026-10-19-yolo-v1.md` (the five sample photos; their labels were
-drafted from the photos in Phase 16 and still need a person's check).
+drafted from the photos in Phase 16 and still need a person's check). It was written under the
+earlier rule; run `evaluate` again after changing that folder's `labels.csv` to PASS and REJECT.
 
 ## Capture from the website (export-onnx)
 

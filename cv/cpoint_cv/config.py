@@ -1,7 +1,7 @@
 """Model toolkit settings from a TOML file, with a few environment overrides.
 
 Every value ``predict``, ``evaluate`` and ``export-onnx`` use (model file, image size, device,
-confidence floor, class renames, the preview's thresholds and defect types) lives here or in the
+confidence floor, class renames, the preview's found-at value and defect types) lives here or in the
 file, never in the code. Lookup order for the file: ``--config``, then ``CPOINT_CV_CONFIG``,
 then ``cv/config.toml``, then ``cv/config.example.toml``. Other sections (the retired station's
 ``[server]``, ``[station]``, ``[camera]`` and ``[window]``) are ignored.
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from .mapper import CONTRACT_MAX_DETECTIONS, MapperConfig
-from .preview import ACTIONS, PreviewConfig
+from .preview import OUTCOMES, PreviewConfig
 
 CV_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,6 +28,10 @@ ENV_OVERRIDES = {
     "CPOINT_CV_MODEL_IMGSZ": ("model", "imgsz"),
     "CPOINT_CV_CONFIDENCE_FLOOR": ("mapper", "confidence_floor"),
 }
+
+
+# Preview settings of the rule before Phase 25 (D-011, D-053). They warn by name, then are ignored.
+RETIRED_PREVIEW_KEYS = ("reject_at_or_above", "rework_at_or_above", "actions")
 
 
 class ConfigError(ValueError):
@@ -49,6 +53,8 @@ class Config:
     mapper: MapperConfig = field(default_factory=MapperConfig)
     preview: PreviewConfig = field(default_factory=PreviewConfig)
     source_file: Path | None = None
+    # Settings that are read but no longer used, each named with its fix.
+    warnings: tuple[str, ...] = ()
 
 
 def default_config_path() -> Path:
@@ -152,33 +158,35 @@ def parse_config(
     )
 
     pv = merged["preview"]
-    reject = _number(
-        "preview", "reject_at_or_above", pv.get("reject_at_or_above", 0.9), low=0.01, high=1.0
-    )
-    rework = _number(
-        "preview", "rework_at_or_above", pv.get("rework_at_or_above", 0.6), low=0.01, high=1.0
-    )
-    if rework >= reject:
-        raise ConfigError(
-            "[preview] rework_at_or_above must be lower than reject_at_or_above, as in Settings."
-        )
     active = _keys("preview", "active_keys", pv.get("active_keys"))
     inactive = _keys("preview", "inactive_keys", pv.get("inactive_keys"))
     if active & inactive:
         both = ", ".join(sorted(active & inactive))
         raise ConfigError(f"[preview] {both} can't be both active and inactive.")
     found = _number(
-        "preview", "found_at_or_above", pv.get("found_at_or_above", 0.5), low=0.01, high=0.99
+        "preview", "found_at_or_above", pv.get("found_at_or_above", 0.5), low=0.01, high=1.0
     )
-    actions = pv.get("actions", {})
-    if not isinstance(actions, Mapping) or not all(
-        isinstance(k, str) and isinstance(v, str) and v.strip().upper() in ACTIONS
-        for k, v in actions.items()
+    outcomes = pv.get("outcomes", {})
+    if not isinstance(outcomes, Mapping) or not all(
+        isinstance(k, str) and isinstance(v, str) and v.strip().upper() in OUTCOMES
+        for k, v in outcomes.items()
     ):
         raise ConfigError(
-            '[preview.actions] maps a class key to "REWORK" or "REJECT", e.g. hole = "REJECT". '
-            "Leave a type out to go by confidence."
+            '[preview.outcomes] maps a class key to "USABLE" or "NOT_ACCEPTED", as in Settings > '
+            'Defect types, e.g. hole = "NOT_ACCEPTED".'
         )
+    missing = sorted(active - set(outcomes))
+    if missing:
+        raise ConfigError(
+            f"[preview.outcomes] has no outcome for {', '.join(missing)}. Add each active type, "
+            f'e.g. {missing[0]} = "USABLE" or "NOT_ACCEPTED", as in Settings > Defect types.'
+        )
+    warnings = tuple(
+        f"warning: [preview] {key} is no longer used: a section is Pass or Reject from each "
+        "defect type's outcome (D-093). Remove it and set [preview.outcomes] instead."
+        for key in RETIRED_PREVIEW_KEYS
+        if key in pv
+    )
 
     return Config(
         model=ModelConfig(
@@ -190,13 +198,12 @@ def parse_config(
         ),
         mapper=mapper,
         preview=PreviewConfig(
-            reject_at_or_above=reject,
-            rework_at_or_above=rework,
             active_keys=active,
             inactive_keys=inactive,
             found_at_or_above=found,
-            actions={k: v.strip().upper() for k, v in actions.items()},
+            outcomes={k: v.strip().upper() for k, v in outcomes.items()},
         ),
+        warnings=warnings,
     )
 
 

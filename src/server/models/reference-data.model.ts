@@ -16,7 +16,7 @@ export function ensureDefectType(
     label: string;
     description: string;
     sortOrder: number;
-    handling?: "CLEAN" | "CUT_AROUND";
+    outcome: "USABLE" | "NOT_ACCEPTED";
   },
   db: Db = defaultDb(),
 ) {
@@ -27,10 +27,7 @@ export function ensureSupplier(data: { name: string; notes: string }, db: Db = d
   return db.supplier.upsert({ where: { name: data.name }, create: data, update: {} });
 }
 
-export function ensureCvSettings(
-  data: { rejectAtOrAbove: number; reworkAtOrAbove: number },
-  db: Db = defaultDb(),
-) {
+export function ensureCvSettings(data: { foundAtOrAbove: number }, db: Db = defaultDb()) {
   return db.cvSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: {} });
 }
 
@@ -60,7 +57,7 @@ export function findSupplier(id: string, db: Db = defaultDb()) {
 
 export function listDefectTypes(db: Db = defaultDb()) {
   return db.defectType.findMany({
-    select: { id: true, key: true, label: true, isActive: true, action: true, handling: true },
+    select: { id: true, key: true, label: true, isActive: true, outcome: true },
     orderBy: { sortOrder: "asc" },
   });
 }
@@ -153,12 +150,7 @@ export async function listUnknownClassKeys(db: Db = defaultDb()): Promise<Unknow
 }
 
 export function updateThresholds(
-  data: {
-    rejectAtOrAbove: number;
-    reworkAtOrAbove: number;
-    foundAtOrAbove: number;
-    updatedById: string;
-  },
+  data: { foundAtOrAbove: number; earlyModelNotice: boolean; updatedById: string },
   db: Db = defaultDb(),
 ) {
   return db.cvSettings.update({ where: { id: 1 }, data });

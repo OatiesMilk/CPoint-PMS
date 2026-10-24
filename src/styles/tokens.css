@@ -40,25 +40,27 @@
   --destructive-foreground: oklch(0.99 0 0);
   --ring: oklch(0.21 0.012 85);
 
-  /* ---------- verdicts (fixed meaning across the whole product) ---------- */
+  /* ---------- verdicts (fixed meaning across the whole product): Pass and Reject (D-093) ----------
+     Caution (orange) and info (blue) are status tones for warnings and notes, never a verdict. */
   --pass: oklch(0.5 0.13 150);
   --pass-soft: oklch(0.95 0.045 150);
-  --rework: oklch(0.53 0.15 50); /* orange, kept clearly apart from brand yellow */
-  --rework-soft: oklch(0.95 0.045 60);
+  --caution: oklch(0.53 0.15 50); /* orange, kept clearly apart from brand yellow */
+  --caution-soft: oklch(0.95 0.045 60);
   --reject: oklch(0.53 0.2 27);
   --reject-soft: oklch(0.95 0.035 27);
-  --review: oklch(0.5 0.14 255);
-  --review-soft: oklch(0.95 0.03 255);
+  --info: oklch(0.5 0.14 255);
+  --info-soft: oklch(0.95 0.03 255);
 
-  /* ---------- charts (D-025) ----------
-     Chart-only steps of the verdict hues, re-stepped in lightness so stacked neighbours stay
-     apart under colour-vision deficiency (Rework vs Reject). Validated with the dataviz
-     validate_palette.js on the card surface: light passes (Rework contrast 2.8:1, so charts
-     always ship a legend + table view), dark passes all checks. Badges keep the tokens above. */
-  --chart-pass: oklch(0.5 0.13 150);
-  --chart-rework: oklch(0.7 0.15 62);
-  --chart-reject: oklch(0.5 0.2 27);
-  --chart-review: oklch(0.5 0.14 255);
+  /* ---------- charts (D-025, D-093) ----------
+     Chart-only steps of the verdict hues for the two stacked series, Pass and Reject, plus the
+     quota line (info). Checked with the dataviz validate_palette.js on the card surface in light
+     and dark (Phase 25). Charts always ship a legend and a table view. Badges keep the tokens
+     above. */
+  /* Pass lighter than Reject: the two touch in stacked bars and must stay apart for red-green
+     colour blindness (dataviz validator, Phase 25). */
+  --chart-pass: oklch(0.62 0.14 150);
+  --chart-reject: oklch(0.48 0.2 27);
+  --chart-info: oklch(0.5 0.14 255);
   --chart-bar: oklch(0.45 0.02 85); /* single-hue magnitude bars */
   --chart-bar-muted: oklch(0.82 0.01 85);
   --chart-grid: oklch(0.92 0.006 95);
@@ -110,17 +112,16 @@
 
   --pass: oklch(0.76 0.15 150);
   --pass-soft: oklch(0.29 0.05 150);
-  --rework: oklch(0.79 0.14 60);
-  --rework-soft: oklch(0.3 0.05 55);
+  --caution: oklch(0.79 0.14 60);
+  --caution-soft: oklch(0.3 0.05 55);
   --reject: oklch(0.72 0.17 25);
   --reject-soft: oklch(0.3 0.06 27);
-  --review: oklch(0.76 0.12 255);
-  --review-soft: oklch(0.29 0.05 255);
+  --info: oklch(0.76 0.12 255);
+  --info-soft: oklch(0.29 0.05 255);
 
-  --chart-pass: oklch(0.5 0.14 150);
-  --chart-rework: oklch(0.665 0.145 75);
-  --chart-reject: oklch(0.54 0.2 25);
-  --chart-review: oklch(0.63 0.13 255);
+  --chart-pass: oklch(0.67 0.15 150);
+  --chart-reject: oklch(0.55 0.2 25);
+  --chart-info: oklch(0.63 0.13 255);
   --chart-bar: oklch(0.78 0.012 90);
   --chart-bar-muted: oklch(0.38 0.01 85);
   --chart-grid: oklch(0.27 0.008 85);

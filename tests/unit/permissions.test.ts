@@ -7,7 +7,6 @@ import {
   canCaptureFor,
   checkInCoverReason,
   mayEnterCheckIns,
-  requiredDecisionPermission,
   type Permission,
 } from "@/server/policies/permissions";
 
@@ -26,11 +25,6 @@ const EXPECTED: Record<Permission, Role[]> = {
   "camera:capture": [FM, QI],
   "camera:operators": [FM, AD],
   "scan:read": [FM, QI, AD],
-  "scan:decide": [FM, QI],
-  "scan:review": [QI],
-  "rework:manage": [FM, QI],
-  "salvage:read": [FM, QI],
-  "salvage:manage": [FM],
   "inventory:read": [FM, AD],
   "inventory:manage": [FM],
   "report:production": [FM],
@@ -104,9 +98,6 @@ describe("navigationFor", () => {
       "Camera",
       "Capture",
       "Scans",
-      "Review queue",
-      "Repair Station",
-      "Salvage",
       "Reports",
     ]);
     expect(labels(QI)).toEqual([
@@ -116,9 +107,6 @@ describe("navigationFor", () => {
       "Camera",
       "Capture",
       "Scans",
-      "Review queue",
-      "Repair Station",
-      "Salvage",
       "Reports",
     ]);
     expect(labels(AD)).toEqual([
@@ -154,13 +142,17 @@ describe("navigationFor", () => {
   });
 });
 
-describe("deciding a scan (D-028)", () => {
-  it("needs scan:review for a flagged scan and scan:decide otherwise", () => {
-    expect(requiredDecisionPermission({ aiVerdict: "NEEDS_REVIEW" })).toBe("scan:review");
-    for (const v of ["PASS", "REWORK", "REJECT"])
-      expect(requiredDecisionPermission({ aiVerdict: v })).toBe("scan:decide");
-    expect(can(FM, requiredDecisionPermission({ aiVerdict: "NEEDS_REVIEW" }))).toBe(false);
-    expect(can(QI, requiredDecisionPermission({ aiVerdict: "NEEDS_REVIEW" }))).toBe(true);
+describe("the camera's verdict is final (D-093)", () => {
+  it("has no permission to decide, review, repair or salvage a section", () => {
+    const names = Object.keys(PERMISSIONS);
+    for (const gone of [
+      "scan:decide",
+      "scan:review",
+      "rework:manage",
+      "salvage:read",
+      "salvage:manage",
+    ])
+      expect(names).not.toContain(gone);
   });
 });
 

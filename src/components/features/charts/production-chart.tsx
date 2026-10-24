@@ -25,7 +25,7 @@ const SERIES = [
   {
     key: "constructorsPresent",
     label: "Shoe Constructors present (right axis)",
-    color: "var(--chart-review)",
+    color: "var(--chart-info)",
     mark: "dot",
   },
 ] as const;
@@ -137,9 +137,9 @@ export function ProductionChart({ days }: { days: ProductionChartDay[] }) {
               dataKey="constructorsPresent"
               name="Shoe Constructors present"
               type="monotone"
-              stroke="var(--chart-review)"
+              stroke="var(--chart-info)"
               strokeWidth={2}
-              dot={{ r: 3, fill: "var(--chart-review)" }}
+              dot={{ r: 3, fill: "var(--chart-info)" }}
               connectNulls={false}
               isAnimationActive={false}
             />

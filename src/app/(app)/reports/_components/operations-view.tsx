@@ -14,14 +14,14 @@ import {
 import { formatDayLabel, formatManilaDateTime, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AttentionList, KpiTile } from "./ops-parts";
-import { RepairStationCard, StockRiskCard, SupplierQualityCard } from "./ops-sections";
+import { ForSalvageCard, StockRiskCard, SupplierQualityCard } from "./ops-sections";
 import type { OperationsReport } from "@/server/services/ops-report.service";
 import type { ReportRange } from "@/lib/report-rules";
 
 /**
  * The Floor Manager's report: what is happening on the production floor in this range, and what
  * is wrong. Order follows the questions: is anything on fire, did the line make its quota (and
- * how many were present), what's at the repair station, will we run out, is supply good, and the
+ * how many were present), what was rejected for salvage, will we run out, is supply good, and the
  * checkpoint before cutting in brief. Stage monitoring was replaced by production in Phase 23.
  */
 export function OperationsView({
@@ -33,7 +33,7 @@ export function OperationsView({
 }) {
   const { kpis, production, checkpoint } = report;
   const compareLabel = range.days === 1 ? "vs yesterday" : `vs previous ${range.days} days`;
-  const yieldNote = `${checkpoint.totals.pass} of ${checkpoint.totals.pass + checkpoint.totals.rework + checkpoint.totals.reject} sections passed`;
+  const yieldNote = `${checkpoint.totals.pass} of ${checkpoint.totals.scanned} sections passed`;
   const quotaNote =
     production.totals.daysWithQuota === 0
       ? "no finished day with a quota yet"
@@ -82,9 +82,12 @@ export function OperationsView({
           compareLabel={compareLabel}
         />
         <KpiTile
-          label="To clean or cut around"
-          value={String(kpis.repairsOpen)}
-          sub="sections, waiting or being handled"
+          label="Reject rate"
+          value={formatPercent(kpis.rejectRate.value)}
+          sub="rejected for salvage"
+          change={kpis.rejectRate.change}
+          compareLabel={compareLabel}
+          testid="kpi-reject"
         />
       </section>
 
@@ -127,14 +130,14 @@ export function OperationsView({
         </CardContent>
       </Card>
 
-      <RepairStationCard repairs={report.repairs} days={range.days} />
+      <ForSalvageCard salvage={report.forSalvage} scanned={checkpoint.totals.scanned} />
 
       <StockRiskCard stock={report.stock} days={range.days} />
 
       <SupplierQualityCard
         suppliers={report.suppliers}
         rolls={report.rejectedRolls}
-        lineProblemShare={report.lineProblemShare}
+        lineRejectShare={report.lineRejectShare}
         rangeQuery={`from=${range.from}&to=${range.to}`}
       />
 
@@ -163,16 +166,12 @@ export function OperationsView({
               <dd className="text-2xl font-semibold tabular-nums">{checkpoint.totals.scanned}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Rejected</dt>
+              <dt className="text-muted-foreground">Passed</dt>
+              <dd className="text-2xl font-semibold tabular-nums">{checkpoint.totals.pass}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Rejected (for salvage)</dt>
               <dd className="text-2xl font-semibold tabular-nums">{checkpoint.totals.reject}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Marked Fixable</dt>
-              <dd className="text-2xl font-semibold tabular-nums">{checkpoint.totals.rework}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Flagged for review</dt>
-              <dd className="text-2xl font-semibold tabular-nums">{checkpoint.totals.pending}</dd>
             </div>
           </dl>
           <div>
@@ -211,9 +210,7 @@ export function OperationsView({
                 <TableHead numeric>Rolls finished</TableHead>
                 <TableHead numeric>Scanned</TableHead>
                 <TableHead numeric>Pass</TableHead>
-                <TableHead numeric>Fixable</TableHead>
-                <TableHead numeric>Reject</TableHead>
-                <TableHead numeric>Cleaned or cut around</TableHead>
+                <TableHead numeric>Reject (for salvage)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -222,8 +219,7 @@ export function OperationsView({
                   key={d.day}
                   aria-label={d.day}
                   className={cn(
-                    d.started + d.completed + d.scanned + d.repairsDone === 0 &&
-                      "text-muted-foreground",
+                    d.started + d.completed + d.scanned === 0 && "text-muted-foreground",
                   )}
                 >
                   <TableCell>{formatDayLabel(d.day)}</TableCell>
@@ -231,9 +227,7 @@ export function OperationsView({
                   <TableCell numeric>{d.completed}</TableCell>
                   <TableCell numeric>{d.scanned}</TableCell>
                   <TableCell numeric>{d.pass}</TableCell>
-                  <TableCell numeric>{d.rework}</TableCell>
                   <TableCell numeric>{d.reject}</TableCell>
-                  <TableCell numeric>{d.repairsDone}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

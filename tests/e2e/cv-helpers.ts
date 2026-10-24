@@ -69,7 +69,7 @@ export function adminApi(browser: Browser): Promise<APIRequestContext> {
   return apiAs(browser, ACCOUNTS.admin);
 }
 
-/** Flagged scans are the Quality Inspector's to decide (D-028). */
+/** The Quality Inspector's API client. */
 export function inspectorApi(browser: Browser): Promise<APIRequestContext> {
   return apiAs(browser, ACCOUNTS.inspector);
 }
@@ -105,23 +105,28 @@ export async function sampleJpeg(): Promise<Buffer> {
 }
 
 /**
- * The tests post "cut", "hole", "abrasion" and "dirt" and expect the confidence rule (D-011). The
- * database's own types may differ (npm run demo:reset turns abrasion and dirt off and gives cut
- * and hole a "When found" action, D-053, D-056), so the tests post their own copies instead:
- * active, with no action, whatever Settings say.
+ * The tests post "cut", "hole", "abrasion" and "dirt" and expect Pass or Reject (D-093): cut and
+ * hole Not accepted, abrasion and dirt Usable. The database's own types may differ (Settings, or
+ * npm run demo:reset turning abrasion and dirt off), so the tests post their own copies instead:
+ * active, with these outcomes, whatever Settings say.
  */
-const RULE_KEYS = ["cut", "hole", "abrasion", "dirt"];
-export const e2eKey = (key: string) => (RULE_KEYS.includes(key) ? `e2e-rule-${key}` : key);
+const RULE_TYPES = {
+  cut: "NOT_ACCEPTED",
+  hole: "NOT_ACCEPTED",
+  abrasion: "USABLE",
+  dirt: "USABLE",
+} as const;
+export const e2eKey = (key: string) => (key in RULE_TYPES ? `e2e-rule-${key}` : key);
 
 let ruleTypes: Promise<void> | undefined;
 export function ensureRuleTypes(): Promise<void> {
   ruleTypes ??= withDb(async (db) => {
-    for (const [i, key] of RULE_KEYS.entries()) {
+    for (const [i, [key, outcome]] of Object.entries(RULE_TYPES).entries()) {
       await db.query(
-        `INSERT INTO defect_types (id, key, label, "isActive", action, "sortOrder", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, true, NULL, $4, now(), now())
-         ON CONFLICT (key) DO UPDATE SET "isActive" = true, action = NULL`,
-        [randomUUID(), e2eKey(key), `E2E ${key}`, 900 + i],
+        `INSERT INTO defect_types (id, key, label, "isActive", outcome, "sortOrder", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, true, $4::"DefectOutcome", $5, now(), now())
+         ON CONFLICT (key) DO UPDATE SET "isActive" = true, outcome = $4::"DefectOutcome"`,
+        [randomUUID(), e2eKey(key), `E2E ${key}`, outcome, 900 + i],
       );
     }
   });

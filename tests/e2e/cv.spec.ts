@@ -10,45 +10,36 @@ import {
 } from "./cv-helpers";
 
 test.describe("camera ingestion API", () => {
-  test("applies the confidence rule and flags unknown classes", async ({ browser, request }) => {
+  test("gives Pass or Reject at once and rejects unknown classes (D-093)", async ({
+    browser,
+    request,
+  }) => {
     const api = await managerApi(browser);
     const batch = await createBatch(api);
     const { token } = await createDeviceToken();
 
     const cases = [
-      { dets: [{ classKey: "cut", confidence: 0.95 }], verdict: "REJECT", status: "DECIDED" },
-      { dets: [{ classKey: "hole", confidence: 0.7 }], verdict: "REWORK", status: "DECIDED" },
-      { dets: [{ classKey: "abrasion", confidence: 0.3 }], verdict: "PASS", status: "DECIDED" },
-      { dets: [], verdict: "PASS", status: "DECIDED" },
-      {
-        dets: [{ classKey: "sim-unknown", confidence: 0.8 }],
-        verdict: "NEEDS_REVIEW",
-        status: "PENDING_REVIEW",
-      },
+      { dets: [{ classKey: "cut", confidence: 0.95 }], verdict: "REJECT" },
+      { dets: [{ classKey: "hole", confidence: 0.3 }], verdict: "PASS" }, // below found-at
+      { dets: [{ classKey: "abrasion", confidence: 0.9 }], verdict: "PASS" }, // Usable
+      { dets: [], verdict: "PASS" },
+      { dets: [{ classKey: "sim-unknown", confidence: 0.8 }], verdict: "REJECT" },
     ];
     for (const [i, c] of cases.entries()) {
       const res = await postScan(request, token, batch.id, c.dets);
       expect(res.status()).toBe(201);
-      expect((await res.json()).data).toMatchObject({
-        batchCode: batch.code,
-        sequence: i + 1,
-        verdict: c.verdict,
-        status: c.status,
-      });
+      const data = (await res.json()).data;
+      expect(data).toMatchObject({ batchCode: batch.code, sequence: i + 1, verdict: c.verdict });
+      expect(data).not.toHaveProperty("status");
     }
 
-    const outcomes = await withDb(async (db) => ({
-      rework: (
+    const stored = await withDb(async (db) => ({
+      final: (
         await db.query(
-          `SELECT count(*)::int n FROM rework_tickets r JOIN scans s ON s.id = r."scanId" WHERE s."batchId" = $1`,
+          `SELECT "finalVerdict"::text v FROM scans WHERE "batchId" = $1 ORDER BY sequence`,
           [batch.id],
         )
-      ).rows[0].n,
-      salvage: (
-        await db.query(`SELECT count(*)::int n FROM salvage_items WHERE "originBatchId" = $1`, [
-          batch.id,
-        ])
-      ).rows[0].n,
+      ).rows.map((r) => r.v),
       unknown: (
         await db.query(
           `SELECT count(*)::int n FROM detections d JOIN scans s ON s.id = d."scanId" WHERE s."batchId" = $1 AND d."isUnknownClass"`,
@@ -56,7 +47,10 @@ test.describe("camera ingestion API", () => {
         )
       ).rows[0].n,
     }));
-    expect(outcomes).toEqual({ rework: 1, salvage: 1, unknown: 1 });
+    expect(stored).toEqual({
+      final: ["REJECT", "PASS", "PASS", "PASS", "REJECT"],
+      unknown: 1,
+    });
   });
 
   test("refuses missing or revoked tokens, non-images, and batches not at Preparation", async ({
@@ -88,73 +82,7 @@ test.describe("camera ingestion API", () => {
   });
 });
 
-test.describe("people deciding", () => {
-  test("scan detail draws the boxes; the inspector overrides a Reject to Fixable with a reason", async ({
-    browser,
-    page,
-    request,
-  }) => {
-    const api = await managerApi(browser);
-    const batch = await createBatch(api);
-    const { token } = await createDeviceToken();
-    const res = await postScan(request, token, batch.id, [
-      { classKey: "cut", confidence: 0.94 },
-      { classKey: "dirt", confidence: 0.4 },
-    ]);
-    const { scanId } = (await res.json()).data;
-
-    await page.goto("/login");
-    await signIn(page, ACCOUNTS.inspector.email);
-    await expect(page).toHaveURL(ACCOUNTS.inspector.home);
-    await page.goto(`/scans/${scanId}`);
-    await expect(page.getByTestId("detection-box")).toHaveCount(2);
-    await expect(page.getByText("Automatically by the camera")).toBeVisible();
-
-    await page.getByRole("button", { name: "Override decision…" }).click();
-    const dialog = page.getByRole("dialog");
-    await dialog.getByRole("radio", { name: /Fixable/ }).check();
-    await dialog.getByRole("button", { name: "Override" }).click();
-    await expect(
-      dialog.getByText(
-        "Enter a reason for changing the camera's decision (at least 3 characters).",
-      ),
-    ).toBeVisible();
-    await dialog.getByLabel("Reason").fill("Surface cut only, can be skived");
-    await dialog.getByRole("button", { name: "Override" }).click();
-
-    await expect(dialog).toBeHidden();
-    await expect(page.getByRole("img", { name: "Overridden by a person" })).toBeVisible();
-    await expect(page.getByText("Surface cut only, can be skived")).toBeVisible();
-    await expect(page.getByText("Cancelled (decision changed)")).toBeVisible();
-    await expect(page.getByText("Waiting to be cleaned or cut around")).toBeVisible();
-  });
-
-  test("the review queue settles an unknown-class scan in one click", async ({
-    browser,
-    page,
-    request,
-  }) => {
-    const api = await managerApi(browser);
-    const batch = await createBatch(api);
-    const { token } = await createDeviceToken();
-    await postScan(request, token, batch.id, [{ classKey: "wrinkle", confidence: 0.77 }]);
-
-    await page.goto("/login");
-    await signIn(page, ACCOUNTS.inspector.email);
-    await expect(page).toHaveURL(ACCOUNTS.inspector.home);
-    await page.goto(`/review?batch=${batch.code}`);
-    const group = page.getByRole("group", { name: `Decide ${batch.code} · #1` });
-    await expect(group).toBeVisible();
-    await group.getByRole("button", { name: "Pass" }).click();
-    await expect(group).toBeHidden();
-
-    await page.goto(`/scans?batch=${batch.code}`);
-    await expect(page.locator("tbody tr")).toHaveCount(1);
-    await expect(page.locator("tbody tr").first()).toContainText("Pass");
-  });
-});
-
-test("only a Quality Inspector decides a flagged scan; the Floor Manager only sees it (D-028)", async ({
+test("a section's page draws the boxes, explains the verdict and offers no change (D-093)", async ({
   browser,
   page,
   request,
@@ -163,35 +91,44 @@ test("only a Quality Inspector decides a flagged scan; the Floor Manager only se
   const batch = await createBatch(api);
   const { token } = await createDeviceToken();
   const res = await postScan(request, token, batch.id, [
-    { classKey: "sim-unknown", confidence: 0.8 },
+    { classKey: "cut", confidence: 0.94 },
+    { classKey: "dirt", confidence: 0.4 },
   ]);
   const { scanId } = (await res.json()).data;
 
-  // The Floor Manager: no controls on the scan or in the queue, and the API refuses.
-  await page.goto("/login");
-  await signIn(page, ACCOUNTS.manager.email);
-  await expect(page).toHaveURL(ACCOUNTS.manager.home);
-  await page.goto(`/scans/${scanId}`);
-  await expect(page.getByText(/Waiting for a Quality Inspector/)).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Override decision|Pass|Fixable|Reject/ }),
-  ).toHaveCount(0);
-  await page.goto(`/review?batch=${batch.code}`);
-  await expect(page.getByRole("group", { name: `Decide ${batch.code} · #1` })).toHaveCount(0);
-  await expect(page.getByRole("cell", { name: "Waiting for a Quality Inspector" })).toBeVisible();
-  const refused = await page.request.post(`/api/v1/scans/${scanId}/decision`, {
-    data: { verdict: "PASS", expectedFinalVerdict: null },
-  });
-  expect(refused.status()).toBe(403);
-  expect((await refused.json()).error.code).toBe("FORBIDDEN");
+  for (const account of [ACCOUNTS.inspector, ACCOUNTS.manager]) {
+    await page.goto("/login");
+    await signIn(page, account.email);
+    await expect(page).toHaveURL(account.home);
+    await page.goto(`/scans/${scanId}`);
+    await expect(page.getByTestId("detection-box")).toHaveCount(2);
+    await expect(page.getByText("The camera’s verdict is final.")).toBeVisible();
+    await expect(page.getByTestId("rules-used")).toContainText("Not accepted");
+    await expect(page.getByRole("cell", { name: "Not accepted" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Override|Pass|Fixable|Reject/ })).toHaveCount(0);
+    await page.context().clearCookies();
+  }
 
-  // The Quality Inspector decides it.
-  const decided = await (
+  // The old decision endpoint is gone.
+  const gone = await (
     await inspectorApi(browser)
   ).post(`/api/v1/scans/${scanId}/decision`, {
-    data: { verdict: "PASS", expectedFinalVerdict: null },
+    data: { verdict: "PASS", expectedFinalVerdict: "REJECT" },
   });
-  expect(decided.status()).toBe(200);
+  expect(gone.status()).toBe(404);
+});
+
+test("the removed pages answer 404 (D-094)", async ({ page }) => {
+  await page.goto("/login");
+  await signIn(page, ACCOUNTS.inspector.email);
+  await expect(page).toHaveURL(ACCOUNTS.inspector.home);
+  for (const path of ["/review", "/rework", "/salvage"]) {
+    const res = await page.goto(path);
+    expect(res?.status(), path).toBe(404);
+  }
+  const nav = page.getByRole("navigation");
+  for (const label of ["Review queue", "Repair Station", "Salvage"])
+    await expect(nav.getByRole("link", { name: label })).toHaveCount(0);
 });
 
 test("the Floor Manager chooses which batch the camera feeds", async ({ browser, page }) => {

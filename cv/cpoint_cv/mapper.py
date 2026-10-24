@@ -1,7 +1,7 @@
 """Turns what the model saw into the app's ``detections`` shape. Pure, no model imports.
 
-The model reports, the app decides (D-011): nothing here applies PASS/REWORK/REJECT
-thresholds. The confidence floor only drops noise.
+The model reports, the app decides (D-011, D-093): nothing here gives Pass or Reject. The
+confidence floor only drops noise.
 """
 
 from __future__ import annotations

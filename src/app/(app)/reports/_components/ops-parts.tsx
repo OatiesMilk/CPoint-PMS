@@ -83,8 +83,7 @@ export function AttentionList({ items, asOf }: { items: AttentionItem[]; asOf: s
       <CardContent>
         {items.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nothing needs attention. No shortage, short day, waiting repair or supplier problem was
-            found.
+            Nothing needs attention. No shortage, short day or supplier problem was found.
           </p>
         ) : (
           <ul className="flex flex-col divide-y">

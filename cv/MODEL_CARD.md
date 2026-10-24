@@ -112,3 +112,7 @@ What it shows:
 Phase 16 added "When found" actions per defect type (D-053): with cut and hole on Reject and
 crease and scratch on Rework, all five photos get the verdict a person would expect. See
 `reports/2026-10-19-yolo-v1.md`, a small check, not a measurement.
+
+Phase 25 (D-093) made every section Pass or Reject: crease and scratch are Usable (Pass), cut and
+hole Not accepted (Reject), and an unknown class rejects. The tables above are kept as they were
+measured under the earlier rule; the preview and `evaluate` now give PASS or REJECT only.

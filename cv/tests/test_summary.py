@@ -19,8 +19,8 @@ def result(name: str, verdict: str, *dets: tuple[str, float], ms: float = 10.0) 
 def test_counts_per_class_and_verdict() -> None:
     s = summarize(
         [
-            result("a.jpg", "NEEDS_REVIEW", ("crease", 0.4), ("crease", 0.6), ("cut", 0.7)),
-            result("b.jpg", "REWORK", ("cut", 0.65), ms=30.0),
+            result("a.jpg", "REJECT", ("crease", 0.4), ("crease", 0.6), ("cut", 0.7)),
+            result("b.jpg", "REJECT", ("cut", 0.65), ms=30.0),
             result("c.jpg", "PASS", ms=20.0),
         ]
     )
@@ -29,11 +29,11 @@ def test_counts_per_class_and_verdict() -> None:
     assert (crease.key, crease.detections, crease.images) == ("crease", 2, 1)
     assert (crease.min, crease.median, crease.max) == (0.4, 0.5, 0.6)
     assert (cut.key, cut.detections, cut.images) == ("cut", 2, 2)
-    assert s.verdicts == {"PASS": 1, "REWORK": 1, "REJECT": 0, "NEEDS_REVIEW": 1}
+    assert s.verdicts == {"PASS": 1, "REJECT": 2}
     assert (s.ms_median, s.ms_max) == (20.0, 30.0)
     md = to_markdown(s, title="Baseline", settings_line="Settings.")
     assert "| crease | 2 | 1 | 0.40 | 0.50 | 0.60 |" in md
-    assert "| NEEDS_REVIEW | 1 |" in md
+    assert "| REJECT | 2 |" in md
 
 
 def test_an_empty_run() -> None:

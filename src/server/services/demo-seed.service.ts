@@ -1,4 +1,3 @@
-import type { Role } from "@/lib/domain";
 import { manilaToday } from "@/lib/format";
 import { DEFAULT_SCHEDULE, slotsFor } from "@/lib/production-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
@@ -12,9 +11,8 @@ import {
 } from "@/server/lib/leather-scan";
 import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import { logger } from "@/server/lib/logger";
-import { countBatches, listOpenBatches } from "@/server/models/batch.model";
+import { countBatches } from "@/server/models/batch.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
-import { findLiveOutcomes } from "@/server/models/outcome.model";
 import {
   ensureSupplier,
   listActiveShoeTypes,
@@ -27,15 +25,13 @@ import { cancelBatch, createBatch, transitionBatchStage } from "./batch.service"
 import { setCameraOperator } from "./camera.service";
 import { saveCheckIn, saveQuotas } from "./production.service";
 import { createItem, recordMovement } from "./inventory.service";
-import { moveReworkTicket } from "./rework.service";
-import { assignSalvage, discardSalvage } from "./salvage.service";
-import { decideScan } from "./scan-decision.service";
 import { ingestScan } from "./scan-ingest.service";
 
 /**
  * The demo week (D-026, D-090): replays a small, believable past week of production through the
- * real services, each with its own `now`, so rolls, scans, repairs, salvage, the stock ledger,
- * attendance, check-ins and audit rows all agree. Scans are Capture page captures (the
+ * real services, each with its own `now`, so rolls, scans, the stock ledger, attendance,
+ * check-ins and audit rows all agree. Every section is Pass or Reject and nobody changes it
+ * (D-093); one section shows an unknown class, rejected and listed in Settings (A-12). Scans are Capture page captures (the
  * website camera, D-069) by the QI, or by the Floor Manager on the day the QI is absent. Opt-in
  * (SEED_DEMO_WEEK or `npm run demo:seed`), and only on a database with no batches. The same seed
  * gives the same week.
@@ -140,8 +136,6 @@ export type DemoSeedResult =
     }
   | { seeded: false; reason: string };
 
-type Actor = { id: string; role: Role };
-
 export async function seedDemoWeek(
   options: { now?: Date; seed?: number; imageSize?: number } = {},
 ): Promise<DemoSeedResult> {
@@ -149,7 +143,6 @@ export async function seedDemoWeek(
   const now = options.now ?? new Date();
   const random = mulberry32(options.seed ?? 20261003);
   const between = (lo: number, hi: number) => lo + random() * (hi - lo);
-  const chance = (p: number) => random() < p;
   const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)];
   const past = (t: Date) => t.getTime() <= now.getTime() - MINUTE;
   const plus = (t: Date, ms: number) => new Date(t.getTime() + ms);
@@ -178,7 +171,7 @@ export async function seedDemoWeek(
   // The week's scans show the defect types active in Settings, as the camera's model would.
   const classes = defectTypes
     .filter((t) => t.isActive)
-    .map((t) => ({ key: t.key, action: t.action }));
+    .map((t) => ({ key: t.key, outcome: t.outcome }));
   if (classes.length === 0) return { seeded: false, reason: "no active defect types" };
 
   const today = manilaToday(now);
@@ -231,7 +224,6 @@ export async function seedDemoWeek(
   let qiMarkedAbsent = false;
   let batches = 0;
   let scans = 0;
-  const salvage: { id: string; originBatchId: string; at: Date }[] = [];
   let index = 0;
 
   const SLOTS = [8, 10.5];
@@ -243,7 +235,7 @@ export async function seedDemoWeek(
   for (const day of workingDays) {
     for (const startHour of SLOTS) {
       index += 1;
-      // The newest batch to reach the camera; its last two sections stay in the review queue.
+      // The newest batch to reach the camera; its last section shows an unknown class (A-12).
       const newest = day === newestSlot?.day && startHour === newestSlot.startHour;
       const school = index % 3 !== 0;
       const shoeType = school ? shoeTypes[0] : (shoeTypes[1] ?? shoeTypes[0]);
@@ -307,15 +299,14 @@ export async function seedDemoWeek(
         let detections: Detection[] = scenario(random, classes);
         // Worse leather: a clean section gets a second chance to show a defect.
         if (worseLeather && detections.length === 0) detections = scenario(random, classes);
-        const keepPending = newest && i >= captured - 2;
-        if (keepPending)
+        if (newest && i === captured - 1)
           detections = [{ classKey: UNKNOWN_CLASS, confidence: 0.82, box: randomBox(random) }];
         const image = await renderLeatherImage(detections, {
           width: options.imageSize ?? 480,
           height: Math.round((options.imageSize ?? 480) * 0.75),
           random,
         });
-        const result = await ingestScan(
+        await ingestScan(
           {
             image: { bytes: new Uint8Array(image), type: { mime: "image/jpeg", ext: "jpg" } },
             detections,
@@ -328,7 +319,6 @@ export async function seedDemoWeek(
           ts,
         );
         scans += 1;
-        await afterScan(result, ts, day, keepPending);
       }
       t = plus(t, prep);
 
@@ -393,46 +383,6 @@ export async function seedDemoWeek(
       plannedAt,
     );
     batches += 1;
-  }
-
-  // ── salvage: some rejected leather reused in open batches, some discarded ──
-  // Reuse goes to batches on the line (not tomorrow's planned roll), at most 4 pieces each.
-  const open = (await listOpenBatches()).filter((b) => b.status === "IN_PROGRESS");
-  const reused = new Map<string, number>();
-  for (const item of salvage) {
-    const when = new Date(Math.min(item.at.getTime() + 6 * HOUR, now.getTime() - 10 * MINUTE));
-    const target = open.find((b) => b.id !== item.originBatchId && (reused.get(b.id) ?? 0) < 4);
-    const roll = random();
-    if (target && roll < 0.35) {
-      const ok = await assignSalvage(
-        item.id,
-        {
-          batchId: target.id,
-          expectedStatus: "AVAILABLE",
-          note: "Cut for linings and small parts",
-        },
-        fm,
-        when,
-      ).then(
-        () => true,
-        () => false,
-      );
-      if (ok) reused.set(target.id, (reused.get(target.id) ?? 0) + 1);
-    } else if (roll < 0.6) {
-      await discardSalvage(
-        item.id,
-        {
-          reason: pick([
-            "Hole too large to cut around",
-            "Grain damage across the whole section",
-            "Too small to cut any shoe part",
-          ]),
-          expectedStatus: "AVAILABLE",
-        },
-        fm,
-        when,
-      ).catch(() => undefined);
-    }
   }
 
   // ── two more deliveries: thread and tacks on the second working day, leather and tacks on the
@@ -592,84 +542,5 @@ export async function seedDemoWeek(
       }
     }
     return entered;
-  }
-
-  /** What people do after each scan: overrides, review decisions, repairs, salvage. */
-  async function afterScan(
-    scan: { scanId: string; batchId: string; verdict: string },
-    ts: Date,
-    day: string,
-    keepPending = false,
-  ) {
-    let final: string | null = scan.verdict === "NEEDS_REVIEW" ? null : scan.verdict;
-    let decidedAt = ts; // repairs and salvage can only follow the decision
-    const qiAway = day === qiAwayDay;
-    const people: Actor[] = qiAway ? [fm!] : [qi!, fm!];
-
-    if (scan.verdict === "NEEDS_REVIEW") {
-      // Only the QI decides flagged scans (D-028): on the day they're away, it waits for the next
-      // working morning.
-      const nextDay = workingDays[workingDays.indexOf(day) + 1] ?? addDays(day, 1);
-      const when = qiAway ? at(nextDay, 8 + between(0.25, 1)) : plus(ts, between(30, 120) * MINUTE);
-      // Recent unknowns stay in the review queue, as on a real afternoon.
-      if (!keepPending && when.getTime() < now.getTime() - 2 * HOUR) {
-        const verdict = chance(0.7) ? "PASS" : "REWORK";
-        await decideScan(scan.scanId, { verdict, expectedFinalVerdict: null }, qi!, when);
-        final = verdict;
-        decidedAt = when;
-      }
-    } else {
-      const override =
-        scan.verdict === "REJECT" && chance(0.15)
-          ? {
-              verdict: "REWORK" as const,
-              reason: "Defect is near the edge; the section can be cut around it.",
-            }
-          : scan.verdict === "PASS" && chance(0.03)
-            ? { verdict: "REWORK" as const, reason: "Small scuff the camera missed." }
-            : scan.verdict === "REWORK" && chance(0.05)
-              ? { verdict: "PASS" as const, reason: "Mark is within tolerance for this shoe type." }
-              : null;
-      const when = plus(ts, 5 * MINUTE);
-      if (override && past(when)) {
-        await decideScan(
-          scan.scanId,
-          {
-            verdict: override.verdict,
-            reason: override.reason,
-            expectedFinalVerdict: scan.verdict as "PASS" | "REWORK" | "REJECT",
-          },
-          pick(people),
-          when,
-        );
-        final = override.verdict;
-        decidedAt = when;
-      }
-    }
-
-    if (final === "REWORK" || final === "REJECT") {
-      const live = await findLiveOutcomes(scan.scanId);
-      if (live.rework) {
-        const start = plus(decidedAt, between(15, 90) * MINUTE);
-        if (past(start)) {
-          await moveReworkTicket(
-            live.rework.id,
-            { move: "start", expectedStatus: "OPEN" },
-            pick(people),
-            start,
-          );
-          const done = plus(start, between(20, 120) * MINUTE);
-          if (past(done) && chance(0.9))
-            await moveReworkTicket(
-              live.rework.id,
-              { move: "done", expectedStatus: "IN_PROGRESS" },
-              pick(people),
-              done,
-            );
-        }
-      }
-      if (live.salvage)
-        salvage.push({ id: live.salvage.id, originBatchId: scan.batchId, at: decidedAt });
-    }
   }
 }

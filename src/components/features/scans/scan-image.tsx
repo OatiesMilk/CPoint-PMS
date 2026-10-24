@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ImageOff } from "lucide-react";
-import { detectionOutcome, type DefectAction, type Thresholds } from "@/lib/decision-engine";
+import { detectionOutcome, type DefectOutcome, type RuleSettings } from "@/lib/decision-engine";
 import { cn } from "@/lib/utils";
 
 export type OverlayDetection = {
@@ -10,8 +10,9 @@ export type OverlayDetection = {
   label: string;
   confidence: number;
   unknown: boolean;
-  /** The type's action when the scan was decided (D-053); null = by confidence. */
-  action?: DefectAction | null;
+  /** The type's outcome when the scan was decided (D-093); null for an unknown class or a scan
+   * decided before Phase 25. */
+  outcome?: DefectOutcome | null;
   box: { x: number; y: number; width: number; height: number };
 };
 
@@ -19,28 +20,33 @@ type Props = {
   src: string;
   alt: string;
   detections: OverlayDetection[];
-  thresholds: Thresholds;
+  rule: RuleSettings;
   /** Controlled highlight (e.g. when hovering a row in the detections table). */
   highlightId?: string | null;
   className?: string;
 };
 
-/** Box tone follows what this detection alone would mean; unknown classes are "needs review". */
-function tone(d: OverlayDetection, t: Thresholds) {
-  if (d.unknown) return "review";
-  const outcome = detectionOutcome(d.confidence, d.action, t);
-  return outcome === "REJECT" ? "reject" : outcome === "REWORK" ? "rework" : "muted";
+/**
+ * Box tone follows what this detection does to the section: red for Not accepted (an unknown class
+ * too, dashed), green for a found Usable defect, a grey dashed box below "counts as found at".
+ */
+function tone(d: OverlayDetection, rule: RuleSettings) {
+  if (d.unknown) return "unknown";
+  // A scan decided before Phase 25 has no outcomes in its snapshot: no tone to claim.
+  if (!d.outcome) return "muted";
+  const outcome = detectionOutcome(d.confidence, d.outcome, rule);
+  return outcome === "NOT_ACCEPTED" ? "reject" : outcome === "USABLE" ? "pass" : "muted";
 }
 
 const TONES = {
   reject: "border-reject [--chip:var(--reject)]",
-  rework: "border-rework [--chip:var(--rework)]",
-  review: "border-review border-dashed [--chip:var(--review)]",
+  unknown: "border-reject border-dashed [--chip:var(--reject)]",
+  pass: "border-pass [--chip:var(--pass)]",
   muted: "border-muted-foreground/70 border-dashed [--chip:var(--muted-foreground)]",
 } as const;
 
 /** The captured section with each detection drawn where the model saw it (fractions of the image). */
-export function ScanImage({ src, alt, detections, thresholds, highlightId, className }: Props) {
+export function ScanImage({ src, alt, detections, rule, highlightId, className }: Props) {
   const [hover, setHover] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const active = highlightId ?? hover;
@@ -74,7 +80,7 @@ export function ScanImage({ src, alt, detections, thresholds, highlightId, class
           onMouseLeave={() => setHover(null)}
           className={cn(
             "absolute rounded-sm border-2 transition-[box-shadow,opacity] duration-(--dur-fast)",
-            TONES[tone(d, thresholds)],
+            TONES[tone(d, rule)],
             active && active !== d.id && "opacity-40",
             active === d.id && "shadow-[0_0_0_3px_var(--background)]",
           )}
