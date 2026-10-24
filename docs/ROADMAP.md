@@ -477,7 +477,7 @@ was never built. Each phase gets its own criteria here when its plan is approved
 - [x] Phase 24: remove Material Requests and Procurement (QA passed, 18 of 18; the report is on
       `docs/phase-24-qa`)
 - [x] Phase 25: Pass or Reject, a final verdict; remove the Review Queue, Repair Station and
-      Salvage (merged #21; QA run 1 FAIL, fixes ready for run 2)
+      Salvage (merged #21; QA passed, run 3, 2026-10-24)
 - [ ] Phase 26: capture on the constructors' own phones; rolls start and finish there; Reports →
       Rolls
 - [ ] Phase 27: batches are the check-in intervals (lunch break, on-screen notices, pairs finished

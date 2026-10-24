@@ -25,6 +25,8 @@ Template:
   60 s. No app change.
 - `npm run check` passed (521 unit tests, build). E2E not run by Claude. Run 3 prompt
   `qa/CODEX_PROMPT_PHASE_25_RUN3.md`.
+- Codex run 3 (`qa/reports/2026-10-24-phase-25-run3.md`): **PASS**. The production spec passed 5
+  of 5 three times in a row; full e2e 75 passed, 0 failed, 1 skipped. Phase 25 QA is done.
 
 ## 2026-10-24 — Phase 25: CI fixes and QA run 1 fixes
 
