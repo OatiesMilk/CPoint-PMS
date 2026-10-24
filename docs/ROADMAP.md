@@ -474,7 +474,7 @@ C-38, assumptions A-1 to A-26, each phase's **Done when**). It replaces the old 
 (materials used, worked out from the check-ins) of `docs/prompts/production-progression.md`, which
 was never built. Each phase gets its own criteria here when its plan is approved.
 
-- [x] Phase 24: remove Material Requests and Procurement (built; QA pending)
+- [x] Phase 24: remove Material Requests and Procurement (QA passed)
 - [ ] Phase 25: Pass or Reject, a final verdict; remove the Review Queue, Repair Station and
       Salvage
 - [ ] Phase 26: capture on the constructors' own phones; rolls start and finish there; Reports →
@@ -507,5 +507,5 @@ Decision: D-091.
 - [x] Bootstrap, the demo week and `demo:reset` without requests or the flag; the demo week keeps
       its two deliveries as stock IN, so the shelf ends where it did
 - [x] Unit and e2e tests updated; the brief's removal check finds nothing
-- [ ] Codex QA: every role's nav, the 404s, Inventory, the FM home, Operations, `demo:reset` and
-      the demo week on a throwaway stack
+- [x] Codex QA (2026-10-24): every role's nav, the 404s, Inventory, the FM home, Operations,
+      `demo:reset` and the demo week on a throwaway stack; 18 of 18, e2e 84 passed

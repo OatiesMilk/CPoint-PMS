@@ -3,18 +3,21 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-23
+**Last updated:** 2026-10-24
 **Branch:** `main` has Phases 20 to 23 (#15), the agent-workflow docs (D-089, #16), the demo seed
-refresh (D-090, #17) and the factory-visit plan (#18). Uncommitted, for a new branch from the
-latest `main` (Dylan commits; the team opens and merges the PR, D-032): the Phase 24 work and the
-Codex report-only docs (D-092).
+refresh (D-090, #17), the factory-visit plan (#18) and Phase 24 with the D-092 docs
+(`feature/phase-24-remove-procurement`, merged 2026-10-24, CI green). Uncommitted: these QA notes
+and the Codex report, for a new branch from the latest `main` (D-032).
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports (the QA runs, and a rerun of an `e2e` or `docker` CI fix
 from `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md`, `qa/README.md` → "CI fix loop"); every agent reads
 the Obsidian vault (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 24, Remove Material Requests and Procurement (D-091). **Built; QA
-pending** (handoff `qa/handoffs/2026-10-23-phase-24-remove-procurement.md`, prompt
-`qa/CODEX_PROMPT_PHASE_24.md`). Plan: `docs/prompts/plans/phase-24-plan.md`, approved as planned.
+**Current phase:** Phase 24, Remove Material Requests and Procurement (D-091). **QA passed**
+(Codex, 2026-10-24: 18 of 18 scenarios; e2e 84 passed, 0 failed, 1 skipped; report
+`qa/reports/2026-10-23-phase-24-remove-procurement.md`). Codex marked it FAIL on one finding only:
+Admin → Audit log still lists the old `procurement.*` actions and `PurchaseRequest` rows. That is
+audit history, which is never deleted (D-091), so it is expected; the prompt's leftover search
+should have excluded the audit log. Plan: `docs/prompts/plans/phase-24-plan.md`, approved as planned.
 The module is gone end to end (migration `drop_procurement`); Inventory, suppliers, the homes and
 the Operations report still work. Phase 23 (Production progression) passed QA on 2026-10-22.
 **Then: Phases 25 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`), briefed
@@ -52,7 +55,7 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 - [x] 23. Production progression in place of stage monitoring (QA passed)
 - ~~24. Materials used, worked out from the check-ins~~ (replaced by the factory-visit plan;
   CPoint counts stock by hand)
-- [x] 24. Remove Material Requests and Procurement (built; QA pending)
+- [x] 24. Remove Material Requests and Procurement (QA passed)
 - [ ] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
 - [ ] 26. Capture on the constructors' own phones; rolls start and finish there
 - [ ] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
@@ -189,6 +192,9 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
+  - Phase 24 (Codex, 2026-10-24): 18 of 18 scenarios passed, e2e 84 passed, 0 failed, 1 skipped;
+    the 404s, every role's nav, Inventory, Operations, the demo week and `demo:reset` on a
+    throwaway stack. Its one finding (old audit rows name procurement) is expected history.
   - 588 unit tests pass (Vitest; 716 before Phase 24, the difference is the deleted procurement
     tests; 646 before Phase 23), plus 81 model-toolkit tests (pytest; they also pass without
     OpenCV or torch, as in CI).
@@ -263,9 +269,9 @@ replace the old Phase 24 (materials used) of `production-progression.md`, which 
 
 ## Next step (exact)
 
-0. Dylan: commit Phase 24 (and the D-092 workflow docs) on a new branch from the latest `main`
-   (git commands in the Phase 24 report) and open the PR (D-032).
-1. Codex: Phase 24 QA from `qa/CODEX_PROMPT_PHASE_24.md` (paste it into Codex).
+0. Dylan: commit these QA notes and the Codex report on a new branch from the latest `main` and
+   open the PR (D-032).
+1. (Phase 24 QA is done.)
 2. Phase 25 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 25. Stop
    for my approval before writing code."
 3. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and

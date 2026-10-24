@@ -53,7 +53,9 @@ removal sweep ✅ (nothing found) · e2e n/a (Codex) · docker not run (Codex's 
 **Decisions:** D-091
 **Follow-ups:**
 
-- Codex runs the Phase 24 QA; Dylan commits and opens the PR.
+- Merged 2026-10-24 with CI green. Codex QA (2026-10-24): 18 of 18 scenarios, e2e 84 passed, 0
+  failed, 1 skipped. Its one finding, old `procurement.*` audit rows in Admin → Audit log, is kept
+  history (D-091 updated); no code change.
 - Phase 25 next (Pass or Reject; remove the Review Queue, Repair Station and Salvage).
 
 ## 2026-10-23 — Agent workflow: Codex only tests and reports

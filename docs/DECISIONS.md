@@ -1580,7 +1580,10 @@ inventory}/page.tsx`, `src/app/(app)/admin/users/**`, `src/app/(app)/reports/_co
 `src/lib/ops-rules.ts`, `src/server/services/{ops-report,bootstrap,demo-seed,demo-reset,auth,
 user-admin}.service.ts`, `src/server/models/{demo-reset,inventory,user,ops-report}.model.ts`.
 **Consequences:** the dev database loses its requests when the migration runs (backed up first).
-Tell CPoint the module is gone; how they order stays outside the system.
+The audit log keeps its `procurement.*` rows and their `PurchaseRequest` record type as history,
+and the Audit log filters still offer them; audit rows are never rewritten or deleted (confirmed by
+the Phase 24 QA, 2026-10-24). Tell CPoint the module is gone; how they order stays outside the
+system.
 
 ### D-092 · 2026-10-23 · Accepted — Codex only tests and reports; Claude fixes failing CI checks (supersedes D-089's Codex CI fix)
 
