@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/select";
 import {
   cameraProblemFor,
   cameraProblemMessage,
+  frameProblemMessage,
   isAppleMobile,
   isPhoneOrTablet,
   SEND_ATTEMPTS,
@@ -376,6 +377,12 @@ export function CaptureClient({
   const capture = useCallback(async () => {
     const video = videoRef.current;
     if (!canCapture || !video || !batch || busyRef.current) return;
+    // No frame yet (the camera is starting, or Floor view's video just got the stream): say so
+    // instead of sending an empty picture.
+    if (video.videoWidth === 0 || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      setSend({ kind: "failed", message: frameProblemMessage("not_ready", floor), pending: null });
+      return;
+    }
     busyRef.current = true; // one press, one scan
     try {
       const capturedAt = new Date().toISOString();
@@ -389,7 +396,7 @@ export function CaptureClient({
       if (!blob) {
         setSend({
           kind: "failed",
-          message: "The picture couldn’t be taken from the camera. Press Capture again.",
+          message: frameProblemMessage("no_image", floor),
           pending: null,
         });
         return;
@@ -406,7 +413,7 @@ export function CaptureClient({
     } finally {
       busyRef.current = false;
     }
-  }, [batch, canCapture, deliver]);
+  }, [batch, canCapture, deliver, floor]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

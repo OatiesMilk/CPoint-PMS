@@ -14,6 +14,27 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-24 — Phase 25: CI fixes and QA run 1 fixes
+
+**Who:** Dylan (PR #21 merged; the run 1 fixes uncommitted on top of `main`)
+**Summary:** CI run 1 on PR #21 failed on two e2e assertions and the docker job's Phase 24 counts;
+fixed and green on run 2, then merged. Codex's QA run 1 failed 22 of 24 with no app fault in the
+rule: one test-isolation bug, one Floor view timing message, two wrong handoff expectations.
+**Changed:**
+
+- **CI (PR #21):** `admin.spec.ts` checks the found-at line itself; `reports.spec.ts` checks the
+  Reject tile's card; `cv.spec.ts` signs each role in on a fresh context; `ci.yml` expects 6
+  defect types and checks verdicts and an unknown-class detection instead of `PENDING_REVIEW`.
+- **QA run 1:** `production.spec.ts` uses a note of its own per run (F1); Capture waits for a
+  video frame and names Space in Floor view (`frameProblemMessage`, F4); the handoff now says
+  "Date (Manila)" (F2) and "at least one" unknown-class section (F3); the demo-seed comment too.
+- **QA:** run 2 prompt `qa/CODEX_PROMPT_PHASE_25_RUN2.md`; Codex's run 1 report.
+
+**Gates:** in a cloud copy: lint ✅ · typecheck ✅ · test ✅ (521) · build ✅ · e2e n/a (Codex;
+CI green on #21) · docker ✅ on CI (#21)
+**Decisions:** none
+**Follow-ups:** Codex run 2; Dylan deletes two temp folders.
+
 ## 2026-10-24 — Phase 25: Pass or Reject, a final verdict
 
 **Who:** Dylan (uncommitted, on top of `main` at #19)

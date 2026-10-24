@@ -3,6 +3,7 @@ import {
   FLOOR_VERDICT,
   cameraProblemFor,
   cameraProblemMessage,
+  frameProblemMessage,
   isAppleMobile,
   isPhoneOrTablet,
   sendFailureMessage,
@@ -101,5 +102,25 @@ describe("Floor view verdicts (D-074)", () => {
   it("never says Rework, Fixable or Hold on the floor", () => {
     const words = Object.values(FLOOR_VERDICT).flatMap((v) => [v.word, v.next]);
     expect(words.join(" ")).not.toMatch(/rework|fixable|hold/i);
+  });
+});
+
+describe("no picture from the camera", () => {
+  it("says the camera is starting and names the key Floor view uses", () => {
+    expect(frameProblemMessage("not_ready", false)).toBe(
+      "The camera is still starting. Wait a moment, then press Capture again.",
+    );
+    expect(frameProblemMessage("not_ready", true)).toBe(
+      "The camera is still starting. Wait a moment, then press Space again.",
+    );
+  });
+
+  it("keeps the old wording on the page and says Space in Floor view", () => {
+    expect(frameProblemMessage("no_image", false)).toBe(
+      "The picture couldn’t be taken from the camera. Press Capture again.",
+    );
+    expect(frameProblemMessage("no_image", true)).toBe(
+      "The picture couldn’t be taken from the camera. Press Space again.",
+    );
   });
 });
