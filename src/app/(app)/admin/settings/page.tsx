@@ -2,7 +2,7 @@
  * Intent brief (ui-craft §1)
  * Who:   the System Admin, rarely, often after a model retrain or a new supplier.
  * What:  adjust what the camera decides (each defect type's outcome, "counts as found at") and
- *        the lists people pick from (shoe types, suppliers).
+ *        the lists people pick from (suppliers), and the lunch break that pauses a batch (C-3).
  * Worst: a new defect class silently rejecting sections (A-12). Unknown classes are listed with
  *        counts and one click to add each as a defect type.
  */
@@ -21,6 +21,18 @@ import {
   listReferenceRows,
   unknownClasses,
 } from "@/server/services/settings.service";
+import { TablePager } from "@/components/features/table-pager";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { formatAttendanceDay } from "@/lib/attendance-rules";
+import { lunchBreakSettings } from "@/server/services/production.service";
+import { LunchBreakForm } from "./lunch-break-form";
 import { ReferenceManager, type Column, type Field, type Row } from "./reference-manager";
 import { ModelNoticeForm } from "./model-notice-form";
 import { ThresholdsForm } from "./thresholds-form";
@@ -30,10 +42,12 @@ export const metadata: Metadata = { title: "Settings" };
 const TABS = [
   { id: "thresholds", label: "Thresholds" },
   { id: "defects", label: "Defect types" },
-  { id: "shoes", label: "Shoe types" },
+  { id: "lunch", label: "Lunch break" },
   { id: "suppliers", label: "Suppliers" },
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
+
+const HISTORY_ROWS = 15;
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 
@@ -57,7 +71,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
     <>
       <PageHeader
         title="Settings"
-        description="What the camera decides, and the lists people choose from."
+        description="What the camera decides, the lists people choose from, and the lunch break."
       />
       <nav aria-label="Settings sections" className="flex gap-1 border-b">
         {TABS.map((t) => (
@@ -78,7 +92,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
       </nav>
       {tab === "thresholds" && <ThresholdsTab />}
       {tab === "defects" && <DefectsTab add={add} />}
-      {tab === "shoes" && <ShoesTab />}
+      {tab === "lunch" && <LunchTab page={Number(params.page) || 1} />}
       {tab === "suppliers" && <SuppliersTab />}
     </>
   );
@@ -216,30 +230,63 @@ async function DefectsTab({ add }: { add?: string }) {
   );
 }
 
-async function ShoesTab() {
-  const rows = await listReferenceRows("shoeType");
+async function LunchTab({ page }: { page: number }) {
+  const lunch = await lunchBreakSettings();
+  const pages = Math.max(1, Math.ceil(lunch.history.length / HISTORY_ROWS));
+  const current = Math.min(Math.max(1, page), pages);
   return (
-    <ReferenceManager
-      kind="shoeType"
-      noun="shoe type"
-      columns={[
-        { key: "name", label: "Name" },
-        { key: "code", label: "Code", mono: true },
-        { key: "sortOrder", label: "Order", numeric: true },
-      ]}
-      fields={[
-        { name: "name", label: "Name", placeholder: "e.g. Loafer" },
-        { name: "code", label: "Code", placeholder: "e.g. LOA", hint: "2–10 letters or numbers." },
-        { name: "sortOrder", label: "Order", type: "number", optional: true },
-      ]}
-      emptyText="No shoe types yet."
-      rows={rows.map((r): Row => ({
-        id: r.id,
-        isActive: r.isActive,
-        values: { name: str(r.name), code: str(r.code), sortOrder: str(r.sortOrder) },
-        cells: { name: str(r.name), code: str(r.code), sortOrder: str(r.sortOrder) },
-      }))}
-    />
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        Lunch pauses the batch it falls in, and a batch whose working time runs out when lunch
+        starts ends when lunch ends. Today: {lunch.current.text}.
+        {lunch.upcoming &&
+          ` From ${formatAttendanceDay(lunch.upcoming.from)}: ${lunch.upcoming.text}.`}
+      </p>
+      <LunchBreakForm initial={lunch.form} shift={lunch.shift} tomorrow={lunch.tomorrow} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Lunch break history</CardTitle>
+          <CardDescription>Newest first.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table label="Lunch break history" data-testid="lunch-history">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>From</TableHead>
+                <TableHead>Lunch</TableHead>
+                <TableHead>Set by</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lunch.history
+                .slice((current - 1) * HISTORY_ROWS, current * HISTORY_ROWS)
+                .map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="whitespace-nowrap">
+                      {l.effectiveFrom <= "2000-01-01"
+                        ? "From the start"
+                        : formatAttendanceDay(l.effectiveFrom)}
+                    </TableCell>
+                    <TableCell>{l.text}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                      {l.setBy}, {formatManilaDateTime(l.setAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+          <TablePager
+            page={current}
+            pageCount={pages}
+            total={lunch.history.length}
+            noun={["lunch break", "lunch breaks"]}
+            href={(p) =>
+              p > 1 ? `/admin/settings?tab=lunch&page=${p}` : "/admin/settings?tab=lunch"
+            }
+          />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

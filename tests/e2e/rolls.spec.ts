@@ -46,6 +46,8 @@ test.describe("Reports → Rolls (Floor Manager)", () => {
       .click();
     await expect(page).toHaveURL(/\/reports\/rolls$/);
     await page.getByLabel("Find").fill(tag);
+    // Wait for the Find box's own navigation, so it can't land after the click on the roll below.
+    await expect(page).toHaveURL(new RegExp(`[?&]q=${tag}`));
     const row = page.getByTestId("roll-row").filter({ hasText: roll.code });
     await expect(row).toHaveCount(1);
     await expect(row).toContainText("Finished");
@@ -138,7 +140,8 @@ test.describe("who sees rolls", () => {
 
   test("the old roll pages and stage moves are gone", async ({ page }) => {
     await signInAs(page, ACCOUNTS.manager);
-    for (const path of ["/batches", "/batches/new", "/constructor"]) {
+    // /batches is the check-in batches since Phase 27; the old roll pages stay gone.
+    for (const path of ["/batches/new", "/constructor", "/production"]) {
       const res = await page.goto(path);
       expect(res?.status(), path).toBe(404);
     }

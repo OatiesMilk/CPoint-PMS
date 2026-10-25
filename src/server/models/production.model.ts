@@ -3,9 +3,10 @@ import { dayValue } from "./attendance.model";
 import { type Db, defaultDb } from "./db";
 
 /**
- * Production progression (Phase 23): the schedule, daily quotas and check-ins. Every read here is
- * per check-in, day or shoe type; the only person attached to a row is who entered or corrected
- * it, an audit fact that is never totalled (D-008).
+ * Batches (Phase 27; before it production progression, Phase 23): the schedule, the lunch break,
+ * the daily quota and the finished batches (check-ins). Every read here is per batch or per day;
+ * the only person attached to a row is who finished or corrected it, an audit fact that is never
+ * totalled (D-008).
  */
 
 const dayString = (d: Date) => d.toISOString().slice(0, 10);
@@ -28,7 +29,7 @@ export function insertSchedule(
   data: {
     shiftStart: string;
     shiftEnd: string;
-    intervalMinutes: number;
+    intervalMinutes: number | null;
     workingDays: number[];
     effectiveFrom: string;
     createdById: string | null;
@@ -41,22 +42,45 @@ export function insertSchedule(
   });
 }
 
+// ───────────── lunch break (C-3) ─────────────
+
+export async function listLunchBreaks(db: Db = defaultDb()) {
+  const rows = await db.lunchBreak.findMany({
+    orderBy: [{ effectiveFrom: "asc" }, { createdAt: "asc" }],
+    include: { createdBy: { select: { name: true } } },
+  });
+  return rows.map((r) => ({ ...r, effectiveFrom: dayString(r.effectiveFrom) }));
+}
+
+export function countLunchBreaks(db: Db = defaultDb()) {
+  return db.lunchBreak.count();
+}
+
+export function insertLunchBreak(
+  data: {
+    startTime: string | null;
+    endTime: string | null;
+    effectiveFrom: string;
+    createdById: string | null;
+    createdAt?: Date;
+  },
+  db: Db = defaultDb(),
+) {
+  return db.lunchBreak.create({ data: { ...data, effectiveFrom: dayValue(data.effectiveFrom) } });
+}
+
 // ───────────── quotas ─────────────
 
 export async function listQuotas(db: Db = defaultDb()) {
   const rows = await db.dailyQuota.findMany({
     orderBy: [{ effectiveFrom: "asc" }, { createdAt: "asc" }],
-    include: {
-      createdBy: { select: { name: true } },
-      shoeType: { select: { id: true, name: true } },
-    },
+    include: { createdBy: { select: { name: true } } },
   });
   return rows.map((r) => ({ ...r, effectiveFrom: dayString(r.effectiveFrom) }));
 }
 
 export function insertQuota(
   data: {
-    shoeTypeId: string;
     pairs: number;
     suggestedPairs: number | null;
     effectiveFrom: string;
@@ -71,7 +95,6 @@ export function insertQuota(
 // ───────────── check-ins ─────────────
 
 const checkInInclude = {
-  counts: { select: { shoeTypeId: true, pairs: true } },
   enteredBy: { select: { name: true } },
   correctedBy: { select: { name: true } },
 } satisfies Prisma.ProductionCheckInInclude;
@@ -106,20 +129,21 @@ export function insertCheckIn(
     constructorsPresent: number | null;
     constructorsOnRoster: number | null;
     notes: string | null;
-    counts: { shoeTypeId: string; pairs: number }[];
+    pairs: number;
+    failedPairs: number;
   },
   db: Db,
 ) {
-  const { counts, day, ...rest } = data;
+  const { day, ...rest } = data;
   return db.productionCheckIn.create({
-    data: { ...rest, day: dayValue(day), counts: { create: counts } },
+    data: { ...rest, day: dayValue(day) },
     include: checkInInclude,
   });
 }
 
 /**
- * A same-day correction, only if nobody changed the check-in since the caller loaded it. Returns
- * false when someone else saved first. The counts are replaced inside the same transaction.
+ * A same-day correction, only if nobody changed the batch since the caller loaded it. Returns
+ * false when someone else saved first.
  */
 export async function correctCheckIn(
   id: string,
@@ -128,19 +152,16 @@ export async function correctCheckIn(
     correctedAt: Date;
     correctedById: string;
     correctionReason: string;
-    counts: { shoeTypeId: string; pairs: number }[];
+    pairs: number;
+    failedPairs: number;
   },
   db: Db,
 ): Promise<boolean> {
-  const { counts, ...fields } = data;
   const { count } = await db.productionCheckIn.updateMany({
     where: { id, updatedAt: expectedUpdatedAt },
-    data: fields,
+    data,
   });
-  if (count !== 1) return false;
-  await db.productionCount.deleteMany({ where: { checkInId: id } });
-  await db.productionCount.createMany({ data: counts.map((c) => ({ ...c, checkInId: id })) });
-  return true;
+  return count === 1;
 }
 
 /** The first day anyone entered a check-in, or null: days before it weren't counted yet. */

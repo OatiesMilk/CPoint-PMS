@@ -92,20 +92,6 @@ export const defectTypeCreateSchema = requireOutcome(defectTypeBase);
 /** The key is fixed after creation: the camera sends it, and past detections reference it. */
 export const defectTypeUpdateSchema = requireOutcome(defectTypeBase.omit({ key: true }));
 
-export const shoeTypeSchema = z.object({
-  code: z
-    .string({ error: "Enter a code for the shoe type, e.g. SCH." })
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z0-9]{2,10}$/, "The code must be 2 to 10 letters or numbers, e.g. SCH."),
-  name: z
-    .string({ error: "Enter the shoe type's name, e.g. School shoe." })
-    .trim()
-    .min(2, "Enter the shoe type's name (at least 2 characters), e.g. School shoe.")
-    .max(40, "Keep the shoe type's name under 40 characters."),
-  sortOrder,
-});
-
 export const supplierSchema = z.object({
   name: z
     .string({ error: "Enter the supplier's name." })
@@ -128,12 +114,11 @@ export const supplierSchema = z.object({
   notes: optionalText(300, "notes"),
 });
 
-export const REFERENCE_KINDS = ["defectType", "shoeType", "supplier"] as const;
+export const REFERENCE_KINDS = ["defectType", "supplier"] as const;
 export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
 
 export const referenceSchemas = {
   defectType: { create: defectTypeCreateSchema, update: defectTypeUpdateSchema },
-  shoeType: { create: shoeTypeSchema, update: shoeTypeSchema },
   supplier: { create: supplierSchema, update: supplierSchema },
 } as const;
 

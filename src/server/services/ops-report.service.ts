@@ -22,7 +22,7 @@ import { productionReport, recentProductionDays } from "./production.service";
 import { qualityReport, rollFlow } from "./report.service";
 
 // Operations report (D-033): what is happening on the floor, in resources, flow, stock and supply.
-// Aggregates per day, shoe type, roll, item or supplier. Nothing here carries a user id, name or
+// Aggregates per day, batch, roll, item or supplier. Nothing here carries a user id, name or
 // email (D-008); tests/unit/ops-report.service.test.ts checks that.
 
 const share = (part: number, whole: number) => (whole > 0 ? part / whole : null);
@@ -136,7 +136,8 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
   const fpy = (t: typeof qt) => share(t.pass, t.scanned);
 
   const kpis = {
-    pairs: compare(production.totals.pairs, prevProduction.totals.pairs),
+    pairs: compare(production.totals.finished, prevProduction.totals.finished),
+    failedPairs: compare(production.totals.failed, prevProduction.totals.failed),
     ofQuota: compare(production.totals.share, prevProduction.totals.share),
     rollsFinished: compare(rolls.totals.completed, prevRolls.totals.completed),
     rollsOpen: rollsNow,
@@ -146,7 +147,9 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
   };
 
   const attention = buildAttention({
-    belowQuota: belowQuotaAttention(recent.days),
+    belowQuota: belowQuotaAttention(
+      recent.days.map((d) => ({ day: d.day, pairs: d.passed, quota: d.quota })),
+    ),
     stock: {
       out: stock.out,
       low: stock.low,
@@ -177,7 +180,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     asOf: now.toISOString(),
     kpis,
     attention,
-    /** Pairs per day per shoe type against the quota (Phase 23; replaces the stage sections). */
+    /** Per day the pairs finished, failed and passed against the quota (Phase 27). */
     production,
     days,
     stock,

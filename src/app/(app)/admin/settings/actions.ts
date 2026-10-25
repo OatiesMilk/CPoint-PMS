@@ -10,6 +10,8 @@ import {
   setReferenceActive,
   updateReferenceRow,
 } from "@/server/services/settings.service";
+import { saveLunchBreak } from "@/server/services/production.service";
+import { lunchBreakSchema } from "@/server/validators/production.validator";
 import {
   isReferenceId,
   isReferenceKind,
@@ -88,6 +90,22 @@ export async function setReferenceActiveAction(
     await setReferenceActive(kind, id, isActive, admin);
     refresh();
     return { ok: true };
+  } catch (error) {
+    return toResult(error);
+  }
+}
+
+/** The lunch break (C-3): from tomorrow; the batches pause for it. */
+export async function saveLunchBreakAction(
+  input: unknown,
+): Promise<ActionResult<{ effectiveFrom: string }>> {
+  const admin = await requirePermission("settings:manage");
+  try {
+    const result = await saveLunchBreak(lunchBreakSchema.parse(input), admin);
+    refresh();
+    revalidatePath("/batches");
+    revalidatePath("/batches/plan");
+    return { ok: true, effectiveFrom: result.effectiveFrom };
   } catch (error) {
     return toResult(error);
   }

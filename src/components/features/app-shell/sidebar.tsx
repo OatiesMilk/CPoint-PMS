@@ -21,7 +21,7 @@ import {
   UserRound,
   Users,
   type LucideIcon,
-  Gauge,
+  Layers,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -31,6 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { BatchBell } from "@/components/features/batches/batch-notices";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import logo from "../../../../public/images/cpoint-logo.jpg";
@@ -54,7 +55,7 @@ export type SidebarSection = { title: string | null; items: SidebarItem[] };
 
 const ICONS: Record<NavIcon, LucideIcon> = {
   overview: LayoutDashboard,
-  production: Gauge,
+  production: Layers,
   attendance: CalendarCheck,
   camera: Camera,
   capture: Aperture,
@@ -71,6 +72,8 @@ type Props = {
   sections: SidebarSection[];
   user: { name: string; email: string; roleLabel: string };
   signOutAction: () => Promise<void>;
+  /** Show the batch notices bell (Phase 27): the Quality Inspector and the Floor Manager. */
+  bell?: boolean;
 };
 
 /** Sections match their sub-pages; a role's home (e.g. /admin) only matches itself. */
@@ -88,18 +91,25 @@ function activeHref(pathname: string, sections: SidebarSection[]): string | null
   return best;
 }
 
-export function Sidebar({ sections, user, signOutAction }: Props) {
+export function Sidebar({ sections, user, signOutAction, bell }: Props) {
   const pathname = usePathname();
   const current = activeHref(pathname, sections);
 
   return (
     <>
-      <PhoneBar sections={sections} current={current} user={user} signOutAction={signOutAction} />
+      <PhoneBar
+        sections={sections}
+        current={current}
+        user={user}
+        signOutAction={signOutAction}
+        bell={bell}
+      />
       <DesktopSidebar
         sections={sections}
         current={current}
         user={user}
         signOutAction={signOutAction}
+        bell={bell}
       />
     </>
   );
@@ -111,13 +121,14 @@ type BarProps = Props & { current: string | null };
  * Below 640 px (a phone, Phase 26, D-096): a top bar with the logo, the page's name, a page menu
  * when the role has more than one page, and the account menu. A Shoe Constructor has only Capture.
  */
-function PhoneBar({ sections, current, user, signOutAction }: BarProps) {
+function PhoneBar({ sections, current, user, signOutAction, bell }: BarProps) {
   const items = sections.flatMap((s) => s.items).filter((i) => !i.phase);
   const title = items.find((i) => i.href === current)?.label ?? "CPoint";
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-sidebar-border bg-sidebar px-3 text-sidebar-foreground sm:hidden">
       <Image src={logo} alt="CPoint" className="size-8 rounded-md" priority />
       <p className="min-w-0 flex-1 truncate text-lg font-semibold">{title}</p>
+      {bell && <BatchBell compact />}
       {items.length > 1 && (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -150,7 +161,7 @@ function PhoneBar({ sections, current, user, signOutAction }: BarProps) {
   );
 }
 
-function DesktopSidebar({ sections, current, user, signOutAction }: BarProps) {
+function DesktopSidebar({ sections, current, user, signOutAction, bell }: BarProps) {
   return (
     <aside className="sticky top-0 hidden h-screen w-14 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground sm:flex lg:w-60">
       <div className="flex items-center justify-center gap-2.5 px-2 py-4 lg:justify-start lg:px-4">
@@ -159,7 +170,17 @@ function DesktopSidebar({ sections, current, user, signOutAction }: BarProps) {
           <p className="font-semibold">CPoint</p>
           <p className="text-xs text-muted-foreground">Product Monitoring</p>
         </div>
+        {bell && (
+          <div className="hidden lg:ml-auto lg:block">
+            <BatchBell />
+          </div>
+        )}
       </div>
+      {bell && (
+        <div className="flex justify-center pb-2 lg:hidden">
+          <BatchBell />
+        </div>
+      )}
 
       <nav
         aria-label="Main"

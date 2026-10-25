@@ -1,4 +1,4 @@
-import { CircleCheck, CircleDashed, CircleSlash, Clock, Hourglass } from "lucide-react";
+import { CircleCheck, CircleDashed, CircleSlash, Clock, Hourglass, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -10,74 +10,100 @@ import {
 } from "@/components/ui/table";
 import { formatAttendanceDay } from "@/lib/attendance-rules";
 import { formatPercent } from "@/lib/format";
-import { SLOT_STATE_LABELS, type SlotState, type TypeProgress } from "@/lib/production-rules";
+import {
+  BATCH_STATE_LABELS,
+  type BatchState,
+  type QuotaProgress as Progress,
+} from "@/lib/production-rules";
 
-// Shared by /production, the homes and Reports → Operations. Every figure is per check-in, day or
-// shoe type for the whole line; nothing here names a person except who entered a check-in (D-008).
+// Shared by /batches, the homes and Reports → Operations. Every figure is per batch or per day for
+// the whole line; nothing here names a person except who finished a batch (D-008, D-086).
 
 const STATE_STYLE = {
   UPCOMING: { tone: "neutral", Icon: CircleDashed },
+  IN_PROGRESS: { tone: "neutral", Icon: Timer },
   DUE: { tone: "info", Icon: Hourglass },
   LATE: { tone: "warning", Icon: Clock },
-  ENTERED: { tone: "success", Icon: CircleCheck },
+  FINISHED: { tone: "success", Icon: CircleCheck },
   MISSED: { tone: "danger", Icon: CircleSlash },
 } as const;
 
-export function SlotStateBadge({ state, late = false }: { state: SlotState; late?: boolean }) {
+/** A batch's status, always an icon and a word (A-5). */
+export function BatchStateBadge({
+  state,
+  late = false,
+  corrected = false,
+  paused = false,
+}: {
+  state: BatchState;
+  late?: boolean;
+  corrected?: boolean;
+  paused?: boolean;
+}) {
   const { tone, Icon } = STATE_STYLE[state];
+  const word =
+    state === "FINISHED" && late
+      ? "Finished late"
+      : state === "IN_PROGRESS" && paused
+        ? "Paused for lunch"
+        : BATCH_STATE_LABELS[state];
   return (
-    <Badge tone={tone}>
-      <Icon aria-hidden />
-      {state === "ENTERED" && late ? "Entered late" : SLOT_STATE_LABELS[state]}
-    </Badge>
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <Badge tone={tone}>
+        <Icon aria-hidden />
+        {word}
+      </Badge>
+      {corrected && <Badge tone="neutral">Corrected</Badge>}
+    </span>
   );
 }
 
-/** "86 of 120 pairs (72%)" with a bar per shoe type, and the pace sentence under it. */
-export function QuotaProgress({ progress }: { progress: TypeProgress[] }) {
-  if (progress.length === 0)
-    return <p className="text-muted-foreground">No shoe types are active. Add one in Settings.</p>;
+const n = (v: number) => v.toLocaleString("en-PH");
+
+/** "86 of 120 pairs passed (72%)" with a bar, and the pace sentence under it (C-30, C-41). */
+export function QuotaProgress({ progress }: { progress: Progress }) {
+  const p = progress;
+  const pct = p.share === null ? 0 : Math.min(100, Math.round(p.share * 100));
   return (
-    <ul className="flex flex-col gap-4" data-testid="quota-progress">
-      {progress.map((p) => {
-        const pct = p.share === null ? 0 : Math.min(100, Math.round(p.share * 100));
-        return (
-          <li key={p.shoeTypeId} className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4">
-              <span className="font-medium">{p.name}</span>
-              <span className="tabular-nums">
-                {p.quota === null
-                  ? `${p.pairs.toLocaleString("en-PH")} pairs, no quota`
-                  : `${p.pairs.toLocaleString("en-PH")} of ${p.quota.toLocaleString("en-PH")} pairs (${formatPercent(p.share)})`}
-              </span>
-            </div>
-            {p.quota !== null && (
-              <div
-                className="h-2.5 overflow-hidden rounded-sm bg-(--chart-bar-muted)"
-                role="progressbar"
-                aria-label={`${p.name} against the daily quota`}
-                aria-valuemin={0}
-                aria-valuemax={p.quota}
-                aria-valuenow={Math.min(p.pairs, p.quota)}
-              >
-                <div className="h-full bg-(--chart-bar)" style={{ width: `${pct}%` }} />
-              </div>
-            )}
-            <p className="text-sm text-muted-foreground">{p.pace}</p>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="flex flex-col gap-1.5" data-testid="quota-progress">
+      <p className="text-2xl font-semibold tabular-nums">
+        {p.quota === null
+          ? `${n(p.passed)} pairs passed`
+          : `${n(p.passed)} of ${n(p.quota)} pairs passed`}
+        {p.quota !== null && (
+          <span className="ml-2 text-base font-normal text-muted-foreground">
+            {formatPercent(p.share)}
+          </span>
+        )}
+      </p>
+      {p.quota !== null && (
+        <div
+          className="h-2.5 overflow-hidden rounded-sm bg-(--chart-bar-muted)"
+          role="progressbar"
+          aria-label="Passed pairs against the daily quota"
+          aria-valuemin={0}
+          aria-valuemax={p.quota}
+          aria-valuenow={Math.min(p.passed, p.quota)}
+        >
+          <div className="h-full bg-(--chart-bar)" style={{ width: `${pct}%` }} />
+        </div>
+      )}
+      <p className="text-sm text-muted-foreground">
+        {n(p.finished)} finished, {n(p.failed)} failed inspection. {p.pace}
+      </p>
+    </div>
   );
 }
 
 export type DayRowView = {
   day: string;
-  checkIns: number;
-  entered: number;
+  batches: number;
+  finishedBatches: number;
   missed: number;
-  byType: { shoeTypeId: string; label: string; pairs: number; quota: number | null }[];
-  pairs: number;
+  finished: number;
+  failed: number;
+  passed: number;
+  failedShare: number | null;
   quota: number | null;
   share: number | null;
   attendanceTaken: boolean;
@@ -87,20 +113,21 @@ export type DayRowView = {
   shortfall: string | null;
 };
 
-/** One row per working day, newest first: pairs per type against the quota, and why it fell short. */
+/**
+ * One row per working day, newest first: pairs finished, failed and passed against the quota, and
+ * why it fell short. Per day only, never per person (D-008).
+ */
 export function ProductionDaysTable({
-  shoeTypes,
   days,
   testid = "production-days",
 }: {
-  shoeTypes: { id: string; label: string }[];
   days: DayRowView[];
   testid?: string;
 }) {
   if (days.length === 0)
     return (
       <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
-        No working days with check-ins yet. Each day appears here once its check-ins are scheduled.
+        No working days with batches yet. Each day appears here once its batches are scheduled.
       </p>
     );
   return (
@@ -108,13 +135,11 @@ export function ProductionDaysTable({
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>Day</TableHead>
-          {shoeTypes.map((t) => (
-            <TableHead key={t.id} numeric>
-              {t.label}
-            </TableHead>
-          ))}
+          <TableHead numeric>Finished</TableHead>
+          <TableHead numeric>Failed inspection</TableHead>
+          <TableHead numeric>Passed</TableHead>
           <TableHead numeric>Of quota</TableHead>
-          <TableHead numeric>Check-ins</TableHead>
+          <TableHead numeric>Batches</TableHead>
           <TableHead numeric>Constructors present</TableHead>
           <TableHead numeric>Pairs per constructor</TableHead>
           <TableHead>Note</TableHead>
@@ -124,23 +149,20 @@ export function ProductionDaysTable({
         {[...days].reverse().map((d) => (
           <TableRow key={d.day} aria-label={formatAttendanceDay(d.day)}>
             <TableCell className="whitespace-nowrap">{formatAttendanceDay(d.day)}</TableCell>
-            {shoeTypes.map((t) => {
-              const c = d.byType.find((b) => b.shoeTypeId === t.id);
-              return (
-                <TableCell key={t.id} numeric className="whitespace-nowrap">
-                  {c ? c.pairs.toLocaleString("en-PH") : 0}
-                  {c?.quota != null && (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      / {c.quota.toLocaleString("en-PH")}
-                    </span>
-                  )}
-                </TableCell>
-              );
-            })}
+            <TableCell numeric>{n(d.finished)}</TableCell>
+            <TableCell numeric className="whitespace-nowrap">
+              {n(d.failed)}
+              {d.failedShare !== null && (
+                <span className="text-muted-foreground"> · {formatPercent(d.failedShare)}</span>
+              )}
+            </TableCell>
+            <TableCell numeric className="whitespace-nowrap">
+              {n(d.passed)}
+              {d.quota !== null && <span className="text-muted-foreground"> / {n(d.quota)}</span>}
+            </TableCell>
             <TableCell numeric>{formatPercent(d.share)}</TableCell>
             <TableCell numeric className="whitespace-nowrap">
-              {d.entered} of {d.checkIns}
+              {d.finishedBatches} of {d.batches}
               {d.missed > 0 && <span className="text-reject"> · {d.missed} missed</span>}
             </TableCell>
             <TableCell numeric className="whitespace-nowrap">

@@ -214,21 +214,8 @@ test("a deactivated supplier disappears from the roll supplier lists (Phase 26)"
   browser,
   page,
 }) => {
-  const shoe = `E2E Shoe ${suffix()}`;
   const supplier = `E2E Supplier ${suffix()}`;
   const admin = await adminPage(browser);
-  await admin.goto("/admin/settings?tab=shoes");
-  await admin.getByRole("button", { name: "Add shoe type" }).click();
-  await admin.getByRole("dialog").getByLabel("Name").fill(shoe);
-  await admin
-    .getByRole("dialog")
-    .getByLabel("Code")
-    .fill(`E${suffix().slice(0, 5)}`.toUpperCase());
-  await admin.getByRole("dialog").getByRole("button", { name: "Add shoe type" }).click();
-  // Found, not browsed: other runs add shoe types and suppliers past page 1 (D-047).
-  await admin.getByLabel("Find shoe type").fill(shoe);
-  await expect(admin.getByRole("row", { name: shoe })).toContainText("Active");
-
   await admin.goto("/admin/settings?tab=suppliers");
   await admin.getByRole("button", { name: "Add supplier" }).click();
   await admin.getByRole("dialog").getByLabel("Name").fill(supplier);
@@ -237,20 +224,23 @@ test("a deactivated supplier disappears from the roll supplier lists (Phase 26)"
   await admin.getByLabel("Find supplier").fill(supplier);
   await expect(admin.getByRole("row", { name: supplier })).toContainText("0917 123 4567");
 
-  // Rolls no longer carry a shoe type; the supplier is listed at Start roll and in Reports → Rolls.
+  // Shoe types are gone (Phase 27, C-8): no Settings tab, no API.
+  await admin.goto("/admin/settings");
+  await expect(admin.getByRole("link", { name: "Shoe types" })).toHaveCount(0);
+  expect((await admin.request.get("/api/v1/shoe-types")).status()).toBe(404);
+
+  // The supplier is listed at Start roll and in Reports → Rolls.
   await signInAs(page, ACCOUNTS.manager);
   await page.goto("/reports/rolls?status=OPEN");
   await expect(page.getByLabel("Supplier").getByRole("option", { name: supplier })).toHaveCount(1);
 
+  await admin.goto("/admin/settings?tab=suppliers");
+  await admin.getByLabel("Find supplier").fill(supplier);
   await admin
     .getByRole("row", { name: supplier })
     .getByRole("button", { name: "Deactivate" })
     .click();
   await expect(admin.getByRole("row", { name: supplier })).toContainText("Inactive");
-  await admin.goto("/admin/settings?tab=shoes");
-  await admin.getByLabel("Find shoe type").fill(shoe);
-  await admin.getByRole("row", { name: shoe }).getByRole("button", { name: "Deactivate" }).click();
-  await expect(admin.getByRole("row", { name: shoe })).toContainText("Inactive");
 
   await page.reload();
   await expect(page.getByLabel("Supplier").getByRole("option", { name: supplier })).toHaveCount(0);

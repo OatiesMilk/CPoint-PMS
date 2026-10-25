@@ -91,27 +91,20 @@ export async function saveModelNotice(input: ModelNoticeInput, actor: Actor) {
 
 const AUDIT_PREFIX: Record<ReferenceKind, string> = {
   defectType: "defect_type",
-  shoeType: "shoe_type",
   supplier: "supplier",
 };
 const ENTITY: Record<ReferenceKind, string> = {
   defectType: "DefectType",
-  shoeType: "ShoeType",
   supplier: "Supplier",
 };
 const WHAT: Record<ReferenceKind, string> = {
   defectType: "This defect type",
-  shoeType: "This shoe type",
   supplier: "This supplier",
 };
 /** Fields that must be unique per kind, with the message for a clash. */
 const UNIQUE: Record<ReferenceKind, { field: string; message: (v: string) => string }[]> = {
   defectType: [
     { field: "key", message: (v) => `"${v}" is already a defect type. Edit that one instead.` },
-  ],
-  shoeType: [
-    { field: "code", message: (v) => `${v} is already used by another shoe type.` },
-    { field: "name", message: (v) => `"${v}" is already a shoe type.` },
   ],
   supplier: [{ field: "name", message: (v) => `"${v}" is already a supplier.` }],
 };
@@ -148,7 +141,6 @@ function uniqueRace(kind: ReferenceKind, error: unknown): never {
 function toColumns(kind: ReferenceKind, values: Record<string, unknown>) {
   const nullable: Record<ReferenceKind, string[]> = {
     defectType: ["description"],
-    shoeType: [],
     supplier: ["contactPerson", "phone", "notes"],
   };
   const out: Record<string, unknown> = { ...values };

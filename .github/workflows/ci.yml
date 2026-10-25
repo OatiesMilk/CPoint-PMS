@@ -135,10 +135,14 @@ jobs:
           test "$(q "select count(*) from batches where status='OPEN'")" -ge 1
           test "$(q "select count(*) from batches where status='CANCELLED' and \"cancelledReason\" is not null")" -eq 1
           q "select count(*) from scans where source <> 'PHONE'" | grep -qx 0
-          # Production progression (Phase 23): the default schedule, a quota per shoe type, check-ins.
+          # Batches (Phase 27): the default schedule and lunch, one daily quota, finished batches
+          # with failed pairs, and no shoe types.
           test "$(q "select count(*) from production_schedules")" -eq 1
-          test "$(q "select count(*) from daily_quotas")" -eq 2
+          test "$(q "select count(*) from lunch_breaks where \"startTime\"='11:00' and \"endTime\"='12:00'")" -eq 1
+          test "$(q "select count(*) from daily_quotas")" -eq 1
           test "$(q "select count(*) from production_check_ins")" -ge 1
+          test "$(q "select count(*) from production_check_ins where \"failedPairs\" > 0")" -ge 1
+          test "$(q "select count(*) from information_schema.tables where table_name in ('shoe_types','production_counts')")" -eq 0
           # Every item's on-hand quantity equals the sum of its ledger.
           q "select count(*) from inventory_items i where i.\"quantityOnHand\" <> (select coalesce(sum(m.\"quantityDelta\"),0) from inventory_movements m where m.\"itemId\"=i.id)" | grep -qx 0
       - name: A restart doesn't seed again

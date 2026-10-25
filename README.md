@@ -1,7 +1,7 @@
 # CPoint Product Monitoring System
 
 Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe production line
-(school shoes and topsiders). It replaces paper tally sheets with one shared view of the line:
+(school shoes and topsiders, counted together). It replaces paper tally sheets with one shared view of the line:
 
 - **Rolls at Capture:** a Shoe Constructor with camera access starts each leather roll on their
   own phone, captures it shot by shot and finishes it once all of it is in (Phase 26). The Floor
@@ -10,10 +10,12 @@ Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe p
   **Reject**; the verdict is final (D-093). Rejected parts are reported for salvage.
 - **Inventory:** leather rolls and supplies are tracked through an audited ledger, with low-stock
   alerts.
-- **Production:** the Quality Inspector counts the pairs finished at each check-in (every 4 hours
-  by default), per shoe type. The Floor Manager sets the schedule and a daily quota (with a
-  suggestion from recent days) and sees each day against it, with the Shoe Constructors present
-  from attendance and one sentence for every short day.
+- **Batches:** the working day is split into batches, one per check-in interval (every 4 hours by
+  default, with lunch left out: 08:00–13:00 and 13:00–17:00). The Quality Inspector finishes each
+  batch on a phone with the pairs finished and how many failed inspection, prompted by an
+  on-screen notice. The Floor Manager sets how often and one daily quota (with a suggestion from
+  recent days) and sees each day's passed pairs against it, with the Shoe Constructors present
+  from attendance and one sentence for every short day. The System Admin sets the lunch break.
 - **Reports:** production against the quota, daily totals, defects by type, how often people kept
   the camera's call, supplier quality, with CSV for Excel. Nothing is ranked per person.
 
@@ -96,12 +98,12 @@ Cloudflare Tunnel (same section).
 `DEMO_USER_PASSWORD`, including `admin@cpoint.local`. `BOOTSTRAP_ADMIN_PASSWORD` is used only
 when there is no admin account yet, as on a real install with demo users off.
 
-| Role              | Email                      | Lands on             | Does                                                                                   |
-| ----------------- | -------------------------- | -------------------- | -------------------------------------------------------------------------------------- |
-| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Schedule and quota, attendance, inventory, reports (Rolls: read, cancel with a reason) |
-| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Enters production check-ins, follows the scans                                         |
-| System Admin      | `admin@cpoint.local`       | `/admin`             | Users (camera access), found-at value, defect types, tokens, audit                     |
-| Shoe Constructor  | `constructor@cpoint.local` | `/camera/capture`    | Starts, captures and finishes rolls on their phone once given camera access (D-095)    |
+| Role              | Email                      | Lands on             | Does                                                                                     |
+| ----------------- | -------------------------- | -------------------- | ---------------------------------------------------------------------------------------- |
+| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Batch plan and quota, attendance, inventory, reports (Rolls: read, cancel with a reason) |
+| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Finishes each batch (pairs finished and failed), follows the scans                       |
+| System Admin      | `admin@cpoint.local`       | `/admin`             | Users (camera access), found-at value, defect types, lunch break, tokens, audit          |
+| Shoe Constructor  | `constructor@cpoint.local` | `/camera/capture`    | Starts, captures and finishes rolls on their phone once given camera access (D-095)      |
 
 Twelve more **demo Shoe Constructors** (Ana Cruz, Ben Santos and others, `@cpoint.local`) are
 created with them so Attendance has a believable roster. They have random passwords and never sign
@@ -115,14 +117,16 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
 
 ### 1. Floor Manager (4 min)
 
-1. **Home** (`manager@cpoint.local`): **Today's production** (pairs per shoe type against the
-   daily quota, the next check-in), the **Attendance** card (today is "Not taken yet"), today's
+1. **Home** (`manager@cpoint.local`): **Today's batches** (passed pairs against the daily quota,
+   the batch under way), the **Attendance** card (today is "Not taken yet"), today's
    inspection split, sections to clean or cut around, low stock (Contact cement), the daily
    summary.
-2. **Production:** today's check-ins (12:00, 16:00, 17:00) and the **Recent days** chart and
-   table: three days fell short, each with its sentence, "Below quota by 18 pairs. 3 of 12 Shoe
-   Constructors were absent." Nothing names a person. **Schedule and quota** shows the suggested
-   quota from the last full days; **Use suggestion** fills it in.
+2. **Batches:** today's two batches (08:00–13:00 with lunch 11:00–12:00, and 13:00–17:00) and the
+   **Recent days** chart and table: three days fell short on passed pairs, each with its sentence,
+   "Below quota by 18 pairs. 3 of 12 Shoe Constructors were absent." Nothing names a person.
+   **Plan batches and quota** sets how often (every 1 to 4 hours, or once at the end of the day)
+   with a preview of tomorrow's batches, and the one daily quota with its suggestion; **Use
+   suggestion** fills it in.
 3. **Reports → Rolls:** every roll the constructors captured, newest first, with its supplier,
    shots, passed and rejected (for salvage). The newest is still **Open**; one was **Cancelled**
    by the Floor Manager with a reason. Open a finished roll: each shot with its photo, verdict and
@@ -145,7 +149,8 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
    **Discard** needs a reason.
 9. **Inventory → Contact cement:** the ledger. Stock changes only through recorded movements
    (deliveries, use, counts), and undo is a reversal entry, never an edit.
-10. **Reports → Operations:** pairs made and the share of quota, the **Production** section with
+10. **Reports → Operations:** pairs finished, failed inspection and the share of quota, the
+    **Production** section with
     the same short days, and "3 of the last 5 working days were below quota" under what needs
     attention. Download **Production CSV** and open it in Excel.
 11. **Reports → Operations → Supplier quality:** each supplier's rolls, Fixable % and Reject %, with
@@ -154,7 +159,12 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
 
 ### 2. Quality Inspector (3 min)
 
-1. **Review queue** (`inspector@cpoint.local`): two scans with an unknown defect class
+1. **Batches on a phone** (`inspector@cpoint.local`, in a phone-sized window): near a batch's end
+   a banner reads "Batch 2 ends at 17:00. Get ready to count the finished pairs.", and at the end
+   "Batch 2 is due. Finish it now." with the bell and a "(1)" in the tab title. **Finish batch 2**:
+   the pairs finished and, of these, the pairs that failed inspection. A second finish is refused;
+   **Correct** needs a reason.
+2. **Review queue** (`inspector@cpoint.local`): two scans with an unknown defect class
    ("scratch") wait for a person. Decide one: **Pass / Fixable / Reject**.
 
    ![Review queue](docs/screenshots/review-queue.png)
@@ -162,28 +172,31 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
    Only the Quality Inspector decides these (D-028). The Floor Manager sees the same queue, but
    read-only: "Waiting for a Quality Inspector".
 
-2. Open one of **today's automatic Fixable and Reject** calls. The image shows the camera's box
+3. Open one of **today's automatic Fixable and Reject** calls. The image shows the camera's box
    and confidence. **Override decision…** asks for a reason, and the scan then shows both calls
    (the camera's is struck through).
 
    ![Scan detail](docs/screenshots/scan-detail.png)
 
-3. **Reports → Camera call vs final verdict:** the off-diagonal numbers are overrides. A high
+4. **Reports → Camera call vs final verdict:** the off-diagonal numbers are overrides. A high
    agreement (about 95% in the demo week) means the thresholds suit the line.
 
 ### 3. System Admin (2 min)
 
-1. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Fixable from 60%,
+1. **Settings → Lunch break** (`admin@cpoint.local`): 11:00 to 12:00, applying from tomorrow, with
+   its history. Lunch pauses the batch it falls in.
+
+2. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Fixable from 60%,
    with a preview of what the camera will decide. Changes apply to new scans only. Old scans keep
    the thresholds they were decided with.
 
    ![Settings](docs/screenshots/admin-settings.png)
 
-2. **Settings → Defect types:** "scratch" is listed as an **unknown class** the camera has sent.
+3. **Settings → Defect types:** "scratch" is listed as an **unknown class** the camera has sent.
    Adding it as a defect type is a data change, not a code change.
-3. **Users:** add a person, who gets a one-time temporary password. **API tokens:** each camera
+4. **Users:** add a person, who gets a one-time temporary password. **API tokens:** each camera
    machine has its own token, which can only send scans.
-4. **Audit log:** every change above, plus every sign-in, with before/after values.
+5. **Audit log:** every change above, plus every sign-in, with before/after values.
 
 ### Talking points
 
@@ -193,7 +206,7 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
 - **People stay in charge:** the camera's calls can be overridden with a reason, and the reports
   show how often that happens. Flagged scans are the Quality Inspector's to decide (D-028).
 - **No per-person rankings or scores** anywhere (from the client survey). Reports aggregate by
-  day, shoe type and defect only; a short day is explained by how many were absent, never who.
+  day, batch and defect only; a short day is explained by how many were absent, never who.
 - **Nothing is deleted:** stock moves through a ledger, rejected leather becomes salvage, and
   every change is in the audit log.
 
@@ -432,7 +445,8 @@ starting the app.
 | `DEMO_USER_PASSWORD`       | 8+ characters. Password for the demo accounts (when `SEED_DEMO_USERS=true`).                                                                                                               |
 | `SEED_DEMO_WEEK`           | `true` to create a past week of production on first start (panel demo). Default off.                                                                                                       |
 
-On every start the app makes sure the reference data exists: shoe types, defect types, CV
+On every start the app makes sure the reference data exists: defect types, the batch schedule
+and lunch break, CV
 thresholds 90% / 60%, and a sample supplier. It never overwrites values an admin has changed.
 With demo users on, it also adds five demo inventory items the first time.
 `npm run db:seed` runs the same steps by hand.
@@ -446,8 +460,9 @@ days through the real services:
 - overrides, repairs, salvage, deliveries and stock use, plus two scans left for review;
 - attendance for the working days before today, taken by the Floor Manager, with a few
   constructors absent on some days (today is left for you to take);
-- a daily quota per shoe type and the Quality Inspector's check-ins at 12:00, 16:00 and 17:00
-  (one late, one missed); the three days with two or more absent end below quota.
+- one daily quota and the Quality Inspector finishing both batches a day (08:00–13:00 and
+  13:00–17:00) with a pair or two failing inspection (one late, one missed); the three days with
+  two or more absent end below quota on passed pairs.
 
 It uses a fixed random seed, so it shows the same shape every time. It never runs on a database
 that already has rolls.

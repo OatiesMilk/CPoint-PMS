@@ -3,11 +3,11 @@
  * Who:   the Floor Manager, at the office desk, checking the line several times a shift.
  * What:  see what needs attention on the line today (exceptions first).
  * Worst: missing a backlog (a short day, low leather stock) until it stops production.
- * Every card is live: today's production against the quota, attendance, camera, stock, and today's numbers (D-025).
+ * Every card is live: today's batches against the quota, attendance, camera, stock, and today's numbers (D-025).
  */
 import type { Metadata } from "next";
 import { AttendanceCard } from "@/components/features/attendance/attendance-card";
-import { TodaysProductionCard } from "@/components/features/production/production-cards";
+import { TodaysBatchesCard } from "@/components/features/production/production-cards";
 import { DailySummaryCard, InspectionSplitCard } from "@/components/features/reports/home-cards";
 import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
 import { LowStockCard } from "@/components/features/inventory/low-stock-card";
@@ -38,7 +38,7 @@ export default async function FloorManagerHome() {
         description="Today on the production line."
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <TodaysProductionCard today={production} />
+        <TodaysBatchesCard today={production} />
         <AttendanceCard workforce={attendance.workforce} summary={attendance.summary} />
         <LatestScansWidget />
         <InspectionSplitCard totals={split} />

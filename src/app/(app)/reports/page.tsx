@@ -6,7 +6,7 @@
  *        wrong. Quality Inspector: how the checkpoint before cutting did: Pass, Reject (for salvage) and the defects.
  * Worst: a problem hidden under averages (a short day, an empty shelf), a number read as
  *        something else, or anyone singled out. Every figure says what it counts; everything is
- *        per day, shoe type, roll, item, supplier or defect type, never per person (D-008, D-033).
+ *        per day, batch, roll, item, supplier or defect type, never per person (D-008, D-033).
  *        Rolls (Phase 26) has its own page, /reports/rolls.
  */
 import type { Metadata } from "next";

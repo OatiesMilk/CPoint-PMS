@@ -2,7 +2,7 @@ export { stockLevel, type StockLevel } from "./inventory-rules";
 
 /**
  * Operations report rules (D-033), pure and client-safe. Everything is an aggregate per day,
- * shoe type, roll, item or supplier, never per person (D-008). The thresholds below are
+ * batch, roll, item or supplier, never per person (D-008). The thresholds below are
  * operational defaults for what the report calls "needs attention"; they are named here so a
  * later settings screen can take them over.
  */
@@ -150,8 +150,8 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
       severity: "warning",
       title: `${i.belowQuota.below} of the last ${i.belowQuota.of} working days were below quota`,
       detail:
-        "Production shows each day's pairs against the quota and how many Shoe Constructors were present.",
-      href: "/production",
+        "Batches shows each day's passed pairs against the quota and how many Shoe Constructors were present.",
+      href: "/batches",
     });
 
   if (i.lineRejectShare !== null) {

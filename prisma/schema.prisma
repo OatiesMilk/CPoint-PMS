@@ -98,6 +98,7 @@ model User {
   attendanceTaken   AttendanceDay[]      @relation("AttendanceTakenBy")
   attendanceMarks   AttendanceMark[]
   schedulesSet      ProductionSchedule[]
+  lunchBreaksSet    LunchBreak[]
   quotasSet         DailyQuota[]
   checkInsEntered   ProductionCheckIn[]  @relation("CheckInEnteredBy")
   checkInsCorrected ProductionCheckIn[]  @relation("CheckInCorrectedBy")
@@ -167,19 +168,6 @@ model AuditLog {
 }
 
 // ───────────── reference data ─────────────
-model ShoeType {
-  id        String  @id @default(uuid(7)) @db.Uuid
-  code      String  @unique // "SCH", "TOP"
-  name      String  @unique // "School Shoe", "Topsider"
-  isActive  Boolean @default(true)
-  sortOrder Int     @default(0)
-
-  quotas DailyQuota[]
-  counts ProductionCount[]
-
-  @@map("shoe_types")
-}
-
 model Supplier {
   id            String   @id @default(uuid(7)) @db.Uuid
   name          String   @unique
@@ -397,13 +385,14 @@ model AttendanceMark {
   @@map("attendance_marks")
 }
 
-/// When the Quality Inspector counts finished pairs (D-083). The row in force on a day is the
-/// latest effectiveFrom on or before it; a change applies from the next day.
+/// When each batch ends (D-083, D-097): a batch is one check-in interval of the working day. The
+/// row in force on a day is the latest effectiveFrom on or before it; a change applies from the
+/// next day.
 model ProductionSchedule {
   id              String   @id @default(uuid(7)) @db.Uuid
   shiftStart      String // "HH:mm", Manila
   shiftEnd        String // "HH:mm", Manila
-  intervalMinutes Int // 60, 120, 180 or 240
+  intervalMinutes Int? // 60, 120, 180 or 240 working minutes; null = once at the end of the day
   workingDays     Int[] // ISO weekdays, 1 = Monday
   effectiveFrom   DateTime @db.Date
   createdById     String?  @db.Uuid // null for the bootstrap default
@@ -416,31 +405,50 @@ model ProductionSchedule {
   @@map("production_schedules")
 }
 
-/// Pairs per shoe type per day for the whole line (D-085). Never per person (D-008).
+/// The lunch break that pauses a batch (D-097, C-3, C-25, C-40), set by the System Admin. The same
+/// on every working day; both times null = no lunch break. Applies from the next day.
+model LunchBreak {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  startTime     String? // "HH:mm", Manila
+  endTime       String? // "HH:mm", Manila
+  effectiveFrom DateTime @db.Date
+  createdById   String?  @db.Uuid // null for the bootstrap default
+  createdAt     DateTime @default(now())
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@index([effectiveFrom])
+  @@index([createdById])
+  @@map("lunch_breaks")
+}
+
+/// Pairs per day for the whole line (D-085, D-099, C-30): one number, counted on passed pairs
+/// (C-41). Never per person (D-008).
 model DailyQuota {
   id             String   @id @default(uuid(7)) @db.Uuid
-  shoeTypeId     String   @db.Uuid
   pairs          Int
   suggestedPairs Int? // what the page suggested when it was set
   effectiveFrom  DateTime @db.Date
   createdById    String   @db.Uuid
   createdAt      DateTime @default(now())
 
-  shoeType  ShoeType @relation(fields: [shoeTypeId], references: [id])
-  createdBy User     @relation(fields: [createdById], references: [id])
+  createdBy User @relation(fields: [createdById], references: [id])
 
-  @@index([shoeTypeId, effectiveFrom])
+  @@index([effectiveFrom])
   @@index([createdById])
   @@map("daily_quotas")
 }
 
-/// One scheduled count of the pairs finished since the previous check-in (D-084).
+/// A finished batch (D-084, D-098): the pairs finished in it and how many of them failed
+/// inspection (C-27). `slotAt` is the batch's end. One row per batch.
 model ProductionCheckIn {
   id                   String    @id @default(uuid(7)) @db.Uuid
   day                  DateTime  @db.Date // the Manila calendar date
-  slotAt               DateTime // the scheduled time
+  slotAt               DateTime // the batch's end
   enteredAt            DateTime  @default(now())
   enteredById          String    @db.Uuid
+  pairs                Int
+  failedPairs          Int       @default(0)
   /// Shoe Constructors present when it was saved; null = attendance not taken (D-080).
   constructorsPresent  Int?
   constructorsOnRoster Int?
@@ -450,26 +458,11 @@ model ProductionCheckIn {
   correctionReason     String?
   updatedAt            DateTime  @updatedAt
 
-  enteredBy   User              @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
-  correctedBy User?             @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
-  counts      ProductionCount[]
+  enteredBy   User  @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
+  correctedBy User? @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
 
   @@unique([day, slotAt])
   @@index([enteredById])
   @@index([correctedById])
   @@map("production_check_ins")
-}
-
-model ProductionCount {
-  id         String @id @default(uuid(7)) @db.Uuid
-  checkInId  String @db.Uuid
-  shoeTypeId String @db.Uuid
-  pairs      Int
-
-  checkIn  ProductionCheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade)
-  shoeType ShoeType          @relation(fields: [shoeTypeId], references: [id])
-
-  @@unique([checkInId, shoeTypeId])
-  @@index([shoeTypeId])
-  @@map("production_counts")
 }

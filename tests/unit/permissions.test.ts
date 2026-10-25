@@ -68,7 +68,7 @@ describe("production access (Phase 23, Dylan 3B)", () => {
     expect(mayEnterCheckIns(AD, false)).toBe(false);
     expect(checkInCoverReason(FM, false)).toBeNull();
     expect(checkInCoverReason(FM, true)).toBe(
-      "A Quality Inspector is present today, so they enter the check-ins.",
+      "A Quality Inspector is present today, so they finish the batches.",
     );
     expect(can(FM, "production:plan")).toBe(true);
     expect(can(QI, "production:plan")).toBe(false);
@@ -91,17 +91,17 @@ describe("navigationFor", () => {
   it("builds each role's sidebar from its permissions", () => {
     expect(labels(FM)).toEqual([
       "Overview",
-      "Production",
+      "Batches",
       "Attendance",
       "Inventory",
       "Camera",
       "Scans",
       "Reports",
     ]);
-    expect(labels(QI)).toEqual(["Overview", "Production", "Camera", "Scans", "Reports"]);
+    expect(labels(QI)).toEqual(["Overview", "Batches", "Camera", "Scans", "Reports"]);
     expect(labels(AD)).toEqual([
       "Overview",
-      "Production",
+      "Batches",
       "Attendance",
       "Inventory",
       "Camera",

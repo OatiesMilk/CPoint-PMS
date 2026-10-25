@@ -122,7 +122,7 @@ test("the Floor Manager sees production against the quota in place of stage time
   await expect(
     page
       .getByTestId("ops-production-table")
-      .or(page.getByText("No working days with check-ins yet.")),
+      .or(page.getByText(/^No working days with batches yet\./)),
   ).toBeVisible();
   await expect(page.getByText("Time in each stage")).toHaveCount(0);
   await expect(page.getByText("On the floor now")).toHaveCount(0);
@@ -146,7 +146,10 @@ test("the Floor Manager sees production against the quota in place of stage time
   // stages.csv is gone with stage monitoring.
   expect((await page.request.get("/api/v1/reports/stages.csv?preset=today")).status()).toBe(404);
   const csv = await (await page.request.get("/api/v1/reports/production.csv?preset=7d")).text();
-  expect(csv).toContain("Date (Manila),Shoe type,Pairs finished,Daily quota,% of quota");
+  expect(csv).toContain(
+    "Date (Manila),Pairs finished,Failed inspection,% failed,Pairs passed,Daily quota,% of quota (passed)",
+  );
+  expect(csv).not.toContain("Shoe type");
   const ops = await (await page.request.get("/api/v1/reports/operations.csv?preset=today")).text();
   expect(ops).toContain("Rolls started,Rolls finished");
   // The purchasing card and the stock CSV's request column left with the module (D-091).

@@ -32,8 +32,8 @@ const SECTIONS: { title: string; items: Definition[] }[] = [
     title: "Production",
     items: [
       {
-        label: "Production",
-        href: "/production",
+        label: "Batches",
+        href: "/batches",
         icon: "production",
         permission: "production:read",
       },

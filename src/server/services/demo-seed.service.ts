@@ -1,5 +1,5 @@
 import { manilaToday } from "@/lib/format";
-import { DEFAULT_SCHEDULE, slotsFor } from "@/lib/production-rules";
+import { DEFAULT_LUNCH, DEFAULT_SCHEDULE, batchesFor } from "@/lib/production-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
   renderLeatherImage,
@@ -15,7 +15,6 @@ import { countRolls } from "@/server/models/roll.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
 import {
   ensureSupplier,
-  listActiveShoeTypes,
   listActiveSuppliers,
   listDefectTypes,
 } from "@/server/models/reference-data.model";
@@ -23,7 +22,7 @@ import { findUserByEmail } from "@/server/models/user.model";
 import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
 import { cancelRoll, finishRoll, startRoll } from "./roll.service";
 import { setCameraOperator } from "./camera.service";
-import { saveCheckIn, saveQuotas } from "./production.service";
+import { saveCheckIn, saveQuota } from "./production.service";
 import { createItem, recordMovement } from "./inventory.service";
 import { ingestScan } from "./scan-ingest.service";
 
@@ -85,13 +84,18 @@ export function preparationMs(random: Random): number {
   return (lo + random() * (hi - lo)) * HOUR;
 }
 
+/** The one daily quota of passed pairs in the demo week (Phase 27, C-30, C-41). */
+export const DEMO_QUOTA = 128;
+
 /**
- * Demo output per Shoe Constructor present per hour, and the daily quotas (Phase 23). Chosen so
- * a day with one constructor absent still makes the quota and a day with two or more absent
- * doesn't, which lines the shortfalls up with the seeded absences (D-081).
+ * Demo output per Shoe Constructor present per working hour. It follows the roster, so a day with
+ * one constructor absent still makes the quota after its few failed pairs and a day with two or
+ * more absent doesn't, whether the database has the 12 demo constructors or a few more (D-081).
+ * The quota sits halfway between the output of `most - 1` and `most - 2` constructors.
  */
-export const DEMO_RATE = { school: 0.9, topsider: 0.45 } as const;
-export const DEMO_QUOTA = { school: 85, topsider: 43 } as const;
+export function demoRate(most: number, workingHours: number): number {
+  return (DEMO_QUOTA + 3) / (Math.max(workingHours, 1) * Math.max(most - 1.5, 0.5));
+}
 
 /** Demo materials (also used by bootstrap when only demo users are on). */
 export const DEMO_INVENTORY = [
@@ -169,8 +173,7 @@ export async function seedDemoWeek(
     return { seeded: false, reason: "demo users are missing (set SEED_DEMO_USERS=true)" };
   // Three leather suppliers, so Supplier quality has something to compare (Phase 20, D-090).
   for (const supplier of DEMO_SUPPLIERS) await ensureSupplier(supplier);
-  const [shoeTypes, activeSuppliers, defectTypes] = await Promise.all([
-    listActiveShoeTypes(),
+  const [activeSuppliers, defectTypes] = await Promise.all([
     listActiveSuppliers(),
     listDefectTypes(),
   ]);
@@ -179,7 +182,6 @@ export async function seedDemoWeek(
     activeSuppliers.filter((s) => s.name === d.name),
   );
   const suppliers = demoSuppliers.length > 0 ? demoSuppliers : activeSuppliers;
-  if (shoeTypes.length === 0) return { seeded: false, reason: "no shoe types" };
   if (suppliers.length === 0) return { seeded: false, reason: "no active suppliers" };
   // The System Admin lets the capturers capture (C-23); each gets it once, as in Users.
   const capturers = [];
@@ -362,7 +364,7 @@ export async function seedDemoWeek(
   // ── attendance (D-077, D-081): the past working days, taken by the Floor Manager ──
   const attendanceSaved = await seedAttendance();
 
-  // ── production (Phase 23): quotas, and the QI's check-ins through the real service ──
+  // ── batches (Phases 23, 27): the quota, and the QI finishing batches through the real service ──
   const checkIns = await seedProduction();
 
   const result: DemoSeedResult = {
@@ -419,33 +421,21 @@ export async function seedDemoWeek(
   }
 
   /**
-   * Production progression through the real services (Phase 23, D-083 to D-086):
-   *  - the Floor Manager sets a quota per shoe type on the first morning of the week (a first
-   *    quota applies from that day, Dylan 5A);
-   *  - the QI enters every check-in of the default schedule (12:00, 16:00, 17:00) a few minutes
-   *    after its time, with one entered 50 minutes late and one (a 17:00) missed on a full day; on
-   *    the day attendance shows the QI absent, the Floor Manager enters them (D-088);
-   *  - pairs follow the constructors present (DEMO_RATE), so the days with 2, 3 and 5 absent end
-   *    below quota and the others meet it. A day without attendance counts everyone on the roster.
-   * Today: check-ins older than 30 minutes are entered; a newer one is left Due.
+   * Batches through the real services (Phase 27, D-097 to D-099):
+   *  - the Floor Manager sets the one daily quota on the first morning of the week (a first quota
+   *    applies from that day, Dylan 5A);
+   *  - the QI finishes every batch of the default schedule and lunch (08:00–13:00 with lunch
+   *    11:00–12:00, and 13:00–17:00) a few minutes after its end, with a pair or two failing
+   *    inspection in each; one finished 50 minutes late on a day that makes the quota, and one
+   *    missed on the shortest-handed day, so it adds no short day of its own; on the day attendance
+   *    shows the QI absent, the Floor Manager finishes them (D-088);
+   *  - pairs follow the constructors present and the working hours (demoRate, from the roster),
+   *    so the days with 2, 3 and 5 absent end below quota on passed pairs and the others meet it. A day without
+   *    attendance counts everyone on the roster.
+   * Today: batches finished more than 30 minutes ago are saved; a newer one is left Due.
    */
   async function seedProduction(): Promise<number> {
-    const types = shoeTypes.slice(0, 2);
-    if (types.length === 0) return 0;
-    const school = types[0];
-    const top = types[1];
-    await saveQuotas(
-      {
-        quotas: [
-          { shoeTypeId: school.id, pairs: DEMO_QUOTA.school, suggestedPairs: null },
-          ...(top
-            ? [{ shoeTypeId: top.id, pairs: DEMO_QUOTA.topsider, suggestedPairs: null }]
-            : []),
-        ],
-      },
-      fm!,
-      at(firstDay, 7),
-    );
+    await saveQuota({ pairs: DEMO_QUOTA, suggestedPairs: null }, fm!, at(firstDay, 7));
     const views = new Map<string, number>();
     for (const day of workingDays) {
       const view = await getAttendanceDay(day, fm!, at(day, 12));
@@ -456,43 +446,34 @@ export async function seedDemoWeek(
           : view.workforce.constructorsOnRoster,
       );
     }
-    // The missed 17:00 goes on a day with everyone in (it still makes the quota); the late one on
-    // another day that makes it, so neither adds a short day of its own.
     const pastDays = workingDays.filter((d) => d < today);
     const most = Math.max(0, ...pastDays.map((d) => views.get(d) ?? 0));
-    const missedDay = pastDays.find((d) => views.get(d) === most);
-    const lateDay =
-      pastDays.find((d) => d !== missedDay && (views.get(d) ?? 0) >= most - 1) ?? missedDay;
+    const fewest = Math.min(...pastDays.map((d) => views.get(d) ?? 0));
+    const missedDay = pastDays.find((d) => views.get(d) === fewest);
+    const lateDay = pastDays.find((d) => d !== missedDay && (views.get(d) ?? 0) >= most - 1);
+    const fullDay = workingDays.length
+      ? batchesFor(DEFAULT_SCHEDULE, [DEFAULT_LUNCH], workingDays[0])
+      : [];
+    const hours = fullDay.reduce((t, b) => t + b.workingMinutes, 0) / 60;
+    const rate = hours > 0 ? demoRate(most, hours) : 0;
     let entered = 0;
     for (const day of workingDays) {
-      const slots = slotsFor(DEFAULT_SCHEDULE, day);
+      const batches = batchesFor(DEFAULT_SCHEDULE, [DEFAULT_LUNCH], day);
       const present = views.get(day) ?? 0;
-      for (const [i, slot] of slots.entries()) {
-        const hours =
-          (slot.at.getTime() - (i === 0 ? at(day, 8) : slots[i - 1].at).getTime()) / HOUR;
-        if (day === missedDay && slot.time === "17:00") continue;
-        const late = day === lateDay && slot.time === "12:00";
-        const when = plus(slot.at, (late ? 50 : 4 + Math.floor(random() * 8)) * MINUTE);
+      for (const batch of batches) {
+        if (day === missedDay && batch.number === batches.length) continue;
+        const late = day === lateDay && batch.number === 1;
+        const when = plus(batch.at, (late ? 50 : 4 + Math.floor(random() * 8)) * MINUTE);
         if (day === today && when.getTime() > now.getTime() - 30 * MINUTE) continue;
         if (!past(when)) continue;
-        // 0 or 1 more School Shoes now and then; never fewer, so the full days stay on quota.
-        const jitter = Math.round(random());
-        const counts = [
-          {
-            shoeTypeId: school.id,
-            pairs: Math.max(0, Math.round(present * hours * DEMO_RATE.school) + jitter),
-          },
-          ...(top
-            ? [{ shoeTypeId: top.id, pairs: Math.round(present * hours * DEMO_RATE.topsider) }]
-            : []),
-        ];
-        // Any other active shoe type gets a 0, as the QI would enter.
-        for (const t of shoeTypes.slice(2)) counts.push({ shoeTypeId: t.id, pairs: 0 });
+        const pairs = Math.round(present * (batch.workingMinutes / 60) * rate);
+        const failedPairs = Math.min(pairs, 1 + Math.floor(random() * 2));
         await saveCheckIn(
           {
-            slotAt: slot.at.toISOString(),
-            counts,
-            notes: late ? "Counted after the lunch break." : undefined,
+            slotAt: batch.at.toISOString(),
+            pairs,
+            failedPairs,
+            notes: late ? "Counted late: the sole press was down." : undefined,
           },
           day === qiAwayDay && qiMarkedAbsent ? fm! : qi!,
           when,

@@ -69,8 +69,8 @@ Re-measure whenever a color token changes.
 
 ## Phone layout (D-096)
 
-For the pages a Shoe Constructor uses on their own phone: Capture now, Batches in Phase 27. Every
-other page stays desktop first.
+For the pages used on a phone by the line: Capture (the Shoe Constructor) and Batches (the Quality
+Inspector, Phase 27). Every other page stays desktop first.
 
 - **Shell:** below 640px (`sm`) the sidebar is replaced by a top bar (`h-14`): the logo, the page's
   name, a page menu (`Menu`, "Pages") only when the role has more than one page, then the account
@@ -84,6 +84,27 @@ other page stays desktop first.
   semibold), e.g. "Roll R-2026-0012 · Marikina Leather Trading · 6 shots", right above the action.
 - **Forms:** one column, labels above, `h-11` inputs, native `<select>` (the phone's own picker).
 - **Never** a sideways scroll at 390px; long words wrap, tables stay off phone pages.
+- **Batches (Phase 27):** one card per batch ("Batch 2 10:00–13:00", the lunch line, a status badge
+  with icon and word); the batch that can be finished now is the page's bottom action, with
+  "Batch 2 · 10:00–13:00" in `text-xl` above **Finish batch 2**. The Finish batch dialog opens as a
+  bottom sheet (`max-sm:bottom-0`, no bottom radius, safe-area padding) with `h-12` numeric fields
+  (`inputMode="numeric"`) and the buttons stacked `h-11`. The QI sees no tables there (today only);
+  the Floor Manager's Recent days table is desktop.
+
+## Batch notices (D-098)
+
+For whoever finishes today's batches (the QI, or the Floor Manager covering, D-088), on every page:
+
+- **Banner** at the top of the main column (`role="status"`, polite): the most urgent notice only.
+  At 10 minutes before a batch's end, muted (`bg-muted/60`, `Hourglass`): "Batch 2 ends at 13:00.
+  Get ready to count the finished pairs." At the end, info (`border-info bg-info-soft`,
+  `BellRing`): "Batch 2 is due. Finish it now." with **Finish batch 2** (`size="lg"`, `h-11`).
+  **Not now** hides that notice until the next one; it stays in the bell.
+- **Bell** beside the logo (sidebar on a desk, the phone top bar on a phone, `size-11` there): a
+  dropdown of the due batches, each linking to Finish batch; its accessible name counts them
+  ("Batch notices: 2 batches due"). Hidden for anyone who can't finish.
+- **Tab title** starts with "(n)" while n batches are due.
+- No sound, push or browser notification; nothing animates beyond the standard fade.
 
 ## Components
 

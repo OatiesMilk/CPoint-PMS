@@ -9,7 +9,6 @@ import { type Db, defaultDb } from "./db";
 export type ResetKeep = {
   emails: string[];
   tokenHashes: string[];
-  shoeTypeCodes: string[];
   supplierNames: string[];
   defectTypeKeys: string[];
 };
@@ -25,13 +24,13 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     inventoryItems,
     movements,
     auditLogs,
-    shoeTypes,
     suppliers,
     defectTypes,
     attendanceDays,
     checkIns,
     quotas,
     schedules,
+    lunchBreaks,
   ] = await Promise.all([
     db.user.count({ where: { email: notIn(keep.emails) } }),
     db.apiToken.count({ where: { tokenHash: notIn(keep.tokenHashes) } }),
@@ -40,7 +39,6 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.inventoryItem.count(),
     db.inventoryMovement.count(),
     db.auditLog.count(),
-    db.shoeType.count({ where: { code: notIn(keep.shoeTypeCodes) } }),
     db.supplier.count({ where: { name: notIn(keep.supplierNames) } }),
     db.defectType.count({ where: { key: notIn(keep.defectTypeKeys) } }),
     db.attendanceDay.count(),
@@ -48,6 +46,8 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.dailyQuota.count(),
     // The bootstrap default (no author) is kept; schedules people saved go.
     db.productionSchedule.count({ where: { createdById: { not: null } } }),
+    // Lunch breaks the System Admin saved; the default comes back from the start (Phase 27).
+    db.lunchBreak.count({ where: { createdById: { not: null } } }),
   ]);
   return {
     users,
@@ -57,13 +57,13 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     inventoryItems,
     movements,
     auditLogs,
-    shoeTypes,
     suppliers,
     defectTypes,
     attendanceDays,
     checkIns,
     quotas,
     schedules,
+    lunchBreaks,
   };
 }
 
@@ -82,18 +82,18 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   // Attendance (D-077): the marks, then the days, before any account goes.
   await db.attendanceMark.deleteMany();
   await db.attendanceDay.deleteMany();
-  // Production progression (Phase 23): check-ins (their counts cascade), quotas and the schedules
-  // people saved; the bootstrap default stays.
+  // Batches (Phases 23, 27): finished batches, quotas and the schedules people saved (the
+  // bootstrap default stays), and every lunch break; the service puts the default lunch back.
   await db.productionCheckIn.deleteMany();
   await db.dailyQuota.deleteMany();
   await db.productionSchedule.deleteMany({ where: { createdById: { not: null } } });
+  await db.lunchBreak.deleteMany();
   // History, then accounts and tokens nobody needs (their sessions go with them).
   await db.auditLog.deleteMany();
   await db.apiToken.deleteMany({ where: { tokenHash: notIn(keep.tokenHashes) } });
   await db.apiToken.updateMany({ data: { lastUsedAt: null } });
   await db.user.deleteMany({ where: { email: notIn(keep.emails) } });
   // Reference rows tests added.
-  await db.shoeType.deleteMany({ where: { code: notIn(keep.shoeTypeCodes) } });
   await db.supplier.deleteMany({ where: { name: notIn(keep.supplierNames) } });
   await db.defectType.deleteMany({ where: { key: notIn(keep.defectTypeKeys) } });
 }

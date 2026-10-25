@@ -22,7 +22,8 @@ import type { ReportRange } from "@/lib/report-rules";
  * The Floor Manager's report: what is happening on the production floor in this range, and what
  * is wrong. Order follows the questions: is anything on fire, did the line make its quota (and
  * how many were present), what was rejected for salvage, will we run out, is supply good, and the
- * checkpoint before cutting in brief. Stage monitoring was replaced by production in Phase 23.
+ * checkpoint before cutting in brief. Stage monitoring was replaced by production in Phase 23,
+ * and production by batches in Phase 27.
  */
 export function OperationsView({
   report,
@@ -46,17 +47,29 @@ export function OperationsView({
         className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4"
       >
         <KpiTile
-          label="Pairs made"
+          label="Pairs finished"
           value={(kpis.pairs.value ?? 0).toLocaleString("en-PH")}
-          sub="counted at the check-ins"
+          sub="counted when each batch was finished"
           change={kpis.pairs.change}
           compareLabel={compareLabel}
           testid="kpi-pairs"
         />
         <KpiTile
+          label="Failed inspection"
+          value={(kpis.failedPairs.value ?? 0).toLocaleString("en-PH")}
+          sub={
+            production.totals.failedShare === null
+              ? "of the pairs finished"
+              : `${formatPercent(production.totals.failedShare)} of the pairs finished`
+          }
+          change={kpis.failedPairs.change}
+          compareLabel={compareLabel}
+          testid="kpi-failed"
+        />
+        <KpiTile
           label="Of quota"
           value={formatPercent(kpis.ofQuota.value)}
-          sub={quotaNote}
+          sub={`passed pairs; ${quotaNote}`}
           change={kpis.ofQuota.change}
           compareLabel={compareLabel}
           testid="kpi-quota"
@@ -99,15 +112,16 @@ export function OperationsView({
             <div>
               <CardTitle>Production</CardTitle>
               <CardDescription>
-                Pairs finished per working day against the daily quota, with the Shoe Constructors
-                present. Each shortfall gets one sentence from the day’s numbers, never a name.
+                Per working day the pairs finished, how many failed inspection, and the pairs that
+                passed against the daily quota, with the Shoe Constructors present. Each shortfall
+                gets one sentence from the day’s numbers, never a name.
               </CardDescription>
             </div>
             <Link
-              href="/production"
+              href="/batches"
               className="text-sm font-medium underline-offset-4 hover:underline"
             >
-              Today’s check-ins
+              Today’s batches
             </Link>
           </div>
         </CardHeader>
@@ -116,17 +130,13 @@ export function OperationsView({
             <ProductionChart
               days={production.days.map((d) => ({
                 day: d.day,
-                pairs: d.pairs,
+                pairs: d.passed,
                 quota: d.quota,
                 constructorsPresent: d.constructorsPresent,
               }))}
             />
           )}
-          <ProductionDaysTable
-            shoeTypes={production.shoeTypes}
-            days={production.days}
-            testid="ops-production-table"
-          />
+          <ProductionDaysTable days={production.days} testid="ops-production-table" />
         </CardContent>
       </Card>
 

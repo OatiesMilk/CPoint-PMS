@@ -263,11 +263,12 @@ duplicate email is `422` on `email`.
 | `GET / PUT /api/v1/settings/cv`    | `{ foundPercent, earlyModelNotice? }`, e.g. `50` (1 to 100, one decimal). `rejectPercent` or `reworkPercent` is refused with a named message (D-093) |
 | `GET /api/v1/defect-types/unknown` | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }`                                                       |
 | `GET / POST /api/v1/defect-types`  | `{ key, label, outcome, description?, sortOrder? }` (key fixed; `outcome` `USABLE` or `NOT_ACCEPTED`, required, D-093)                               |
-| `GET / POST /api/v1/shoe-types`    | `{ code, name, sortOrder? }`                                                                                                                         |
 | `GET / POST /api/v1/suppliers`     | `{ name, contactPerson?, phone?, notes? }`                                                                                                           |
+| `PUT /api/v1/settings/lunch-break` | `{ startTime, endTime }` (`HH:mm`, inside tomorrow's shift, end after start) or `{ none: true }`; applies from tomorrow (D-097)                      |
 | `PATCH /api/v1/<list>/{id}`        | the same fields, or `{ isActive }`. There are no deletes.                                                                                            |
 
 A new found-at value or outcome applies to new scans only; each scan keeps its `thresholdsSnapshot`.
+Shoe types and `/api/v1/shoe-types/**` were removed in Phase 27 (D-099, `404`).
 
 **Audit log**: `GET /api/v1/audit-logs?actor=&action=&entity=&entityId=&from=&to=&page=`
 (`from`/`to` are Manila calendar days) → `{ entries, total, page, pageCount }`, newest first, 15
@@ -300,61 +301,71 @@ Constructors count as workers, and a day never saved is `taken: false` with null
   "Attendance can't be taken for a future day." or "Someone in this list isn't on the roster for
   21 Oct. Refresh the list."
 
-## Production (session, Phase 23)
+## Batches (session, Phase 27; before it Production, Phase 23)
 
-Production progression (D-083 to D-087): the check-in schedule, the daily quota per shoe type and
-the Quality Inspector's counts. Everything is per check-in, day or shoe type for the whole line
-(D-008); the only name is who entered or corrected a check-in. Days are Manila calendar days.
+A batch is one check-in interval of the working day (D-097 to D-099): the schedule and the one
+daily quota (Floor Manager), the lunch break (System Admin, under Settings above) and each batch's
+pairs finished and failed inspection (Quality Inspector). Everything is per batch or day for the
+whole line (D-008); the only name is who finished or corrected a batch. Days are Manila calendar
+days. The paths keep `production`; a finished batch is a `check-in` row whose `slotAt` is the
+batch's end.
 
-| Method & path                             | Permission           | Body / query                                                     |
-| ----------------------------------------- | -------------------- | ---------------------------------------------------------------- |
-| `GET /api/v1/production/today`            | `production:read`    | —                                                                |
-| `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                             |
-| `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, counts: [{ shoeTypeId, pairs }], notes? }`            |
-| `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, counts: [{ shoeTypeId, pairs }], reason }` |
-| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }`         |
-| `PUT /api/v1/production/quotas`           | `production:plan`    | `{ quotas: [{ shoeTypeId, pairs, suggestedPairs? }] }`           |
+| Method & path                             | Permission           | Body / query                                             |
+| ----------------------------------------- | -------------------- | -------------------------------------------------------- |
+| `GET /api/v1/production/today`            | `production:read`    | —                                                        |
+| `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                     |
+| `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes? }`                |
+| `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason }`     |
+| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }` |
+| `PUT /api/v1/production/quotas`           | `production:plan`    | `{ pairs, suggestedPairs? }`                             |
 
 `production:read` is the Floor Manager, the Quality Inspector and the System Admin;
 `production:checkin` the Quality Inspector, and the Floor Manager **only on a day attendance shows no
-Quality Inspector present** (D-088; otherwise `403` with the reason); `production:plan` the Floor
-Manager.
+Quality Inspector present** (D-088; otherwise `403` "A Quality Inspector is present today, so they
+finish the batches." or "Take today's attendance first. …"); `production:plan` the Floor Manager.
 
-- **today** → `{ day, schedule, workingDay, rows: [{ slotAt, time, since, state, lateBy, checkIn }],
-shoeTypes, progress: [{ shoeTypeId, name, pairs, quota, share, pace }], next, late, missed,
-workforce, shortfall, canEnter }`. `state` is `UPCOMING`, `DUE`, `LATE` (more than 30 minutes
-  past), `ENTERED` or `MISSED`. `checkIn` carries the counts, `constructorsPresent` read at save,
-  `attendanceChanged`, notes and any correction.
-- **days** → `{ shoeTypes: [{ id, label }], days: [{ day, checkIns, entered, missed, full, byType:
-[{ shoeTypeId, label, pairs, quota }], pairs, quota, share, attendanceTaken, constructorsPresent,
-constructorsOnRoster, pairsPerConstructor, shortfall }] }`, from the first day a check-in was ever
-  entered. `pairsPerConstructor` is a line average for the day.
-- **check-ins:** every active shoe type needs a whole number from 0 to 2,000. The slot must be on
-  that day's schedule and open (from its time to midnight Manila). Errors: `422` keyed
-  `counts.<shoeTypeId>` ("Enter the School Shoes finished since 10:00 as a whole number, like 24.
-  Enter 0 if none."); `409 CONFLICT` "The 14:00 check-in isn't open yet. You can enter it from
-  14:00." or "The check-in for Mon, 20 Oct closed at midnight. …"; `409 STALE` "Lea Santos already
-  entered the 12:00 check-in at 12:04. Refresh to see it."
+- **today** → `{ day, dayLabel, schedule, lunch, workingDay, rows: [{ number, slotAt, startTime,
+time, lunch, times, label, state, pausedForLunch, canFinishNow, finishOpensAt, lateBy, checkIn }],
+progress: { finished, failed, passed, quota, share, pace }, next, late, missed, workforce,
+shortfall, canEnter, covering, enterNote }`. `state` is `UPCOMING`, `IN_PROGRESS`, `DUE`, `LATE`
+  (30 minutes past the end), `FINISHED` or `MISSED` (after midnight), worked out on each request.
+  `checkIn` carries `pairs`, `failedPairs`, `constructorsPresent` read at save,
+  `attendanceChanged`, notes, `enteredLate` and any correction. The browser's notices are worked
+  out from this.
+- **days** → `{ days: [{ day, batches, finishedBatches, missed, full, finished, failed, passed,
+failedShare, quota, share, attendanceTaken, constructorsPresent, constructorsOnRoster,
+pairsPerConstructor, shortfall }] }`, from the first day a batch was ever finished. `share` is
+  passed ÷ quota (C-41); `pairsPerConstructor` is a line average.
+- **check-ins (Finish batch):** `slotAt` must be the end of a batch on that day; Finish batch is
+  open from 10 minutes before the end until midnight Manila. `pairs` 0–2,000; `failedPairs`
+  0–2,000 (default 0) and never more than `pairs`. Returns `{ id, number, time }`. Errors: `422`
+  keyed `pairs` ("Enter the pairs finished in Batch 2 as a whole number, like 24. Enter 0 if
+  none.") or `failedPairs` ("Failed inspection can't be more than the pairs finished (12).");
+  `409 CONFLICT` "Batch 3 can be finished from 14:50.", "Batch 1 of Mon, 20 Oct closed at
+  midnight. …" or "There's no batch ending at 12:00 on …"; `409 STALE` "Lea Santos already
+  finished Batch 1 at 13:04. Refresh to see it."
 - **corrections:** the same Manila day only, `reason` 5–300 characters; the audit row keeps both
   counts. `409 STALE` when it changed since it was loaded.
-- **schedule:** times `HH:mm`, shift end after start, an interval of 60, 120, 180 or 240 minutes,
-  at least one ISO weekday. Always applies from tomorrow.
-- **quotas:** `pairs` 1–50,000 per shoe type. A shoe type's first quota applies from today, a change
-  from tomorrow; a value equal to the one already set for that day is skipped. Returns `{ saved }`.
+- **schedule:** times `HH:mm`, shift end after start, `intervalMinutes` 60, 120, 180 or 240, or
+  `null` (or `"end"`) for once at the end of the day, at least one ISO weekday. Always applies
+  from tomorrow.
+- **quotas:** one `pairs` 1–50,000 for the whole line. The first quota applies from today, a change
+  from tomorrow; a value equal to the one already set for that day is skipped. Returns
+  `{ saved, effectiveFrom }`.
 
 ## Reports (session)
 
-Aggregates per Manila day, shoe type, defect type, supplier or roll, never per person (D-025, D-008). Shots of a cancelled roll are left out (Phase 26). Range params:
+Aggregates per Manila day, defect type, supplier or roll, never per person (D-025, D-008). Shots of a cancelled roll are left out (Phase 26). Range params:
 `?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
 default is the last 14 days, at most 92, and never past today.
 
 | Method & path                            | Permission          | Returns                                                                                                                   |
 | ---------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals: { scanned, pass, reject }, days[], defects[] }`                                                         |
-| `GET /api/v1/reports/production`         | `report:production` | `{ shoeTypes[], days[], totals: { pairs, share, daysBelow, daysWithQuota } }` (Phase 23)                                  |
+| `GET /api/v1/reports/production`         | `report:production` | `{ days[], totals: { finished, failed, passed, failedShare, share, daysBelow, daysWithQuota } }` (Phase 27)               |
 | `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: Scanned, Pass, Reject (for salvage)                                                                      |
 | `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection): Scans, Pass, Reject (for salvage)                                 |
-| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day and shoe type: pairs, quota, % of quota, check-ins, constructors present, line average, shortfall         |
+| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day: pairs finished, failed, % failed, passed, quota, % of quota (passed), batches, constructors, shortfall   |
 | `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], stock, suppliers[], rejectedRolls[], lineRejectShare, forSalvage, checkpoint }` |
 | `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, sections scanned, Pass, Reject (for salvage)                                 |
 | `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                                       |

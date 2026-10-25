@@ -35,7 +35,7 @@ export const reportController = {
     return json({ data: await qualityReport(rangeFrom(request)) });
   }),
 
-  /** GET /api/v1/reports/production?preset=|from=&to=: pairs per day per shoe type vs the quota */
+  /** GET /api/v1/reports/production?preset=|from=&to=: per day pairs finished, failed and passed vs the quota */
   production: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     return json({ data: await productionReport(rangeFrom(request)) });
@@ -83,7 +83,7 @@ export const reportController = {
     return csv(await defectsCsv(range), "defects", range);
   }),
 
-  /** One row per day and shoe type: pairs, quota, check-ins, constructors present (Phase 23). */
+  /** One row a day: pairs finished, failed and passed, the quota, batches, constructors present. */
   productionCsv: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     const range = rangeFrom(request);

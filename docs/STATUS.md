@@ -3,23 +3,27 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-24 (Phase 26 built)
-**Branch:** `main` has Phase 25 and its QA fixes. Phase 26 is **uncommitted** in
+**Last updated:** 2026-10-24 (Phase 27 built)
+**Branch:** `main` has Phase 26 (#24, QA run 2 passed). Phase 27 is **uncommitted** in
 `C:\dev\CPoint-PMS`; Dylan commits it after Codex QA passes.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 26, capture on the constructors' own phones (D-095, D-096). **QA run 1
-FAILED** (`qa/reports/2026-10-24-phase-26-phone-capture.md`: 25 of 29, e2e 57 passed, 18 failed);
-the fixes are in, **run 2 next** (`qa/CODEX_PROMPT_PHASE_26_RUN2.md`). Run 1's faults: the desktop
-sidebar was hidden at every width over 640 px (13 of the e2e failures), the camera-access 403 had
-the generic message, no link from a scan to its roll's scans, and an always-empty Roll column in
-Inventory; three e2e tests used wrong locators or ignored the CSV's byte-order mark. `npm run
-check` passed after the fixes (506 unit tests). Migration `rolls_at_capture` is applied to the dev
-database. Phase 25 passed QA (run 3) on 2026-10-24.
-**Then: Phases 27 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
+**Current phase:** Phase 27, batches are the check-in intervals (D-097 to D-099). **QA passed (run 5,
+`qa/reports/2026-10-24-phase-27-run5.md`)**; commit and PR next. Run 5: the batches spec alone 6
+of 6, toasts leave in about 4 s with mouse and touch; the full suite 72 passed, 1 failed (an
+isolation note: once under the parallel run the QI phone test saw "3 pairs" saved instead of 12;
+the test now checks both fields' values before it saves; not rerun, CI runs it). Run 1 FAIL (the demo rate, now from the
+roster; stale `.next/dev/types`, deleted). Run 2 (`qa/reports/2026-10-24-phase-27-run2.md`):
+build, S2 (three short days) and S9 passed; e2e 67 passed, 5 failed, 1 skipped, 4 not run, all
+test faults, fixed: `auth.spec.ts` expected "Production" in the nav, `admin.spec.ts` looked for the
+supplier on the wrong Settings tab, `batches.spec.ts` didn't untick "No lunch break" (its own
+no-lunch row). `npm run check` passed (527 unit tests). The migration is applied to the dev
+database (24 Oct).
+Phase 26 passed QA (run 2) and is merged (#24).
+**Then: Phases 28 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
 `docs/prompts/factory-visit-changes.md`, C-1 to C-41).
-**Overall:** 27 phases built (0 to 26); 5 planned (27 to 31, Phase 30 in two parts)
+**Overall:** 28 phases built (0 to 27); 4 planned (28 to 31, Phase 30 in two parts)
 
 ## Phase progress
 
@@ -54,9 +58,9 @@ database. Phase 25 passed QA (run 3) on 2026-10-24.
 - [x] 24. Remove Material Requests and Procurement (QA passed, 18 of 18)
 - [x] 25. Pass or Reject, a final verdict; remove the Review Queue, Repair Station and Salvage
       (QA passed, run 3)
-- [x] 26. Capture on the constructors' own phones; rolls start and finish there (QA run 1 failed;
-      fixed, run 2 next)
-- [ ] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
+- [x] 26. Capture on the constructors' own phones; rolls start and finish there (QA passed, run 2)
+- [x] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
+      (QA passed, run 5)
 - [ ] 28. Each role sees only its modules; demo sign-in and reset on the login page
 - [ ] 29. Inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
 - [ ] 30. The whole-roll check (A, with real rolls) and the return to the supplier (B)
@@ -64,6 +68,48 @@ database. Phase 25 passed QA (run 3) on 2026-10-24.
 
 ## What works right now
 
+- **Batches (Phase 27, D-097 to D-099):**
+  - A **batch** is one check-in interval of the working day (C-2). Production is now **Batches**
+    (`/batches`; `/production` is 404). Internally a finished batch is still a `ProductionCheckIn`.
+  - **Lunch** (C-3, C-25, C-26, C-40): Settings → **Lunch break** (System Admin): start and end, or
+    "No lunch break", applies from tomorrow, with a history. Default 11:00 to 12:00. Working time
+    leaves lunch out; a batch whose working time runs out at lunch's start ends when lunch ends;
+    the last batch ends at the shift end. With the defaults the batches are **08:00–13:00 (lunch
+    11:00–12:00) and 13:00–17:00**; every 2 hours gives 08–10, 10–13, 13–15, 15–17.
+  - **How often** (FM, Batches → Plan batches and quota): every 1, 2, 3 or 4 hours, or **once at
+    the end of the day** (`intervalMinutes` null, C-4); a preview of tomorrow's batches.
+  - **Status is worked out, never stored** (D-098): Upcoming, In progress ("Paused for lunch"
+    during lunch), Due at its end, Late 30 minutes after, Finished (Finished late, Corrected),
+    Missed at midnight.
+  - **Finish batch** (QI; the FM on a day no QI is present, D-088) opens **10 minutes before the
+    end** (C-28) until midnight: "Pairs finished in Batch 2 (10:00–13:00)" and "Of these, failed
+    inspection" (starts at 0, at most the pairs finished), notes; one finish per batch (`409
+STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
+  - **Notices** (A-9, C-6, C-31) for whoever finishes: a banner on every page at end − 10 ("Batch
+    2 ends at 13:00. Get ready to count the finished pairs.") and at the end ("Batch 2 is due.
+    Finish it now." with Finish batch), a bell beside the logo listing the due batches, and "(n)"
+    at the start of the tab title. Worked out in the browser from `/api/v1/production/today`
+    (every 60 s and when the tab returns). No push, browser notification or sound.
+  - **One daily quota** for the whole line (C-8, D-099), counted on **passed** pairs (finished −
+    failed, C-41); the suggestion is the average passed pairs per full working day over the last
+    10 such days. **Shoe types are gone**: no Settings tab, API (`/api/v1/shoe-types` 404), field
+    or column.
+  - Phone layout (D-096) for Batches: one column, `h-11` controls, the batch to finish fixed at the
+    bottom, the Finish batch dialog as a bottom sheet. The QI sees today only; the FM also sees
+    Recent days (chart and table). The QI keeps the Overview home (Next batch card) until Phase 28.
+  - Reports → Operations: KPI tiles Pairs finished and **Failed inspection**, Of quota on passed
+    pairs; `production.csv` is one row a day (Date (Manila), Pairs finished, Failed inspection, %
+    failed, Pairs passed, Daily quota, % of quota (passed), Batches finished, Batches scheduled, …).
+  - Migration `batches_are_intervals` converts first (A-10): a check-in's pairs are the sum of its
+    per-type counts (failed 0); each quota day becomes one quota, the sum of the per-type quotas in
+    force; then `production_counts` and `shoe_types` are dropped. The default lunch starts from the
+    beginning on a database with no check-ins, otherwise from tomorrow, so past days keep their old
+    check-in times.
+  - Demo week: the QI finishes both batches a day with one or two failed pairs each, one late, one
+    missed, the FM covering on the QI's absent day; one quota of 128; the three short days still
+    line up with the absences. `demo:reset` clears lunch rows and puts the default back.
+  - Where the bullets below mention check-ins at 12:00, 16:00 and 17:00, quotas per shoe type or
+    Production, Phase 27 replaced them.
 - **Rolls at Capture (Phase 26, D-095, D-096):**
   - `Batch` is `Roll` in the code (tables keep their names). A roll is Open, Finished or
     Cancelled; new codes `R-YYYY-NNNN`, older rolls keep `B-`; the supplier's code is the
@@ -238,6 +284,9 @@ database. Phase 25 passed QA (run 3) on 2026-10-24.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
+  - Phase 27: `npm run check` passed, **526 unit tests** (the shoe-type and per-type tests went;
+    the batch, lunch, notice and quota tests came). E2E: `batches.spec.ts` replaces
+    `production.spec.ts`; `reports`, `admin` and `rolls` specs updated; not run (Codex).
   - 519 unit tests pass (Vitest; 588 before Phase 25, the difference is the deleted review, repair
     and salvage tests; 716 before Phase 24), plus 81 model-toolkit tests (pytest; they also pass
     without OpenCV or torch, as in CI). 521 since the Phase 25 QA fixes; 506 since Phase 26 (the
@@ -248,8 +297,13 @@ database. Phase 25 passed QA (run 3) on 2026-10-24.
     scan to its roll's scans; Inventory's Roll column always empty after a reset (now shown only
     when a row has a roll). Test faults: an ambiguous `getByLabel('Roll')`, a "Shots" table name
     that only exists when the table scrolls, the CSV's BOM. Dev data: only `constructor@` had
-    camera access (cause unknown; run 2 collects the user rows). All fixed except the data
-    question; `npm run check` passed (506).
+    camera access: the other demo constructors don't exist on that database (they're created at
+    start with `SEED_DEMO_USERS=true`, D-081; the seed skips missing ones). `npm run check` passed
+    (506).
+  - Phase 26 (Codex, 2026-10-24, run 2): **PASS**. R1 to R5 passed (desktop sidebar at 1440 and
+    640 px, phone bar at 390; the named 403; no Roll column; "Scans of this roll"). E2E 73 passed,
+    2 failed, 1 skipped; both `rolls.spec.ts` failures (a slow navigation, a sign-in timeout under
+    the parallel run) passed alone with one worker. Watch them in CI.
   - Phase 25 (Codex, 2026-10-24): runs 2 and 3 after the fixes. Run 2 FAIL, two test faults in
     `production.spec.ts` (a fixed D-088 note; axe on a fading toast), fixed. Run 3 **PASS**: the
     production spec 5 of 5 three times, e2e 75 passed, 0 failed, 1 skipped.
@@ -332,24 +386,25 @@ database. Phase 25 passed QA (run 3) on 2026-10-24.
 
 ## Next step (exact)
 
-1. Codex QA run 2: paste `qa/CODEX_PROMPT_PHASE_26_RUN2.md` (no reset needed; the migration is
-   applied).
-2. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` (Codex's cleanup was blocked), and the two
-   Phase 25 folders if still there.
-3. After PASS, Dylan commits Phase 26 on a new branch from `main`, pushes and opens the PR
-   (D-032). Claude gives the git commands when asked.
-4. Phase 27 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 27. Stop
-   for my approval before writing code."
-5. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
+1. QA passed (run 5). Dylan commits Phase 27 on a new branch from `main` and opens the PR.
+2. Watch the QI phone test in `batches.spec.ts` in CI (run 5's isolation note).
+3. After PASS, Dylan commits Phase 27 on a new branch from `main`, pushes and opens the PR
+   (D-032). Claude gives the git commands when asked; CI runs on the PR and Claude fixes any
+   failure.
+4. Phase 28 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 28. Stop
+   for my approval before writing code." It also trims the FM sidebar (Camera, Scans, the Quality
+   heading) and makes Batches the QI's home (Dylan, Phase 27 plan question 3).
+5. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
+6. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
    an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the
    "Simulator" token first (it was pasted in chat).
-6. Optional (Dylan's call): delete the two Phase 25 QA folders in `%TEMP%`, the backups in
-   `storage/backups/` and the old `certs/` files; `docker image prune -a -f` frees about 8.4 GB.
+7. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
+   `docker image prune -a -f` frees about 8.4 GB.
 
 Later:
 
 - Many open questions below close as Phases 25 to 31 land (the procurement ones closed in 24; the
-  review, repair, thresholds and salvage ones in 25; the roll and capture ones in 26; the check-in ones in 27).
+  review, repair, thresholds and salvage ones in 25; the roll and capture ones in 26; the check-in ones in 27, see D-097 to D-099).
   Each phase updates this list.
 
 ## Blockers
@@ -384,6 +439,19 @@ Later:
   only break (C-40); the daily quota counts only the pairs that passed inspection (C-41).
 - The brief's other ASSUMPTIONS (A-1 to A-26) are confirmed or changed in Step 1 of their phase and
   added here when built.
+- Decided (Dylan, 2026-10-24, Phase 27 plan): default lunch 11:00 to 12:00, set by the System
+  Admin (Settings → Lunch break); the QI sees today's batches only; the QI keeps the Overview home
+  until Phase 28; the quota suggestion is the average passed pairs per full working day (D-097 to
+  D-099). Tell CPoint: batches replace the 12:00, 16:00 and 17:00 check-ins, and shoe types are
+  gone.
+- ASSUMPTION (D-097, A-2): the last batch of the day ends at the shift end even when it is shorter
+  than the others (every 3 hours gives 08:00–12:00, 12:00–15:00 and a 2-hour 15:00–17:00).
+- ASSUMPTION (D-098, A-9): the notices are on screen only (banner, bell, tab title) while the app is
+  open; nothing reaches a closed browser or a locked phone.
+- ASSUMPTION (D-098): Late starts 30 minutes after a batch's end (kept from D-084), and Finish batch
+  opens 10 minutes before it (C-28).
+- ASSUMPTION (D-097): a lunch the Admin saves outside tomorrow's shift is refused; one that falls
+  outside a later shift change is ignored by the batches and the plan page says so.
 - Decided (D-082 to D-087, Dylan 2026-10-21): a batch ends with Finish roll; check-ins every 4
   hours (12:00, 16:00, 17:00); only the QI enters them; the suggestion averages 10 full days; a
   first quota applies today. Tell CPoint that stage monitoring is gone.

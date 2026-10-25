@@ -14,6 +14,10 @@ Prisma 7 specifics: the client is generated to `src/generated/prisma` (import fr
 `@/generated/prisma/client`), it needs the `@prisma/adapter-pg` driver adapter, and the CLI is
 configured in `prisma.config.ts`, which doesn't auto-load `.env`.
 
+Glossary (Phases 26 and 27): a **roll** is a leather roll (`Roll` in the code, table `batches`); a
+**batch** is one check-in interval of the working day (D-097), stored as a `ProductionCheckIn`
+whose `slotAt` is the batch's end, under the `production.*` code and `/api/v1/production/**`.
+
 ## Read at the start of every session
 
 - Current state (auto-loaded below): @docs/STATUS.md

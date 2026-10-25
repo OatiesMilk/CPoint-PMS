@@ -1,0 +1,206 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { Bell, BellRing, Hourglass, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { noticesFor, type Notice } from "@/lib/production-rules";
+import { cn } from "@/lib/utils";
+
+/*
+ * On-screen batch notices (A-9, C-6, C-31, D-098) for the Quality Inspector, and the Floor Manager
+ * on a day no QI is present: at 10 minutes before a batch's end and at its end, on whatever page is
+ * open. Worked out in the browser from today's batches (refetched every 60 s and when the tab comes
+ * back) and the clock. No browser notification, push or sound; nothing reaches a closed app.
+ */
+
+type TodayRow = { number: number; slotAt: string; time: string; checkIn: unknown | null };
+type Today = { rows: TodayRow[]; canEnter: boolean };
+
+const REFETCH_MS = 60_000;
+
+function useToday() {
+  return useQuery({
+    queryKey: ["production-today"],
+    queryFn: async (): Promise<Today> => {
+      const res = await fetch("/api/v1/production/today", { cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      return (await res.json()).data as Today;
+    },
+    refetchInterval: REFETCH_MS,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** The notices now, re-worked out at the next notice time (and every 30 s as a backstop). */
+function useNotices(): Notice[] {
+  const { data } = useToday();
+  const [now, setNow] = useState(() => new Date());
+  const result = useMemo(() => {
+    if (!data?.canEnter) return { current: [] as Notice[], nextAt: null as Date | null };
+    const batches = data.rows.map((r) => ({
+      number: r.number,
+      at: new Date(r.slotAt),
+      time: r.time,
+    }));
+    const finished = new Set(data.rows.filter((r) => r.checkIn).map((r) => r.slotAt));
+    return noticesFor(batches, finished, now);
+  }, [data, now]);
+
+  useEffect(() => {
+    const wait = result.nextAt
+      ? Math.max(500, Math.min(30_000, result.nextAt.getTime() - Date.now() + 250))
+      : 30_000;
+    const timer = setTimeout(() => setNow(new Date()), wait);
+    const onVisible = () => document.visibilityState === "visible" && setNow(new Date());
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [result.nextAt, now]);
+
+  return result.current;
+}
+
+const finishHref = (n: Notice) => `/batches?finish=${encodeURIComponent(n.slotAt)}`;
+
+/** The tab title starts with "(1)" while a batch is due or late. */
+function useTabCount(count: number) {
+  const pathname = usePathname();
+  useEffect(() => {
+    const strip = (t: string) => t.replace(/^\(\d+\) /, "");
+    const apply = () => {
+      const base = strip(document.title);
+      const next = count > 0 ? `(${count}) ${base}` : base;
+      if (document.title !== next) document.title = next;
+    };
+    apply();
+    // Next.js sets the title on navigation; put the count back after it does.
+    const observer = new MutationObserver(apply);
+    const title = document.querySelector("title");
+    if (title) observer.observe(title, { childList: true });
+    return () => {
+      observer.disconnect();
+      document.title = strip(document.title);
+    };
+  }, [count, pathname]);
+}
+
+/**
+ * The banner on every page: the most urgent notice, with Finish batch when it is due. "Not now"
+ * hides that one notice until the next one comes (it stays in the bell).
+ */
+export function BatchNoticeBanner() {
+  const notices = useNotices();
+  const [hidden, setHidden] = useState<string[]>([]);
+  useTabCount(notices.filter((n) => n.kind === "DUE").length);
+  const shown = [...notices]
+    .sort((a, b) => (a.kind === b.kind ? a.number - b.number : a.kind === "DUE" ? -1 : 1))
+    .find((n) => !hidden.includes(`${n.kind}:${n.slotAt}`));
+  if (!shown) return null;
+  const due = shown.kind === "DUE";
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="batch-notice"
+      className={cn(
+        "flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center",
+        due ? "border-info bg-info-soft" : "bg-muted/60",
+      )}
+    >
+      <p className="flex flex-1 items-start gap-2 text-lg font-medium">
+        {due ? (
+          <BellRing aria-hidden className="mt-1 size-5 shrink-0 text-info" />
+        ) : (
+          <Hourglass aria-hidden className="mt-1 size-5 shrink-0 text-muted-foreground" />
+        )}
+        {shown.message}
+      </p>
+      <div className="flex items-center gap-2">
+        {due && (
+          <Button asChild size="lg" className="h-11 flex-1 sm:flex-none">
+            <Link href={finishHref(shown)}>Finish batch {shown.number}</Link>
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="lg"
+          className="h-11"
+          onClick={() => setHidden((h) => [...h, `${shown.kind}:${shown.slotAt}`])}
+        >
+          <X aria-hidden />
+          Not now
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The bell beside the logo: lists the batches due or late, each with Finish batch. */
+export function BatchBell({ compact = false }: { compact?: boolean }) {
+  const { data } = useToday();
+  const due = useNotices().filter((n) => n.kind === "DUE");
+  // Only for whoever finishes today's batches: the QI, or the FM covering (D-088).
+  if (!data?.canEnter) return null;
+  const label =
+    due.length === 0
+      ? "Batch notices: none due"
+      : `Batch notices: ${due.length} batch${due.length === 1 ? "" : "es"} due`;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={label}
+        title={label}
+        data-testid="batch-bell"
+        className={cn(
+          "relative flex items-center justify-center rounded-md hover:bg-accent",
+          compact ? "size-11" : "size-8",
+        )}
+      >
+        {due.length > 0 ? (
+          <BellRing aria-hidden className="size-5 text-info" />
+        ) : (
+          <Bell aria-hidden className="size-5" />
+        )}
+        {due.length > 0 && (
+          <span
+            aria-hidden
+            className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs leading-none font-semibold text-primary-foreground"
+          >
+            {due.length}
+          </span>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="max-w-[calc(100vw-1rem)]">
+        <DropdownMenuLabel>Batches to finish</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {due.length === 0 ? (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">
+            No batch is due. You’ll see a notice 10 minutes before each batch ends.
+          </p>
+        ) : (
+          due.map((n) => (
+            <DropdownMenuItem key={n.slotAt} asChild>
+              <Link href={finishHref(n)}>
+                <Hourglass aria-hidden />
+                Batch {n.number} is due. Finish it now.
+              </Link>
+            </DropdownMenuItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

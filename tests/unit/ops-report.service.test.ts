@@ -19,23 +19,25 @@ vi.mock("@/server/models/report.model", () => report);
 vi.mock("@/server/models/ops-report.model", () => ops);
 const productionDay = (
   day: string,
-  pairs: number,
+  passed: number,
   quota: number | null,
   shortfall: string | null,
 ) => ({
   day,
-  checkIns: 3,
-  entered: 3,
+  batches: 2,
+  finishedBatches: 2,
   missed: 0,
   full: true,
-  byType: [{ shoeTypeId: "st1", label: "School Shoe", pairs, quota }],
-  pairs,
+  finished: passed + 2,
+  failed: 2,
+  passed,
+  failedShare: 2 / (passed + 2),
   quota,
-  share: quota ? pairs / quota : null,
+  share: quota ? passed / quota : null,
   attendanceTaken: true,
   constructorsPresent: 10,
   constructorsOnRoster: 12,
-  pairsPerConstructor: pairs / 10,
+  pairsPerConstructor: (passed + 2) / 10,
   shortfall,
 });
 const production = {
@@ -69,7 +71,6 @@ beforeEach(() => {
   production.productionReport.mockImplementation(async (r: { from: string }) =>
     r.from === "2026-10-02"
       ? {
-          shoeTypes: [{ id: "st1", label: "School Shoe" }],
           days: [
             productionDay(
               "2026-10-06",
@@ -79,16 +80,30 @@ beforeEach(() => {
             ),
             productionDay("2026-10-07", 90, 85, null),
           ],
-          totals: { pairs: 160, share: 160 / 170, daysBelow: 1, daysWithQuota: 2 },
+          totals: {
+            finished: 164,
+            failed: 4,
+            passed: 160,
+            failedShare: 4 / 164,
+            share: 160 / 170,
+            daysBelow: 1,
+            daysWithQuota: 2,
+          },
         }
       : {
-          shoeTypes: [],
           days: [],
-          totals: { pairs: 100, share: 0.5, daysBelow: 0, daysWithQuota: 0 },
+          totals: {
+            finished: 100,
+            failed: 8,
+            passed: 92,
+            failedShare: 0.08,
+            share: 0.5,
+            daysBelow: 0,
+            daysWithQuota: 0,
+          },
         },
   );
   production.recentProductionDays.mockResolvedValue({
-    shoeTypes: [{ id: "st1", label: "School Shoe" }],
     days: [
       productionDay("2026-10-02", 70, 85, "x"),
       productionDay("2026-10-03", 70, 85, "x"),
@@ -192,10 +207,11 @@ const PERSON_KEYS = [
 ];
 
 describe("operationsReport", () => {
-  it("puts production against the quota and the rolls together (Phase 23)", async () => {
+  it("puts the batches' pairs against the quota and the rolls together (Phase 27)", async () => {
     const r = await svc.operationsReport(range, now);
-    expect(r.kpis.pairs).toMatchObject({ value: 160, previous: 100 });
-    expect(r.kpis.pairs.change).toBeCloseTo(0.6);
+    expect(r.kpis.pairs).toMatchObject({ value: 164, previous: 100 });
+    expect(r.kpis.pairs.change).toBeCloseTo(0.64);
+    expect(r.kpis.failedPairs).toMatchObject({ value: 4, previous: 8 });
     expect(r.kpis.ofQuota.value).toBeCloseTo(160 / 170);
     expect(r.kpis.rollsFinished.value).toBe(2);
     expect(r.kpis.rollsOpen).toBe(2);

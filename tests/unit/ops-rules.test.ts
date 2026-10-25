@@ -82,7 +82,7 @@ describe("buildAttention", () => {
     expect(items[0].severity).toBe("critical");
     expect(items.find((i) => i.id === "below-quota")).toMatchObject({
       title: "3 of the last 5 working days were below quota",
-      href: "/production",
+      href: "/batches",
     });
   });
 
@@ -112,7 +112,7 @@ describe("buildAttention", () => {
     expect(items.find((i) => i.id === "stock-low")?.detail).toBe(
       "Restock them before they run out.",
     );
-    const screens = ["/inventory", "/production", "/reports"];
+    const screens = ["/inventory", "/batches", "/reports"];
     for (const item of items) expect(screens).toContain(item.href.split(/[?#]/)[0]);
   });
 });
