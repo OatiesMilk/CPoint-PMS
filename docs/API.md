@@ -199,11 +199,13 @@ from before 24 Oct 2026 keep the earlier shape (`rejectAtOrAbove`, `reworkAtOrAb
 
 ## Scans (session)
 
-| Method & path                  | Permission  | Notes                                                                                                     |
-| ------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/scans`            | `scan:read` | filters `verdict` (`PASS` or `REJECT`), `source`, `roll` (code), `defect`, `page`; or `limit=1…50` (live) |
-| `GET /api/v1/scans/{id}`       | `scan:read` | scan and detections (with boxes); no person                                                               |
-| `GET /api/v1/scans/{id}/image` | `scan:read` | the captured image (`Cache-Control: private`)                                                             |
+| Method & path                  | Permission                   | Notes                                                                                     |
+| ------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `GET /api/v1/scans/{id}`       | `scan:read` (FM)             | scan and detections (with boxes); no person                                               |
+| `GET /api/v1/scans/{id}/image` | `scan:read` or `camera:view` | the captured image (`Cache-Control: private`); the Admin's Camera page shows the last one |
+
+There is no scans list since Phase 28 (A-26, D-100): `GET /api/v1/scans` answers `405` (only the
+device `POST` remains), and a section is reached from its roll (`/api/v1/rolls/{id}`).
 
 The camera's verdict is final (D-093): there is no decision endpoint. The Review Queue, the Repair
 Station and Salvage, with `/api/v1/rework/**`, `/api/v1/salvage/**` and
@@ -377,6 +379,16 @@ default is the last 14 days, at most 92, and never past today.
   rejected sections by main defect (A-11). `/api/v1/reports/repairs` was removed (D-094).
 - **CSV:** UTF-8 with a BOM and CRLF, so it opens correctly in Excel. Text cells starting with
   `= + - @` are prefixed with `'`.
+
+## Demo tools (no session, Phase 28, D-101)
+
+Only while `DEMO_LOGIN_TOOLS=true` and `SEED_DEMO_USERS=true`; otherwise both answer `404`. The
+only routes without `requireApiPermission`.
+
+| Method & path               | Body                               | Notes                                                                                                                                                                                                       |
+| --------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/demo/sign-in` | `{ role }` (one of the four roles) | signs in as that role's demo account with the server's `DEMO_USER_PASSWORD`; `200 { data: { redirectTo } }`. `409 DEMO_ACCOUNT_MISSING` or `DEMO_PASSWORD_MISSING`; `401 SIGN_IN_FAILED` (locked, inactive) |
+| `POST /api/v1/demo/reset`   | `{ confirm: "RESET" }`             | the `demo:reset` plus a fresh demo week (about a minute); `200 { data: { removed, demoWeek } }`; `409 RESET_RUNNING` while one runs; `422` for any other word                                               |
 
 ## Coming next
 

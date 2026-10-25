@@ -2,7 +2,7 @@
  * Intent brief (ui-craft §1)
  * Who:   the Quality Inspector on their phone by the line, finishing each batch with the pairs
  *        finished and failed (the Floor Manager covers on a day no QI is present, D-088); the
- *        Floor Manager reading the day against the quota at a desk; the Admin viewing.
+ *        Floor Manager reading the day against the quota at a desk (Batches is the QI's home, D-100).
  * What:  see today's batches (C-2, C-4) with where each stands, finish the one that is due, see the
  *        passed pairs against the quota (C-41) and, for the Floor Manager, why recent days fell
  *        short. Replaces Production (Phase 23).

@@ -27,6 +27,7 @@ const {
   checkSession,
   changeOwnPassword,
   recordSignOut,
+  loginErrorMessage,
   MAX_FAILED_ATTEMPTS,
   LOCK_MINUTES,
 } = await import("@/server/services/auth.service");
@@ -76,6 +77,23 @@ describe("verifyCredentials", () => {
       expect.anything(),
       expect.objectContaining({ action: "user.login" }),
     );
+  });
+
+  it("labels a demo sign-in in the audit log (D-101), and a normal one not at all", async () => {
+    users.findUserByEmail.mockResolvedValue(user());
+    verifyPassword.mockResolvedValue(true);
+    await verifyCredentials(
+      { email: "manager@cpoint.local", password: "pw", method: "demo" },
+      {},
+      now,
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ action: "user.login", after: { method: "demo" } }),
+    );
+    recordAudit.mockClear();
+    await attempt();
+    expect(recordAudit.mock.calls[0][1]).not.toHaveProperty("after");
   });
 
   it("gives an unknown email the same answer as a wrong password, after a real bcrypt compare", async () => {
@@ -241,5 +259,13 @@ describe("sign-out revocation (D-025)", () => {
       expect.anything(),
       expect.objectContaining({ action: "user.logout" }),
     );
+  });
+});
+
+describe("loginErrorMessage", () => {
+  it("names the reason and the fix, never which field was wrong", () => {
+    expect(loginErrorMessage("inactive")).toMatch(/deactivated/);
+    expect(loginErrorMessage("locked:1")).toMatch(/locked for 1 more minute\./);
+    expect(loginErrorMessage("credentials")).toMatch(/Email or password is incorrect/);
   });
 });

@@ -3,27 +3,27 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-24 (Phase 27 built)
-**Branch:** `main` has Phase 26 (#24, QA run 2 passed). Phase 27 is **uncommitted** in
+**Last updated:** 2026-10-25 (Phase 28 QA passed, run 2)
+**Branch:** `main` has Phase 27 (#25, QA run 5 passed, CI green). Phase 28 is **uncommitted** in
 `C:\dev\CPoint-PMS`; Dylan commits it after Codex QA passes.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 27, batches are the check-in intervals (D-097 to D-099). **QA passed (run 5,
-`qa/reports/2026-10-24-phase-27-run5.md`)**; commit and PR next. Run 5: the batches spec alone 6
-of 6, toasts leave in about 4 s with mouse and touch; the full suite 72 passed, 1 failed (an
-isolation note: once under the parallel run the QI phone test saw "3 pairs" saved instead of 12;
-the test now checks both fields' values before it saves; not rerun, CI runs it). Run 1 FAIL (the demo rate, now from the
-roster; stale `.next/dev/types`, deleted). Run 2 (`qa/reports/2026-10-24-phase-27-run2.md`):
-build, S2 (three short days) and S9 passed; e2e 67 passed, 5 failed, 1 skipped, 4 not run, all
-test faults, fixed: `auth.spec.ts` expected "Production" in the nav, `admin.spec.ts` looked for the
-supplier on the wrong Settings tab, `batches.spec.ts` didn't untick "No lunch break" (its own
-no-lunch row). `npm run check` passed (527 unit tests). The migration is applied to the dev
-database (24 Oct).
-Phase 26 passed QA (run 2) and is merged (#24).
-**Then: Phases 28 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
+**Current phase:** Phase 28, each role sees only its modules, and the demo sign-in tools (D-100,
+D-101). Codex run 1 (`qa/reports/2026-10-25-phase-28-roles-and-demo-tools.md`): FAIL, 21 of 25
+scenarios, e2e 78 passed, 2 failed, 3 skipped; demo e2e 1 passed, 2 failed. All six findings fixed:
+the notice's Finish batch on Batches opened no dialog (F1); the first click on a demo button or
+Reset demo data was lost to Email's blur check (F3, F4, F6: Email isn't auto-focused with the
+tools on, and a blur towards them doesn't validate); the reset's audit row came after the default
+lunch (F5); the smoke test's axe needed `browser.newContext()` (F2). `npm run check` passed (548
+unit tests). **Run 2 PASS** (`qa/reports/2026-10-25-phase-28-run2.md`): 8 of 9 checks, 1 blocked
+(the manual Finish batch from a notice: Sunday, no due batch; the e2e test covers it); the demo
+buttons and Reset work on the first click; e2e 83 passed, 0 failed, 3 skipped; demo e2e 3 passed,
+1 skipped; axe 0 violations. Commit and PR next.
+Phase 27 passed QA (run 5) and is merged (#25).
+**Then: Phases 29 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
 `docs/prompts/factory-visit-changes.md`, C-1 to C-41).
-**Overall:** 28 phases built (0 to 27); 4 planned (28 to 31, Phase 30 in two parts)
+**Overall:** 29 phases built (0 to 28); 3 planned (29 to 31, Phase 30 in two parts)
 
 ## Phase progress
 
@@ -60,14 +60,36 @@ Phase 26 passed QA (run 2) and is merged (#24).
       (QA passed, run 3)
 - [x] 26. Capture on the constructors' own phones; rolls start and finish there (QA passed, run 2)
 - [x] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
-      (QA passed, run 5)
-- [ ] 28. Each role sees only its modules; demo sign-in and reset on the login page
+      (QA passed, run 5; merged #25)
+- [x] 28. Each role sees only its modules; demo sign-in and reset on the login page (built; QA
+      next)
 - [ ] 29. Inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
 - [ ] 30. The whole-roll check (A, with real rolls) and the return to the supplier (B)
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
 
+- **Each role sees only its modules (Phase 28, D-100, C-18):**
+  - Sidebars, one flat list each: constructor **Capture**; QI **Batches** (its home;
+    `/quality-inspector` is 404); FM **Overview, Batches, Attendance, Reports, Inventory**; Admin
+    **Overview, Users, Settings, Camera, API tokens, Audit log**. Everything else is the 403 page.
+  - Matrix: `camera:view` Admin; `scan:read`, `inventory:read`, `attendance:read`,
+    `report:quality` FM; `production:read` FM and QI.
+  - Gone (A-26): the Scans list `/scans` and `GET /api/v1/scans` (405; the device `POST` stays),
+    the Latest scans widget, the QI's Reports, the Admin's Batches, Attendance and Inventory, the
+    FM's and QI's Camera. A section's page stays for the FM, from its roll ("Roll R-…" back link).
+  - FM home: Today's batches, Attendance, **Rolls today** (sections checked, rejected for salvage,
+    rolls still open), Low stock, Daily summary. Admin home: System health, Users, **Camera**,
+    Unknown defect classes, **Lunch break**, Audit log. The Admin's Camera keeps the last capture's
+    photo (`/api/v1/scans/{id}/image` takes `scan:read` or `camera:view`).
+- **Demo tools (Phase 28, D-101, C-17):** with `DEMO_LOGIN_TOOLS=true` and `SEED_DEMO_USERS=true`
+  the login page has **Demo sign-in** (four buttons, the server's `DEMO_USER_PASSWORD`, audited
+  `method: "demo"`) and **Reset demo data** (type RESET; the same reset as
+  `npm run demo:reset -- --yes` with a fresh week, one at a time, also in a production build;
+  audited `origin: "login page"`), and every page shows a **Demo mode** band. Off: nothing shows
+  and `POST /api/v1/demo/{sign-in,reset}` answer 404. Default off in `.env.example` and Compose.
+- Where the bullets below mention the QI home, the Scans list, Latest scans, the QI's Reports or
+  the Admin's read-only views, Phase 28 replaced them.
 - **Batches (Phase 27, D-097 to D-099):**
   - A **batch** is one check-in interval of the working day (C-2). Production is now **Batches**
     (`/batches`; `/production` is 404). Internally a finished batch is still a `ProductionCheckIn`.
@@ -284,6 +306,10 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
+  - Phase 28: `npm run check` passed, **548 unit tests** (the matrix and sidebars per role, the demo
+    endpoints off → 404, the reset lock, the demo sign-in audit). E2E: `auth.spec.ts` (nav, homes,
+    refused pages per role, the demo tools both ways, axe on the login page) and nine other specs
+    updated; not run (Codex).
   - Phase 27: `npm run check` passed, **526 unit tests** (the shoe-type and per-type tests went;
     the batch, lunch, notice and quota tests came). E2E: `batches.spec.ts` replaces
     `production.spec.ts`; `reports`, `admin` and `rolls` specs updated; not run (Codex).
@@ -386,21 +412,17 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. PR #25 is open. CI's `e2e` failed on two sign-in loops (a notices request could restore the
-   cookie); fixed in the tests. Codex re-check: `qa/CODEX_PROMPT_CI_RECHECK_feature-phase-27-batches.md`,
-   then Dylan pushes the fix.
-2. Watch the QI phone test in `batches.spec.ts` in CI (run 5's isolation note).
-3. After PASS, Dylan commits Phase 27 on a new branch from `main`, pushes and opens the PR
-   (D-032). Claude gives the git commands when asked; CI runs on the PR and Claude fixes any
-   failure.
-4. Phase 28 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 28. Stop
-   for my approval before writing code." It also trims the FM sidebar (Camera, Scans, the Quality
-   heading) and makes Batches the QI's home (Dylan, Phase 27 plan question 3).
-5. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
-6. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
+1. Done: Codex QA passed (run 2). Dylan: on a working day, as the QI, press a notice's Finish
+   batch on `/batches`, then Not now, then Finish batch again (the one blocked check).
+2. After PASS, Dylan commits Phase 28 on a new branch from `main`, pushes and opens the PR (D-032).
+   Claude gives the git commands when asked; CI runs on the PR and Claude fixes any failure.
+3. Phase 29 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 29. Stop
+   for my approval before writing code."
+4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
+5. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
    an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the
    "Simulator" token first (it was pasted in chat).
-7. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
+6. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
    `docker image prune -a -f` frees about 8.4 GB.
 
 Later:
@@ -415,6 +437,16 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-10-25, Phase 28 plan): the Scans list is removed (A-26); the FM home cards as
+  the brief lists them, with Rolls today; the flag is `DEMO_LOGIN_TOOLS`; one flat sidebar per role
+  (D-100, D-101). Tell CPoint the QI's phone opens on Batches and the Admin no longer sees
+  production pages.
+- ASSUMPTION (A-23, D-101): the demo tools need both `DEMO_LOGIN_TOOLS` and `SEED_DEMO_USERS`; a
+  production build may reset only from the login page while the flag is on.
+- ASSUMPTION (D-100): "Rolls today" counts the sections checked today, those rejected (for
+  salvage), and the rolls open now.
+- ASSUMPTION (D-100): the Admin's Camera page keeps the last capture's photo, so the image route
+  also takes `camera:view`.
 - Decided (Dylan, 2026-10-24, Phase 26 plan): several rolls open at once with a Roll dropdown at
   Capture; a roll finishes only at Capture once fully scanned; the FM cancels any open roll with a
   reason, anyone with camera access an empty one; no stages; the supplier is required; Capture is

@@ -150,7 +150,7 @@ test("using a leather roll from stock links no roll (Phase 26)", async ({ browse
   expect(history.data.movements[0]).toMatchObject({ type: "OUT", quantityDelta: -1, roll: null });
 });
 
-test("the System Admin sees inventory read-only; the Quality Inspector has no access", async ({
+test("Inventory is the Floor Manager's alone (D-100): the Admin and the QI are refused", async ({
   browser,
   page,
 }) => {
@@ -158,11 +158,11 @@ test("the System Admin sees inventory read-only; the Quality Inspector has no ac
   const item = await createItem(api, { reorderLevel: 1, openingStock: 3 });
 
   await signInAs(page, ACCOUNTS.admin);
-  await page.goto(`/inventory/${item.id}`);
-  await expect(page.getByTestId("on-hand")).toHaveText("3 boxes");
-  await expect(
-    page.getByRole("button", { name: /Receive stock|Use stock|Stock count/ }),
-  ).toHaveCount(0);
+  for (const path of ["/inventory", `/inventory/${item.id}`]) {
+    await page.goto(path);
+    await expect(page).toHaveURL("/forbidden");
+  }
+  expect((await page.request.get("/api/v1/inventory")).status()).toBe(403);
   const post = await page.request.post(`/api/v1/inventory/${item.id}/movements`, {
     data: { type: "IN", quantity: 1 },
   });

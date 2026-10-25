@@ -1824,3 +1824,69 @@ passed inspection (C-41).
 (`saveQuota`, `productionCsv`), `src/server/services/ops-report.service.ts`,
 `src/server/services/settings.service.ts`, `src/server/validators/{production,settings}.validator.ts`.
 **Consequences:** the demo week sets one quota of 128.
+
+### D-100 · 2026-10-25 · Accepted — Each role sees only its modules (Phase 28)
+
+**Context:** CPoint asked that each role sees only its own work (C-18): the constructor Capture,
+the QI Batches, the Floor Manager Batches, Attendance, Reports and Inventory, the System Admin the
+administration modules. Dylan approved the plan's four answers on 2026-10-25.
+**Decision:**
+
+- The matrix: `camera:view` → System Admin; `scan:read`, `inventory:read`, `attendance:read`,
+  `report:quality` → Floor Manager; `production:read` → FM and QI. The rest is unchanged
+  (`camera:capture` for constructors with `canCapture`, D-095; the FM finishes a batch only on a
+  day no QI is present, D-088).
+- One sidebar per role, a flat list without headings, in this order: constructor **Capture**; QI
+  **Batches**; FM **Overview, Batches, Attendance, Reports, Inventory**; Admin **Overview, Users,
+  Settings, Camera, API tokens, Audit log**. Each item still needs its permission.
+- Homes: Batches is the QI's home (`/quality-inspector` is gone). The FM home has Today's batches,
+  Attendance, **Rolls today** (sections checked today, rejected for salvage, rolls still open), Low
+  stock and the Daily summary. The Admin home has System health, Users, Camera, Unknown defect
+  classes, Lunch break and the Audit log.
+- Removed (A-26): the Scans list `/scans`, `GET /api/v1/scans`, the Latest scans widget, the QI's
+  Reports, the Admin's read-only Batches, Attendance and Inventory, the FM's and QI's Camera page.
+  A section's page (`/scans/{id}`) stays for the FM, reached from its roll. The Admin's Camera page
+  keeps the last capture's photo: `GET /api/v1/scans/{id}/image` takes `scan:read` or
+  `camera:view`.
+
+**Amends:** D-023 and D-079 (the Admin's read access), D-033 (the QI's Quality report), D-066 and
+D-067 (who opens the Camera page). Supersedes the master spec's old `<roles_and_modules>` rows.
+**Where:** `src/server/policies/{permissions,navigation}.ts`, `src/lib/domain.ts` (`ROLE_HOME`),
+`src/app/(app)/{floor-manager,admin,camera,reports,scans/[id]}/**`,
+`src/components/features/reports/home-cards.tsx`, `src/server/controllers/scan.controller.ts`.
+**Consequences:** tell CPoint the QI's phone opens straight on Batches and the Admin no longer sees
+production pages.
+
+### D-101 · 2026-10-25 · Accepted — Demo sign-in and Reset demo data on the login page (Phase 28)
+
+**Context:** for the demo, CPoint asked for a quick sign-in and a reset button on the login page
+(C-17, A-23). Nobody is signed in there, so these can't use `requireApiPermission`.
+**Decision:**
+
+- `DEMO_LOGIN_TOOLS` (default off; "For the demo only. Never turn on for real use."). The tools
+  exist only while it **and** `SEED_DEMO_USERS` are on; otherwise both endpoints answer `404`
+  before reading the body, and the login page shows nothing.
+- Under the login form: **Demo sign-in** with four buttons (Floor Manager · Rodel Pascual, Quality
+  Inspector · Maricel Dizon, System Admin · Jerome Salazar, Shoe Constructor · Noel Manalo) and
+  **Reset demo data** (a dialog listing what goes and what stays, RESET typed exactly, progress
+  with the seconds, "Fresh demo week loaded.").
+- `POST /api/v1/demo/sign-in` `{ role }` signs in through the normal credentials path with the
+  server's `DEMO_USER_PASSWORD`, which never reaches the browser; lockout and inactive accounts
+  apply as usual. The `user.login` audit row gets `after: { method: "demo" }`, only for the four
+  accounts while the flag is on.
+- `POST /api/v1/demo/reset` `{ confirm: "RESET" }` runs the same reset as
+  `npm run demo:reset -- --yes` plus a fresh demo week, one at a time (`409 RESET_RUNNING`; a lock
+  in memory, since the app is one process), keeps the token in `CV_DEVICE_TOKEN`, and audits
+  `system.demo_reset` with `origin: "login page"`. It runs in a production build while the flag is
+  on; the command line still refuses `NODE_ENV=production`.
+- A thin **Demo mode** band on every signed-in page, the login page and the password page while
+  the flag is on.
+- These two routes are the only API routes without `requireApiPermission`. They are fenced by the
+  two flags, four fixed accounts, a server-held password, one reset at a time and the audit log.
+
+**Amends:** D-056 (a reset from the login page, also in a production build while the flag is on).
+**Where:** `src/server/services/demo-tools.service.ts`, `src/server/controllers/demo.controller.ts`,
+`src/app/api/v1/demo/{sign-in,reset}/route.ts`, `src/app/(auth)/login/demo-tools.tsx`,
+`src/components/features/demo-band.tsx`, `src/server/lib/{env,auth}.ts`,
+`src/server/services/{auth,demo-reset}.service.ts`, `.env.example`, `docker-compose.yml`.
+**Consequences:** never set `DEMO_LOGIN_TOOLS=true` at CPoint; the reset can't be undone.

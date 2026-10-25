@@ -20,6 +20,7 @@ import { runInTransaction } from "@/server/models/db";
 import { findSupplier, listActiveSuppliers } from "@/server/models/reference-data.model";
 import {
   closeRoll,
+  countOpenRolls,
   countVerdictsForRolls,
   findRollDetail,
   findRollState,
@@ -241,4 +242,9 @@ export async function resolveCaptureRoll(
 export async function deviceTargetRoll(): Promise<OpenRoll | null> {
   const oldest = oldestOpenRoll(await listOpenRolls());
   return oldest ? toOpenRoll(oldest) : null;
+}
+
+/** Rolls open now, being captured (the FM home's Rolls today, Phase 28). */
+export function openRollCount(): Promise<number> {
+  return countOpenRolls();
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ScanSource, Verdict } from "@/lib/domain";
+import { ScanSource } from "@/lib/domain";
 import { OUT_OF_DATE } from "./shared";
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -91,22 +91,6 @@ export const ingestFieldsSchema = z.object({
 });
 
 export type IngestFields = z.infer<typeof ingestFieldsSchema>;
-
-export const scanListQuerySchema = z.object({
-  verdict: z.enum(Verdict).optional().catch(undefined),
-  source: z.enum(ScanSource).optional().catch(undefined),
-  roll: z.string().trim().max(30).optional().catch(undefined), // roll code, e.g. B-2026-0001
-  /** A defect class key (from Reports → Defects by type): scans with a detection of it. */
-  defect: z
-    .string()
-    .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/)
-    .optional()
-    .catch(undefined),
-  page: z.coerce.number().int().min(1).max(10_000).optional().catch(undefined),
-  limit: z.coerce.number().int().min(1).max(50).optional().catch(undefined),
-});
-
-export type ScanListQuery = z.infer<typeof scanListQuerySchema>;
 
 export const isScanId = (value: string) => z.uuid().safeParse(value).success;
 

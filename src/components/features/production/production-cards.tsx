@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, CircleAlert, ClipboardList } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, CircleAlert } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Workforce } from "@/lib/attendance-rules";
 import type { BatchState, QuotaProgress as Progress } from "@/lib/production-rules";
-import { BatchStateBadge, QuotaProgress } from "./production-parts";
+import { QuotaProgress } from "./production-parts";
 
 /** What the home cards need from the day (the production service's today, passed by the page). */
 type BatchesToday = {
@@ -76,39 +75,6 @@ export function TodaysBatchesCard({ today }: { today: BatchesToday }) {
           </p>
         )}
         {today.shortfall && <p className="text-sm">{today.shortfall}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** The Quality Inspector's home: the batch that is due, late or under way, with Finish batch. */
-export function NextBatchCard({ today }: { today: BatchesToday }) {
-  const n = today.next;
-  return (
-    <Card data-testid="next-batch-card">
-      <CardHeader>
-        <CardTitle>Next batch</CardTitle>
-        <CardDescription>
-          {today.workforce.taken
-            ? `Constructors present today: ${today.workforce.constructorsPresent}`
-            : "Attendance not taken yet today."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col items-start gap-3">
-        <p className="flex items-center gap-2 text-lg">
-          <ClipboardList aria-hidden className="size-5 text-muted-foreground" />
-          {nextLine(today)}
-        </p>
-        {n && <BatchStateBadge state={n.state} paused={n.pausedForLunch} />}
-        {n?.canFinishNow && today.canEnter ? (
-          <Button asChild size="sm">
-            <Link href="/batches?finish=next">Finish batch {n.number}</Link>
-          </Button>
-        ) : (
-          <Link href="/batches" className="text-sm font-medium underline-offset-4 hover:underline">
-            Open Batches
-          </Link>
-        )}
       </CardContent>
     </Card>
   );

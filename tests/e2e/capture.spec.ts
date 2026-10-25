@@ -246,7 +246,7 @@ test.describe("Capture on a phone (Phase 26)", () => {
       "Ask the System Admin for camera access.",
     );
     await expect(page.getByRole("button", { name: "Capture", exact: true })).toHaveCount(0);
-    await page.goto("/scans");
+    await page.goto("/batches");
     await expect(page).toHaveURL(/\/forbidden/);
   });
 });

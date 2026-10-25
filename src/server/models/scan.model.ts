@@ -1,4 +1,4 @@
-import type { Prisma, Verdict } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { type Db, defaultDb } from "./db";
 
 export async function nextScanSequence(rollId: string, db: Db): Promise<number> {
@@ -36,73 +36,6 @@ export function findScanById(id: string, db: Db = defaultDb()) {
 }
 
 // ───────────── reads ─────────────
-
-const listSelect = {
-  id: true,
-  sequence: true,
-  aiVerdict: true,
-  finalVerdict: true,
-  maxConfidence: true,
-  source: true,
-  capturedAt: true,
-  createdAt: true,
-  roll: { select: { id: true, code: true } },
-  detections: {
-    orderBy: { confidence: "desc" },
-    take: 1,
-    select: {
-      rawClassKey: true,
-      confidence: true,
-      isUnknownClass: true,
-      defectType: { select: { label: true } },
-    },
-  },
-} satisfies Prisma.ScanSelect;
-
-export type ScanListRow = Prisma.ScanGetPayload<{ select: typeof listSelect }>;
-
-export type ScanFilters = {
-  verdict?: Verdict;
-  source?: Prisma.ScanWhereInput["source"];
-  rollCode?: string;
-  rollId?: string;
-  since?: Date;
-  defectKey?: string;
-};
-
-function scanWhere(f: ScanFilters): Prisma.ScanWhereInput {
-  return {
-    source: f.source,
-    rollId: f.rollId,
-    ...(f.verdict ? { finalVerdict: f.verdict } : {}),
-    ...(f.rollCode ? { roll: { code: { contains: f.rollCode, mode: "insensitive" } } } : {}),
-    ...(f.defectKey ? { detections: { some: { rawClassKey: f.defectKey } } } : {}),
-    ...(f.since ? { createdAt: { gte: f.since } } : {}),
-  };
-}
-
-export async function listScans(
-  filters: ScanFilters,
-  page: { skip: number; take: number },
-  order: "newest" | "oldest" = "newest",
-  db: Db = defaultDb(),
-): Promise<{ rows: ScanListRow[]; total: number }> {
-  const where = scanWhere(filters);
-  const [rows, total] = await Promise.all([
-    db.scan.findMany({
-      where,
-      select: listSelect,
-      orderBy: { createdAt: order === "newest" ? "desc" : "asc" },
-      ...page,
-    }),
-    db.scan.count({ where }),
-  ]);
-  return { rows, total };
-}
-
-export function countScans(filters: ScanFilters, db: Db = defaultDb()) {
-  return db.scan.count({ where: scanWhere(filters) });
-}
 
 const detailInclude = {
   roll: {

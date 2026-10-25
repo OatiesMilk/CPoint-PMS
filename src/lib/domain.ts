@@ -24,7 +24,8 @@ export const ROLE_LABELS: Record<Role, string> = {
 /** Each role's landing page after sign-in. */
 export const ROLE_HOME: Record<Role, string> = {
   FLOOR_MANAGER: "/floor-manager",
-  QUALITY_INSPECTOR: "/quality-inspector",
+  // The QI's one page is Batches (Phase 28, D-100).
+  QUALITY_INSPECTOR: "/batches",
   SYSTEM_ADMIN: "/admin",
   // A constructor's one page is Capture (Phase 26, D-095).
   SHOE_CONSTRUCTOR: "/camera/capture",

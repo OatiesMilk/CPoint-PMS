@@ -209,7 +209,8 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
     height: 844,
   });
   const note = `E2E batch ${Date.now()}`;
-  await expect(page.getByTestId("next-batch-card")).toBeVisible();
+  // Batches is the QI's home (Phase 28, D-100).
+  await expect(page.getByTestId("today-batches")).toBeVisible();
 
   // The notice: a banner on any page, a "(n)" in the tab title and the bell (A-9, C-6).
   const banner = page.getByTestId("batch-notice");
@@ -409,18 +410,18 @@ test("the Floor Manager finishes batches only on a day no Quality Inspector is p
   }
 });
 
-test("the Admin views the batches read-only", async ({ browser }) => {
+test("the Admin is refused Batches (D-100) and sets only the lunch break", async ({ browser }) => {
   const page = await signedIn(browser, ACCOUNTS.admin.email, ACCOUNTS.admin.home);
-  await page.goto("/batches");
-  await expect(page.getByRole("heading", { name: "Batches", level: 1 })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Plan batches and quota" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^Finish batch/ })).toHaveCount(0);
-  await page.goto("/batches/plan");
-  await expect(page).toHaveURL("/forbidden");
-  expect((await page.request.get("/api/v1/production/today")).status()).toBe(200);
+  for (const path of ["/batches", "/batches/plan"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL("/forbidden");
+  }
+  expect((await page.request.get("/api/v1/production/today")).status()).toBe(403);
   expect(
     (await page.request.put("/api/v1/production/quotas", { data: { pairs: 10 } })).status(),
   ).toBe(403);
+  await page.goto("/admin");
+  await expect(page.getByTestId("lunch-break-card")).toContainText("Lunch break");
 });
 
 test("a Shoe Constructor is refused, and the old pages are gone", async ({ browser }) => {

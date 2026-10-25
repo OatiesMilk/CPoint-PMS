@@ -21,7 +21,6 @@ function refresh() {
   revalidatePath("/batches");
   revalidatePath("/batches/plan");
   revalidatePath("/floor-manager");
-  revalidatePath("/quality-inspector");
   revalidatePath("/reports");
 }
 

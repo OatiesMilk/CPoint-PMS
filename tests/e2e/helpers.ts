@@ -4,7 +4,7 @@ export const DEMO_PASSWORD = process.env.DEMO_USER_PASSWORD ?? "";
 
 export const ACCOUNTS = {
   manager: { email: "manager@cpoint.local", home: "/floor-manager" },
-  inspector: { email: "inspector@cpoint.local", home: "/quality-inspector" },
+  inspector: { email: "inspector@cpoint.local", home: "/batches" },
   admin: { email: "admin@cpoint.local", home: "/admin" },
   constructor: { email: "constructor@cpoint.local", home: "/camera/capture" },
 } as const;

@@ -1,7 +1,9 @@
 import type { Role } from "@/lib/domain";
 
 /**
- * Role × permission matrix (docs/prompts/system-rebuild.md → <roles_and_modules>).
+ * Role × permission matrix (docs/prompts/system-rebuild.md → <roles_and_modules>). Each role sees
+ * only its own modules (Phase 28, D-100, C-18): the constructor Capture, the QI Batches, the Floor
+ * Manager Batches, Attendance, Reports and Inventory, the System Admin the administration pages.
  * Pure and dependency-free so it can be unit-tested and used to build navigation.
  */
 export const PERMISSIONS = {
@@ -9,30 +11,32 @@ export const PERMISSIONS = {
   // one with a reason. Starting and finishing happen at Capture (camera:capture).
   "roll:read": ["FLOOR_MANAGER"],
   "roll:manage": ["FLOOR_MANAGER"],
-  "camera:view": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
+  // The Camera page (status, model, early-model notice) is an administration page (D-100).
+  "camera:view": ["SYSTEM_ADMIN"],
   // Capture on their own phones (C-23): only Shoe Constructors the System Admin allows
   // (canCapture, checked by canCaptureFor). Starting, finishing and cancelling an empty roll come
   // with it. The QI and the Floor Manager no longer capture (C-18).
   "camera:capture": ["SHOE_CONSTRUCTOR"],
   "camera:operators": ["SYSTEM_ADMIN"], // Users → More actions → May capture (amends D-075)
-  "scan:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
-  "inventory:read": ["FLOOR_MANAGER", "SYSTEM_ADMIN"],
+  // A section's page, reached from its roll in Reports → Rolls (A-26). There is no Scans list.
+  "scan:read": ["FLOOR_MANAGER"],
+  "inventory:read": ["FLOOR_MANAGER"],
   "inventory:manage": ["FLOOR_MANAGER"],
   "report:production": ["FLOOR_MANAGER"],
-  "report:quality": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
+  "report:quality": ["FLOOR_MANAGER"],
   "user:manage": ["SYSTEM_ADMIN"],
   "settings:manage": ["SYSTEM_ADMIN"], // defect types, the CV rule, suppliers, the lunch break
   "token:manage": ["SYSTEM_ADMIN"],
   "audit:read": ["SYSTEM_ADMIN"],
   "system:health": ["SYSTEM_ADMIN"],
-  // Attendance, a one-day log book (D-077): the Floor Manager takes it, the Admin views it.
-  "attendance:read": ["FLOOR_MANAGER", "SYSTEM_ADMIN"],
+  // Attendance, a one-day log book (D-077): the Floor Manager's alone since D-100.
+  "attendance:read": ["FLOOR_MANAGER"],
   "attendance:manage": ["FLOOR_MANAGER"],
   // Batches (Phase 27, D-097 to D-099; before it production progression, D-083 to D-086): the
-  // QI finishes each batch, the Floor Manager plans how often and the quota, and the Admin views
-  // (until Phase 28) and sets the lunch break (settings:manage). The Floor Manager may finish a
-  // batch only on a day no Quality Inspector is present (D-088): mayEnterCheckIns decides.
-  "production:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
+  // QI finishes each batch, the Floor Manager plans how often and the quota, and the Admin sets
+  // the lunch break (settings:manage) without seeing Batches (D-100). The Floor Manager may finish
+  // a batch only on a day no Quality Inspector is present (D-088): mayEnterCheckIns decides.
+  "production:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
   "production:checkin": ["QUALITY_INSPECTOR", "FLOOR_MANAGER"],
   "production:plan": ["FLOOR_MANAGER"],
 } as const satisfies Record<string, readonly Role[]>;

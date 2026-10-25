@@ -127,7 +127,7 @@ test("Floor Manager journey: read the rolls, receive stock, read the report", as
   await expect(page.getByTestId("report-range")).toBeVisible();
 });
 
-test("Quality Inspector journey: a rejected and a passed section, explained on their pages", async ({
+test("QI lands on Batches; the FM opens a rejected section from its roll", async ({
   browser,
   page,
   request,
@@ -137,17 +137,25 @@ test("Quality Inspector journey: a rejected and a passed section, explained on t
   await postScan(request, token, roll.id, [{ classKey: "smoke-unknown", confidence: 0.9 }]);
   await postScan(request, token, roll.id, [{ classKey: "abrasion", confidence: 0.7 }]);
 
+  // The QI's one page is Batches (Phase 28, D-100).
   await signInAs(page, ACCOUNTS.inspector);
+  await expect(page).toHaveURL("/batches");
   await expectAccessible(page);
-  await page.goto(`/scans?roll=${roll.code}`);
-  await expect(page.locator("tbody tr")).toHaveCount(2);
-  await expectAccessible(page);
-  await page.goto(`/scans?roll=${roll.code}&verdict=REJECT`);
-  await expect(page.locator("tbody tr")).toHaveCount(1);
-  await page.locator("tbody a").first().click();
-  await expect(page).toHaveURL(/\/scans\/[0-9a-f-]{36}$/);
-  await expect(page.getByText(/so this section is rejected/)).toBeVisible();
-  await expectAccessible(page);
+
+  // A section's page is the Floor Manager's, reached from its roll (A-26).
+  // A context of its own: axe needs one made by browser.newContext() (QA Phase 28 F2).
+  const fmContext = await browser.newContext();
+  const fm = await fmContext.newPage();
+  await signInAs(fm, ACCOUNTS.manager);
+  await fm.goto(`/reports/rolls/${roll.id}`);
+  await expect(fm.getByTestId("shot-row")).toHaveCount(2);
+  await expectAccessible(fm);
+  await fm.getByTestId("shot-row").filter({ hasText: "Reject" }).getByRole("link").first().click();
+  await expect(fm).toHaveURL(/\/scans\/[0-9a-f-]{36}$/);
+  await expect(fm.getByText(/so this section is rejected/)).toBeVisible();
+  await expect(fm.getByRole("link", { name: `Roll ${roll.code}` })).toBeVisible();
+  await expectAccessible(fm);
+  await fmContext.close();
 });
 
 test("System Admin journey: thresholds, unknown classes and the audit trail", async ({ page }) => {
@@ -176,7 +184,7 @@ test("Shoe Constructor: Capture is their only page (Phase 26)", async ({ page })
       .or(page.getByText("Ask the System Admin for camera access.")),
   ).toBeVisible();
   await expectAccessible(page);
-  for (const path of ["/reports/rolls", "/inventory", "/scans"]) {
+  for (const path of ["/reports/rolls", "/inventory", "/batches"]) {
     await page.goto(path);
     await expect(page).toHaveURL("/forbidden");
   }

@@ -1,9 +1,9 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Floor Manager, who runs the production floor (Operations), and the Quality
- *        Inspector, who needs the inspection numbers (Quality). Desktop, end of shift or all day.
- * What:  Floor Manager: what is happening on the floor in these days and right now, and what is
- *        wrong. Quality Inspector: how the checkpoint before cutting did: Pass, Reject (for salvage) and the defects.
+ * Who:   the Floor Manager, who runs the production floor. Reports are theirs alone (Phase 28,
+ *        D-100). Desktop, end of shift or all day.
+ * What:  Operations: what is happening on the floor in these days and right now, and what is
+ *        wrong. Quality: how the checkpoint before cutting did: Pass, Reject (for salvage) and the defects.
  * Worst: a problem hidden under averages (a short day, an empty shelf), a number read as
  *        something else, or anyone singled out. Every figure says what it counts; everything is
  *        per day, batch, roll, item, supplier or defect type, never per person (D-008, D-033).
@@ -22,7 +22,6 @@ import { formatDayLabel, formatManilaDateTime } from "@/lib/format";
 import { PRESETS, parseRange } from "@/lib/report-rules";
 import { cn } from "@/lib/utils";
 import { requirePermission } from "@/server/policies/guard";
-import { can } from "@/server/policies/permissions";
 import { operationsReport } from "@/server/services/ops-report.service";
 import { qualityReport } from "@/server/services/report.service";
 import { reportQuerySchema } from "@/server/validators/report.validator";
@@ -30,13 +29,12 @@ import { reportQuerySchema } from "@/server/validators/report.validator";
 export const metadata: Metadata = { title: "Reports" };
 
 export default async function ReportsPage({ searchParams }: PageProps<"/reports">) {
-  const user = await requirePermission("report:quality");
+  await requirePermission("report:production");
   await connection();
   const query = reportQuerySchema.parse(await searchParams);
   const range = parseRange(query);
-  // The Floor Manager lands on Operations; the Quality Inspector only has Quality.
-  const canOperations = can(user.role, "report:production");
-  const view = canOperations && query.view !== "quality" ? "operations" : "quality";
+  // The Floor Manager lands on Operations; Quality is the other tab.
+  const view = query.view === "quality" ? "quality" : "operations";
   const now = new Date();
 
   const [operations, quality] = await Promise.all([
@@ -85,7 +83,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         }
       />
 
-      {canOperations && <ReportTabs current={view} qs={qs} />}
+      <ReportTabs current={view} qs={qs} />
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <nav aria-label="Report range" className="flex gap-1 rounded-md border p-1">

@@ -1,8 +1,5 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { BarList } from "@/components/features/charts/bar-list";
-import { SplitBar } from "@/components/features/charts/split-bar";
-import { VERDICT_SERIES } from "@/components/features/charts/verdict-legend";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDayLabel, formatPercent } from "@/lib/format";
 
@@ -20,43 +17,53 @@ function CardLink({ href, children }: { href: string; children: React.ReactNode 
 
 type Totals = { scanned: number; pass: number; reject: number };
 
-/** FM home: today's sections by final verdict, as counts with a 100% bar. */
-export function InspectionSplitCard({ totals }: { totals: Totals }) {
-  const decided = totals.pass + totals.reject;
+/**
+ * FM home: today's rolls at the checkpoint (Phase 28): sections checked, of them rejected (set
+ * aside for salvage), and the rolls still open at Capture.
+ */
+export function RollsTodayCard({ totals, openRolls }: { totals: Totals; openRolls: number }) {
+  const items = [
+    { key: "checked", label: "Sections checked", value: totals.scanned, note: "today" },
+    {
+      key: "rejected",
+      label: "Rejected (for salvage)",
+      value: totals.reject,
+      note: `${formatPercent(totals.scanned > 0 ? totals.reject / totals.scanned : null)} of checked`,
+    },
+    {
+      key: "open",
+      label: "Rolls still open",
+      value: openRolls,
+      note: "being captured now",
+    },
+  ];
   return (
-    <Card data-testid="inspection-split">
+    <Card data-testid="rolls-today">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle>Today’s inspection split</CardTitle>
+            <CardTitle>Rolls today</CardTitle>
             <CardDescription>
               {totals.scanned === 0
-                ? "No sections scanned yet today."
-                : `${totals.scanned} sections scanned, by verdict. Rejected ones are for salvage.`}
+                ? "No sections checked yet today."
+                : "The camera check before cutting, today so far."}
             </CardDescription>
           </div>
-          <CardLink href="/reports?preset=today">Report</CardLink>
+          <CardLink href="/reports/rolls">Rolls</CardLink>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <SplitBar counts={totals} />
-        <dl className="grid grid-cols-[repeat(auto-fit,minmax(4.5rem,1fr))] gap-2 text-sm">
-          {VERDICT_SERIES.map((s) => (
-            <div key={s.key}>
-              <dt className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
-                <span
-                  aria-hidden
-                  className="size-2.5 shrink-0 rounded-sm"
-                  style={{ background: s.color }}
-                />
-                {s.label}
-              </dt>
-              <dd className="text-xl font-semibold tabular-nums" data-testid={`split-${s.key}`}>
-                {totals[s.key]}
+      <CardContent>
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-3 text-sm">
+          {items.map((i) => (
+            <div key={i.key}>
+              <dt className="text-muted-foreground">{i.label}</dt>
+              <dd
+                className="text-xl font-semibold tabular-nums"
+                data-testid={`rolls-today-${i.key}`}
+              >
+                {i.value}
               </dd>
-              <dd className="text-xs text-muted-foreground tabular-nums">
-                {formatPercent(decided > 0 ? totals[s.key] / decided : null)}
-              </dd>
+              <dd className="text-xs text-muted-foreground tabular-nums">{i.note}</dd>
             </div>
           ))}
         </dl>
@@ -111,40 +118,6 @@ export function DailySummaryCard({ yesterday, today }: { yesterday: Day; today: 
             Download 14-day CSV
           </a>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-type Defect = { key: string; label: string; known: boolean; scans: number };
-
-/** QI home: today's defects by type. */
-export function DefectsTodayCard({ defects }: { defects: Defect[] }) {
-  return (
-    <Card data-testid="defects-today">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle>Defects by type</CardTitle>
-            <CardDescription>Today, by each section’s strongest detection.</CardDescription>
-          </div>
-          <CardLink href="/reports?preset=today">Report</CardLink>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {defects.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No defects detected today.</p>
-        ) : (
-          <BarList
-            label="Defects today"
-            items={defects.slice(0, 6).map((d) => ({
-              id: d.key,
-              label: d.known ? d.label : `${d.label} (unknown)`,
-              value: d.scans,
-              muted: !d.known,
-            }))}
-          />
-        )}
       </CardContent>
     </Card>
   );

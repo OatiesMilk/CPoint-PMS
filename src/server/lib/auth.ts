@@ -3,6 +3,7 @@ import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { loginSchema } from "@/server/validators/auth.validator";
 import { verifyCredentials } from "@/server/services/auth.service";
+import { isDemoSignIn } from "@/server/services/demo-tools.service";
 import { authConfig } from "./auth.config";
 import { logger } from "./logger";
 
@@ -41,11 +42,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   providers: [
     Credentials({
-      credentials: { email: { type: "email" }, password: { type: "password" } },
+      credentials: {
+        email: { type: "email" },
+        password: { type: "password" },
+        method: { type: "text" },
+      },
       async authorize(raw, request) {
         const parsed = loginSchema.safeParse(raw);
         if (!parsed.success) return null;
-        const result = await verifyCredentials(parsed.data, requestMeta(request));
+        // Only a demo account with the demo tools on is labelled a demo sign-in (D-101).
+        const method =
+          raw?.method === "demo" && isDemoSignIn(parsed.data.email) ? ("demo" as const) : undefined;
+        const result = await verifyCredentials({ ...parsed.data, method }, requestMeta(request));
         if (result.ok) return result.user;
         if (result.reason === "inactive") throw new InactiveAccountError();
         if (result.reason === "locked") throw new LockedAccountError(result.minutesLeft);

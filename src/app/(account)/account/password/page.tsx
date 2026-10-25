@@ -6,6 +6,8 @@
  *        mode says why and offers Sign out as the only other way out.
  */
 import type { Metadata } from "next";
+import { DemoBand } from "@/components/features/demo-band";
+import { demoToolsEnabled } from "@/server/services/demo-tools.service";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -25,55 +27,58 @@ export default async function ChangePasswordPage() {
   const forced = user.mustChangePassword;
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background p-10">
-      <div className="absolute top-6 right-6">
-        <ThemeToggle />
-      </div>
-      <main className="flex w-full max-w-sm flex-col gap-8">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <Image
-            src={logo}
-            alt="CPoint Shoe Store"
-            className="size-14 rounded-lg shadow-1"
-            priority
-          />
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {forced ? "Choose your password" : "Change password"}
-            </h1>
-            <p className="mt-1 text-muted-foreground">{user.email}</p>
+    <>
+      <DemoBand on={demoToolsEnabled()} />
+      <div className="relative flex min-h-screen items-center justify-center bg-background p-10">
+        <div className="absolute top-6 right-6">
+          <ThemeToggle />
+        </div>
+        <main className="flex w-full max-w-sm flex-col gap-8">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <Image
+              src={logo}
+              alt="CPoint Shoe Store"
+              className="size-14 rounded-lg shadow-1"
+              priority
+            />
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {forced ? "Choose your password" : "Change password"}
+              </h1>
+              <p className="mt-1 text-muted-foreground">{user.email}</p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex flex-col gap-5 rounded-lg border bg-card p-6 shadow-1">
-          {forced && (
-            <Alert tone="info">
-              You signed in with a temporary password from a System Admin. Choose your own to
-              continue.
-            </Alert>
-          )}
-          <PasswordForm forced={forced} />
-        </div>
+          <div className="flex flex-col gap-5 rounded-lg border bg-card p-6 shadow-1">
+            {forced && (
+              <Alert tone="info">
+                You signed in with a temporary password from a System Admin. Choose your own to
+                continue.
+              </Alert>
+            )}
+            <PasswordForm forced={forced} />
+          </div>
 
-        <div className="flex items-center justify-between text-sm">
-          {forced ? (
-            <span className="text-muted-foreground">Other devices will be signed out.</span>
-          ) : (
-            <Link
-              href={ROLE_HOME[user.role]}
-              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft aria-hidden className="size-4" />
-              Back
-            </Link>
-          )}
-          <form action={signOutAction}>
-            <Button type="submit" variant="link" className="h-auto p-0">
-              Sign out
-            </Button>
-          </form>
-        </div>
-      </main>
-    </div>
+          <div className="flex items-center justify-between text-sm">
+            {forced ? (
+              <span className="text-muted-foreground">Other devices will be signed out.</span>
+            ) : (
+              <Link
+                href={ROLE_HOME[user.role]}
+                className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft aria-hidden className="size-4" />
+                Back
+              </Link>
+            )}
+            <form action={signOutAction}>
+              <Button type="submit" variant="link" className="h-auto p-0">
+                Sign out
+              </Button>
+            </form>
+          </div>
+        </main>
+      </div>
+    </>
   );
 }

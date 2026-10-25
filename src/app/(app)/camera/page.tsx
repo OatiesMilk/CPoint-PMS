@@ -1,6 +1,6 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   Floor Manager, Quality Inspector or System Admin checking the camera before cutting.
+ * Who:   the System Admin checking the camera before cutting (an administration page, D-100).
  * What:  know whether sections are being captured, how many rolls are open, which model judged
  *        the last section, and who captures (Phase 26: constructors on their own phones).
  * Worst: an early model's verdicts trusted blindly. The early-model notice sits beside the model.
@@ -60,7 +60,6 @@ export default async function CameraPage() {
     status.state === "capturing" && status.lastScan?.device
       ? { ...STATE.capturing, label: "Scans arriving" }
       : STATE[status.state];
-  const canReadRolls = can(user.role, "roll:read");
   const canGrant = can(user.role, "camera:operators");
   const lastModel = modelName(status.lastScan?.modelVersion);
   const fromSimulator = status.lastScan?.source === "SIMULATOR";
@@ -98,10 +97,7 @@ export default async function CameraPage() {
               />
               <p className="text-sm text-muted-foreground">
                 Last capture: {last.roll.code} · section #{last.sequence},{" "}
-                {formatManilaDateTime(last.createdAt)}.{" "}
-                <Link href={`/scans/${last.id}`} className="underline underline-offset-4">
-                  Open scan
-                </Link>
+                {formatManilaDateTime(last.createdAt)}.
               </p>
             </>
           ) : (
@@ -130,17 +126,6 @@ export default async function CameraPage() {
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Constructors start, capture and finish each roll on the Capture page.
-                {canReadRolls && (
-                  <>
-                    {" "}
-                    <Link
-                      href="/reports/rolls?status=OPEN"
-                      className="underline underline-offset-4"
-                    >
-                      See open rolls
-                    </Link>
-                  </>
-                )}
               </p>
             </CardContent>
           </Card>

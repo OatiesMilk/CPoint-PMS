@@ -47,6 +47,18 @@ function toSessionUser(user: User): SessionUser {
   };
 }
 
+/** What the login form says for a refused sign-in, by its error code (never which part was wrong). */
+export function loginErrorMessage(code: string): string {
+  if (code === "inactive") {
+    return "This account is deactivated. Ask a System Admin to reactivate it.";
+  }
+  if (code.startsWith("locked:")) {
+    const minutes = Number(code.split(":")[1]) || 15;
+    return `Too many wrong passwords. This account is locked for ${minutes} more minute${minutes === 1 ? "" : "s"}. Ask a System Admin if you need in sooner.`;
+  }
+  return "Email or password is incorrect. Check both and try again. After 5 wrong tries the account locks for 15 minutes.";
+}
+
 function minutesUntil(date: Date, now: Date): number {
   return Math.max(1, Math.ceil((date.getTime() - now.getTime()) / 60_000));
 }
@@ -57,7 +69,7 @@ function minutesUntil(date: Date, now: Date): number {
  * exist, and they get the same "invalid" answer as a wrong password.
  */
 export async function verifyCredentials(
-  input: { email: string; password: string },
+  input: { email: string; password: string; method?: "demo" },
   meta: RequestMeta = {},
   now: Date = new Date(),
 ): Promise<SignInResult> {
@@ -128,6 +140,8 @@ export async function verifyCredentials(
       action: "user.login",
       entity: "User",
       entityId: user.id,
+      // A demo sign-in from the login page (D-101) says so; a normal one has no `after`.
+      ...(input.method === "demo" ? { after: { method: "demo" } } : {}),
       request: meta,
     });
   });

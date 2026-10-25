@@ -53,7 +53,7 @@ test("a new account signs in with its temporary password, must choose its own, a
   await page.goto("/login");
   await signIn(page, email, temp);
   await expect(page).toHaveURL("/account/password");
-  await page.goto("/quality-inspector");
+  await page.goto("/batches");
   await expect(page).toHaveURL("/account/password");
   await page.getByLabel("Temporary password").fill(temp);
   await page.getByLabel("New password").fill("short");
@@ -64,7 +64,7 @@ test("a new account signs in with its temporary password, must choose its own, a
   await page.getByLabel("New password").fill(chosen);
   await page.getByLabel("Type it again").fill(chosen);
   await page.getByRole("button", { name: "Save new password" }).click();
-  await expect(page).toHaveURL("/quality-inspector");
+  await expect(page).toHaveURL("/batches");
 
   // Reset by the admin: the open session ends on the next request.
   await admin.reload();

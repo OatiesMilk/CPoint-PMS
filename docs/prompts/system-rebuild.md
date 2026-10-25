@@ -217,33 +217,37 @@ history. Placeholder only. Add a `ComponentType` table and a
 <roles_and_modules>
 Seed one demo account per role (password from `.env`, documented in README).
 
-| Module                                                        | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor   |
-| ------------------------------------------------------------- | -------------- | ----------------- | ------------------ | ------------------ |
-| Overview dashboard (role-specific)                            | ✅             | ✅                | ✅ (system health) | my requests        |
-| Rolls: start, capture, finish, cancel an empty roll (D-095)   | —              | —                 | —                  | if allowed (D-075) |
-| Reports → Rolls: read, cancel an open roll with a reason      | ✅             | —                 | —                  | —                  |
-| Batches: today (QI), recent days (FM) (Phase 27, D-098)       | ✅             | ✅ today only     | view               | —                  |
-| Batches: finish and correct a batch (D-098, D-088)            | no QI present  | ✅                | —                  | —                  |
-| Batches: how often and the one daily quota (D-097, D-099)     | ✅             | —                 | —                  | —                  |
-| Settings → Lunch break (D-097)                                | —              | —                 | ✅                 | —                  |
-| Camera (CV placeholder page)                                  | ✅             | ✅                | ✅                 | —                  |
-| Capture page and Floor view (Phase 26: constructors only)     | —              | —                 | —                  | if allowed (D-075) |
-| "Latest scans" widget (polls every 5s)                        | ✅ on overview | ✅ on overview    | —                  | —                  |
-| Scan history + detail (image + boxes)                         | ✅             | ✅                | view               | —                  |
-| Attendance: one day at a time (Phase 22, D-077 to D-079)      | ✅             | —                 | view               | —                  |
-| Inventory + movements                                         | ✅             | —                 | view               | —                  |
-| Reports: production vs quota, daily summary, defects, CSV     | ✅             | ✅ (quality only) | —                  | —                  |
-| Users (CRUD, deactivate, reset password, camera access)       | —              | —                 | ✅                 | —                  |
-| Defect types, CV thresholds, suppliers (no shoe types, D-099) | —              | —                 | ✅                 | —                  |
-| CV device API tokens (create / revoke, shown once)            | —              | —                 | ✅                 | —                  |
-| Audit log (filterable)                                        | —              | —                 | ✅                 | —                  |
-| Constructor's only page: Capture, else who grants access      | —              | —                 | —                  | ✅                 |
+Each role sees only its modules (Phase 28, D-100, C-18). Sidebars, in order: Shoe Constructor
+**Capture**; Quality Inspector **Batches**; Floor Manager **Overview, Batches, Attendance, Reports,
+Inventory**; System Admin **Overview, Users, Settings, Camera, API tokens, Audit log**. Everything
+else answers 403.
 
-**Floor Manager overview:** today's batches, passed pairs against the quota (Phase 27; before it
-today's production, Phase 23), today's attendance, today's scans and Pass/Reject split, low-stock alerts, and Latest
-scans.
-**Quality Inspector overview:** sections scanned and rejected today, the next batch to finish (Phase 27), today's defect breakdown by type, and
-Latest scans.
+| Module                                                      | Floor Manager | Quality Inspector | System Admin       | Shoe Constructor   |
+| ----------------------------------------------------------- | ------------- | ----------------- | ------------------ | ------------------ |
+| Overview (role-specific)                                    | ✅            | — (Batches)       | ✅ (system health) | — (Capture)        |
+| Rolls: start, capture, finish, cancel an empty roll (D-095) | —             | —                 | —                  | if allowed (D-075) |
+| Reports → Rolls: read, cancel an open roll with a reason    | ✅            | —                 | —                  | —                  |
+| A section's page (from its roll)                            | ✅            | —                 | —                  | —                  |
+| Batches: today (QI's home), recent days (FM) (D-098)        | ✅            | ✅ today only     | —                  | —                  |
+| Batches: finish and correct a batch (D-098, D-088)          | no QI present | ✅                | —                  | —                  |
+| Batches: how often and the one daily quota (D-097, D-099)   | ✅            | —                 | —                  | —                  |
+| Settings → Lunch break (D-097)                              | —             | —                 | ✅                 | —                  |
+| Camera page: status, model, early-model notice              | —             | —                 | ✅                 | —                  |
+| Capture page and Floor view (constructors only)             | —             | —                 | —                  | if allowed (D-075) |
+| Attendance: one day at a time (D-077 to D-079)              | ✅            | —                 | —                  | —                  |
+| Inventory + movements                                       | ✅            | —                 | —                  | —                  |
+| Reports: Operations, Quality, Rolls, CSV                    | ✅            | —                 | —                  | —                  |
+| Users (CRUD, deactivate, reset password, camera access)     | —             | —                 | ✅                 | —                  |
+| Defect types, the CV rule, suppliers                        | —             | —                 | ✅                 | —                  |
+| CV device API tokens (create / revoke, shown once)          | —             | —                 | ✅                 | —                  |
+| Audit log (filterable)                                      | —             | —                 | ✅                 | —                  |
+
+**Floor Manager overview:** today's batches against the quota, today's attendance, Rolls today
+(sections checked, rejected for salvage, rolls still open), low-stock alerts and the daily summary.
+**System Admin overview:** system health, users, camera status, unknown defect classes, the lunch
+break and the audit log.
+**Demo tools (D-101):** with `DEMO_LOGIN_TOOLS=true` the login page has a demo sign-in per role and
+Reset demo data, and every page shows a Demo mode band.
 
 **Camera page (placeholder):** shows the connected source as "Not connected" with a
 "Simulator active" state when demo scans are arriving. It has a batch selector (the open batch at
