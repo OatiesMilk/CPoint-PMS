@@ -113,14 +113,21 @@ who capture its rolls.
 ## Demo script
 
 About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows
-(or one normal and one private) to show two roles side by side.
+(or one normal and one private) to show two roles side by side. Each role sees only its own pages
+(D-100): the FM Overview, Batches, Attendance, Reports and Inventory; the QI Batches; the Admin the
+administration pages and Camera; a constructor Capture.
+
+**Demo tools (optional, D-101):** with `DEMO_LOGIN_TOOLS=true` (and `SEED_DEMO_USERS=true`) the
+login page has **Demo sign-in**, one button per role, and **Reset demo data** (type RESET; about a
+minute; "Fresh demo week loaded."). A **Demo mode** band shows on every page. Never turn it on for
+real use.
 
 ### 1. Floor Manager (4 min)
 
 1. **Home** (`manager@cpoint.local`): **Today's batches** (passed pairs against the daily quota,
-   the batch under way), the **Attendance** card (today is "Not taken yet"), today's
-   inspection split, sections to clean or cut around, low stock (Contact cement), the daily
-   summary.
+   the batch under way), the **Attendance** card (today is "Not taken yet"), **Rolls today**
+   (sections checked, rejected for salvage, rolls still open), low stock (Contact cement), the
+   daily summary.
 2. **Batches:** today's two batches (08:00–13:00 with lunch 11:00–12:00, and 13:00–17:00) and the
    **Recent days** chart and table: three days fell short on passed pairs, each with its sentence,
    "Below quota by 18 pairs. 3 of 12 Shoe Constructors were absent." Nothing names a person.
@@ -139,9 +146,8 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
 5. **Capture on a phone** (`constructor@cpoint.local`, in a phone-sized window): Capture is the
    only page. **Start roll** (supplier, tag number), then **Capture**: green Pass or red Reject
    for each shot, each defect Usable or Not accepted. **Finish roll** once all of it is in.
-6. **Camera:** the model and how many rolls are being captured. To show live scans without a
-   phone, run the simulator from a development checkout (see
-   [Camera and simulator](#camera-and-simulator)).
+6. To show live scans without a phone, run the simulator from a development checkout (see
+   [Camera and simulator](#camera-and-simulator)); the System Admin's **Camera** page shows them.
 7. **Repair Station:** To handle → Being handled → Done, usable. Each card says what the
    section needs (Clean before cutting, or Cut around the marked area). Each step is one click,
    with undo.
@@ -183,7 +189,9 @@ About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two bro
 
 ### 3. System Admin (2 min)
 
-1. **Settings → Lunch break** (`admin@cpoint.local`): 11:00 to 12:00, applying from tomorrow, with
+0. **Overview** (`admin@cpoint.local`): system health, users, the camera, unknown classes and the
+   lunch break. **Camera:** the model, the last capture and how many rolls are open.
+1. **Settings → Lunch break**: 11:00 to 12:00, applying from tomorrow, with
    its history. Lunch pauses the batch it falls in.
 
 2. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Fixable from 60%,
@@ -365,13 +373,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 Paste the generated value after `AUTH_SECRET=` in `.env`. Fill in these settings before starting
 Docker or the app:
 
-| Setting                    | Value for local development                                                    |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| `AUTH_SECRET`              | The generated random secret; at least 32 characters.                           |
-| `BOOTSTRAP_ADMIN_PASSWORD` | Your chosen password, at least 12 characters.                                  |
-| `DEMO_USER_PASSWORD`       | Your chosen password, at least 8 characters; used by all four demo accounts.   |
-| `SEED_DEMO_USERS`          | `true` to create the demo accounts.                                            |
-| `SEED_DEMO_WEEK`           | `true` for sample production data, or `false` for an empty production dataset. |
+| Setting                    | Value for local development                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AUTH_SECRET`              | The generated random secret; at least 32 characters.                                                                                                                     |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Your chosen password, at least 12 characters.                                                                                                                            |
+| `DEMO_USER_PASSWORD`       | Your chosen password, at least 8 characters; used by all four demo accounts.                                                                                             |
+| `SEED_DEMO_USERS`          | `true` to create the demo accounts.                                                                                                                                      |
+| `DEMO_LOGIN_TOOLS`         | `true` for the demo sign-in buttons and Reset demo data on the login page, with a Demo mode band (D-101). Needs `SEED_DEMO_USERS=true`. Never for real use. Default off. |
+| `SEED_DEMO_WEEK`           | `true` for sample production data, or `false` for an empty production dataset.                                                                                           |
 
 Use actual values, not placeholder text, and save the file. Keep the database values from
 `.env.example` for the default local setup. Each teammate should create their own `.env`; keep
@@ -443,6 +452,7 @@ starting the app.
 | `AUTH_SECRET`              | A random secret that signs sessions: `openssl rand -base64 32`. One per machine.                                                                                                           |
 | `BOOTSTRAP_ADMIN_PASSWORD` | 12+ characters. Creates the first System Admin (`BOOTSTRAP_ADMIN_EMAIL`) if no active admin exists. With demo users on, `admin@cpoint.local` already exists and uses `DEMO_USER_PASSWORD`. |
 | `DEMO_USER_PASSWORD`       | 8+ characters. Password for the demo accounts (when `SEED_DEMO_USERS=true`).                                                                                                               |
+| `DEMO_LOGIN_TOOLS`         | `true` for the demo sign-in and Reset demo data on the login page, with a Demo mode band (D-101). Needs `SEED_DEMO_USERS=true`. Never for real use. Default off.                           |
 | `SEED_DEMO_WEEK`           | `true` to create a past week of production on first start (panel demo). Default off.                                                                                                       |
 
 On every start the app makes sure the reference data exists: defect types, the batch schedule

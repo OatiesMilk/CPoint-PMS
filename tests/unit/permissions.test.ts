@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Role } from "@/lib/domain";
+import { ROLE_HOME, type Role } from "@/lib/domain";
 import { navigationFor } from "@/server/policies/navigation";
 import {
   PERMISSIONS,
@@ -15,26 +15,26 @@ const QI: Role = "QUALITY_INSPECTOR";
 const AD: Role = "SYSTEM_ADMIN";
 const SC: Role = "SHOE_CONSTRUCTOR";
 
-// Mirrors the roles × modules table in docs/prompts/system-rebuild.md. Change both together.
+// Mirrors the roles × modules table in docs/prompts/system-rebuild.md (Phase 28, D-100). Change both together.
 const EXPECTED: Record<Permission, Role[]> = {
   "roll:read": [FM],
   "roll:manage": [FM],
-  "camera:view": [FM, QI, AD],
+  "camera:view": [AD],
   "camera:capture": [SC],
   "camera:operators": [AD],
-  "scan:read": [FM, QI, AD],
-  "inventory:read": [FM, AD],
+  "scan:read": [FM],
+  "inventory:read": [FM],
   "inventory:manage": [FM],
   "report:production": [FM],
-  "report:quality": [FM, QI],
+  "report:quality": [FM],
   "user:manage": [AD],
   "settings:manage": [AD],
   "token:manage": [AD],
   "audit:read": [AD],
   "system:health": [AD],
-  "attendance:read": [FM, AD],
+  "attendance:read": [FM],
   "attendance:manage": [FM],
-  "production:read": [FM, QI, AD],
+  "production:read": [FM, QI],
   "production:checkin": [QI, FM],
   "production:plan": [FM],
 };
@@ -88,28 +88,45 @@ describe("navigationFor", () => {
   const labels = (role: Role) =>
     navigationFor({ role }).flatMap((s) => s.items.map((i) => i.label));
 
-  it("builds each role's sidebar from its permissions", () => {
-    expect(labels(FM)).toEqual([
-      "Overview",
-      "Batches",
-      "Attendance",
-      "Inventory",
-      "Camera",
-      "Scans",
-      "Reports",
-    ]);
-    expect(labels(QI)).toEqual(["Overview", "Batches", "Camera", "Scans", "Reports"]);
+  it("gives each role exactly its row of the table, in order (Phase 28, D-100, C-18)", () => {
+    expect(labels(SC)).toEqual(["Capture"]);
+    expect(labels(QI)).toEqual(["Batches"]);
+    expect(labels(FM)).toEqual(["Overview", "Batches", "Attendance", "Reports", "Inventory"]);
     expect(labels(AD)).toEqual([
       "Overview",
-      "Batches",
-      "Attendance",
-      "Inventory",
-      "Camera",
-      "Scans",
       "Users",
       "Settings",
+      "Camera",
       "API tokens",
       "Audit log",
+    ]);
+  });
+
+  it("uses one list without headings, and never the Scans list (A-26)", () => {
+    for (const role of [FM, QI, AD, SC]) {
+      const sections = navigationFor({ role });
+      expect(sections).toHaveLength(1);
+      expect(sections[0].title).toBeNull();
+      expect(sections[0].items.map((i) => i.href)).not.toContain("/scans");
+    }
+  });
+
+  it("only links pages the role may open", () => {
+    const hrefs = (role: Role) => navigationFor({ role })[0].items.map((i) => i.href);
+    expect(hrefs(FM)).toEqual([
+      "/floor-manager",
+      "/batches",
+      "/attendance",
+      "/reports",
+      "/inventory",
+    ]);
+    expect(hrefs(AD)).toEqual([
+      "/admin",
+      "/admin/users",
+      "/admin/settings",
+      "/camera",
+      "/admin/tokens",
+      "/admin/audit",
     ]);
   });
 
@@ -122,8 +139,10 @@ describe("navigationFor", () => {
     for (const role of [FM, QI, AD]) expect(labels(role)).not.toContain("Capture");
   });
 
-  it("links each role's first item to its own home", () => {
-    expect(navigationFor({ role: QI })[0].items[0].href).toBe("/quality-inspector");
+  it("links each role's first item to its own home; Batches is the QI's home", () => {
+    expect(ROLE_HOME.QUALITY_INSPECTOR).toBe("/batches");
+    for (const role of [FM, QI, AD, SC])
+      expect(navigationFor({ role })[0].items[0].href).toBe(ROLE_HOME[role]);
   });
 });
 

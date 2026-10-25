@@ -40,6 +40,9 @@ services:
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-}
       SEED_DEMO_WEEK: ${SEED_DEMO_WEEK:-false}
+      DEMO_LOGIN_TOOLS: ${DEMO_LOGIN_TOOLS:-false}
+      # Kept by Reset demo data on the login page, so the simulator's token survives a reset.
+      CV_DEVICE_TOKEN: ${CV_DEVICE_TOKEN:-}
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Manila}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:

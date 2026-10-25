@@ -1,6 +1,6 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   Quality Inspector / Floor Manager verifying one leather section.
+ * Who:   the Floor Manager, from a roll in Reports → Rolls, verifying one leather section.
  * What:  see what the camera saw, where, how sure it was, and why it is Pass or Reject.
  * Worst: a verdict that can't be explained. "Rules used" shows the rule in force when it was
  *         decided. The camera's verdict is final: nobody changes it (C-21, D-093).
@@ -16,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { outcomeGroups, readSnapshot } from "@/lib/decision-engine";
 import { formatManilaDateTime, formatPercent } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
-import { can } from "@/server/policies/permissions";
 import { getScanDetail } from "@/server/services/scan-query.service";
 import { isScanId } from "@/server/validators/scan.validator";
 import { ScanViewer } from "./scan-viewer";
@@ -31,9 +30,8 @@ const SOURCE: Record<string, string> = {
 };
 
 export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]">) {
-  const user = await requirePermission("scan:read");
-  // Roll pages are in Reports → Rolls, for the Floor Manager only (Phase 26).
-  const canOpenRoll = can(user.role, "roll:read");
+  // The Floor Manager reaches a section from its roll (A-26, D-100); there is no Scans list.
+  await requirePermission("scan:read");
   const { id } = await params;
   if (!isScanId(id)) notFound();
   const scan = await getScanDetail(id);
@@ -49,11 +47,11 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
     <>
       <div>
         <Link
-          href="/scans"
+          href={`/reports/rolls/${scan.roll.id}`}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft aria-hidden className="size-4" />
-          All scans
+          Roll {scan.roll.code}
         </Link>
       </div>
       <PageHeader
@@ -155,22 +153,11 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                 <dd>{scan.modelVersion ?? "—"}</dd>
                 <dt className="text-muted-foreground">Roll</dt>
                 <dd>
-                  {canOpenRoll ? (
-                    <Link
-                      href={`/reports/rolls/${scan.roll.id}`}
-                      className="font-mono underline underline-offset-4"
-                    >
-                      {scan.roll.code}
-                    </Link>
-                  ) : (
-                    <span className="font-mono">{scan.roll.code}</span>
-                  )}
-                  {" · "}
                   <Link
-                    href={`/scans?roll=${encodeURIComponent(scan.roll.code)}`}
-                    className="underline underline-offset-4"
+                    href={`/reports/rolls/${scan.roll.id}`}
+                    className="font-mono underline underline-offset-4"
                   >
-                    Scans of this roll
+                    {scan.roll.code}
                   </Link>
                 </dd>
               </dl>

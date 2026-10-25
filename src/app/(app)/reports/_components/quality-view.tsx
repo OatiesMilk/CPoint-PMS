@@ -113,16 +113,7 @@ export function QualityView({ quality }: { quality: QualityReport }) {
                     {defects.slice(0, DEFECT_ROWS).map((d) => (
                       <TableRow key={d.key}>
                         <TableCell className="font-medium">
-                          {d.known ? (
-                            <Link
-                              href={`/scans?defect=${encodeURIComponent(d.key)}`}
-                              className="underline-offset-4 hover:underline"
-                            >
-                              {d.label}
-                            </Link>
-                          ) : (
-                            `${d.label} (unknown)`
-                          )}
+                          {d.known ? d.label : `${d.label} (unknown)`}
                         </TableCell>
                         <TableCell numeric>{d.scans}</TableCell>
                         <TableCell numeric>{d.reject}</TableCell>

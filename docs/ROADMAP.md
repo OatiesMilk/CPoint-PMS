@@ -482,7 +482,8 @@ was never built. Each phase gets its own criteria here when its plan is approved
       Rolls (merged #24; QA passed, run 2)
 - [x] Phase 27: batches are the check-in intervals (lunch break, on-screen notices, pairs finished
       and failed, no shoe types); QA passed, run 5, 2026-10-25
-- [ ] Phase 28: each role sees only its modules; demo sign-in and reset on the login page
+- [x] Phase 28: each role sees only its modules; demo sign-in and reset on the login page (built;
+      QA next)
 - [ ] Phase 29: inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
 - [ ] Phase 30A: can the camera measure a whole roll? A check with real rolls (`cv/` only)
 - [ ] Phase 30B: cuts from 3 inches Not accepted; a roll over 10% defects marked Return to
@@ -577,3 +578,16 @@ Brief: `docs/prompts/factory-visit-changes.md`, Phase 27. Plan: `docs/prompts/pl
 - [x] Homes, Operations, `production.csv` on passed pairs; demo week and `demo:reset`
 - [x] `npm run check` passes (526 unit tests); e2e `batches.spec.ts` written, not run
 - [ ] Codex QA from `qa/CODEX_PROMPT_PHASE_27.md`
+
+## Phase 28 — Each role sees only its modules, and the demo sign-in tools
+
+Brief: `docs/prompts/factory-visit-changes.md`, Phase 28. Plan: `docs/prompts/plans/phase-28-plan.md`
+(approved 2026-10-25 with Dylan's four answers). Decisions: D-100, D-101.
+
+- [x] The matrix and one flat sidebar per role, exactly the brief's table; Batches is the QI's home
+- [x] Removed: the QI home, the Scans list and `GET /api/v1/scans`, the Latest scans widget, the
+      QI's Reports, the Admin's Batches, Attendance and Inventory, the FM's Camera page
+- [x] FM home with Rolls today; Admin home with Camera and Lunch break
+- [x] Demo sign-in and Reset demo data behind `DEMO_LOGIN_TOOLS` (404 when off), the Demo mode band
+- [x] `npm run check` passes (548 unit tests); e2e specs updated, not run
+- [ ] Codex QA from `qa/CODEX_PROMPT_PHASE_28.md`

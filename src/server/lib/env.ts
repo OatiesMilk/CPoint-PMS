@@ -30,6 +30,11 @@ const envSchema = z.object({
   // A realistic past week of production for demos (D-026). Needs SEED_DEMO_USERS; runs once.
   SEED_DEMO_WEEK: booleanString,
   DEMO_USER_PASSWORD: optionalString.pipe(z.string().min(8).optional()),
+  // Demo sign-in and Reset demo data on the login page (Phase 28, D-101). For the demo only:
+  // never turn on for real use. Works only together with SEED_DEMO_USERS.
+  DEMO_LOGIN_TOOLS: booleanString,
+  // The simulator's device token; Reset demo data keeps it, as `npm run demo:reset` does.
+  CV_DEVICE_TOKEN: optionalString,
 });
 
 export type Env = z.infer<typeof envSchema>;

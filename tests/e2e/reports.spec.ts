@@ -164,35 +164,28 @@ test("the Floor Manager sees production against the quota in place of stage time
   await expect(page.getByTestId("report-range")).toContainText("7 days");
 });
 
-test("the Quality Inspector gets quality reports only, and both homes show live numbers", async ({
+test("Reports are the Floor Manager's alone, and the FM home shows Rolls today (D-100)", async ({
   browser,
   page,
 }) => {
   await signInAs(page, ACCOUNTS.inspector);
-  await expect(page.getByTestId("agreement-card")).toHaveCount(0);
-  await expect(page.getByTestId("defects-today")).toBeVisible();
-  await expect(page.getByText(/Phase 7/)).toHaveCount(0);
-
   await page.goto("/reports");
-  await expect(page.getByTestId("report-range")).toBeVisible();
-  // The Quality Inspector gets the quality report, with no Operations tab.
-  await expect(page.getByTestId("total-scanned")).toBeVisible();
-  await expect(page.getByTestId("repair-station")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Operations", exact: true })).toHaveCount(0);
-  await page.goto("/reports?view=operations");
-  await expect(page.getByTestId("total-scanned")).toBeVisible();
-  await expect(page.getByTestId("attention")).toHaveCount(0);
-  expect((await page.request.get("/api/v1/reports/operations")).status()).toBe(403);
-  await expect(page.getByTestId("production-section")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Production CSV" })).toHaveCount(0);
-  expect((await page.request.get("/api/v1/reports/production")).status()).toBe(403);
-  expect((await page.request.get("/api/v1/reports/production.csv")).status()).toBe(403);
-  expect((await page.request.get("/api/v1/reports/quality")).status()).toBe(200);
+  await expect(page).toHaveURL("/forbidden");
+  for (const path of [
+    "/api/v1/reports/quality",
+    "/api/v1/reports/operations",
+    "/api/v1/reports/production.csv",
+  ])
+    expect((await page.request.get(path)).status(), path).toBe(403);
 
   const fm = await browser.newPage();
   await signInAs(fm, ACCOUNTS.manager);
-  await expect(fm.getByTestId("inspection-split")).toContainText("Today’s inspection split");
+  await expect(fm.getByTestId("rolls-today")).toContainText("Rolls today");
+  await expect(fm.getByTestId("rolls-today-open")).toBeVisible();
   await expect(fm.getByText("Daily summary")).toBeVisible();
-  await expect(fm.getByText(/Phase 7/)).toHaveCount(0);
+  await expect(fm.getByText("Latest scans")).toHaveCount(0);
+  await fm.goto("/reports?view=quality");
+  await expect(fm.getByTestId("total-scanned")).toBeVisible();
+  expect((await fm.request.get("/api/v1/reports/quality")).status()).toBe(200);
   await fm.close();
 });

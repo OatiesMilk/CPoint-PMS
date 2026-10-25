@@ -115,6 +115,27 @@ describe("resetDemoData", () => {
     expect(clearUploadFolders).not.toHaveBeenCalled();
   });
 
+  it("runs in production only when the login page's demo tools ask (D-101), and says where", async () => {
+    env.NODE_ENV = "production";
+    await resetDemoData(resetKeep([]), { allowInProduction: true, origin: "login page" });
+    expect(model.deleteResetTargets).toHaveBeenCalled();
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "system.demo_reset",
+        after: expect.objectContaining({ origin: "login page" }),
+      }),
+    );
+  });
+
+  it("records the command line as the origin by default", async () => {
+    await resetDemoData(resetKeep([]), { demoWeek: false });
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({ after: expect.objectContaining({ origin: "command line" }) }),
+    );
+  });
+
   it("leaves the model's four classes on with outcomes and the two placeholders off", () => {
     const state = Object.fromEntries(
       MODEL_DEFECT_TYPES.map((d) => [d.key, [d.isActive, d.outcome]]),

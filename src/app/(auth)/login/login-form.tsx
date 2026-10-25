@@ -13,12 +13,25 @@ import { loginAction } from "./actions";
 
 const noSubscribe = () => () => {};
 
+/**
+ * Clicking a demo button (D-101) moves focus out of the form. Validating on that blur would show
+ * "Enter your email." and push the demo buttons down mid-click, so the click was lost (QA Phase 28
+ * F3, F4). Blurs towards the demo tools don't validate.
+ */
+function toDemoTools(event: React.FocusEvent): boolean {
+  const next = event.relatedTarget;
+  return next instanceof Element && next.closest("[data-demo-tools]") !== null;
+}
+
 export function LoginForm({
   callbackUrl,
   showContinueNotice = false,
+  autoFocusEmail = true,
 }: {
   callbackUrl?: string;
   showContinueNotice?: boolean;
+  /** Off while the demo tools are on, so a demo click never starts with a field to validate. */
+  autoFocusEmail?: boolean;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -37,6 +50,14 @@ export function LoginForm({
     defaultValues: { email: "", password: "" },
   });
   const { errors } = form.formState;
+  const field = (name: keyof LoginInput) => {
+    const registered = form.register(name);
+    return {
+      ...registered,
+      onBlur: (event: React.FocusEvent<HTMLInputElement>) =>
+        toDemoTools(event) ? Promise.resolve() : registered.onBlur(event),
+    };
+  };
 
   const onSubmit = form.handleSubmit((values) => {
     setServerError(null);
@@ -64,10 +85,10 @@ export function LoginForm({
           type="email"
           autoComplete="username"
           inputMode="email"
-          autoFocus
+          autoFocus={autoFocusEmail}
           aria-invalid={!!errors.email}
           aria-describedby={errors.email ? "email-error" : undefined}
-          {...form.register("email")}
+          {...field("email")}
         />
         {errors.email && (
           <p id="email-error" className="text-sm text-reject">
@@ -84,7 +105,7 @@ export function LoginForm({
           autoComplete="current-password"
           aria-invalid={!!errors.password}
           aria-describedby={errors.password ? "password-error" : undefined}
-          {...form.register("password")}
+          {...field("password")}
         />
         {errors.password && (
           <p id="password-error" className="text-sm text-reject">

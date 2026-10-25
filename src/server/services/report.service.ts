@@ -4,7 +4,6 @@ import {
   dailyScanStats,
   defectBreakdown,
   type DailyScanRow,
-  type DefectRow,
 } from "@/server/models/report.model";
 
 // Reports (D-025): aggregates per Manila day, defect type or roll. Nothing here carries a
@@ -46,7 +45,7 @@ export async function rollFlow(range: ReportRange) {
 
 // ───────────── home cards ─────────────
 
-/** Today's verdict split (FM home). */
+/** Today's sections by verdict (the FM home's Rolls today). */
 export async function todaySplit(now: Date = new Date()) {
   const report = await qualityReport(parseRange({ preset: "today" }, now));
   return report.totals;
@@ -57,11 +56,6 @@ export async function recentDays(now: Date = new Date()) {
   const report = await qualityReport(parseRange({ preset: "7d" }, now));
   const [yesterday, today] = report.days.slice(-2);
   return { yesterday, today };
-}
-
-/** Today's defects by type (QI home). */
-export async function defectsToday(now: Date = new Date()): Promise<DefectRow[]> {
-  return defectBreakdown(parseRange({ preset: "today" }, now));
 }
 
 // ───────────── CSV ─────────────

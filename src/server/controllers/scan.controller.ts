@@ -1,12 +1,18 @@
 import { Errors } from "@/server/lib/errors";
 import { handle, json } from "@/server/lib/http";
 import { sniffImageType } from "@/server/lib/image-type";
-import { requireApiCapture, requireApiPermission, requireDevice } from "@/server/policies/guard";
+import {
+  requireApiCapture,
+  requireApiPermission,
+  requireApiUser,
+  requireDevice,
+} from "@/server/policies/guard";
+import { can } from "@/server/policies/permissions";
 import { CAMERA_OPERATORS_FORBIDDEN, setCameraOperator } from "@/server/services/camera.service";
 import { getStorage } from "@/server/lib/storage";
 import { captureScan } from "@/server/services/capture.service";
 import { ingestScan } from "@/server/services/scan-ingest.service";
-import { getScanDetail, latestScans, listScans } from "@/server/services/scan-query.service";
+import { getScanDetail } from "@/server/services/scan-query.service";
 import { readJsonBody } from "@/server/lib/http";
 import {
   cameraOperatorSchema,
@@ -14,7 +20,6 @@ import {
   ingestFieldsSchema,
   isScanId,
   MAX_IMAGE_BYTES,
-  scanListQuerySchema,
 } from "@/server/validators/scan.validator";
 
 type IdContext = { params: Promise<{ id: string }> };
@@ -59,15 +64,6 @@ async function readImageForm(request: Request) {
 }
 
 export const scanController = {
-  /** GET /api/v1/scans?verdict=&source=&roll=&defect=&page=  or  ?limit=8 (latest, for the live widget). */
-  index: handle(async (request: Request) => {
-    await requireApiPermission("scan:read");
-    const query = scanListQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
-    if (query.limit) return json({ data: await latestScans(query.limit) });
-    const { rows, total, page, pageCount } = await listScans(query);
-    return json({ data: rows, meta: { total, page, pageCount } });
-  }),
-
   /** GET /api/v1/scans/{id}: the scan, its detections and the rule used. */
   show: handle(async (_request: Request, ctx: IdContext) => {
     await requireApiPermission("scan:read");
@@ -78,7 +74,9 @@ export const scanController = {
 
   /** GET /api/v1/scans/{id}/image: the captured image (private, cacheable: keys are never reused). */
   image: handle(async (_request: Request, ctx: IdContext) => {
-    await requireApiPermission("scan:read");
+    // The Floor Manager's section pages, and the last capture on the System Admin's Camera page.
+    const user = await requireApiUser();
+    if (!can(user.role, "scan:read") && !can(user.role, "camera:view")) throw Errors.forbidden();
     const scan = await getScanDetail(await scanIdFrom(ctx));
     if (!scan?.imagePath) throw Errors.notFound("This scan's image");
     let bytes: Buffer;

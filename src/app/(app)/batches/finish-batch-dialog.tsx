@@ -54,6 +54,13 @@ export function FinishBatchDialog({
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(autoOpen ?? false);
+  // Batches is the QI's home (Phase 28), so a notice's Finish batch link can arrive while this
+  // page is already open: open when the link asks, not only on the first render.
+  const [askedToOpen, setAskedToOpen] = useState(autoOpen ?? false);
+  if ((autoOpen ?? false) !== askedToOpen) {
+    setAskedToOpen(autoOpen ?? false);
+    if (autoOpen) setOpen(true);
+  }
   const [pending, startTransition] = useTransition();
   const [pairs, setPairs] = useState(checkIn ? String(checkIn.pairs) : "");
   const [failed, setFailed] = useState(checkIn ? String(checkIn.failedPairs) : "0");
@@ -207,7 +214,14 @@ export function FinishBatchDialog({
           </Button>
         </Alert>
       )}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          // Drop ?finish= on close, so the same notice link opens it again later.
+          if (!next && autoOpen) router.replace("/batches", { scroll: false });
+        }}
+      >
         <DialogContent
           className={cn(
             "max-h-[90dvh] overflow-y-auto",

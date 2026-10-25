@@ -15,7 +15,6 @@ import {
   LogOut,
   Menu,
   Package,
-  ScanLine,
   ScrollText,
   Settings,
   UserRound,
@@ -43,7 +42,6 @@ type NavIcon =
   | "attendance"
   | "camera"
   | "capture"
-  | "scans"
   | "inventory"
   | "reports"
   | "users"
@@ -59,7 +57,6 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   attendance: CalendarCheck,
   camera: Camera,
   capture: Aperture,
-  scans: ScanLine,
   inventory: Package,
   reports: ChartColumn,
   users: Users,

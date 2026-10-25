@@ -132,25 +132,30 @@ export type ResetResult = {
   demoWeek: Awaited<ReturnType<typeof seedDemoWeek>> | null;
 };
 
+export type ResetOptions = {
+  demoWeek?: boolean;
+  now?: Date;
+  /** Where the reset was started, kept in its audit row: the command line or the login page. */
+  origin?: "command line" | "login page";
+  /**
+   * Run even with NODE_ENV=production. Only Reset demo data on the login page passes it, and only
+   * while DEMO_LOGIN_TOOLS is on (D-101); the command line keeps refusing (D-056).
+   */
+  allowInProduction?: boolean;
+};
+
 export async function resetDemoData(
   keep: ResetKeep,
-  options: { demoWeek?: boolean; now?: Date } = {},
+  options: ResetOptions = {},
 ): Promise<ResetResult> {
-  if (getEnv().NODE_ENV === "production")
+  if (getEnv().NODE_ENV === "production" && !options.allowInProduction)
     throw new Error("demo:reset refuses to run with NODE_ENV=production.");
   const removed = await countResetTargets(keep);
   await runInTransaction(
     async (tx) => {
       await deleteResetTargets(keep, tx);
-      // The default lunch, now in force from the start: the old batches are gone (Phase 27).
-      await ensureDefaultLunchBreak(tx, options.now);
-      for (const type of MODEL_DEFECT_TYPES) await upsertDefectTypeState(type, tx);
-      // Accounts made before the demo names (D-090) get them; the constructors list has its own.
-      await setDemoAccountNames(
-        DEMO_USERS.filter((u) => u.name).map((u) => ({ email: u.email, name: u.name })),
-        tx,
-      );
-      // The audit log starts again with this one row, so anyone can see when and what was reset.
+      // The audit log starts again with this row first, so anyone can see when and what was reset;
+      // the default lunch and the defect types it sets come after it.
       await recordAudit(tx, {
         actor: { type: "SYSTEM" },
         action: "system.demo_reset",
@@ -158,6 +163,7 @@ export async function resetDemoData(
         entityId: "demo-reset",
         before: removed,
         after: {
+          origin: options.origin ?? "command line",
           keptAccounts: keep.emails,
           keptDeviceTokens: keep.tokenHashes.length,
           defectTypes: MODEL_DEFECT_TYPES.map((d) => ({
@@ -167,6 +173,14 @@ export async function resetDemoData(
           })),
         },
       });
+      // The default lunch, now in force from the start: the old batches are gone (Phase 27).
+      await ensureDefaultLunchBreak(tx, options.now);
+      for (const type of MODEL_DEFECT_TYPES) await upsertDefectTypeState(type, tx);
+      // Accounts made before the demo names (D-090) get them; the constructors list has its own.
+      await setDemoAccountNames(
+        DEMO_USERS.filter((u) => u.name).map((u) => ({ email: u.email, name: u.name })),
+        tx,
+      );
     },
     { timeoutMs: 120_000 },
   );

@@ -1,5 +1,7 @@
 import { ROLE_LABELS } from "@/lib/domain";
 import { Sidebar } from "@/components/features/app-shell/sidebar";
+import { DemoBand } from "@/components/features/demo-band";
+import { demoToolsEnabled } from "@/server/services/demo-tools.service";
 import { BatchNoticeBanner } from "@/components/features/batches/batch-notices";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/toaster";
@@ -17,6 +19,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <QueryProvider>
+      <DemoBand on={demoToolsEnabled()} />
       <div className="flex min-h-screen flex-col sm:flex-row">
         {/* Printing (a claim sheet, Phase 20) leaves the navigation out. */}
         <div className="contents print:hidden">

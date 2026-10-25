@@ -14,6 +14,51 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-25 — Phase 28: QA run 1 fixes
+
+**Who:** Dylan (Claude fixing)
+**Summary:** Codex run 1 failed (21 of 25 scenarios; e2e 78 passed, 2 failed; demo e2e 1 passed,
+2 failed). All six findings fixed; run 2 prompt written.
+**Changed:**
+
+- `finish-batch-dialog.tsx`: opens whenever `?finish=` asks, not only on first mount (Batches is
+  now the QI's home, so the notice link arrives on an open page); closing drops `?finish=` (F1).
+- Login: with the demo tools on, Email isn't auto-focused, and a blur towards `[data-demo-tools]`
+  skips validation, so no error shifts the buttons mid-click (F3, F4, F6).
+- `demo-reset.service.ts`: `system.demo_reset` is written right after the delete, before the
+  default lunch's audit row (F5).
+- `smoke.spec.ts`: the FM page has its own `browser.newContext()` for axe (F2).
+  **Gates:** lint ✅ · typecheck ✅ · test ✅ (548) · build ✅ · e2e not run (Codex run 2) · docker not run
+  **Decisions:** none
+  **Follow-ups:** Codex run 2 `qa/CODEX_PROMPT_PHASE_28_RUN2.md`; then Dylan commits and opens the PR.
+
+## 2026-10-25 — Phase 28: each role sees only its modules, and the demo tools
+
+**Who:** Dylan (Claude building)
+**Summary:** Plan approved with the four recommendations (remove the Scans list, the FM home cards
+as listed, `DEMO_LOGIN_TOOLS`, flat sidebars). Each role now sees exactly its row of the brief's
+table, and the login page has flag-gated demo sign-in and Reset demo data.
+**Changed:**
+
+- Policies: the matrix (`camera:view` Admin; `scan:read`, `inventory:read`, `attendance:read`,
+  `report:quality` FM; `production:read` FM and QI), one ordered sidebar per role, QI home
+  `/batches`.
+- Removed: `/quality-inspector`, `/scans` and its filters, `GET /api/v1/scans` (list and live),
+  the Latest scans widget, `inspectorSummary`, `defectsToday`, `NextBatchCard`,
+  `DefectsTodayCard`, `InspectionSplitCard`, the scans list validator and model query.
+- Homes: FM Rolls today; Admin Camera and Lunch break cards. Camera page, Reports (FM only, no
+  scans links) and the section page (back to its roll) follow.
+- Demo tools: `demo-tools.service`, `demo.controller`, `POST /api/v1/demo/{sign-in,reset}`,
+  `demo-tools.tsx` on the login page, `DemoBand`; `env.ts` (`DEMO_LOGIN_TOOLS`, `CV_DEVICE_TOKEN`),
+  `auth.ts`/`auth.service` (`method: "demo"`, `loginErrorMessage`), `demo-reset.service`
+  (`origin`, `allowInProduction`); `.env.example`, `docker-compose.yml`.
+- Tests: unit `permissions`, `auth.service`, `demo-reset`, new `demo-tools`; e2e `auth` and nine
+  other specs. Docs: D-100, D-101, ROADMAP, API, README, the master spec's roles table, STATUS;
+  QA handoff and `qa/CODEX_PROMPT_PHASE_28.md`; vault.
+  **Gates:** lint ✅ · typecheck ✅ · test ✅ (548) · build ✅ · e2e not run (Codex) · docker not run
+  **Decisions:** D-100, D-101
+  **Follow-ups:** Codex QA run 1; then the commit and PR.
+
 ## 2026-10-25 — Phase 27: QA run 1 fixes
 
 **Who:** Dylan (Claude fixing)

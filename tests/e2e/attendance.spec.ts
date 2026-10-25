@@ -143,19 +143,8 @@ test("a day more than 7 days ago is read-only, and the future can't be saved", a
   }
 });
 
-test("the System Admin sees attendance read-only and can't save it", async ({ browser }) => {
-  const page = await signedIn(browser, ACCOUNTS.admin.email, ACCOUNTS.admin.home);
-  await page.goto("/attendance");
-  await expect(page.getByText("Only the Floor Manager takes attendance.")).toBeVisible();
-  await expect(page.getByRole("checkbox")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Save attendance/ })).toHaveCount(0);
-  const res = await page.request.put(`/api/v1/attendance/${manilaDay()}`, {
-    data: { expectedUpdatedAt: null, marks: [] },
-  });
-  expect(res.status()).toBe(403);
-});
-
-for (const role of ["inspector", "constructor"] as const) {
+// Attendance is the Floor Manager's alone since Phase 28 (D-100).
+for (const role of ["inspector", "admin", "constructor"] as const) {
   test(`the ${role} is refused the page and the API`, async ({ browser }) => {
     const page = await signedIn(browser, ACCOUNTS[role].email, ACCOUNTS[role].home);
     await page.goto("/attendance");

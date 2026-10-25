@@ -55,7 +55,7 @@ export function ForSalvageCard({
               aside for salvage; per roll and per supplier are in Supplier quality below.
             </CardDescription>
           </div>
-          <SectionLink href="/scans?verdict=REJECT">Rejected scans</SectionLink>
+          <SectionLink href="/reports/rolls">Rolls</SectionLink>
         </div>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_2fr]">

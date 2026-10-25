@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import bcrypt from "bcryptjs";
 import pg from "pg";
@@ -13,24 +14,21 @@ test("health endpoint reports app and database up", async ({ request }) => {
   expect((await res.json()).checks).toEqual({ app: "up", database: "up" });
 });
 
-// Phase 26: rolls moved to Reports (the FM), and only constructors capture. Phase 27: Batches.
+// Each role sees only its modules (Phase 28, D-100, C-18): one list, in this order.
 const EXPECTED_NAV = {
-  manager: ["Overview", "Batches", "Attendance", "Inventory", "Camera", "Scans", "Reports"],
-  inspector: ["Overview", "Batches", "Camera", "Scans", "Reports"],
-  admin: [
-    "Overview",
-    "Batches",
-    "Attendance",
-    "Inventory",
-    "Camera",
-    "Scans",
-    "Users",
-    "Settings",
-    "API tokens",
-    "Audit log",
-  ],
+  manager: ["Overview", "Batches", "Attendance", "Reports", "Inventory"],
+  inspector: ["Batches"],
+  admin: ["Overview", "Users", "Settings", "Camera", "API tokens", "Audit log"],
   // Capture is a constructor's only page and home, with or without camera access.
   constructor: ["Capture"],
+} as const;
+
+// A sample of pages each role is refused (403 page), and pages that are gone for everyone (404).
+const REFUSED = {
+  manager: ["/camera", "/admin", "/admin/users", "/camera/capture"],
+  inspector: ["/reports", "/camera", "/attendance", "/inventory", "/floor-manager", "/admin"],
+  admin: ["/batches", "/attendance", "/inventory", "/reports", "/reports/rolls"],
+  constructor: ["/batches", "/reports", "/admin", "/camera"],
 } as const;
 
 for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
@@ -42,6 +40,29 @@ for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
     expect(await navLabels(page)).toEqual([...EXPECTED_NAV[role]]);
   });
 }
+
+for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
+  test(`${role} is refused every other role's pages`, async ({ page }) => {
+    await page.goto("/login");
+    await signIn(page, ACCOUNTS[role].email);
+    await expect(page).toHaveURL(ACCOUNTS[role].home);
+    for (const path of REFUSED[role]) {
+      await page.goto(path);
+      await expect(page, `${role} → ${path}`).toHaveURL("/forbidden");
+    }
+  });
+}
+
+test("the QI home, the Scans list and its API are gone (A-26)", async ({ page }) => {
+  await page.goto("/login");
+  await signIn(page, ACCOUNTS.manager.email);
+  await expect(page).toHaveURL(ACCOUNTS.manager.home);
+  for (const path of ["/quality-inspector", "/scans"]) {
+    const res = await page.goto(path);
+    expect(res?.status(), path).toBe(404);
+  }
+  expect((await page.request.get("/api/v1/scans")).status()).toBe(405);
+});
 
 test("a signed-out visit goes to login, then back to the page after signing in", async ({
   page,
@@ -123,7 +144,7 @@ test.describe("deactivation", () => {
   }) => {
     await page.goto("/login");
     await signIn(page, email);
-    await expect(page).toHaveURL("/quality-inspector");
+    await expect(page).toHaveURL("/batches");
 
     await db.query(`UPDATE users SET "isActive" = false WHERE email = $1`, [email]);
     await page.reload();
@@ -150,4 +171,67 @@ test("the sign-in form never sends credentials before the page is ready, nor in 
   await signIn(page, ACCOUNTS.manager.email);
   await expect(page).toHaveURL(ACCOUNTS.manager.home);
   expect(page.url()).not.toContain("password");
+});
+
+// Demo sign-in and Reset demo data (Phase 28, D-101): only while DEMO_LOGIN_TOOLS (and
+// SEED_DEMO_USERS) are on for the server under test. Codex runs this once each way.
+const DEMO_TOOLS = process.env.DEMO_LOGIN_TOOLS === "true";
+
+test.describe("demo tools", () => {
+  test("with the flag off: no tools, no band, and both endpoints answer 404", async ({
+    page,
+    request,
+  }) => {
+    test.skip(DEMO_TOOLS, "The server under test has DEMO_LOGIN_TOOLS=true.");
+    await page.goto("/login");
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByTestId("demo-tools")).toHaveCount(0);
+    await expect(page.getByTestId("demo-band")).toHaveCount(0);
+    for (const [path, body] of [
+      ["/api/v1/demo/sign-in", { role: "FLOOR_MANAGER" }],
+      ["/api/v1/demo/reset", { confirm: "RESET" }],
+    ] as const)
+      expect((await request.post(path, { data: body })).status(), path).toBe(404);
+  });
+
+  test("with the flag on: four buttons sign in, and the band shows on every page", async ({
+    page,
+  }) => {
+    test.skip(!DEMO_TOOLS, "Start the server with DEMO_LOGIN_TOOLS=true to run this.");
+    await page.goto("/login");
+    await expect(page.getByTestId("demo-band")).toContainText("Demo mode");
+    const tools = page.getByTestId("demo-tools");
+    for (const label of [
+      "Floor Manager · Rodel Pascual",
+      "Quality Inspector · Maricel Dizon",
+      "System Admin · Jerome Salazar",
+      "Shoe Constructor · Noel Manalo",
+    ])
+      await expect(tools.getByRole("button", { name: label })).toBeVisible();
+    await tools.getByRole("button", { name: "Quality Inspector · Maricel Dizon" }).click();
+    await expect(page).toHaveURL(ACCOUNTS.inspector.home);
+    await expect(page.getByTestId("demo-band")).toBeVisible();
+  });
+
+  test("with the flag on: Reset demo data needs RESET typed exactly", async ({ page }) => {
+    test.skip(!DEMO_TOOLS, "Start the server with DEMO_LOGIN_TOOLS=true to run this.");
+    await page.goto("/login");
+    await page.getByRole("button", { name: "Reset demo data…" }).click();
+    const dialog = page.getByRole("dialog", { name: "Reset demo data?" });
+    await dialog.getByLabel("Type RESET to confirm").fill("reset");
+    await dialog.getByRole("button", { name: "Reset demo data" }).click();
+    await expect(dialog.getByText("Type RESET in capitals to reset the demo data.")).toBeVisible();
+    // The reset itself is run by hand on a throwaway stack (the QA handoff), not here.
+    await dialog.getByRole("button", { name: "Keep the data" }).click();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test("the login page passes axe (WCAG 2.1 A/AA), with or without the tools", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
 });

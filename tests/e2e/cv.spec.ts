@@ -97,8 +97,8 @@ test("a section's page draws the boxes, explains the verdict and offers no chang
   ]);
   const { scanId } = (await res.json()).data;
 
-  // A fresh browser context per role, so the second sign-in never meets the first one's session.
-  for (const account of [ACCOUNTS.inspector, ACCOUNTS.manager]) {
+  // A section's page is the Floor Manager's (Phase 28, D-100), reached from its roll.
+  for (const account of [ACCOUNTS.manager]) {
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.goto("/login");
@@ -184,20 +184,11 @@ test("an admin creates a device token, sees it once, and revokes it", async ({
   expect((await postScan(request, token, roll.id, [])).status()).toBe(401);
 });
 
-test("the live feed on the inspector's home shows a new scan within seconds", async ({
-  browser,
-  page,
-  request,
-}) => {
-  const roll = await createRoll(await captureApi(browser));
-  const { token } = await createDeviceToken();
-
+test("the live feed and the Scans list are gone (Phase 28, A-26)", async ({ page }) => {
   await page.goto("/login");
-  await signIn(page, ACCOUNTS.inspector.email);
-  await expect(page.getByText(/Updated \d+s ago/)).toBeVisible();
-
-  await postScan(request, token, roll.id, [{ classKey: "hole", confidence: 0.66 }]);
-  await expect(page.getByRole("link", { name: new RegExp(`${roll.code} · #1`) })).toBeVisible({
-    timeout: 8_000,
-  });
+  await signIn(page, ACCOUNTS.manager.email);
+  await expect(page).toHaveURL(ACCOUNTS.manager.home);
+  await expect(page.getByText("Latest scans")).toHaveCount(0);
+  expect((await page.request.get("/api/v1/scans?limit=8")).status()).toBe(405);
+  expect((await page.goto("/scans"))?.status()).toBe(404);
 });

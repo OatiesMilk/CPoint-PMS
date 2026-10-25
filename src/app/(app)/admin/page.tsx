@@ -1,7 +1,8 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   the System Admin, occasionally, to manage accounts and settings.
- * What:  confirm the system is healthy, then go to the admin task at hand.
+ * What:  confirm the system is healthy, then go to the admin task at hand. Administration only
+ *        (Phase 28, D-100): health, users, the camera, unknown classes and the lunch break.
  * Worst: not noticing the database is down while the floor relies on the system.
  */
 import type { Metadata } from "next";
@@ -12,13 +13,22 @@ import { PageHeader } from "@/components/features/page-header";
 import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ROLE_LABELS, type Role } from "@/lib/domain";
+import { formatDayLabel } from "@/lib/format";
 import { requireRole } from "@/server/policies/guard";
 import { auditCountLastDay } from "@/server/services/audit-query.service";
-import { getThresholds, unknownClasses } from "@/server/services/settings.service";
+import { cameraStatus } from "@/server/services/camera.service";
+import { lunchBreakSettings } from "@/server/services/production.service";
+import { unknownClasses } from "@/server/services/settings.service";
 import { userSummary } from "@/server/services/user-admin.service";
 import { getHealth } from "@/server/services/health.service";
 
 export const metadata: Metadata = { title: "Overview" };
+
+const CAMERA_STATE = {
+  capturing: "Sections are being captured now.",
+  simulator: "Scans are coming from the simulator.",
+  idle: "Nothing captured in the last minute.",
+} as const;
 
 function formatManila(iso: string) {
   return new Intl.DateTimeFormat("en-PH", {
@@ -43,11 +53,12 @@ function CardLink({ href, children }: { href: string; children: React.ReactNode 
 export default async function AdminHome() {
   await requireRole("SYSTEM_ADMIN");
   await connection();
-  const [health, users, thresholds, unknown, auditDay] = await Promise.all([
+  const [health, users, camera, unknown, lunch, auditDay] = await Promise.all([
     getHealth(),
     userSummary(),
-    getThresholds(),
+    cameraStatus(),
     unknownClasses(),
+    lunchBreakSettings(),
     auditCountLastDay(),
   ]);
   const dbUp = health.checks.database === "up";
@@ -109,7 +120,7 @@ export default async function AdminHome() {
           </dl>
         </CardContent>
       </Card>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Users</CardTitle>
@@ -136,24 +147,25 @@ export default async function AdminHome() {
             </CardLink>
           </CardContent>
         </Card>
-        <Card>
+        <Card data-testid="camera-status-card">
           <CardHeader>
-            <CardTitle>Pass or Reject</CardTitle>
-            <CardDescription>What the camera decides.</CardDescription>
+            <CardTitle>Camera</CardTitle>
+            <CardDescription>{CAMERA_STATE[camera.state]}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <dl className="flex flex-col gap-1 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-muted-foreground">A defect counts as found at</dt>
-                <dd className="font-medium tabular-nums">
-                  {Math.round(thresholds.foundAtOrAbove * 1000) / 10}%
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Last capture</dt>
+                <dd className="font-medium">
+                  {camera.lastScan ? formatManila(camera.lastScan.at.toISOString()) : "None yet"}
                 </dd>
               </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Rolls open</dt>
+                <dd className="font-medium tabular-nums">{camera.openRolls}</dd>
+              </div>
             </dl>
-            <p className="text-sm text-muted-foreground">
-              Each defect type is Usable or Not accepted when found.
-            </p>
-            <CardLink href="/admin/settings?tab=defects">Defect types</CardLink>
+            <CardLink href="/camera">Camera status</CardLink>
           </CardContent>
         </Card>
         <Card>
@@ -174,6 +186,23 @@ export default async function AdminHome() {
                     .join(", ")}${unknown.length > 3 ? "…" : ""}`}
             </p>
             <CardLink href="/admin/settings?tab=defects">Defect types</CardLink>
+          </CardContent>
+        </Card>
+        <Card data-testid="lunch-break-card">
+          <CardHeader>
+            <CardTitle>Lunch break</CardTitle>
+            <CardDescription>Pauses the batch it falls in, every working day.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-sm">
+              Today: <span className="font-medium">{lunch.current.text}</span>
+            </p>
+            {lunch.upcoming && (
+              <p className="text-sm text-muted-foreground">
+                From {formatDayLabel(lunch.upcoming.from)}: {lunch.upcoming.text}
+              </p>
+            )}
+            <CardLink href="/admin/settings?tab=lunch">Lunch break</CardLink>
           </CardContent>
         </Card>
         <Card>
