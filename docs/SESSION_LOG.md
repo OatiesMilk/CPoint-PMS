@@ -45,6 +45,12 @@ Run 5: **PASS**. The batches spec alone 6 of 6; toasts leave in about 4 s (mouse
 suite 72 passed, 1 failed (isolation note: "3 pairs" saved instead of 12 once under load). The test
 now checks both values before saving (not rerun; CI runs it).
 
+CI on PR #25 (run 40154348825): `check`, `station` and `docker` passed; `e2e` failed in
+`capture.spec.ts` (C-18) and was flaky in `rolls.spec.ts` (who sees rolls): after the QI, `/login`
+showed no Email field. A batch-notices request still in flight could set the session cookie again
+after `clearCookies()`; both tests now go to `about:blank` first. `npm run check` passed (527).
+Codex re-check prompt `qa/CODEX_PROMPT_CI_RECHECK_feature-phase-27-batches.md`.
+
 ## 2026-10-24 — Phase 27: batches are the check-in intervals
 
 **Who:** Dylan (Claude building)

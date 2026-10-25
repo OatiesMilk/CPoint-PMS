@@ -386,7 +386,9 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. QA passed (run 5). Dylan commits Phase 27 on a new branch from `main` and opens the PR.
+1. PR #25 is open. CI's `e2e` failed on two sign-in loops (a notices request could restore the
+   cookie); fixed in the tests. Codex re-check: `qa/CODEX_PROMPT_CI_RECHECK_feature-phase-27-batches.md`,
+   then Dylan pushes the fix.
 2. Watch the QI phone test in `batches.spec.ts` in CI (run 5's isolation note).
 3. After PASS, Dylan commits Phase 27 on a new branch from `main`, pushes and opens the PR
    (D-032). Claude gives the git commands when asked; CI runs on the PR and Claude fixes any

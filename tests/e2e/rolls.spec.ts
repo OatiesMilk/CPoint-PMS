@@ -134,6 +134,9 @@ test.describe("who sees rolls", () => {
       await page.goto("/reports/rolls");
       await expect(page).toHaveURL(/\/forbidden/);
       expect((await page.request.get("/api/v1/rolls")).status()).toBe(403);
+      // Leave the app first: a request still in flight (the QI's batch notices, Phase 27) could
+      // set the session cookie again after it's cleared, and /login would then redirect home.
+      await page.goto("about:blank");
       await page.context().clearCookies();
     }
   });

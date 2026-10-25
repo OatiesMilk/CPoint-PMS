@@ -260,6 +260,9 @@ test.describe("Capture page on a desktop", () => {
       expect(await navLabels(page)).not.toContain("Capture");
       await page.goto("/camera/capture");
       await expect(page).toHaveURL(/\/forbidden/);
+      // Leave the app first: a request still in flight (the QI's batch notices, Phase 27) could
+      // set the session cookie again after it's cleared, and /login would then redirect home.
+      await page.goto("about:blank");
       await page.context().clearCookies();
     }
   });
