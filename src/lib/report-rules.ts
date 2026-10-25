@@ -1,7 +1,7 @@
 import { manilaToday } from "./format";
 
 /**
- * Report rules (D-025), pure and client-safe. Every report is an aggregate per day, shoe type, defect
+ * Report rules (D-025), pure and client-safe. Every report is an aggregate per day, batch, defect
  * type or roll, never per person (D-008). Days are Manila calendar days (UTC+8, no DST).
  */
 

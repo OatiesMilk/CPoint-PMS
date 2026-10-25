@@ -1,9 +1,9 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   the Quality Inspector, at a desk next to the line, through the whole shift.
- * What:  count the pairs finished at each production check-in (D-084) and follow today's
+ * What:  finish each batch with the pairs finished and failed (Phase 27) and follow today's
  *        sections, whose Pass or Reject is final (D-093). The constructors capture (Phase 26).
- * Worst: a check-in is missed. The next check-in comes first; today's sections are context.
+ * Worst: a batch is missed. The next batch comes first; today's sections are context.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -11,7 +11,7 @@ import { connection } from "next/server";
 import { CircleX, ScanLine } from "lucide-react";
 import { DefectsTodayCard } from "@/components/features/reports/home-cards";
 import { PageHeader } from "@/components/features/page-header";
-import { NextCheckInCard } from "@/components/features/production/production-cards";
+import { NextBatchCard } from "@/components/features/production/production-cards";
 import { LatestScansWidget } from "@/components/features/scans/latest-scans-widget";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/server/policies/guard";
@@ -54,7 +54,7 @@ export default async function QualityInspectorHome() {
         description="Today’s inspection work."
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <NextCheckInCard today={production} />
+        <NextBatchCard today={production} />
         {tiles.map((t) => (
           <Card key={t.label}>
             <CardHeader>

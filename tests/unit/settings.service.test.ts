@@ -134,13 +134,6 @@ describe("reference data", () => {
     expect(data).toMatchObject({ label: "Slit" });
   });
 
-  it("checks both shoe type code and name for clashes", async () => {
-    refs.findReferenceByField.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "x" });
-    await expect(
-      svc.createReferenceRow("shoeType", { code: "sch", name: "School Shoe" }, admin),
-    ).rejects.toMatchObject({ details: [{ path: ["name"] }] });
-  });
-
   it("clears optional supplier fields to null on edit", async () => {
     refs.findReference.mockResolvedValue({ id: "s1", name: "Acme", phone: "123", isActive: true });
     await svc.updateReferenceRow("supplier", "s1", { name: "Acme", phone: "" }, admin);

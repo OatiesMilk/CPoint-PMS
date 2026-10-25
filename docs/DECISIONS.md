@@ -1748,3 +1748,79 @@ least 44 px tall, dialogs that fit 390 × 844. Batches gets the same care in Pha
 page stays desktop first (D-034 still holds for them).
 **Where:** `src/components/features/app-shell/sidebar.tsx`, `src/app/(app)/layout.tsx`,
 `src/app/(app)/camera/capture/**`, `DESIGN.md` → "Phone layout (D-096)", `CLAUDE.md`.
+
+### D-097 · 2026-10-24 · Accepted — A batch is a check-in interval; the System Admin sets the lunch break (Phase 27)
+
+**Context:** CPoint counts finished pairs at set times and calls each stretch between two counts a
+batch (C-2, C-4). Lunch pauses the line, and a batch carries on after it (C-3, C-25, C-26, C-40).
+**Decision:**
+
+- A **batch** is one check-in interval of the working day. The Floor Manager chooses **How often**:
+  every 1, 2, 3 or 4 hours of working time, or **once at the end of the day** (`intervalMinutes`
+  null). Changes apply from tomorrow (D-083 still holds).
+- The **lunch break** is one per working day, set by the **System Admin** under Settings → Lunch
+  break (start and end, or none), applying from tomorrow with a history. Default **11:00 to
+  12:00** (A-4, Dylan 2026-10-24). A lunch must sit inside tomorrow's shift.
+- Working time leaves lunch out. A batch whose working time runs out at lunch's start ends when
+  lunch ends; the last batch ends at the shift end, so it can be shorter (A-2). With the defaults
+  the batches are 08:00–13:00 (lunch 11:00–12:00) and 13:00–17:00.
+- `/production` becomes **Batches** (`/batches`, `/batches/plan`); a finished batch is still a
+  `ProductionCheckIn` row in the code (`slotAt` = the batch's end).
+- The bootstrap adds the default lunch from the start on a database with no check-ins, otherwise
+  from tomorrow, so past days keep the times they were counted at.
+
+**Supersedes:** the check-in times of D-083 (12:00, 16:00, 17:00 without lunch).
+**Where:** `src/lib/production-rules.ts` (`batchesFor`, `lunchProblem`),
+`src/server/services/production.service.ts`, `prisma/migrations/20261026090000_batches_are_intervals/`,
+`src/app/(app)/batches/**`, `src/app/(app)/admin/settings/lunch-break-form.tsx`,
+`src/app/api/v1/settings/lunch-break/route.ts`.
+**Consequences:** tell CPoint the batch times and who sets lunch.
+
+### D-098 · 2026-10-24 · Accepted — Worked-out batch statuses, Finish batch with failed pairs, on-screen notices (Phase 27)
+
+**Context:** the QI counts the pairs that left Finishing and how many failed inspection (C-5, C-7,
+C-27), may finish a batch shortly before its end (C-28), and should be reminded (C-6, C-31, A-9).
+**Decision:**
+
+- A batch's status is **worked out, never stored**: Upcoming, In progress (Paused for lunch during
+  lunch), Due at its end, Late 30 minutes after (D-084), Finished (Finished late, Corrected), Missed
+  at midnight.
+- **Finish batch** opens **10 minutes before the end** and stays open until midnight: the pairs
+  finished and, of these, the pairs that failed inspection (0 to start, never more than finished),
+  with notes. One finish per batch (`409 STALE` naming who and when); a same-day correction needs a
+  reason and the audit keeps both counts. Who may finish is unchanged (the QI; the FM on a day no
+  QI is present, D-088).
+- **Notices** for whoever may finish: a banner on every page at end − 10 minutes and at the end
+  (with Finish batch), a bell beside the logo listing the due batches, and "(n)" in the tab title.
+  The browser works them out from `GET /api/v1/production/today` (every 60 s and when the tab
+  returns) and the clock. No push, browser notification, sound or server scheduler (C-31).
+- Batches has a phone layout (D-096): one column, the batch to finish fixed at the bottom, the
+  dialog as a bottom sheet. The QI sees today only; the FM also sees Recent days (Dylan
+  2026-10-24).
+
+**Where:** `src/lib/production-rules.ts` (`batchState`, `finishWindow`, `noticesFor`),
+`src/components/features/batches/batch-notices.tsx`, `src/app/(app)/batches/**`,
+`src/app/(app)/layout.tsx`, `src/components/features/app-shell/sidebar.tsx`.
+**Consequences:** tell CPoint the notices only show while the app is open.
+
+### D-099 · 2026-10-24 · Accepted — No shoe types; one daily quota on passed pairs (Phase 27)
+
+**Context:** CPoint doesn't count by shoe type (C-8), and the quota counts only the pairs that
+passed inspection (C-41).
+**Decision:**
+
+- Shoe types are removed: the table, the Settings tab, `/api/v1/shoe-types/**`, every field,
+  filter and column. Old audit rows stay as history.
+- **One daily quota** for the whole line. A first quota applies today, a change from tomorrow
+  (D-085). Progress, the pace, the shortfall sentence, Operations and `production.csv` use
+  **passed pairs** (finished − failed).
+- The suggestion is the **average passed pairs per full working day** over the last 10 such days
+  (Dylan 2026-10-24), replacing D-085's per-check-in average.
+- The migration converts first (A-10): a check-in's pairs are the sum of its per-type counts
+  (failed 0); each quota day becomes one quota, the sum of the per-type quotas in force that day.
+
+**Supersedes:** the per-shoe-type parts of D-085 and D-086.
+**Where:** `prisma/schema.prisma`, the migration above, `production.service.ts`
+(`saveQuota`, `productionCsv`), `src/server/services/ops-report.service.ts`,
+`src/server/services/settings.service.ts`, `src/server/validators/{production,settings}.validator.ts`.
+**Consequences:** the demo week sets one quota of 128.

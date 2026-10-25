@@ -33,8 +33,6 @@ function entityHref(entity: string, id: string | null): string | null {
       return "/admin/settings?tab=thresholds";
     case "DefectType":
       return "/admin/settings?tab=defects";
-    case "ShoeType":
-      return "/admin/settings?tab=shoes";
     case "Supplier":
       return "/admin/settings?tab=suppliers";
     default:

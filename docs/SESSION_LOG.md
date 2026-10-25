@@ -14,6 +14,78 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-25 — Phase 27: QA run 1 fixes
+
+**Who:** Dylan (Claude fixing)
+**Summary:** Codex run 1 failed S2 (two short days instead of three) and the host build (stale
+generated route types), so e2e didn't start; S9 was blocked on a Sunday.
+**Changed:** `demo-seed.service.ts`: `DEMO_RATE` became `demoRate(most, hours)`, worked out from
+the roster so the day with 2 absent falls short with 12 or 13 constructors; a unit test with a
+13th constructor. Deleted the laptop's stale `.next/dev/types`. Run 2 prompt
+`qa/CODEX_PROMPT_PHASE_27_RUN2.md` (a Sunday schedule row for S2 and S9 when needed).
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (527) · build ✅ · e2e not run (Codex) · docker not run
+**Decisions:** none
+**Follow-ups:** Dylan resets the demo week, then Codex run 2.
+
+Run 2 (same day): build, S2 and S9 passed; five e2e failures, all test faults, fixed in
+`auth.spec.ts` (Batches in the nav), `admin.spec.ts` (back to the Suppliers tab) and
+`batches.spec.ts` (untick "No lunch break"). `npm run check` passed (527). Run 3 prompt
+`qa/CODEX_PROMPT_PHASE_27_RUN3.md`.
+
+Run 3: e2e 71 passed, 2 failed, both test faults, fixed: the axe helper moves the pointer off the
+phone toasts (a hovered toast never leaves), and `rolls.spec.ts` waits for the Find box's `?q=`
+before clicking a roll. `npm run check` passed (527). Run 4 prompt `qa/CODEX_PROMPT_PHASE_27_RUN4.md`.
+
+Run 4: 72 passed, 1 failed (the QI phone test's toast wait); run 3's pointer fix hadn't reached
+the laptop. The axe helper in `batches.spec.ts` excludes `[data-sonner-toaster]` instead of
+waiting for every toast. `npm run check` passed (527). Run 5 prompt
+`qa/CODEX_PROMPT_PHASE_27_RUN5.md`, with a manual toast-timing check on a phone viewport.
+
+Run 5: **PASS**. The batches spec alone 6 of 6; toasts leave in about 4 s (mouse and touch); full
+suite 72 passed, 1 failed (isolation note: "3 pairs" saved instead of 12 once under load). The test
+now checks both values before saving (not rerun; CI runs it).
+
+CI on PR #25 (run 40154348825): `check`, `station` and `docker` passed; `e2e` failed in
+`capture.spec.ts` (C-18) and was flaky in `rolls.spec.ts` (who sees rolls): after the QI, `/login`
+showed no Email field. A batch-notices request still in flight could set the session cookie again
+after `clearCookies()`; both tests now go to `about:blank` first. `npm run check` passed (527).
+Codex re-check prompt `qa/CODEX_PROMPT_CI_RECHECK_feature-phase-27-batches.md`.
+
+## 2026-10-24 — Phase 27: batches are the check-in intervals
+
+**Who:** Dylan (Claude building)
+**Summary:** A batch is one check-in interval of the working day, with a lunch break the System
+Admin sets; the QI finishes each batch with the pairs finished and the pairs that failed
+inspection, prompted by on-screen notices; one daily quota on passed pairs; shoe types removed.
+Plan `docs/prompts/plans/phase-27-plan.md`, approved with Dylan's four answers.
+**Changed:**
+
+- Schema and migration `batches_are_intervals`: `lunch_breaks`; `intervalMinutes` nullable (once
+  at the end of the day); `pairs` and `failedPairs` on a check-in (summed from
+  `production_counts`, then dropped); one quota per day (summed per type, then `shoeTypeId` and
+  `shoe_types` dropped). Checked on scratch data and for drift.
+- Rules (`production-rules.ts`): `batchesFor` with breaks, `batchState`, `finishWindow` (10
+  minutes before the end), `noticesFor`, pace, shortfall and suggestion on passed pairs.
+- Services: `production.service.ts` (batches today, finish, correct, plan, lunch, reports, CSV),
+  `ensureDefaultLunchBreak` in the bootstrap and `demo:reset`, shoe types out of settings,
+  reference data, audit links and the demo reset; the demo week on two batches a day.
+- Pages: `/production` → `/batches` (cards, phone layout, Finish batch sheet), `/batches/plan`
+  (How often with end of day, a preview, one quota), Settings → Lunch break, the notice banner,
+  bell and tab title, the FM and QI home cards, Operations (Failed inspection tile).
+- API: `PUT /api/v1/settings/lunch-break`; check-ins take `pairs` and `failedPairs`; quotas take
+  `{ pairs }`; `/api/v1/shoe-types/**` removed.
+- Tests: unit tests rewritten for batches (526 pass); `tests/e2e/batches.spec.ts` replaces
+  `production.spec.ts`; `reports`, `admin`, `rolls` specs updated.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (526) · build ✅ · e2e not run (Codex) · docker not run
+(Codex)
+**Decisions:** D-097, D-098, D-099
+**Follow-ups:**
+
+- Dylan: back up, `db:deploy`, `db:generate`, `demo:reset -- --yes`; then Codex QA from
+  `qa/CODEX_PROMPT_PHASE_27.md`.
+- Phase 28: trim the FM sidebar and make Batches the QI's home.
+
 ## 2026-10-24 — Phase 26: QA run 1 fixes
 
 - Codex run 1 (`qa/reports/2026-10-24-phase-26-phone-capture.md`): FAIL, 25 of 29 scenarios; e2e

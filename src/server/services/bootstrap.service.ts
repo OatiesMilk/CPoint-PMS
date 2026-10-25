@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { ensureDefaultSchedule } from "./production.service";
+import { ensureDefaultLunchBreak, ensureDefaultSchedule } from "./production.service";
 import type { Role } from "@/lib/domain";
 import { getEnv } from "@/server/lib/env";
 import { logger } from "@/server/lib/logger";
@@ -8,7 +8,6 @@ import { runInTransaction } from "@/server/models/db";
 import {
   ensureCvSettings,
   ensureDefectType,
-  ensureShoeType,
   ensureSupplier,
 } from "@/server/models/reference-data.model";
 import { countActiveUsersWithRole, createUser, findUserByEmail } from "@/server/models/user.model";
@@ -20,10 +19,6 @@ import { createItem } from "./inventory.service";
 const SYSTEM = { type: "SYSTEM" } as const;
 
 export const REFERENCE_DATA = {
-  shoeTypes: [
-    { code: "SCH", name: "School Shoe", sortOrder: 1 },
-    { code: "TOP", name: "Topsider", sortOrder: 2 },
-  ],
   // The model's four classes with CPoint's outcomes (DQ-7, A-13), and the two earlier placeholder
   // types, which the model never sends. Data: the Admin changes them in Settings, and a fine-tuned
   // model's new classes arrive under Unknown classes.
@@ -112,16 +107,16 @@ export const DEMO_CONSTRUCTORS: { name: string; email: string }[] = [
 const DEMO_ACCOUNT_AGE_DAYS = 30;
 
 /**
- * Shoe types, defect types, the CV rule, a sample supplier and the default check-in schedule
- * (D-083). Never overwrites existing rows.
+ * Defect types, the CV rule, a sample supplier, the default batch schedule (D-083) and the default
+ * lunch break (A-4). Never overwrites existing rows. No shoe types since Phase 27 (C-8).
  */
 export async function ensureReferenceData(): Promise<void> {
   await runInTransaction(async (tx) => {
-    for (const shoeType of REFERENCE_DATA.shoeTypes) await ensureShoeType(shoeType, tx);
     for (const defectType of REFERENCE_DATA.defectTypes) await ensureDefectType(defectType, tx);
     for (const supplier of REFERENCE_DATA.suppliers) await ensureSupplier(supplier, tx);
     await ensureCvSettings(REFERENCE_DATA.cvSettings, tx);
     await ensureDefaultSchedule(tx);
+    await ensureDefaultLunchBreak(tx);
   });
 }
 

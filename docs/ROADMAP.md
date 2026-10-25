@@ -479,9 +479,9 @@ was never built. Each phase gets its own criteria here when its plan is approved
 - [x] Phase 25: Pass or Reject, a final verdict; remove the Review Queue, Repair Station and
       Salvage (merged #21; QA passed, run 3, 2026-10-24)
 - [x] Phase 26: capture on the constructors' own phones; rolls start and finish there; Reports →
-      Rolls (built; Codex QA next)
-- [ ] Phase 27: batches are the check-in intervals (lunch break, on-screen notices, pairs finished
-      and failed, no shoe types)
+      Rolls (merged #24; QA passed, run 2)
+- [x] Phase 27: batches are the check-in intervals (lunch break, on-screen notices, pairs finished
+      and failed, no shoe types); QA passed, run 5, 2026-10-25
 - [ ] Phase 28: each role sees only its modules; demo sign-in and reset on the login page
 - [ ] Phase 29: inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
 - [ ] Phase 30A: can the camera measure a whole roll? A check with real rolls (`cv/` only)
@@ -560,3 +560,20 @@ Brief: `docs/prompts/factory-visit-changes.md`, Phase 26. Plan: `docs/prompts/pl
       not run
 - [ ] Codex QA from `qa/CODEX_PROMPT_PHASE_26.md`: run 1 FAIL (sidebar hidden on desktop, three
       small faults, three test locators); fixed, run 2 from `qa/CODEX_PROMPT_PHASE_26_RUN2.md`
+
+## Phase 27 — Batches are the check-in intervals
+
+Brief: `docs/prompts/factory-visit-changes.md`, Phase 27. Plan: `docs/prompts/plans/phase-27-plan.md`
+(approved 2026-10-24 with Dylan's four answers). Decisions: D-097, D-098, D-099.
+
+- [x] Shoe types removed (table, Settings tab, API, fields, columns, seeds, demo reset)
+- [x] Migration `batches_are_intervals`: lunch breaks, end-of-day interval, pairs and failed pairs
+      per check-in, one quota a day; converts first, checked on scratch data
+- [x] Batch rules: lunch left out of working time, a batch ending at lunch ends after it, the last
+      batch ends at the shift end; worked-out statuses; Finish batch from 10 minutes before the end
+- [x] `/batches` with the phone layout and the Finish batch sheet; `/batches/plan` with How often
+      (end of day) and one quota; Settings → Lunch break (System Admin)
+- [x] Notices: banner, bell, tab title, for the QI and the covering FM
+- [x] Homes, Operations, `production.csv` on passed pairs; demo week and `demo:reset`
+- [x] `npm run check` passes (526 unit tests); e2e `batches.spec.ts` written, not run
+- [ ] Codex QA from `qa/CODEX_PROMPT_PHASE_27.md`

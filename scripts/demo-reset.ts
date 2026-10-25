@@ -36,13 +36,13 @@ const LABELS: Record<string, string> = {
   inventoryItems: "inventory items (the demo ones come back with opening stock)",
   movements: "stock movements",
   auditLogs: "audit log rows",
-  shoeTypes: "shoe types tests added",
   suppliers: "suppliers tests added",
   defectTypes: "defect types tests added",
   attendanceDays: "days of attendance (the demo week adds its own)",
-  checkIns: "production check-ins (the demo week adds its own)",
+  checkIns: "finished batches (the demo week adds its own)",
   quotas: "daily quotas (the demo week sets its own)",
-  schedules: "check-in schedules people saved (the default stays)",
+  schedules: "batch schedules people saved (the default stays)",
+  lunchBreaks: "lunch breaks the System Admin saved (the default 11:00 to 12:00 comes back)",
 };
 
 async function main() {

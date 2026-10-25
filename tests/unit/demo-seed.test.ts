@@ -42,10 +42,6 @@ const mocks = {
   countRolls: vi.fn(async () => 0),
   // Each item is known by its code, so a movement shows which item it moved.
   findInventoryItemBySku: vi.fn(async (sku: string) => ({ id: sku })),
-  listActiveShoeTypes: vi.fn(async () => [
-    { id: "st1", name: "School Shoe" },
-    { id: "st2", name: "Topsider" },
-  ]),
   listActiveSuppliers: vi.fn(async () => [{ id: "sp1", name: "Supplier" }]),
   listDefectTypes: vi.fn(async () => [
     { id: "d1", key: "crease", label: "Crease", isActive: true, outcome: "USABLE" },
@@ -71,7 +67,6 @@ vi.mock("@/server/models/inventory.model", () => ({
   findInventoryItemBySku: mocks.findInventoryItemBySku,
 }));
 vi.mock("@/server/models/reference-data.model", () => ({
-  listActiveShoeTypes: mocks.listActiveShoeTypes,
   listActiveSuppliers: mocks.listActiveSuppliers,
   listDefectTypes: mocks.listDefectTypes,
   ensureSupplier: vi.fn(),
@@ -97,10 +92,15 @@ const attendance = {
       ? {
           taken: true,
           constructorsPresent: savedPresent.get(day),
-          constructorsOnRoster: 12,
+          constructorsOnRoster: roster.filter((p) => p.role === "SHOE_CONSTRUCTOR").length,
           othersPresent: 1,
         }
-      : { taken: false, constructorsPresent: null, constructorsOnRoster: 12, othersPresent: null },
+      : {
+          taken: false,
+          constructorsPresent: null,
+          constructorsOnRoster: roster.filter((p) => p.role === "SHOE_CONSTRUCTOR").length,
+          othersPresent: null,
+        },
   })),
   saveAttendanceDay: vi.fn(
     async (
@@ -117,8 +117,8 @@ const attendance = {
   ),
 };
 const production = {
-  saveQuotas: vi.fn(async () => ({ saved: 2 })),
-  saveCheckIn: vi.fn(async () => ({ id: "ci", time: "12:00" })),
+  saveQuota: vi.fn(async () => ({ saved: true, effectiveFrom: "2026-09-28" })),
+  saveCheckIn: vi.fn(async () => ({ id: "ci", number: 1, time: "13:00" })),
 };
 vi.mock("@/server/services/production.service", () => production);
 vi.mock("@/server/services/attendance.service", () => attendance);
@@ -309,11 +309,16 @@ describe("seedDemoWeek", () => {
     for (const [, i] of laidOut) expect(i).not.toHaveProperty("rollId");
   });
 
-  it("enters check-ins as the QI, with one late and one missed, and three short days that line up with the absences", async () => {
+  it("finishes the batches as the QI, with one late and one missed, and three short days that line up with the absences", async () => {
     const result = await seedDemoWeek({ now, seed: 1 });
-    expect(production.saveQuotas).toHaveBeenCalledTimes(1);
+    expect(production.saveQuota).toHaveBeenCalledTimes(1);
+    expect(production.saveQuota).toHaveBeenCalledWith(
+      { pairs: DEMO_QUOTA, suggestedPairs: null },
+      expect.anything(),
+      expect.any(Date),
+    );
     const calls = production.saveCheckIn.mock.calls as unknown as [
-      { slotAt: string; counts: { shoeTypeId: string; pairs: number }[]; notes?: string },
+      { slotAt: string; pairs: number; failedPairs: number; notes?: string },
       { id: string },
       Date,
     ][];
@@ -327,22 +332,48 @@ describe("seedDemoWeek", () => {
       ([input, , when]) => when.getTime() - new Date(input.slotAt).getTime() > 30 * 60_000,
     );
     expect(late).toHaveLength(1);
-    // Pairs per past day against the quota for School Shoes (st1).
-    const byDay = new Map<string, { school: number; slots: number }>();
+    // Passed pairs per past day against the one quota (C-41).
+    const byDay = new Map<string, { passed: number; slots: number }>();
     for (const [input] of calls) {
       const day = new Date(new Date(input.slotAt).getTime() + 8 * 3_600_000)
         .toISOString()
         .slice(0, 10);
-      const d = byDay.get(day) ?? { school: 0, slots: 0 };
-      d.school += input.counts.find((c) => c.shoeTypeId === "st1")!.pairs;
+      expect(input.failedPairs).toBeGreaterThanOrEqual(1);
+      expect(input.failedPairs).toBeLessThanOrEqual(input.pairs);
+      const d = byDay.get(day) ?? { passed: 0, slots: 0 };
+      d.passed += input.pairs - input.failedPairs;
       d.slots += 1;
       byDay.set(day, d);
     }
-    // Five past working days of three check-ins each, one of them missed: 14.
+    // Five past working days of two batches each (08:00–13:00 with lunch, 13:00–17:00), one
+    // missed: 9.
     const past = [...byDay].filter(([day]) => day < "2026-10-03");
-    expect(past.reduce((t, [, d]) => t + d.slots, 0)).toBe(14);
-    const below = past.filter(([, d]) => d.school < DEMO_QUOTA.school).map(([day]) => day);
+    expect(past.reduce((t, [, d]) => t + d.slots, 0)).toBe(9);
+    const below = past.filter(([, d]) => d.passed < DEMO_QUOTA).map(([day]) => day);
     // 29 Sep (5 absent), 1 Oct (3 absent) and 2 Oct (2 absent).
+    expect(below).toEqual(["2026-09-29", "2026-10-01", "2026-10-02"]);
+  });
+
+  it("keeps the same three short days with a 13th constructor on the roster (dev databases)", async () => {
+    roster.unshift({ id: "c13", role: "SHOE_CONSTRUCTOR" });
+    try {
+      await seedDemoWeek({ now, seed: 1 });
+    } finally {
+      roster.shift();
+    }
+    const calls = production.saveCheckIn.mock.calls as unknown as [
+      { slotAt: string; pairs: number; failedPairs: number },
+    ][];
+    const passed = new Map<string, number>();
+    for (const [input] of calls) {
+      const day = new Date(new Date(input.slotAt).getTime() + 8 * 3_600_000)
+        .toISOString()
+        .slice(0, 10);
+      passed.set(day, (passed.get(day) ?? 0) + input.pairs - input.failedPairs);
+    }
+    const below = [...passed]
+      .filter(([day, p]) => day < "2026-10-03" && p < DEMO_QUOTA)
+      .map(([day]) => day);
     expect(below).toEqual(["2026-09-29", "2026-10-01", "2026-10-02"]);
   });
 

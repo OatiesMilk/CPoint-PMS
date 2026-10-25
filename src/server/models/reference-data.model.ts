@@ -3,13 +3,6 @@ import { type Db, defaultDb } from "./db";
 // Create-if-missing upserts: an existing row is never overwritten, so edits made by an admin
 // (labels, thresholds, active flags) survive every restart.
 
-export function ensureShoeType(
-  data: { code: string; name: string; sortOrder: number },
-  db: Db = defaultDb(),
-) {
-  return db.shoeType.upsert({ where: { code: data.code }, create: data, update: {} });
-}
-
 export function ensureDefectType(
   data: {
     key: string;
@@ -31,24 +24,12 @@ export function ensureCvSettings(data: { foundAtOrAbove: number }, db: Db = defa
   return db.cvSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: {} });
 }
 
-export function listActiveShoeTypes(db: Db = defaultDb()) {
-  return db.shoeType.findMany({
-    where: { isActive: true },
-    select: { id: true, name: true },
-    orderBy: { sortOrder: "asc" },
-  });
-}
-
 export function listActiveSuppliers(db: Db = defaultDb()) {
   return db.supplier.findMany({
     where: { isActive: true },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
-}
-
-export function findShoeType(id: string, db: Db = defaultDb()) {
-  return db.shoeType.findUnique({ where: { id } });
 }
 
 export function findSupplier(id: string, db: Db = defaultDb()) {
@@ -64,11 +45,11 @@ export function listDefectTypes(db: Db = defaultDb()) {
 
 // ───────────── admin CRUD (D-024) ─────────────
 
-export type ReferenceKind = "defectType" | "shoeType" | "supplier";
+export type ReferenceKind = "defectType" | "supplier";
 
 export type ReferenceRow = { id: string; isActive: boolean } & Record<string, unknown>;
 
-/** The three delegates share the calls used here; one cast keeps the services generic. */
+/** The two delegates share the calls used here; one cast keeps the services generic. */
 type RefDelegate = {
   findMany(args: { orderBy: object[] }): Promise<ReferenceRow[]>;
   findUnique(args: { where: { id: string } }): Promise<ReferenceRow | null>;
@@ -80,7 +61,6 @@ type RefDelegate = {
 function delegate(kind: ReferenceKind, db: Db): RefDelegate {
   const delegates = {
     defectType: db.defectType,
-    shoeType: db.shoeType,
     supplier: db.supplier,
   };
   return delegates[kind] as unknown as RefDelegate;
@@ -88,7 +68,6 @@ function delegate(kind: ReferenceKind, db: Db): RefDelegate {
 
 const ORDER: Record<ReferenceKind, object[]> = {
   defectType: [{ sortOrder: "asc" }, { label: "asc" }],
-  shoeType: [{ sortOrder: "asc" }, { name: "asc" }],
   supplier: [{ isActive: "desc" }, { name: "asc" }],
 };
 
@@ -161,12 +140,4 @@ export function updateModelNotice(
   db: Db = defaultDb(),
 ) {
   return db.cvSettings.update({ where: { id: 1 }, data });
-}
-
-/** Every shoe type, active first then by sort order, for production history (a type turned off later still shows its counts). */
-export function listAllShoeTypes(db: Db = defaultDb()) {
-  return db.shoeType.findMany({
-    select: { id: true, name: true, isActive: true },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
 }

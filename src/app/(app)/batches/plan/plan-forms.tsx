@@ -15,12 +15,14 @@ import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import {
   INTERVAL_MINUTES,
   WEEKDAYS,
+  batchTimes,
+  batchesFor,
   describeInterval,
-  slotsFor,
+  type BreakRule,
   type Suggestion,
 } from "@/lib/production-rules";
 import { quotaPairsSchema, scheduleSchema } from "@/server/validators/production.validator";
-import { saveQuotasAction, saveScheduleAction } from "../actions";
+import { saveQuotaAction, saveScheduleAction } from "../actions";
 
 const FIELD_IDS: Record<string, string> = {
   shiftStart: "shift-start",
@@ -29,33 +31,48 @@ const FIELD_IDS: Record<string, string> = {
   workingDays: "working-days",
 };
 
-/** The check-in schedule (D-083). A change applies from tomorrow, so today's check-ins stay put. */
+/**
+ * When batches end (D-083, D-097): the shift, how often (every 1 to 4 hours of working time, or
+ * once at the end of the day, C-2) and the working days. A change applies from tomorrow, so today's
+ * batches stay put. The preview uses tomorrow's lunch, which the System Admin sets (C-3).
+ */
 export function ScheduleForm({
   current,
   tomorrow,
+  lunch,
 }: {
   current: {
     shiftStart: string;
     shiftEnd: string;
-    intervalMinutes: number;
+    intervalMinutes: number | null;
     workingDays: number[];
   } | null;
   tomorrow: string;
+  lunch: BreakRule | null;
 }) {
   const [shiftStart, setShiftStart] = useState(current?.shiftStart ?? "08:00");
   const [shiftEnd, setShiftEnd] = useState(current?.shiftEnd ?? "17:00");
-  const [interval, setIntervalMinutes] = useState(String(current?.intervalMinutes ?? 240));
+  const [interval, setIntervalMinutes] = useState(
+    current ? (current.intervalMinutes === null ? "end" : String(current.intervalMinutes)) : "240",
+  );
   const [days, setDays] = useState<number[]>(current?.workingDays ?? [1, 2, 3, 4, 5, 6]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
 
-  const values = { shiftStart, shiftEnd, intervalMinutes: Number(interval), workingDays: days };
+  const values = { shiftStart, shiftEnd, intervalMinutes: interval, workingDays: days };
   const parsed = scheduleSchema.safeParse(values);
+  // "Tomorrow: Batch 1 08:00–13:00, lunch 11:00–12:00; Batch 2 13:00–17:00" (any weekday shape).
   const preview = parsed.success
-    ? slotsFor({ ...parsed.data, workingDays: [1, 2, 3, 4, 5, 6, 7] }, tomorrow).map((s) => s.time)
-    : [];
+    ? batchesFor(
+        { ...parsed.data, workingDays: [1, 2, 3, 4, 5, 6, 7] },
+        lunch ? [lunch] : [],
+        tomorrow,
+      )
+        .map((b) => `Batch ${b.number} ${batchTimes(b)}`)
+        .join("; ")
+    : "";
 
   function submit() {
     setFormError(null);
@@ -132,7 +149,7 @@ export function ScheduleForm({
           <FieldError id="shift-end-error" message={errors.shiftEnd} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="interval">Check-in</Label>
+          <Label htmlFor="interval">How often</Label>
           <Select
             id="interval"
             value={interval}
@@ -145,6 +162,7 @@ export function ScheduleForm({
                 {describeInterval(m).replace(/^every/, "Every")}
               </option>
             ))}
+            <option value="end">Once at the end of the day</option>
           </Select>
           <FieldError id="interval-error" message={errors.intervalMinutes} />
         </div>
@@ -179,8 +197,8 @@ export function ScheduleForm({
       </fieldset>
 
       <p className="text-sm text-muted-foreground" aria-live="polite">
-        {preview.length > 0
-          ? `Check-ins at ${preview.join(", ")}. Applies from tomorrow, ${formatAttendanceDay(tomorrow)}.`
+        {preview
+          ? `Tomorrow: ${preview}. Applies from tomorrow, ${formatAttendanceDay(tomorrow)}.`
           : `Applies from tomorrow, ${formatAttendanceDay(tomorrow)}.`}
       </p>
       {formError && <Alert tone="danger">{formError}</Alert>}
@@ -194,9 +212,7 @@ export function ScheduleForm({
   );
 }
 
-type QuotaRow = {
-  shoeTypeId: string;
-  name: string;
+type QuotaPlan = {
   today: number | null;
   upcoming: { pairs: number; from: string } | null;
   appliesFrom: string;
@@ -204,50 +220,39 @@ type QuotaRow = {
 };
 
 /**
- * The daily quota per shoe type (D-085), for the whole line. The suggestion sits beside each with
- * Use suggestion; the Floor Manager can type any other number.
+ * The one daily quota for the whole line (D-085, D-099, C-30), counted on passed pairs (C-41). The
+ * suggestion sits beside it with Use suggestion; the Floor Manager can type any other number.
  */
-export function QuotaForm({ rows, today }: { rows: QuotaRow[]; today: string }) {
-  const start = () =>
-    Object.fromEntries(rows.map((r) => [r.shoeTypeId, String(r.upcoming?.pairs ?? r.today ?? "")]));
-  const [values, setValues] = useState<Record<string, string>>(start);
-  const [used, setUsed] = useState<Record<string, boolean>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
+export function QuotaForm({ quota, today }: { quota: QuotaPlan; today: string }) {
+  const [value, setValue] = useState(String(quota.upcoming?.pairs ?? quota.today ?? ""));
+  const [used, setUsed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
-
-  if (rows.length === 0)
-    return <p className="text-muted-foreground">No shoe types are active. Add one in Settings.</p>;
+  const s = quota.suggestion;
 
   function submit() {
     setFormError(null);
-    const found: Record<string, string> = {};
-    for (const r of rows) {
-      const parsed = quotaPairsSchema(r.name).safeParse(values[r.shoeTypeId]);
-      if (!parsed.success) found[`quotas.${r.shoeTypeId}`] = parsed.error.issues[0].message;
+    const parsed = quotaPairsSchema.safeParse(value);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0].message);
+      return focusFirstInvalid(formRef.current);
     }
-    setErrors(found);
-    if (Object.keys(found).length) return focusFirstInvalid(formRef.current);
+    setError(null);
     startTransition(async () => {
-      const result = await saveQuotasAction({
-        quotas: rows.map((r) => ({
-          shoeTypeId: r.shoeTypeId,
-          pairs: values[r.shoeTypeId],
-          suggestedPairs: r.suggestion.pairs,
-        })),
-      });
+      const result = await saveQuotaAction({ pairs: value, suggestedPairs: s.pairs });
       if (result.ok) {
         toast.success(
-          result.saved === 0
-            ? "Nothing changed, so nothing was saved."
-            : `${result.saved} quota${result.saved === 1 ? "" : "s"} saved.`,
+          result.saved
+            ? `Daily quota saved. It applies from ${formatAttendanceDay(result.effectiveFrom)}.`
+            : "Nothing changed, so nothing was saved.",
         );
-        setUsed({});
+        setUsed(false);
         return;
       }
-      if (result.fieldErrors && Object.keys(result.fieldErrors).length) {
-        setErrors(result.fieldErrors);
+      if (result.fieldErrors?.pairs) {
+        setError(result.fieldErrors.pairs);
         focusFirstInvalid(formRef.current);
         return;
       }
@@ -266,91 +271,68 @@ export function QuotaForm({ rows, today }: { rows: QuotaRow[]; today: string }) 
       }}
       data-testid="quota-form"
     >
-      <FormErrorSummary
-        errors={Object.entries(errors).map(([k, message]) => ({
-          fieldId: `quota-${k.replace("quotas.", "")}`,
-          message,
-        }))}
-        outcome="saved"
-      />
-      <ul className="flex flex-col divide-y rounded-lg border">
-        {rows.map((r) => {
-          const key = `quotas.${r.shoeTypeId}`;
-          const id = `quota-${r.shoeTypeId}`;
-          const s = r.suggestion;
-          return (
-            <li
-              key={r.shoeTypeId}
-              className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(12rem,1fr)_2fr]"
-            >
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={id}>{r.name}: pairs per day</Label>
-                <div className="relative max-w-48">
-                  <Input
-                    id={id}
-                    inputMode="numeric"
-                    autoComplete="off"
-                    className="pr-14"
-                    value={values[r.shoeTypeId] ?? ""}
-                    aria-invalid={!!errors[key]}
-                    aria-describedby={errors[key] ? `${id}-error` : `${id}-hint`}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setValues((v) => ({ ...v, [r.shoeTypeId]: value }));
-                      if (errors[key] && quotaPairsSchema(r.name).safeParse(value).success)
-                        setErrors(({ [key]: _gone, ...rest }) => rest);
-                    }}
-                  />
-                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                    pairs
-                  </span>
-                </div>
-                <FieldError id={`${id}-error`} message={errors[key]} />
-                <p id={`${id}-hint`} className="text-sm text-muted-foreground">
-                  {r.today === null
-                    ? `No quota yet. The first one applies from today, ${formatAttendanceDay(today)}.`
-                    : `Today: ${r.today} pairs. A change applies from ${formatAttendanceDay(r.appliesFrom)}.`}
-                  {r.upcoming &&
-                    ` From ${formatAttendanceDay(r.upcoming.from)}: ${r.upcoming.pairs} pairs.`}
-                </p>
-              </div>
-              <div className="flex flex-col items-start gap-2 rounded-md bg-muted/60 p-3 text-sm">
-                <p className="flex items-center gap-1.5 font-medium">
-                  <Sparkles aria-hidden className="size-4" />
-                  {s.pairs === null ? "No suggestion yet" : `Suggested: ${s.pairs} pairs`}
-                </p>
-                {s.pairs === null ? (
-                  <p className="text-muted-foreground">{s.reason}</p>
-                ) : (
-                  <>
-                    <p>{s.sentence}</p>
-                    {s.perConstructor && (
-                      <p className="text-muted-foreground">{s.perConstructor}</p>
-                    )}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        setValues((v) => ({ ...v, [r.shoeTypeId]: String(s.pairs) }));
-                        setUsed((u) => ({ ...u, [r.shoeTypeId]: true }));
-                        setErrors(({ [key]: _gone, ...rest }) => rest);
-                      }}
-                    >
-                      {used[r.shoeTypeId] ? "Suggestion used" : "Use suggestion"}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(12rem,1fr)_2fr]">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="quota-pairs">Pairs per day for the whole line</Label>
+          <div className="relative max-w-48">
+            <Input
+              id="quota-pairs"
+              inputMode="numeric"
+              autoComplete="off"
+              className="pr-14"
+              value={value}
+              aria-invalid={!!error}
+              aria-describedby={error ? "quota-pairs-error" : "quota-pairs-hint"}
+              onChange={(e) => {
+                setValue(e.target.value);
+                if (error && quotaPairsSchema.safeParse(e.target.value).success) setError(null);
+              }}
+            />
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+              pairs
+            </span>
+          </div>
+          <FieldError id="quota-pairs-error" message={error ?? undefined} />
+          <p id="quota-pairs-hint" className="text-sm text-muted-foreground">
+            {quota.today === null
+              ? `No quota yet. The first one applies from today, ${formatAttendanceDay(today)}.`
+              : `Today: ${quota.today} pairs. A change applies from ${formatAttendanceDay(quota.appliesFrom)}.`}
+            {quota.upcoming &&
+              ` From ${formatAttendanceDay(quota.upcoming.from)}: ${quota.upcoming.pairs} pairs.`}
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-2 rounded-md bg-muted/60 p-3 text-sm">
+          <p className="flex items-center gap-1.5 font-medium">
+            <Sparkles aria-hidden className="size-4" />
+            {s.pairs === null ? "No suggestion yet" : `Suggested: ${s.pairs} pairs`}
+          </p>
+          {s.pairs === null ? (
+            <p className="text-muted-foreground">{s.reason}</p>
+          ) : (
+            <>
+              <p>{s.sentence}</p>
+              {s.perConstructor && <p className="text-muted-foreground">{s.perConstructor}</p>}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setValue(String(s.pairs));
+                  setUsed(true);
+                  setError(null);
+                }}
+              >
+                {used ? "Suggestion used" : "Use suggestion"}
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
       {formError && <Alert tone="danger">{formError}</Alert>}
       <div>
         <Button type="submit" disabled={pending}>
           {pending && <LoaderCircle aria-hidden className="animate-spin" />}
-          Save quotas
+          Save quota
         </Button>
       </div>
     </form>

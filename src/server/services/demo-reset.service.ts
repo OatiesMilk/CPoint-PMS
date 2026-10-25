@@ -12,6 +12,7 @@ import {
   type ResetKeep,
 } from "@/server/models/demo-reset.model";
 import { recordAudit } from "./audit.service";
+import { ensureDefaultLunchBreak } from "./production.service";
 import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import {
   DEMO_CONSTRUCTORS,
@@ -26,7 +27,7 @@ import { seedDemoWeek } from "./demo-seed.service";
  * `npm run demo:reset` (D-056): a clean, freshly organised system for a demo, keeping the people.
  *
  * Keeps the bootstrap System Admin and the demo accounts, the device tokens given to it (so the
- * camera station keeps working), the bootstrap shoe types and suppliers, and the defect types.
+ * camera station keeps working), the bootstrap suppliers, and the defect types.
  * Removes everything else: test accounts and tokens, rolls, scans, stock
  * movements and items, attendance, check-ins, the audit log, and the files on disk. Then it sets
  * the camera model's classes and their outcomes (D-052, A-13) and, unless told not to, seeds a fresh demo week,
@@ -108,7 +109,6 @@ export function resetKeep(deviceTokens: string[]): ResetKeep {
       ]),
     ],
     tokenHashes: [...new Set(deviceTokens.filter(Boolean).map(hashDeviceToken))],
-    shoeTypeCodes: REFERENCE_DATA.shoeTypes.map((s) => s.code),
     supplierNames: [
       ...REFERENCE_DATA.suppliers.map((s) => s.name),
       ...DEMO_SUPPLIERS.map((s) => s.name),
@@ -142,6 +142,8 @@ export async function resetDemoData(
   await runInTransaction(
     async (tx) => {
       await deleteResetTargets(keep, tx);
+      // The default lunch, now in force from the start: the old batches are gone (Phase 27).
+      await ensureDefaultLunchBreak(tx, options.now);
       for (const type of MODEL_DEFECT_TYPES) await upsertDefectTypeState(type, tx);
       // Accounts made before the demo names (D-090) get them; the constructors list has its own.
       await setDemoAccountNames(

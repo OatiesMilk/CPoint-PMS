@@ -11,7 +11,6 @@ import { ingestFieldsSchema } from "@/server/validators/scan.validator";
 import {
   defectTypeCreateSchema,
   referenceActiveSchema,
-  shoeTypeSchema,
   supplierSchema,
   thresholdsSchema,
 } from "@/server/validators/settings.validator";
@@ -22,9 +21,12 @@ import {
 import {
   checkInSchema,
   correctionSchema,
+  failedPairsSchema,
+  lunchBreakSchema,
   pairsSchema,
+  parseBatchCounts,
   quotaPairsSchema,
-  quotasSchema,
+  quotaSchema,
   scheduleSchema,
 } from "@/server/validators/production.validator";
 import { createTokenSchema } from "@/server/validators/token.validator";
@@ -167,11 +169,6 @@ const CASES: [string, ZodType, unknown[]][] = [
     ],
   ],
   [
-    "shoe type",
-    shoeTypeSchema,
-    [{}, { code: "x", name: "x" }, { code: "TOO-LONG-CODE", name: long(41), sortOrder: "x" }],
-  ],
-  [
     "supplier",
     supplierSchema,
     [
@@ -196,16 +193,12 @@ const CASES: [string, ZodType, unknown[]][] = [
   [
     "production check-in",
     checkInSchema,
-    [
-      {},
-      { slotAt: "noon", counts: "x" },
-      { slotAt: "2026-10-21T04:00:00.000Z", counts: [{ shoeTypeId: "x" }] },
-    ],
+    [{}, { slotAt: "noon", pairs: "x" }, { slotAt: "2026-10-21T04:00:00.000Z", notes: long(501) }],
   ],
   [
     "production correction",
     correctionSchema,
-    [{}, { expectedUpdatedAt: "x", counts: [], reason: "oops" }],
+    [{}, { expectedUpdatedAt: "x", pairs: 3, reason: "oops" }],
   ],
   [
     "production schedule",
@@ -216,9 +209,15 @@ const CASES: [string, ZodType, unknown[]][] = [
       { shiftStart: "17:00", shiftEnd: "08:00", intervalMinutes: 240, workingDays: [1] },
     ],
   ],
-  ["production quotas", quotasSchema, [{}, { quotas: [] }, { quotas: [{ shoeTypeId: "x" }] }]],
-  ["check-in pairs", pairsSchema("School Shoes", "10:00"), ["", "abc", "-1", "2.5", "2001"]],
-  ["daily quota", quotaPairsSchema("Topsider"), ["", "0", "1.5", "60000"]],
+  ["production quota", quotaSchema, [{}, { pairs: "" }, { pairs: "0", suggestedPairs: "x" }]],
+  ["batch pairs", pairsSchema(2), ["", "abc", "-1", "2.5", "2001"]],
+  ["failed pairs", failedPairsSchema(), ["abc", "-1", "2.5", "2001"]],
+  ["daily quota", quotaPairsSchema, ["", "0", "1.5", "60000"]],
+  [
+    "lunch break",
+    lunchBreakSchema,
+    [{}, { startTime: "noon", endTime: "" }, { startTime: "12:00", endTime: "11:00" }],
+  ],
   ["attendance day", attendanceDaySchema, ["", "2026-02-30", "21/10/2026", 5]],
   [
     "attendance save",
@@ -354,25 +353,47 @@ describe("attendance messages (D-038, D-079)", () => {
   });
 });
 
-describe("production messages (D-038, Phase 23)", () => {
-  it("names the shoe type and the check-in for a count", () => {
-    const schema = pairsSchema("School Shoes", "10:00");
+describe("batch messages (D-038, Phase 27)", () => {
+  it("names the batch for the pairs finished", () => {
+    const schema = pairsSchema(2);
     const whole =
-      "Enter the School Shoes finished since 10:00 as a whole number, like 24. Enter 0 if none.";
+      "Enter the pairs finished in Batch 2 as a whole number, like 24. Enter 0 if none.";
     expect(messages(schema, "")).toEqual([whole]);
     expect(messages(schema, "2.5")).toEqual([whole]);
     expect(messages(schema, "-3")).toEqual([whole]);
     expect(messages(schema, "2001")).toEqual([
-      "School Shoes can't be more than 2,000 pairs in one check-in. Check the number.",
+      "Batch 2 can't be more than 2,000 pairs. Check the number.",
     ]);
     expect(schema.parse("0")).toBe(0);
     expect(schema.parse(" 24 ")).toBe(24);
   });
 
-  it("names the shoe type for a quota", () => {
-    expect(messages(quotaPairsSchema("Topsider"), "0")).toEqual([
-      "Enter the daily quota for Topsider as a whole number of pairs, at least 1.",
+  it("asks for the failed pairs as a whole number, never more than finished (C-27)", () => {
+    expect(messages(failedPairsSchema(), "-1")).toEqual([
+      "Enter the pairs that failed inspection as a whole number, like 2. Enter 0 if none.",
     ]);
+    expect(parseBatchCounts(1, { pairs: "3", failedPairs: "4" })).toEqual({
+      ok: false,
+      errors: { failedPairs: "Failed inspection can't be more than the pairs finished (3)." },
+    });
+    expect(parseBatchCounts(1, { pairs: "3" })).toEqual({
+      ok: true,
+      pairs: 3,
+      failedPairs: 0,
+    });
+  });
+
+  it("asks for the one daily quota", () => {
+    expect(messages(quotaPairsSchema, "0")).toEqual([
+      "Enter the daily quota as a whole number of pairs, at least 1.",
+    ]);
+  });
+
+  it("checks the lunch break, and allows none", () => {
+    expect(messages(lunchBreakSchema, { startTime: "12:00", endTime: "11:00" })).toEqual([
+      "Lunch must end after it starts.",
+    ]);
+    expect(lunchBreakSchema.parse({ none: true })).toEqual({ startTime: null, endTime: null });
   });
 
   it("checks the schedule", () => {
@@ -391,17 +412,20 @@ describe("production messages (D-038, Phase 23)", () => {
         intervalMinutes: 90,
         workingDays: [],
       }),
-    ).toEqual(["Pick an interval of 1, 2, 3 or 4 hours.", "Pick at least one working day."]);
+    ).toEqual([
+      "Choose how often: every 1, 2, 3 or 4 hours, or once at the end of the day.",
+      "Pick at least one working day.",
+    ]);
   });
 
   it("asks for a reason to correct", () => {
     expect(
       messages(correctionSchema, {
         expectedUpdatedAt: "2026-10-21T04:00:00.000Z",
-        counts: [],
+        pairs: 3,
         reason: "oops",
       }),
-    ).toEqual(["Say why you're correcting this check-in, at least 5 characters."]);
+    ).toEqual(["Say why you're correcting this batch, at least 5 characters."]);
   });
 
   it("asks for the supplier at Start roll, and a reason to cancel (Phase 26)", () => {

@@ -1,112 +1,248 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_LUNCH,
   DEFAULT_SCHEDULE,
+  batchState,
+  batchesFor,
   belowQuotaAttention,
-  checkInWindow,
-  dayProgress,
+  breaksOf,
+  describeInterval,
   describeMinutes,
   effectiveFromFor,
   enteredLate,
   explainShortfall,
+  failedShare,
+  finishWindow,
   inForceOn,
   isoWeekday,
+  lunchProblem,
   manilaDayOf,
+  noticesFor,
   pairsPerConstructor,
   paceSentence,
-  slotState,
-  slotsFor,
+  pausedForLunch,
+  quotaProgress,
   suggestQuota,
+  type BreakRule,
   type DayHistory,
+  type ScheduleRule,
 } from "@/lib/production-rules";
 
-// Production progression rules (Phase 23). Manila is UTC+8: 12:00 Manila is 04:00Z.
+// Batch rules (Phase 27, D-097 to D-099). Manila is UTC+8: 13:00 Manila is 05:00Z.
 
 const MIN = 60_000;
 const at = (iso: string) => new Date(iso);
 const MON = "2026-10-19";
 const SUN = "2026-10-25";
+const LUNCH: BreakRule[] = [{ ...DEFAULT_LUNCH }];
+const every = (minutes: number | null): ScheduleRule => ({
+  ...DEFAULT_SCHEDULE,
+  intervalMinutes: minutes,
+});
+const spans = (rule: ScheduleRule, breaks = LUNCH, day = MON) =>
+  batchesFor(rule, breaks, day).map((b) => `${b.startTime}–${b.time}`);
+/** A Manila clock time on MON as an instant. */
+const manila = (hhmm: string, day = MON) => new Date(`${day}T${hhmm}:00+08:00`);
 
-describe("slotsFor (D-083)", () => {
-  it("gives 12:00, 16:00 and 17:00 for the default 08:00–17:00 every 4 hours", () => {
-    const slots = slotsFor(DEFAULT_SCHEDULE, MON);
-    expect(slots.map((s) => s.time)).toEqual(["12:00", "16:00", "17:00"]);
-    expect(slots.map((s) => s.since)).toEqual(["08:00", "12:00", "16:00"]);
-    expect(slots[0].at.toISOString()).toBe("2026-10-19T04:00:00.000Z");
+describe("batchesFor: the visit's examples, 08:00–17:00 with lunch 11:00–12:00 (C-2, C-26)", () => {
+  it("every 4 hours gives Batch 1 08:00–13:00 and Batch 2 13:00–17:00", () => {
+    expect(spans(every(240))).toEqual(["08:00–13:00", "13:00–17:00"]);
   });
 
-  it("adds the shift end when it is off the grid, and not twice when it is on it", () => {
-    const every2 = { ...DEFAULT_SCHEDULE, intervalMinutes: 120 };
-    expect(slotsFor(every2, MON).map((s) => s.time)).toEqual([
-      "10:00",
-      "12:00",
-      "14:00",
-      "16:00",
-      "17:00",
+  it("every 2 hours gives 08:00–10:00, 10:00–13:00 with lunch inside, 13:00–15:00, 15:00–17:00", () => {
+    const batches = batchesFor(every(120), LUNCH, MON);
+    expect(batches.map((b) => `${b.startTime}–${b.time}`)).toEqual([
+      "08:00–10:00",
+      "10:00–13:00",
+      "13:00–15:00",
+      "15:00–17:00",
     ]);
-    const onGrid = { ...DEFAULT_SCHEDULE, shiftEnd: "16:00" };
-    expect(slotsFor(onGrid, MON).map((s) => s.time)).toEqual(["12:00", "16:00"]);
+    expect(batches[1].lunch).toEqual(DEFAULT_LUNCH);
+    expect(batches[1].workingMinutes).toBe(120);
+    expect(batches[1].label).toBe("Batch 2 · 10:00–13:00, lunch 11:00–12:00");
+  });
+
+  it("once at the end of the day gives one batch 08:00–17:00", () => {
+    const batches = batchesFor(every(null), LUNCH, MON);
+    expect(batches.map((b) => `${b.startTime}–${b.time}`)).toEqual(["08:00–17:00"]);
+    expect(batches[0].workingMinutes).toBe(8 * 60);
+  });
+
+  it("every 3 hours: Batch 1 runs out at 11:00, so it carries on past lunch to 12:00", () => {
+    expect(spans(every(180))).toEqual(["08:00–12:00", "12:00–15:00", "15:00–17:00"]);
+  });
+
+  it("every hour: Batch 3 is 10:00–12:00, then hourly again", () => {
+    const s = spans(every(60));
+    expect(s[2]).toBe("10:00–12:00");
+    expect(s).toEqual([
+      "08:00–09:00",
+      "09:00–10:00",
+      "10:00–12:00",
+      "12:00–13:00",
+      "13:00–14:00",
+      "14:00–15:00",
+      "15:00–16:00",
+      "16:00–17:00",
+    ]);
+  });
+
+  it("without lunch, every 4 hours gives the old 12:00, 16:00 and 17:00", () => {
+    expect(spans(every(240), [])).toEqual(["08:00–12:00", "12:00–16:00", "16:00–17:00"]);
+    expect(breaksOf({ startTime: null, endTime: null })).toEqual([]);
+    expect(breaksOf(null)).toEqual([]);
+  });
+
+  it("takes a list of breaks, so a second one pauses its batch too", () => {
+    const two = [...LUNCH, { startTime: "15:00", endTime: "15:30" }];
+    expect(spans(every(240), two)).toEqual(["08:00–13:00", "13:00–17:00"]);
+    expect(batchesFor(every(240), two, MON)[1].workingMinutes).toBe(210);
+    expect(spans(every(120), two)).toEqual([
+      "08:00–10:00",
+      "10:00–13:00",
+      "13:00–15:30",
+      "15:30–17:00",
+    ]);
+  });
+
+  it("ignores a lunch that isn't inside the shift", () => {
+    expect(spans(every(240), [{ startTime: "07:00", endTime: "08:30" }])).toEqual([
+      "08:00–12:00",
+      "12:00–16:00",
+      "16:00–17:00",
+    ]);
   });
 
   it("has none on a day that isn't a working day, or without a schedule", () => {
     expect(isoWeekday(SUN)).toBe(7);
-    expect(slotsFor(DEFAULT_SCHEDULE, SUN)).toEqual([]);
-    expect(slotsFor(null, MON)).toEqual([]);
+    expect(batchesFor(DEFAULT_SCHEDULE, LUNCH, SUN)).toEqual([]);
+    expect(batchesFor(null, LUNCH, MON)).toEqual([]);
   });
 
-  it("handles a shift shorter than one interval", () => {
-    const short = { ...DEFAULT_SCHEDULE, shiftStart: "08:00", shiftEnd: "10:00" };
-    expect(slotsFor(short, MON).map((s) => s.time)).toEqual(["10:00"]);
+  it("puts each batch's end at the Manila clock time", () => {
+    const [b1] = batchesFor(DEFAULT_SCHEDULE, LUNCH, MON);
+    expect(b1.start.toISOString()).toBe("2026-10-19T00:00:00.000Z");
+    expect(b1.at.toISOString()).toBe("2026-10-19T05:00:00.000Z");
+  });
+
+  it("describes how often", () => {
+    expect(describeInterval(60)).toBe("every hour");
+    expect(describeInterval(180)).toBe("every 3 hours");
+    expect(describeInterval(null)).toBe("once at the end of the day");
   });
 });
 
-describe("slotState (D-084)", () => {
-  const slot = { at: at("2026-10-19T04:00:00.000Z") }; // 12:00 Manila
+describe("lunchProblem (C-3, A-4)", () => {
+  const shift = { shiftStart: "08:00", shiftEnd: "17:00" };
+  it("needs the end after the start, inside the shift", () => {
+    expect(lunchProblem({ startTime: "12:00", endTime: "11:00" }, shift)?.message).toBe(
+      "Lunch must end after it starts.",
+    );
+    expect(lunchProblem({ startTime: "07:30", endTime: "08:30" }, shift)?.message).toBe(
+      "Lunch must be inside the shift (08:00 to 17:00).",
+    );
+    expect(lunchProblem({ startTime: "16:30", endTime: "17:00" }, shift)?.message).toBe(
+      "Lunch must be inside the shift (08:00 to 17:00).",
+    );
+    expect(lunchProblem({ startTime: "11:00", endTime: "12:00" }, shift)).toBeNull();
+  });
+});
 
-  it("is Upcoming before its time and Due from it", () => {
-    expect(slotState(slot, null, at("2026-10-19T03:59:00.000Z"))).toBe("UPCOMING");
-    expect(slotState(slot, null, at("2026-10-19T04:00:00.000Z"))).toBe("DUE");
+describe("batchState (A-5)", () => {
+  const [b1] = batchesFor(DEFAULT_SCHEDULE, LUNCH, MON); // 08:00–13:00, lunch 11:00–12:00
+
+  it("is Upcoming before it starts, In progress until its end, Due at it", () => {
+    expect(batchState(b1, null, manila("07:59"))).toBe("UPCOMING");
+    expect(batchState(b1, null, manila("08:00"))).toBe("IN_PROGRESS");
+    expect(batchState(b1, null, manila("12:59"))).toBe("IN_PROGRESS");
+    expect(batchState(b1, null, manila("13:00"))).toBe("DUE");
+  });
+
+  it("reads Paused for lunch during lunch", () => {
+    expect(pausedForLunch(b1, manila("10:59"))).toBe(false);
+    expect(pausedForLunch(b1, manila("11:30"))).toBe(true);
+    expect(pausedForLunch(b1, manila("12:00"))).toBe(false);
   });
 
   it("turns Late after exactly 30 minutes, not at 30", () => {
-    expect(slotState(slot, null, new Date(slot.at.getTime() + 30 * MIN))).toBe("DUE");
-    expect(slotState(slot, null, new Date(slot.at.getTime() + 30 * MIN + 1))).toBe("LATE");
+    expect(batchState(b1, null, manila("13:30"))).toBe("DUE");
+    expect(batchState(b1, null, new Date(manila("13:30").getTime() + MIN))).toBe("LATE");
   });
 
-  it("is Missed once the Manila day is over, and Entered whenever saved", () => {
-    expect(slotState(slot, null, at("2026-10-19T15:59:00.000Z"))).toBe("LATE"); // 23:59 Manila
-    expect(slotState(slot, null, at("2026-10-19T16:00:00.000Z"))).toBe("MISSED"); // midnight
-    expect(
-      slotState(slot, { enteredAt: at("2026-10-19T05:00:00Z") }, at("2026-10-20T00:00Z")),
-    ).toBe("ENTERED");
+  it("is Missed once the Manila day is over, and Finished whenever saved", () => {
+    expect(batchState(b1, null, at("2026-10-19T15:59:00.000Z"))).toBe("LATE");
+    expect(batchState(b1, null, at("2026-10-19T16:00:00.000Z"))).toBe("MISSED");
+    expect(batchState(b1, { enteredAt: manila("12:55") }, manila("12:56"))).toBe("FINISHED");
   });
 
-  it("marks an entry more than 30 minutes after its time as late", () => {
-    expect(enteredLate(slot, new Date(slot.at.getTime() + 30 * MIN))).toBe(false);
-    expect(enteredLate(slot, new Date(slot.at.getTime() + 50 * MIN))).toBe(true);
+  it("marks a finish more than 30 minutes after the end as late", () => {
+    expect(enteredLate(b1, manila("13:30"))).toBe(false);
+    expect(enteredLate(b1, manila("13:31"))).toBe(true);
     expect(describeMinutes(40 * MIN)).toBe("40 minutes");
     expect(describeMinutes(65 * MIN)).toBe("1 hour 5 minutes");
   });
 });
 
-describe("checkInWindow", () => {
-  const slot = { at: at("2026-10-19T06:00:00.000Z"), time: "14:00" };
+describe("finishWindow (C-28)", () => {
+  const batches = batchesFor(every(120), LUNCH, MON);
+  const b3 = batches[2]; // 13:00–15:00
 
-  it("refuses before its time with the time it opens", () => {
-    expect(checkInWindow(slot, MON, at("2026-10-19T05:00:00.000Z"))).toEqual({
+  it("opens 10 minutes before the end, and says from when", () => {
+    expect(finishWindow(b3, MON, manila("14:49"))).toEqual({
       ok: false,
-      reason: "The 14:00 check-in isn't open yet. You can enter it from 14:00.",
+      reason: "Batch 3 can be finished from 14:50.",
     });
+    expect(finishWindow(b3, MON, manila("14:50"))).toEqual({ ok: true });
+    expect(finishWindow(b3, MON, manila("23:59"))).toEqual({ ok: true });
   });
 
-  it("refuses after midnight, naming the day", () => {
-    const r = checkInWindow(slot, MON, at("2026-10-19T16:00:00.000Z"));
+  it("closes at midnight, naming the day", () => {
+    const r = finishWindow(b3, MON, at("2026-10-19T16:00:00.000Z"));
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.reason).toContain("The check-in for Mon, 19 Oct closed at midnight.");
+    if (!r.ok) expect(r.reason).toMatch(/^Batch 3 of .+ closed at midnight\./);
+  });
+});
+
+describe("noticesFor (A-9, C-6, C-31)", () => {
+  const batches = batchesFor(DEFAULT_SCHEDULE, LUNCH, MON); // ends 13:00 and 17:00
+  const none = new Set<string>();
+
+  it("says nothing before 10 minutes to the end, and when the next notice comes", () => {
+    const r = noticesFor(batches, none, manila("12:30"));
+    expect(r.current).toEqual([]);
+    expect(r.nextAt?.toISOString()).toBe(manila("12:50").toISOString());
   });
 
-  it("is open from its time to the end of the day", () => {
-    expect(checkInWindow(slot, MON, at("2026-10-19T06:00:00.000Z"))).toEqual({ ok: true });
-    expect(checkInWindow(slot, MON, at("2026-10-19T15:59:59.000Z"))).toEqual({ ok: true });
+  it("at 10 minutes before the end: get ready", () => {
+    const r = noticesFor(batches, none, manila("12:50"));
+    expect(r.current).toEqual([
+      {
+        kind: "SOON",
+        number: 1,
+        slotAt: batches[0].at.toISOString(),
+        message: "Batch 1 ends at 13:00. Get ready to count the finished pairs.",
+      },
+    ]);
+    expect(r.nextAt?.toISOString()).toBe(manila("13:00").toISOString());
+  });
+
+  it("at the end: due, until it is finished", () => {
+    const r = noticesFor(batches, none, manila("13:00"));
+    expect(r.current.map((n) => [n.kind, n.message])).toEqual([
+      ["DUE", "Batch 1 is due. Finish it now."],
+    ]);
+    expect(
+      noticesFor(batches, new Set([batches[0].at.toISOString()]), manila("13:05")).current,
+    ).toEqual([]);
+  });
+
+  it("goes by the clock, so a batch ending at 12:00 after lunch gets its first notice at 11:50", () => {
+    const b = batchesFor(every(180), LUNCH, MON); // 08:00–12:00
+    expect(noticesFor(b, none, manila("11:50")).current[0]?.kind).toBe("SOON");
+  });
+
+  it("stops at midnight", () => {
+    expect(noticesFor(batches, none, at("2026-10-19T16:00:00.000Z")).current).toEqual([]);
   });
 });
 
@@ -133,41 +269,24 @@ describe("inForceOn and effectiveFromFor (D-083, D-085, Dylan 5A)", () => {
   });
 });
 
-describe("dayProgress and the pace (D-086)", () => {
-  const types = [
-    { id: "sch", name: "School Shoes" },
-    { id: "top", name: "Topsider" },
-    { id: "new", name: "Loafer" }, // added mid-week, no quota yet
-  ];
-  const counts = [
-    { shoeTypeId: "sch", pairs: 40 },
-    { shoeTypeId: "sch", pairs: 42 },
-    { shoeTypeId: "top", pairs: 50 },
-  ];
-
-  it("sums each type against its quota with the pace still needed", () => {
-    const p = dayProgress(
-      types,
-      counts,
-      new Map([
-        ["sch", 120],
-        ["top", 45],
-      ]),
-      2,
-    );
-    expect(p[0]).toMatchObject({ pairs: 82, quota: 120 });
-    expect(p[0].share).toBeCloseTo(82 / 120);
-    expect(p[0].pace).toBe("38 pairs more over 2 check-ins to reach the quota.");
-    expect(p[1].pace).toBe("Quota reached.");
-    expect(p[2]).toMatchObject({ pairs: 0, quota: null, share: null });
-    expect(p[2].pace).toBe("No daily quota is set for Loafer yet.");
+describe("quotaProgress and the pace on passed pairs (C-30, C-41)", () => {
+  it("counts only the pairs that passed against the one quota", () => {
+    const p = quotaProgress(90, 6, 120, 1);
+    expect(p).toMatchObject({ passed: 84, finished: 90, failed: 6, quota: 120 });
+    expect(p.share).toBeCloseTo(0.7);
+    expect(p.pace).toBe("36 pairs more over 1 batch to reach the quota.");
   });
 
-  it("says how far below once no check-ins are left", () => {
-    expect(paceSentence("School Shoes", 100, 120, 0)).toBe("Below quota by 20 pairs.");
-    expect(paceSentence("School Shoes", 119, 120, 1)).toBe(
-      "1 pair more over 1 check-in to reach the quota.",
-    );
+  it("says how far below once no batches are left, or when there is no quota", () => {
+    expect(paceSentence(100, 120, 0)).toBe("Below quota by 20 pairs.");
+    expect(paceSentence(120, 120, 2)).toBe("Quota reached.");
+    expect(paceSentence(10, null, 2)).toBe("No daily quota is set yet.");
+    expect(paceSentence(100, 120, 2)).toBe("20 pairs more over 2 batches to reach the quota.");
+  });
+
+  it("gives the failed share of the pairs finished", () => {
+    expect(failedShare(40, 4)).toBeCloseTo(0.1);
+    expect(failedShare(0, 0)).toBeNull();
   });
 });
 
@@ -233,48 +352,49 @@ describe("explainShortfall (D-086, D-008)", () => {
   });
 });
 
-describe("suggestQuota (D-085, Dylan 4A)", () => {
-  const day = (d: number, pairs: number, full = true, present: number | null = 10): DayHistory => ({
-    day: `2026-10-${String(d).padStart(2, "0")}`,
+describe("suggestQuota (D-099, Dylan 2026-10-24)", () => {
+  const day = (
+    d: string,
+    passed: number,
+    full = true,
+    present: number | null = 12,
+  ): DayHistory => ({
+    day: d,
     full,
-    checkIns: 3,
-    pairs,
+    passed,
     constructorsPresent: present,
   });
 
   it("needs 3 full days, and says how many there are", () => {
-    const r = suggestQuota([day(1, 60), day(2, 60), day(3, 90, false)], 3, 12);
-    expect(r).toEqual({
-      pairs: null,
-      reason:
-        "A suggestion needs at least 3 working days with every check-in entered. There are 2 so far.",
-    });
+    const r = suggestQuota([day("2026-10-13", 100), day("2026-10-14", 100, false)], 12);
+    expect(r.pairs).toBeNull();
+    if (r.pairs === null)
+      expect(r.reason).toBe(
+        "A suggestion needs at least 3 working days with every batch finished. There is 1 so far.",
+      );
   });
 
-  it("averages pairs per check-in over the full days × check-ins a day", () => {
-    const r = suggestQuota([day(1, 60), day(2, 66), day(3, 72), day(4, 10, false)], 3, 12);
-    expect(r.pairs).toBe(66); // 198 pairs over 9 check-ins = 22 a check-in, × 3
-    expect(r.pairs !== null && r.sentence).toBe(
-      "Average 22 pairs per check-in over the last 3 full working days × 3 check-ins a day = 66 pairs.",
+  it("averages the passed pairs per full working day", () => {
+    const r = suggestQuota(
+      [day("2026-10-13", 120), day("2026-10-14", 130), day("2026-10-15", 125)],
+      12,
     );
-    expect(r.pairs !== null && r.perConstructor).toBe(
-      "Or 6.6 pairs per Shoe Constructor present × 12 expected = 79 pairs.",
-    );
+    expect(r.pairs).toBe(125);
+    if (r.pairs !== null) {
+      expect(r.sentence).toBe(
+        "Average 125 passed pairs a day over the last 3 full working days = 125 pairs.",
+      );
+      expect(r.perConstructor).toBe(
+        "Or 10.4 passed pairs per Shoe Constructor present × 12 expected = 125 pairs.",
+      );
+    }
   });
 
   it("uses only the latest 10 full days", () => {
-    const history = [
-      ...Array.from({ length: 10 }, (_, i) => day(i + 11, 30)),
-      day(1, 300),
-      day(2, 300),
-    ];
-    const r = suggestQuota(history, 3, null);
-    expect(r).toMatchObject({ pairs: 30, days: 10, perConstructor: null });
-  });
-
-  it("follows the schedule for the next day (a change effective tomorrow)", () => {
-    const history = [day(1, 60), day(2, 60), day(3, 60)]; // 20 a check-in
-    expect(suggestQuota(history, 5, null).pairs).toBe(100);
+    const days = Array.from({ length: 12 }, (_, i) =>
+      day(`2026-10-${String(i + 1).padStart(2, "0")}`, i < 2 ? 1000 : 100),
+    );
+    expect(suggestQuota(days, null).pairs).toBe(100);
   });
 });
 

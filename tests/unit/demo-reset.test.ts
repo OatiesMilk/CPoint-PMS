@@ -12,6 +12,7 @@ const seedDemoWeek = vi.fn(async () => ({ seeded: true, rolls: 14, scans: 290 })
 const ensureDemoInventory = vi.fn();
 const ensureDemoConstructors = vi.fn();
 const clearUploadFolders = vi.fn();
+const ensureDefaultLunchBreak = vi.fn();
 const runInTransaction = vi.fn(
   async (fn: (tx: unknown) => unknown, _options?: { timeoutMs?: number }) => fn("tx"),
 );
@@ -23,6 +24,7 @@ vi.mock("@/server/models/db", () => ({ runInTransaction }));
 vi.mock("@/server/models/demo-reset.model", () => model);
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 vi.mock("@/server/services/demo-seed.service", () => ({ seedDemoWeek }));
+vi.mock("@/server/services/production.service", () => ({ ensureDefaultLunchBreak }));
 vi.mock("@/server/services/bootstrap.service", () => ({
   DEMO_USERS: [
     { email: "manager@cpoint.local", name: "Rodel Pascual" },
@@ -31,7 +33,6 @@ vi.mock("@/server/services/bootstrap.service", () => ({
   DEMO_CONSTRUCTORS: [{ email: "arnel.bautista@cpoint.local" }],
   ensureDemoConstructors,
   REFERENCE_DATA: {
-    shoeTypes: [{ code: "SCH" }, { code: "TOP" }],
     suppliers: [{ name: "Sample Leather Supplier" }],
     defectTypes: [{ key: "cut" }, { key: "hole" }, { key: "abrasion" }, { key: "dirt" }],
   },
@@ -58,7 +59,7 @@ describe("resetKeep (D-056)", () => {
     ]);
     expect(keep.tokenHashes).toEqual([hashDeviceToken("cpt_station_token")]);
     expect(JSON.stringify(keep)).not.toContain("cpt_station_token");
-    expect(keep.shoeTypeCodes).toEqual(["SCH", "TOP"]);
+    expect(keep).not.toHaveProperty("shoeTypeCodes");
     expect(keep.defectTypeKeys.sort()).toEqual(
       ["abrasion", "crease", "cut", "dirt", "hole", "scratch"].sort(),
     );
@@ -89,6 +90,8 @@ describe("resetDemoData", () => {
         before: { users: 135, scans: 900 },
       }),
     );
+    // The lunch rows go and the default comes back in force from the start (Phase 27).
+    expect(ensureDefaultLunchBreak).toHaveBeenCalledWith("tx", undefined);
     expect(clearUploadFolders).toHaveBeenCalledWith(["scans", "pod"]);
     // The demo constructors come back before the week, so its attendance has a roster (D-081).
     expect(ensureDemoConstructors).toHaveBeenCalled();

@@ -217,31 +217,32 @@ history. Placeholder only. Add a `ComponentType` table and a
 <roles_and_modules>
 Seed one demo account per role (password from `.env`, documented in README).
 
-| Module                                                      | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor   |
-| ----------------------------------------------------------- | -------------- | ----------------- | ------------------ | ------------------ |
-| Overview dashboard (role-specific)                          | ✅             | ✅                | ✅ (system health) | my requests        |
-| Rolls: start, capture, finish, cancel an empty roll (D-095) | —              | —                 | —                  | if allowed (D-075) |
-| Reports → Rolls: read, cancel an open roll with a reason    | ✅             | —                 | —                  | —                  |
-| Production: today, recent days (Phase 23, D-086)            | ✅             | ✅                | view               | —                  |
-| Production: enter and correct check-ins (D-084, D-088)      | no QI present  | ✅                | —                  | —                  |
-| Production: schedule and daily quota (D-083, D-085)         | ✅             | —                 | —                  | —                  |
-| Camera (CV placeholder page)                                | ✅             | ✅                | ✅                 | —                  |
-| Capture page and Floor view (Phase 26: constructors only)   | —              | —                 | —                  | if allowed (D-075) |
-| "Latest scans" widget (polls every 5s)                      | ✅ on overview | ✅ on overview    | —                  | —                  |
-| Scan history + detail (image + boxes)                       | ✅             | ✅                | view               | —                  |
-| Attendance: one day at a time (Phase 22, D-077 to D-079)    | ✅             | —                 | view               | —                  |
-| Inventory + movements                                       | ✅             | —                 | view               | —                  |
-| Reports: production vs quota, daily summary, defects, CSV   | ✅             | ✅ (quality only) | —                  | —                  |
-| Users (CRUD, deactivate, reset password, camera access)     | —              | —                 | ✅                 | —                  |
-| Defect types, CV thresholds, shoe types, suppliers          | —              | —                 | ✅                 | —                  |
-| CV device API tokens (create / revoke, shown once)          | —              | —                 | ✅                 | —                  |
-| Audit log (filterable)                                      | —              | —                 | ✅                 | —                  |
-| Constructor's only page: Capture, else who grants access    | —              | —                 | —                  | ✅                 |
+| Module                                                        | Floor Manager  | Quality Inspector | System Admin       | Shoe Constructor   |
+| ------------------------------------------------------------- | -------------- | ----------------- | ------------------ | ------------------ |
+| Overview dashboard (role-specific)                            | ✅             | ✅                | ✅ (system health) | my requests        |
+| Rolls: start, capture, finish, cancel an empty roll (D-095)   | —              | —                 | —                  | if allowed (D-075) |
+| Reports → Rolls: read, cancel an open roll with a reason      | ✅             | —                 | —                  | —                  |
+| Batches: today (QI), recent days (FM) (Phase 27, D-098)       | ✅             | ✅ today only     | view               | —                  |
+| Batches: finish and correct a batch (D-098, D-088)            | no QI present  | ✅                | —                  | —                  |
+| Batches: how often and the one daily quota (D-097, D-099)     | ✅             | —                 | —                  | —                  |
+| Settings → Lunch break (D-097)                                | —              | —                 | ✅                 | —                  |
+| Camera (CV placeholder page)                                  | ✅             | ✅                | ✅                 | —                  |
+| Capture page and Floor view (Phase 26: constructors only)     | —              | —                 | —                  | if allowed (D-075) |
+| "Latest scans" widget (polls every 5s)                        | ✅ on overview | ✅ on overview    | —                  | —                  |
+| Scan history + detail (image + boxes)                         | ✅             | ✅                | view               | —                  |
+| Attendance: one day at a time (Phase 22, D-077 to D-079)      | ✅             | —                 | view               | —                  |
+| Inventory + movements                                         | ✅             | —                 | view               | —                  |
+| Reports: production vs quota, daily summary, defects, CSV     | ✅             | ✅ (quality only) | —                  | —                  |
+| Users (CRUD, deactivate, reset password, camera access)       | —              | —                 | ✅                 | —                  |
+| Defect types, CV thresholds, suppliers (no shoe types, D-099) | —              | —                 | ✅                 | —                  |
+| CV device API tokens (create / revoke, shown once)            | —              | —                 | ✅                 | —                  |
+| Audit log (filterable)                                        | —              | —                 | ✅                 | —                  |
+| Constructor's only page: Capture, else who grants access      | —              | —                 | —                  | ✅                 |
 
-**Floor Manager overview:** today's production against the quota (Phase 23; replaced batches per
-stage), today's attendance, today's scans and Pass/Reject split, low-stock alerts, and Latest
+**Floor Manager overview:** today's batches, passed pairs against the quota (Phase 27; before it
+today's production, Phase 23), today's attendance, today's scans and Pass/Reject split, low-stock alerts, and Latest
 scans.
-**Quality Inspector overview:** sections scanned and rejected today, the next production check-in (Phase 23), today's defect breakdown by type, and
+**Quality Inspector overview:** sections scanned and rejected today, the next batch to finish (Phase 27), today's defect breakdown by type, and
 Latest scans.
 
 **Camera page (placeholder):** shows the connected source as "Not connected" with a

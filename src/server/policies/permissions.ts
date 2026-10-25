@@ -21,16 +21,17 @@ export const PERMISSIONS = {
   "report:production": ["FLOOR_MANAGER"],
   "report:quality": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
   "user:manage": ["SYSTEM_ADMIN"],
-  "settings:manage": ["SYSTEM_ADMIN"], // defect types, the CV rule, shoe types, suppliers
+  "settings:manage": ["SYSTEM_ADMIN"], // defect types, the CV rule, suppliers, the lunch break
   "token:manage": ["SYSTEM_ADMIN"],
   "audit:read": ["SYSTEM_ADMIN"],
   "system:health": ["SYSTEM_ADMIN"],
   // Attendance, a one-day log book (D-077): the Floor Manager takes it, the Admin views it.
   "attendance:read": ["FLOOR_MANAGER", "SYSTEM_ADMIN"],
   "attendance:manage": ["FLOOR_MANAGER"],
-  // Production progression (D-083 to D-086): the QI counts pairs at each check-in, the Floor
-  // Manager sets the schedule and the quota, and the Admin views. The Floor Manager may enter a
-  // check-in only on a day no Quality Inspector is present (D-088): mayEnterCheckIns decides.
+  // Batches (Phase 27, D-097 to D-099; before it production progression, D-083 to D-086): the
+  // QI finishes each batch, the Floor Manager plans how often and the quota, and the Admin views
+  // (until Phase 28) and sets the lunch break (settings:manage). The Floor Manager may finish a
+  // batch only on a day no Quality Inspector is present (D-088): mayEnterCheckIns decides.
   "production:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR", "SYSTEM_ADMIN"],
   "production:checkin": ["QUALITY_INSPECTOR", "FLOOR_MANAGER"],
   "production:plan": ["FLOOR_MANAGER"],
@@ -64,8 +65,8 @@ export function mayEnterCheckIns(role: Role, qiPresent: boolean | null): boolean
 /** Why the Floor Manager can't enter today's check-ins, in one sentence; null when they can. */
 export function checkInCoverReason(role: Role, qiPresent: boolean | null): string | null {
   if (mayEnterCheckIns(role, qiPresent)) return null;
-  if (role !== "FLOOR_MANAGER") return "The Quality Inspector enters the count at each check-in.";
+  if (role !== "FLOOR_MANAGER") return "The Quality Inspector finishes each batch.";
   if (qiPresent === null)
-    return "Take today's attendance first. You can enter check-ins only when it shows no Quality Inspector present.";
-  return "A Quality Inspector is present today, so they enter the check-ins.";
+    return "Take today's attendance first. You can finish batches only when it shows no Quality Inspector present.";
+  return "A Quality Inspector is present today, so they finish the batches.";
 }

@@ -6,48 +6,50 @@ import { requirePermission } from "@/server/policies/guard";
 import {
   correctCheckIn,
   saveCheckIn,
-  saveQuotas,
+  saveQuota,
   saveSchedule,
 } from "@/server/services/production.service";
 import {
   checkInSchema,
   correctionSchema,
-  quotasSchema,
+  quotaSchema,
   scheduleSchema,
 } from "@/server/validators/production.validator";
 import { z } from "zod";
 
 function refresh() {
-  revalidatePath("/production");
-  revalidatePath("/production/plan");
+  revalidatePath("/batches");
+  revalidatePath("/batches/plan");
   revalidatePath("/floor-manager");
   revalidatePath("/quality-inspector");
   revalidatePath("/reports");
 }
 
-/** The QI's count at a check-in (D-084, Dylan 3B). */
-export async function saveCheckInAction(input: unknown): Promise<ActionResult<{ time: string }>> {
+/** Finish a batch: the pairs finished and, of these, failed inspection (C-27). */
+export async function finishBatchAction(
+  input: unknown,
+): Promise<ActionResult<{ number: number; time: string }>> {
   const user = await requirePermission("production:checkin");
   try {
     const result = await saveCheckIn(checkInSchema.parse(input), user);
     refresh();
-    return { ok: true, time: result.time };
+    return { ok: true, number: result.number, time: result.time };
   } catch (error) {
-    return toActionError(error, "The check-in");
+    return toActionError(error, "Finishing the batch");
   }
 }
 
 /** A same-day correction with a reason. */
-export async function correctCheckInAction(
+export async function correctBatchAction(
   id: string,
   input: unknown,
-): Promise<ActionResult<{ time: string }>> {
+): Promise<ActionResult<{ number: number }>> {
   const user = await requirePermission("production:checkin");
-  if (!z.uuid().safeParse(id).success) return { ok: false, error: "This check-in doesn't exist." };
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: "This batch doesn't exist." };
   try {
     const result = await correctCheckIn(id, correctionSchema.parse(input), user);
     refresh();
-    return { ok: true, time: result.time };
+    return { ok: true, number: result.number };
   } catch (error) {
     return toActionError(error, "The correction");
   }
@@ -66,13 +68,15 @@ export async function saveScheduleAction(
   }
 }
 
-export async function saveQuotasAction(input: unknown): Promise<ActionResult<{ saved: number }>> {
+export async function saveQuotaAction(
+  input: unknown,
+): Promise<ActionResult<{ saved: boolean; effectiveFrom: string }>> {
   const user = await requirePermission("production:plan");
   try {
-    const result = await saveQuotas(quotasSchema.parse(input), user);
+    const result = await saveQuota(quotaSchema.parse(input), user);
     refresh();
-    return { ok: true, saved: result.saved };
+    return { ok: true, saved: result.saved, effectiveFrom: result.effectiveFrom };
   } catch (error) {
-    return toActionError(error, "The quotas");
+    return toActionError(error, "The quota");
   }
 }

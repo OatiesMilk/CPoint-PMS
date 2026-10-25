@@ -13,13 +13,13 @@ test("health endpoint reports app and database up", async ({ request }) => {
   expect((await res.json()).checks).toEqual({ app: "up", database: "up" });
 });
 
-// Phase 26: rolls moved to Reports (the FM), and only constructors capture.
+// Phase 26: rolls moved to Reports (the FM), and only constructors capture. Phase 27: Batches.
 const EXPECTED_NAV = {
-  manager: ["Overview", "Production", "Attendance", "Inventory", "Camera", "Scans", "Reports"],
-  inspector: ["Overview", "Production", "Camera", "Scans", "Reports"],
+  manager: ["Overview", "Batches", "Attendance", "Inventory", "Camera", "Scans", "Reports"],
+  inspector: ["Overview", "Batches", "Camera", "Scans", "Reports"],
   admin: [
     "Overview",
-    "Production",
+    "Batches",
     "Attendance",
     "Inventory",
     "Camera",

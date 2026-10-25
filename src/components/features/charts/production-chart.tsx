@@ -20,7 +20,7 @@ export type ProductionChartDay = {
 };
 
 const SERIES = [
-  { key: "pairs", label: "Pairs finished", color: "var(--chart-bar)", mark: "bar" },
+  { key: "pairs", label: "Pairs passed", color: "var(--chart-bar)", mark: "bar" },
   { key: "quota", label: "Daily quota", color: "var(--foreground)", mark: "dash" },
   {
     key: "constructorsPresent",
@@ -31,7 +31,7 @@ const SERIES = [
 ] as const;
 
 /**
- * Pairs finished per working day against the quota (D-086), with the Shoe Constructors present on
+ * Pairs passed per working day against the quota (D-086, C-41), with the Shoe Constructors present on
  * a second axis, so a short day and a short-handed day line up. The quota is a dashed line and is
  * named in the legend, not told by colour alone. The Recent days table is its table view.
  */
@@ -60,7 +60,7 @@ export function ProductionChart({ days }: { days: ProductionChartDay[] }) {
       <div
         className="h-64"
         role="img"
-        aria-label={`Pairs finished per day against the daily quota, ${days.length} working days, ${below} below quota`}
+        aria-label={`Pairs passed per day against the daily quota, ${days.length} working days, ${below} below quota`}
       >
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -100,7 +100,7 @@ export function ProductionChart({ days }: { days: ProductionChartDay[] }) {
                   <div className="rounded-md border bg-popover px-3 py-2 text-sm shadow-2">
                     <p className="mb-1 font-medium">{formatDayLabel(String(label))}</p>
                     <p className="tabular-nums">
-                      {d.pairs} pairs{d.quota !== null ? ` of ${d.quota}` : ", no quota"}
+                      {d.pairs} pairs passed{d.quota !== null ? ` of ${d.quota}` : ", no quota"}
                     </p>
                     <p className="text-muted-foreground tabular-nums">
                       {d.constructorsPresent === null
@@ -114,7 +114,7 @@ export function ProductionChart({ days }: { days: ProductionChartDay[] }) {
             <Bar
               yAxisId="pairs"
               dataKey="pairs"
-              name="Pairs finished"
+              name="Pairs passed"
               fill="var(--chart-bar)"
               maxBarSize={24}
               radius={[4, 4, 0, 0]}

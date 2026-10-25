@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Production progression service (Phase 23): check-ins, corrections, the schedule and quotas.
+// Batches service (Phase 27, D-097 to D-099): finishing a batch, corrections, the schedule, the
+// one daily quota and the lunch break.
 
-const ST = "0199a000-0000-7000-8000-0000000000a1"; // School Shoes
-const TP = "0199a000-0000-7000-8000-0000000000a2"; // Topsider
 const SCHEDULE = {
   id: "sch1",
   shiftStart: "08:00",
@@ -15,11 +14,23 @@ const SCHEDULE = {
   createdById: null,
   createdBy: null,
 };
+const LUNCH = {
+  id: "l1",
+  startTime: "11:00",
+  endTime: "12:00",
+  effectiveFrom: "2000-01-01",
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  createdById: null,
+  createdBy: null,
+};
 
 const model = {
   listSchedules: vi.fn(async () => [SCHEDULE]),
   countSchedules: vi.fn(async () => 1),
   insertSchedule: vi.fn(async (d: object) => ({ id: "sch2", ...d })),
+  listLunchBreaks: vi.fn(async () => [LUNCH] as unknown[]),
+  countLunchBreaks: vi.fn(async () => 1),
+  insertLunchBreak: vi.fn(async (d: object) => ({ id: "l2", ...d })),
   listQuotas: vi.fn(async () => [] as unknown[]),
   insertQuota: vi.fn(async (d: object) => ({ id: "q1", ...d })),
   listCheckIns: vi.fn(async () => [] as unknown[]),
@@ -28,16 +39,6 @@ const model = {
   findCheckInBySlot: vi.fn(async () => null as unknown),
   insertCheckIn: vi.fn(async (d: object) => ({ id: "ci1", ...d })),
   correctCheckIn: vi.fn(async () => true),
-};
-const refs = {
-  listActiveShoeTypes: vi.fn(async () => [
-    { id: ST, name: "School Shoes" },
-    { id: TP, name: "Topsider" },
-  ]),
-  listAllShoeTypes: vi.fn(async () => [
-    { id: ST, name: "School Shoes", isActive: true },
-    { id: TP, name: "Topsider", isActive: true },
-  ]),
 };
 const workforce = {
   qualityInspectorPresentOn: vi.fn(async () => true as boolean | null),
@@ -57,7 +58,6 @@ const recordAudit = vi.fn();
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/production.model", () => model);
-vi.mock("@/server/models/reference-data.model", () => refs);
 vi.mock("@/server/services/attendance.service", () => workforce);
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 vi.mock("@/server/models/db", () => ({
@@ -68,39 +68,35 @@ const svc = await import("@/server/services/production.service");
 
 const QI = { id: "qi1", name: "Lea Santos", role: "QUALITY_INSPECTOR" as const };
 const FM = { id: "fm1" };
-// Tue 20 Oct 2026; 12:00 Manila = 04:00Z.
-const NOON = "2026-10-20T04:00:00.000Z";
+// Tue 20 Oct 2026. With lunch 11:00–12:00, Batch 1 is 08:00–13:00 (ends 05:00Z) and Batch 2
+// 13:00–17:00 (ends 09:00Z).
+const B1 = "2026-10-20T05:00:00.000Z";
+const B2 = "2026-10-20T09:00:00.000Z";
 const at = (iso: string) => new Date(iso);
-const counts = (school: unknown, top: unknown) => [
-  { shoeTypeId: ST, pairs: school },
-  { shoeTypeId: TP, pairs: top },
-];
 
 beforeEach(() => {
   vi.clearAllMocks();
   model.findCheckInBySlot.mockResolvedValue(null);
 });
 
-describe("saveCheckIn (D-084)", () => {
-  it("saves the counts with the day's worker count read at save, and audits in the same tx", async () => {
+describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
+  it("saves the pairs and failed pairs with the day's worker count, and audits in the same tx", async () => {
     const r = await svc.saveCheckIn(
-      { slotAt: NOON, counts: counts("22", 10), notes: "Press down 20 min" },
+      { slotAt: B1, pairs: "42", failedPairs: 2, notes: "Press down 20 min" },
       QI,
-      at("2026-10-20T04:05:00.000Z"),
+      at("2026-10-20T05:05:00.000Z"),
     );
-    expect(r).toEqual({ id: "ci1", time: "12:00" });
+    expect(r).toEqual({ id: "ci1", number: 1, time: "13:00" });
     expect(model.insertCheckIn).toHaveBeenCalledWith(
       expect.objectContaining({
         day: "2026-10-20",
-        slotAt: at(NOON),
+        slotAt: at(B1),
         enteredById: "qi1",
+        pairs: 42,
+        failedPairs: 2,
         constructorsPresent: 14,
         constructorsOnRoster: 16,
         notes: "Press down 20 min",
-        counts: [
-          { shoeTypeId: ST, pairs: 22 },
-          { shoeTypeId: TP, pairs: 10 },
-        ],
       }),
       "tx",
     );
@@ -108,9 +104,57 @@ describe("saveCheckIn (D-084)", () => {
       "tx",
       expect.objectContaining({
         action: "production.checkin",
-        after: expect.objectContaining({ counts: { "School Shoes": 22, Topsider: 10 } }),
+        after: expect.objectContaining({ pairs: 42, failedPairs: 2 }),
       }),
     );
+  });
+
+  it("opens Finish batch 10 minutes before the end, not earlier", async () => {
+    await expect(
+      svc.saveCheckIn({ slotAt: B2, pairs: 5 }, QI, at("2026-10-20T08:49:00.000Z")),
+    ).rejects.toMatchObject({ status: 409, message: "Batch 2 can be finished from 16:50." });
+    await svc.saveCheckIn({ slotAt: B2, pairs: 5 }, QI, at("2026-10-20T08:50:00.000Z"));
+    expect(model.insertCheckIn).toHaveBeenCalledWith(
+      expect.objectContaining({ failedPairs: 0 }),
+      "tx",
+    );
+  });
+
+  it("refuses after midnight", async () => {
+    await expect(
+      svc.saveCheckIn({ slotAt: B1, pairs: 1 }, QI, at("2026-10-20T16:00:00.000Z")),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining("Batch 1 of Tue, 20 Oct closed at midnight."),
+    });
+  });
+
+  it("refuses more failed pairs than finished, under the failed field", async () => {
+    await expect(
+      svc.saveCheckIn({ slotAt: B1, pairs: 3, failedPairs: 4 }, QI, at(B1)),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [
+        {
+          path: ["failedPairs"],
+          message: "Failed inspection can't be more than the pairs finished (3).",
+        },
+      ],
+    });
+    expect(model.insertCheckIn).not.toHaveBeenCalled();
+  });
+
+  it("names the batch in a bad count", async () => {
+    await expect(svc.saveCheckIn({ slotAt: B1, pairs: "2.5" }, QI, at(B1))).rejects.toMatchObject({
+      status: 422,
+      details: [
+        {
+          path: ["pairs"],
+          message:
+            "Enter the pairs finished in Batch 1 as a whole number, like 24. Enter 0 if none.",
+        },
+      ],
+    });
   });
 
   it("saves without a worker count when attendance wasn't taken, never blocking", async () => {
@@ -127,24 +171,22 @@ describe("saveCheckIn (D-084)", () => {
         ],
       ]),
     );
-    await svc.saveCheckIn({ slotAt: NOON, counts: counts(0, 0) }, QI, at(NOON));
+    await svc.saveCheckIn({ slotAt: B1, pairs: 0 }, QI, at(B1));
     expect(model.insertCheckIn).toHaveBeenCalledWith(
       expect.objectContaining({ constructorsPresent: null, constructorsOnRoster: null }),
       "tx",
     );
   });
 
-  it("refuses a second entry of the same slot as 409 STALE, naming who and when", async () => {
+  it("refuses a second finish of the same batch as 409 STALE, naming who and when", async () => {
     model.findCheckInBySlot.mockResolvedValueOnce({
       enteredBy: { name: "Lea Santos" },
-      enteredAt: at("2026-10-20T04:04:00.000Z"),
+      enteredAt: at("2026-10-20T05:04:00.000Z"),
     });
-    await expect(
-      svc.saveCheckIn({ slotAt: NOON, counts: counts(1, 1) }, QI, at(NOON)),
-    ).rejects.toMatchObject({
+    await expect(svc.saveCheckIn({ slotAt: B1, pairs: 1 }, QI, at(B1))).rejects.toMatchObject({
       status: 409,
       code: "STALE",
-      message: "Lea Santos already entered the 12:00 check-in at 12:04. Refresh to see it.",
+      message: "Lea Santos already finished Batch 1 at 13:04. Refresh to see it.",
     });
     expect(model.insertCheckIn).not.toHaveBeenCalled();
   });
@@ -153,65 +195,29 @@ describe("saveCheckIn (D-084)", () => {
     model.insertCheckIn.mockRejectedValueOnce({ code: "P2002" });
     model.findCheckInBySlot
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ enteredBy: { name: "Lea Santos" }, enteredAt: at(NOON) });
-    await expect(
-      svc.saveCheckIn({ slotAt: NOON, counts: counts(1, 1) }, QI, at(NOON)),
-    ).rejects.toMatchObject({ status: 409, code: "STALE" });
+      .mockResolvedValueOnce({ enteredBy: { name: "Lea Santos" }, enteredAt: at(B1) });
+    await expect(svc.saveCheckIn({ slotAt: B1, pairs: 1 }, QI, at(B1))).rejects.toMatchObject({
+      status: 409,
+      code: "STALE",
+    });
   });
 
-  it("refuses before the check-in opens and after midnight", async () => {
+  it("refuses a time that isn't a batch's end", async () => {
     await expect(
-      svc.saveCheckIn({ slotAt: NOON, counts: counts(1, 1) }, QI, at("2026-10-20T03:00:00.000Z")),
+      svc.saveCheckIn({ slotAt: "2026-10-20T04:00:00.000Z", pairs: 1 }, QI, at(B1)),
     ).rejects.toMatchObject({
       status: 409,
-      message: "The 12:00 check-in isn't open yet. You can enter it from 12:00.",
+      message: expect.stringContaining("no batch ending at 12:00"),
     });
-    await expect(
-      svc.saveCheckIn({ slotAt: NOON, counts: counts(1, 1) }, QI, at("2026-10-20T16:00:00.000Z")),
-    ).rejects.toMatchObject({
-      status: 409,
-      message: expect.stringContaining("The check-in for Tue, 20 Oct closed at midnight."),
-    });
-  });
-
-  it("refuses a time that isn't on the schedule", async () => {
-    await expect(
-      svc.saveCheckIn({ slotAt: "2026-10-20T03:00:00.000Z", counts: counts(1, 1) }, QI, at(NOON)),
-    ).rejects.toMatchObject({ status: 409, message: expect.stringContaining("no 11:00 check-in") });
-  });
-
-  it("puts each bad count under its own shoe type", async () => {
-    await expect(
-      svc.saveCheckIn({ slotAt: NOON, counts: counts("2.5", "3000") }, QI, at(NOON)),
-    ).rejects.toMatchObject({
-      status: 422,
-      details: [
-        {
-          path: ["counts", ST],
-          message:
-            "Enter the School Shoes finished since 08:00 as a whole number, like 24. Enter 0 if none.",
-        },
-        {
-          path: ["counts", TP],
-          message: "Topsider can't be more than 2,000 pairs in one check-in. Check the number.",
-        },
-      ],
-    });
-  });
-
-  it("asks for every active shoe type, so a type added mid-week isn't skipped", async () => {
-    await expect(
-      svc.saveCheckIn({ slotAt: NOON, counts: [{ shoeTypeId: ST, pairs: 4 }] }, QI, at(NOON)),
-    ).rejects.toMatchObject({ status: 422, details: [{ path: ["counts", TP] }] });
   });
 });
 
 describe("the Floor Manager covers only when no QI is present (D-088)", () => {
   const FM_ACTOR = { id: "fm1", name: "Ivy", role: "FLOOR_MANAGER" as const };
 
-  it("saves the Floor Manager's count on a day no QI is present, marked as covering", async () => {
+  it("saves the Floor Manager's batch on a day no QI is present, marked as covering", async () => {
     workforce.qualityInspectorPresentOn.mockResolvedValueOnce(false);
-    await svc.saveCheckIn({ slotAt: NOON, counts: counts(5, 5) }, FM_ACTOR, at(NOON));
+    await svc.saveCheckIn({ slotAt: B1, pairs: 5 }, FM_ACTOR, at(B1));
     expect(model.insertCheckIn).toHaveBeenCalledWith(
       expect.objectContaining({ enteredById: "fm1" }),
       "tx",
@@ -226,32 +232,28 @@ describe("the Floor Manager covers only when no QI is present (D-088)", () => {
 
   it("refuses the Floor Manager when a QI is present, or attendance isn't taken", async () => {
     workforce.qualityInspectorPresentOn.mockResolvedValueOnce(true);
-    await expect(
-      svc.saveCheckIn({ slotAt: NOON, counts: counts(5, 5) }, FM_ACTOR, at(NOON)),
-    ).rejects.toMatchObject({
-      status: 403,
-      message: "A Quality Inspector is present today, so they enter the check-ins.",
-    });
+    await expect(svc.saveCheckIn({ slotAt: B1, pairs: 5 }, FM_ACTOR, at(B1))).rejects.toMatchObject(
+      {
+        status: 403,
+        message: "A Quality Inspector is present today, so they finish the batches.",
+      },
+    );
     workforce.qualityInspectorPresentOn.mockResolvedValueOnce(null);
-    await expect(
-      svc.saveCheckIn({ slotAt: NOON, counts: counts(5, 5) }, FM_ACTOR, at(NOON)),
-    ).rejects.toMatchObject({
-      status: 403,
-      message:
-        "Take today's attendance first. You can enter check-ins only when it shows no Quality Inspector present.",
-    });
+    await expect(svc.saveCheckIn({ slotAt: B1, pairs: 5 }, FM_ACTOR, at(B1))).rejects.toMatchObject(
+      {
+        status: 403,
+        message:
+          "Take today's attendance first. You can finish batches only when it shows no Quality Inspector present.",
+      },
+    );
     expect(model.insertCheckIn).not.toHaveBeenCalled();
   });
 
   it("never asks attendance for the QI, and refuses the Admin", async () => {
-    await svc.saveCheckIn({ slotAt: NOON, counts: counts(1, 1) }, QI, at(NOON));
+    await svc.saveCheckIn({ slotAt: B1, pairs: 1 }, QI, at(B1));
     expect(workforce.qualityInspectorPresentOn).not.toHaveBeenCalled();
     await expect(
-      svc.saveCheckIn(
-        { slotAt: NOON, counts: counts(1, 1) },
-        { id: "ad1", role: "SYSTEM_ADMIN" },
-        at(NOON),
-      ),
+      svc.saveCheckIn({ slotAt: B1, pairs: 1 }, { id: "ad1", role: "SYSTEM_ADMIN" }, at(B1)),
     ).rejects.toMatchObject({ status: 403 });
   });
 });
@@ -260,40 +262,42 @@ describe("correctCheckIn", () => {
   const saved = {
     id: "ci1",
     day: at("2026-10-20T00:00:00.000Z"),
-    slotAt: at(NOON),
-    updatedAt: at("2026-10-20T04:05:00.000Z"),
-    counts: [
-      { shoeTypeId: ST, pairs: 22 },
-      { shoeTypeId: TP, pairs: 10 },
-    ],
+    slotAt: at(B1),
+    updatedAt: at("2026-10-20T05:05:00.000Z"),
+    pairs: 42,
+    failedPairs: 2,
     correctedAt: null,
     correctedBy: null,
   };
+  const input = (over: object = {}) => ({
+    expectedUpdatedAt: "2026-10-20T05:05:00.000Z",
+    pairs: 40,
+    failedPairs: 3,
+    reason: "Counted a rack twice",
+    ...over,
+  });
 
-  it("keeps both values in the audit, with the reason", async () => {
+  it("keeps both counts in the audit, with the reason", async () => {
     model.findCheckIn.mockResolvedValueOnce(saved);
-    await svc.correctCheckIn(
-      "ci1",
-      {
-        expectedUpdatedAt: "2026-10-20T04:05:00.000Z",
-        counts: counts(20, 10),
-        reason: "Counted a rack twice",
-      },
-      QI,
-      at("2026-10-20T05:00:00.000Z"),
-    );
+    const r = await svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T06:00:00.000Z"));
+    expect(r).toEqual({ id: "ci1", number: 1, time: "13:00" });
     expect(model.correctCheckIn).toHaveBeenCalledWith(
       "ci1",
       saved.updatedAt,
-      expect.objectContaining({ correctedById: "qi1", correctionReason: "Counted a rack twice" }),
+      expect.objectContaining({
+        correctedById: "qi1",
+        correctionReason: "Counted a rack twice",
+        pairs: 40,
+        failedPairs: 3,
+      }),
       "tx",
     );
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
       expect.objectContaining({
         action: "production.checkin.correct",
-        before: { counts: { "School Shoes": 22, Topsider: 10 } },
-        after: { counts: { "School Shoes": 20, Topsider: 10 }, reason: "Counted a rack twice" },
+        before: { pairs: 42, failedPairs: 2 },
+        after: { pairs: 40, failedPairs: 3, reason: "Counted a rack twice" },
       }),
     );
   });
@@ -301,59 +305,45 @@ describe("correctCheckIn", () => {
   it("only on the same Manila day", async () => {
     model.findCheckIn.mockResolvedValueOnce(saved);
     await expect(
-      svc.correctCheckIn(
-        "ci1",
-        {
-          expectedUpdatedAt: "2026-10-20T04:05:00.000Z",
-          counts: counts(20, 10),
-          reason: "Late fix",
-        },
-        QI,
-        at("2026-10-20T16:30:00.000Z"),
-      ),
+      svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T16:30:00.000Z")),
     ).rejects.toMatchObject({
       status: 409,
-      message: "A check-in can only be corrected on the same day. This one was for Tue, 20 Oct.",
+      message: "A batch can only be corrected on the same day. This one was on Tue, 20 Oct.",
     });
   });
 
   it("is 409 STALE when someone corrected it first", async () => {
     model.findCheckIn.mockResolvedValueOnce({
       ...saved,
-      updatedAt: at("2026-10-20T04:40:00.000Z"),
-      correctedAt: at("2026-10-20T04:40:00.000Z"),
+      updatedAt: at("2026-10-20T05:40:00.000Z"),
+      correctedAt: at("2026-10-20T05:40:00.000Z"),
       correctedBy: { name: "Lea Santos" },
     });
     await expect(
-      svc.correctCheckIn(
-        "ci1",
-        {
-          expectedUpdatedAt: "2026-10-20T04:05:00.000Z",
-          counts: counts(20, 10),
-          reason: "Recount",
-        },
-        QI,
-        at("2026-10-20T05:00:00.000Z"),
-      ),
+      svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T06:00:00.000Z")),
     ).rejects.toMatchObject({
       code: "STALE",
-      message: "This check-in was already corrected by Lea Santos at 12:40. Refresh to see it.",
+      message: "This batch was already corrected by Lea Santos at 13:40. Refresh to see it.",
     });
   });
 });
 
-describe("saveSchedule and saveQuotas (D-083, D-085)", () => {
+describe("saveSchedule, saveQuota and saveLunchBreak (D-083, D-085, D-097, D-099)", () => {
   const now = at("2026-10-21T02:00:00.000Z"); // Wed 21 Oct, 10:00 Manila
 
-  it("applies a schedule change from tomorrow", async () => {
+  it("applies a schedule change from tomorrow, and accepts once at the end of the day", async () => {
     const r = await svc.saveSchedule(
-      { shiftStart: "07:00", shiftEnd: "16:00", intervalMinutes: 120, workingDays: [6, 1, 1] },
+      { shiftStart: "07:00", shiftEnd: "16:00", intervalMinutes: null, workingDays: [6, 1, 1] },
       FM,
       now,
     );
     expect(r.effectiveFrom).toBe("2026-10-22");
     expect(model.insertSchedule).toHaveBeenCalledWith(
-      expect.objectContaining({ workingDays: [1, 6], effectiveFrom: "2026-10-22" }),
+      expect.objectContaining({
+        intervalMinutes: null,
+        workingDays: [1, 6],
+        effectiveFrom: "2026-10-22",
+      }),
       "tx",
     );
     expect(recordAudit).toHaveBeenCalledWith(
@@ -363,53 +353,95 @@ describe("saveSchedule and saveQuotas (D-083, D-085)", () => {
   });
 
   it("applies a first quota from today and a change from tomorrow (Dylan 5A)", async () => {
-    model.listQuotas.mockResolvedValueOnce([
-      { shoeTypeId: TP, pairs: 40, effectiveFrom: "2026-10-01" },
-    ]);
-    await svc.saveQuotas(
-      {
-        quotas: [
-          { shoeTypeId: ST, pairs: "110", suggestedPairs: 108 },
-          { shoeTypeId: TP, pairs: 45, suggestedPairs: null },
-        ],
-      },
-      FM,
-      now,
+    model.listQuotas.mockResolvedValueOnce([]);
+    expect(await svc.saveQuota({ pairs: 128, suggestedPairs: 125 }, FM, now)).toEqual({
+      saved: true,
+      effectiveFrom: "2026-10-21",
+    });
+    expect(model.insertQuota).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pairs: 128, suggestedPairs: 125, effectiveFrom: "2026-10-21" }),
+      "tx",
     );
-    expect(model.insertQuota.mock.calls.map(([d]) => d)).toEqual([
+    model.listQuotas.mockResolvedValueOnce([{ pairs: 128, effectiveFrom: "2026-10-21" }]);
+    expect(await svc.saveQuota({ pairs: 135, suggestedPairs: null }, FM, now)).toEqual({
+      saved: true,
+      effectiveFrom: "2026-10-22",
+    });
+    expect(recordAudit).toHaveBeenLastCalledWith(
+      "tx",
       expect.objectContaining({
-        shoeTypeId: ST,
-        pairs: 110,
-        suggestedPairs: 108,
-        effectiveFrom: "2026-10-21",
+        action: "production.quota.set",
+        before: { pairs: 128 },
       }),
-      expect.objectContaining({ shoeTypeId: TP, pairs: 45, effectiveFrom: "2026-10-22" }),
-    ]);
+    );
   });
 
-  it("skips a quota that wouldn't change, and names the shoe type in a bad one", async () => {
-    model.listQuotas.mockResolvedValue([
-      { shoeTypeId: TP, pairs: 40, effectiveFrom: "2026-10-01" },
-    ]);
-    expect(await svc.saveQuotas({ quotas: [{ shoeTypeId: TP, pairs: 40 }] }, FM, now)).toEqual({
-      saved: 0,
+  it("skips a quota that wouldn't change", async () => {
+    model.listQuotas.mockResolvedValueOnce([{ pairs: 128, effectiveFrom: "2026-10-01" }]);
+    expect(await svc.saveQuota({ pairs: 128 }, FM, now)).toEqual({
+      saved: false,
+      effectiveFrom: "2026-10-22",
     });
+    expect(model.insertQuota).not.toHaveBeenCalled();
+  });
+
+  it("saves the lunch break from tomorrow and audits it (C-3)", async () => {
+    const r = await svc.saveLunchBreak({ startTime: "11:30", endTime: "12:30" }, FM, now);
+    expect(r.effectiveFrom).toBe("2026-10-22");
+    expect(model.insertLunchBreak).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startTime: "11:30",
+        endTime: "12:30",
+        effectiveFrom: "2026-10-22",
+        createdById: "fm1",
+      }),
+      "tx",
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({ action: "production.lunch.set" }),
+    );
+  });
+
+  it("refuses a lunch outside tomorrow's shift, and allows no lunch", async () => {
     await expect(
-      svc.saveQuotas({ quotas: [{ shoeTypeId: TP, pairs: "0" }] }, FM, now),
-    ).rejects.toMatchObject({
-      status: 422,
-      details: [
-        {
-          path: ["quotas", TP],
-          message: "Enter the daily quota for Topsider as a whole number of pairs, at least 1.",
-        },
-      ],
-    });
-    model.listQuotas.mockResolvedValue([]);
+      svc.saveLunchBreak({ startTime: "07:00", endTime: "08:00" }, FM, now),
+    ).rejects.toMatchObject({ status: 422 });
+    expect(model.insertLunchBreak).not.toHaveBeenCalled();
+    await svc.saveLunchBreak({ startTime: null, endTime: null }, FM, now);
+    expect(model.insertLunchBreak).toHaveBeenCalledWith(
+      expect.objectContaining({ startTime: null, endTime: null }),
+      "tx",
+    );
   });
 });
 
-describe("productionDays (D-086, D-008)", () => {
+describe("ensureDefaultLunchBreak (A-4, Dylan 2026-10-24)", () => {
+  it("is in force from the start on a new database, from tomorrow once batches were finished", async () => {
+    model.countLunchBreaks.mockResolvedValueOnce(0);
+    model.firstCheckInDay.mockResolvedValueOnce(null);
+    expect(await svc.ensureDefaultLunchBreak("tx" as never, at(B1))).toBe(true);
+    expect(model.insertLunchBreak).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        startTime: "11:00",
+        endTime: "12:00",
+        effectiveFrom: "2000-01-01",
+      }),
+      "tx",
+    );
+    model.countLunchBreaks.mockResolvedValueOnce(0);
+    model.firstCheckInDay.mockResolvedValueOnce("2026-10-01");
+    await svc.ensureDefaultLunchBreak("tx" as never, at(B1));
+    expect(model.insertLunchBreak).toHaveBeenLastCalledWith(
+      expect.objectContaining({ effectiveFrom: "2026-10-21" }),
+      "tx",
+    );
+    model.countLunchBreaks.mockResolvedValueOnce(1);
+    expect(await svc.ensureDefaultLunchBreak("tx" as never, at(B1))).toBe(false);
+  });
+});
+
+describe("productionDays (D-086, D-008, C-41)", () => {
   /** Every key at any depth, to prove the day rows never carry a person. */
   function keysDeep(value: unknown, out = new Set<string>()): Set<string> {
     if (Array.isArray(value)) value.forEach((v) => keysDeep(v, out));
@@ -421,35 +453,33 @@ describe("productionDays (D-086, D-008)", () => {
     return out;
   }
 
-  it("totals each day per shoe type against the quota, explains a short day and names nobody", async () => {
-    model.listQuotas.mockResolvedValueOnce([
-      { shoeTypeId: ST, pairs: 85, effectiveFrom: "2026-10-01" },
-    ]);
+  it("totals each day's passed pairs against the quota, explains a short day and names nobody", async () => {
+    model.listQuotas.mockResolvedValueOnce([{ pairs: 85, effectiveFrom: "2026-10-01" }]);
     model.listCheckIns.mockResolvedValueOnce(
-      ["04:00", "08:00", "09:00"].map((t, i) => ({
+      ["05:00", "09:00"].map((t, i) => ({
         id: `c${i}`,
         day: at("2026-10-19T00:00:00.000Z"),
         slotAt: at(`2026-10-19T${t}:00.000Z`),
         enteredAt: at(`2026-10-19T${t}:05.000Z`),
         enteredBy: { name: "Lea Santos" },
-        counts: [
-          { shoeTypeId: ST, pairs: 25 },
-          { shoeTypeId: TP, pairs: 10 },
-        ],
+        pairs: 40,
+        failedPairs: 2,
       })),
     );
     const r = await svc.productionDays("2026-10-18", "2026-10-19", at("2026-10-20T04:00:00.000Z"));
-    // Sunday 18 Oct isn't a working day and had no check-ins, so it is left out.
+    // Sunday 18 Oct isn't a working day and had no batches, so it is left out.
     expect(r.days.map((d) => d.day)).toEqual(["2026-10-19"]);
     expect(r.days[0]).toMatchObject({
-      checkIns: 3,
-      entered: 3,
+      batches: 2,
+      finishedBatches: 2,
+      missed: 0,
       full: true,
-      pairs: 105,
+      finished: 80,
+      failed: 4,
+      passed: 76,
       quota: 85,
       constructorsPresent: 14,
-      pairsPerConstructor: 7.5,
-      shortfall: "Below quota by 10 pairs. 2 of 16 Shoe Constructors were absent.",
+      shortfall: "Below quota by 9 pairs. 2 of 16 Shoe Constructors were absent.",
     });
     const keys = keysDeep(r);
     for (const k of ["userId", "name", "email", "enteredBy", "enteredById", "createdBy", "actor"])
@@ -457,13 +487,29 @@ describe("productionDays (D-086, D-008)", () => {
   });
 });
 
-describe("productionDays before any check-in", () => {
-  it("shows no days until the first check-in is entered, so nothing reads as missed", async () => {
+describe("productionDays before any batch", () => {
+  it("shows no days until the first batch is finished, so nothing reads as missed", async () => {
     model.firstCheckInDay.mockResolvedValueOnce(null);
     expect((await svc.productionDays("2026-10-12", "2026-10-19")).days).toEqual([]);
     model.firstCheckInDay.mockResolvedValueOnce("2026-10-16");
     const r = await svc.productionDays("2026-10-12", "2026-10-19", at("2026-10-20T04:00:00Z"));
     expect(r.days.map((d) => d.day)).toEqual(["2026-10-16", "2026-10-17", "2026-10-19"]);
+  });
+});
+
+describe("productionToday (D-008, C-28)", () => {
+  it("shows each batch with where it stands and when Finish batch opens", async () => {
+    const r = await svc.productionToday(QI, at("2026-10-20T03:30:00.000Z")); // 11:30, lunch
+    expect(r.rows.map((b) => [b.number, b.startTime, b.time, b.state])).toEqual([
+      [1, "08:00", "13:00", "IN_PROGRESS"],
+      [2, "13:00", "17:00", "UPCOMING"],
+    ]);
+    expect(r.rows[0]).toMatchObject({
+      pausedForLunch: true,
+      canFinishNow: false,
+      finishOpensAt: "12:50",
+    });
+    expect(r.canEnter).toBe(true);
   });
 });
 
