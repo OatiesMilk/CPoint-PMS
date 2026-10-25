@@ -25,6 +25,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   report and its artifacts) and its line in the vault's Daily note. Anything that fails goes in
   the report for Claude to fix.
 - Neither agent creates branches, commits, pushes or PRs. Dylan does.
+- For browser/e2e tests, keep Chromium headless. Do not open or leave visible Chrome or Chrome for Testing tabs/windows. Never launch chrome.exe directly for version checks on Windows; use Playwright or executable metadata instead.
 
 ## Vault first
 

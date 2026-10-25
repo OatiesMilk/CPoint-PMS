@@ -143,6 +143,12 @@ jobs:
           test "$(q "select count(*) from production_check_ins")" -ge 1
           test "$(q "select count(*) from production_check_ins where \"failedPairs\" > 0")" -ge 1
           test "$(q "select count(*) from information_schema.tables where table_name in ('shoe_types','production_counts')")" -eq 0
+          # Stock updates (Phase 29, D-102): the reminder days row (Wednesday and Friday), at least
+          # one Update stock save with its entries, and every leather roll item has a supplier.
+          test "$(q "select count(*) from inventory_settings where \"reminderDays\" = '{3,5}'")" -eq 1
+          test "$(q "select count(*) from stock_updates")" -ge 1
+          test "$(q "select count(*) from inventory_movements where \"updateId\" is not null")" -ge 1
+          q "select count(*) from inventory_items where category='LEATHER_ROLL' and \"supplierId\" is null" | grep -qx 0
           # Every item's on-hand quantity equals the sum of its ledger.
           q "select count(*) from inventory_items i where i.\"quantityOnHand\" <> (select coalesce(sum(m.\"quantityDelta\"),0) from inventory_movements m where m.\"itemId\"=i.id)" | grep -qx 0
       - name: A restart doesn't seed again

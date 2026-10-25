@@ -5,8 +5,6 @@ import {
   createItem,
   getItemDetail,
   listItems,
-  recordMovement,
-  reverseMovement,
   setItemActive,
   updateItem,
 } from "@/server/services/inventory.service";
@@ -15,7 +13,6 @@ import {
   inventoryItemFormSchema,
   inventoryListQuerySchema,
   isInventoryId,
-  movementSchema,
 } from "@/server/validators/inventory.validator";
 
 type IdContext = { params: Promise<{ id: string }> };
@@ -69,20 +66,5 @@ export const inventoryController = {
     if (!detail) throw Errors.notFound("This item");
     const { movements, page, pageCount } = detail;
     return json({ data: { movements, page, pageCount } });
-  }),
-
-  /** POST /api/v1/inventory/{id}/movements  { type: IN|OUT|ADJUST, … } */
-  recordMovement: handle(async (request: Request, ctx: IdContext) => {
-    const user = await requireApiPermission("inventory:manage");
-    const id = await idFrom(ctx, "This item");
-    const body = movementSchema.parse(await readJsonBody(request));
-    return json({ data: await recordMovement(id, body, user) }, 201);
-  }),
-
-  /** POST /api/v1/inventory/movements/{id}/undo: records the opposite of a recent IN/OUT. */
-  undoMovement: handle(async (_request: Request, ctx: IdContext) => {
-    const user = await requireApiPermission("inventory:manage");
-    const id = await idFrom(ctx, "This stock entry");
-    return json({ data: await reverseMovement(id, user) }, 201);
   }),
 };

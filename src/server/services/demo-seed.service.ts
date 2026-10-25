@@ -1,5 +1,5 @@
 import { manilaToday } from "@/lib/format";
-import { DEFAULT_LUNCH, DEFAULT_SCHEDULE, batchesFor } from "@/lib/production-rules";
+import { DEFAULT_LUNCH, DEFAULT_SCHEDULE, batchesFor, isoWeekday } from "@/lib/production-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
   renderLeatherImage,
@@ -12,7 +12,7 @@ import {
 import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import { logger } from "@/server/lib/logger";
 import { countRolls } from "@/server/models/roll.model";
-import { findInventoryItemBySku } from "@/server/models/inventory.model";
+import { findInventoryItem, findInventoryItemBySku } from "@/server/models/inventory.model";
 import {
   ensureSupplier,
   listActiveSuppliers,
@@ -23,7 +23,8 @@ import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
 import { cancelRoll, finishRoll, startRoll } from "./roll.service";
 import { setCameraOperator } from "./camera.service";
 import { saveCheckIn, saveQuota } from "./production.service";
-import { createItem, recordMovement } from "./inventory.service";
+import { createItem } from "./inventory.service";
+import { saveStockUpdate } from "./stock-update.service";
 import { ingestScan } from "./scan-ingest.service";
 
 /**
@@ -97,7 +98,10 @@ export function demoRate(most: number, workingHours: number): number {
   return (DEMO_QUOTA + 3) / (Math.max(workingHours, 1) * Math.max(most - 1.5, 0.5));
 }
 
-/** Demo materials (also used by bootstrap when only demo users are on). */
+/**
+ * Demo materials (also used by bootstrap when only demo users are on). A leather roll names its
+ * supplier (Phase 29, D-102), one of the demo suppliers.
+ */
 export const DEMO_INVENTORY = [
   {
     sku: "LR-001",
@@ -106,6 +110,7 @@ export const DEMO_INVENTORY = [
     unit: "roll",
     reorderLevel: 3,
     openingStock: 8,
+    supplier: "Meycauayan Tannery",
   },
   {
     sku: "LR-002",
@@ -114,6 +119,7 @@ export const DEMO_INVENTORY = [
     unit: "roll",
     reorderLevel: 2,
     openingStock: 2,
+    supplier: "Marikina Leather Trading",
   },
   {
     sku: "NL-001",
@@ -141,6 +147,15 @@ export const DEMO_INVENTORY = [
   },
 ] as const;
 
+/** A demo item's form values, with its supplier's id (the supplier is added if missing). */
+export async function demoItemValues(item: (typeof DEMO_INVENTORY)[number]) {
+  const { supplier, ...values } = item as (typeof DEMO_INVENTORY)[number] & { supplier?: string };
+  if (!supplier) return { ...values, supplierId: null };
+  const known = DEMO_SUPPLIERS.find((s) => s.name === supplier);
+  const row = await ensureSupplier(known ?? { name: supplier, notes: "" });
+  return { ...values, supplierId: row.id };
+}
+
 export type DemoSeedResult =
   | {
       seeded: true;
@@ -148,6 +163,7 @@ export type DemoSeedResult =
       scans: number;
       attendanceDays: number;
       checkIns: number;
+      stockUpdates: number;
       ms: number;
     }
   | { seeded: false; reason: string };
@@ -204,27 +220,26 @@ export async function seedDemoWeek(
   const at = (day: string, hour: number) => new Date(manilaDayStart(day).getTime() + hour * HOUR);
   const firstDay = addDays(today, -6);
 
-  // ── inventory: the shelf at the start of the week, then deliveries ──
+  // ── inventory: the shelf at the start of the week. What came in and what the line used is
+  //    noted as it happens, and the Floor Manager enters it on the Update stock sheet on the
+  //    week's Wednesday and Friday (Phase 29, D-102); see seedStockUpdates. ──
   const itemIds = new Map<string, string>();
   for (const item of DEMO_INVENTORY) {
     const existing = await findInventoryItemBySku(item.sku);
     const id =
-      existing?.id ?? (await createItem({ ...item }, fm, at(addDays(firstDay, -1), 16))).id;
+      existing?.id ??
+      (await createItem(await demoItemValues(item), fm, at(addDays(firstDay, -1), 16))).id;
     itemIds.set(item.sku, id);
   }
+  const shelf: { sku: string; type: "IN" | "OUT"; quantity: number; t: Date }[] = [];
   const stock = async (
     sku: string,
     type: "IN" | "OUT",
     quantity: number,
-    reason: string,
+    _note: string,
     t: Date,
   ) => {
-    if (!past(t)) return;
-    try {
-      await recordMovement(itemIds.get(sku)!, { type, quantity, reason }, fm, t);
-    } catch {
-      // Not enough on the shelf in this replay: skip, as a real floor would wait for a delivery.
-    }
+    if (past(t)) shelf.push({ sku, type, quantity, t });
   };
   await stock("LR-001", "IN", 6, "Delivery from the leather supplier", at(addDays(firstDay, 2), 9));
   await stock("LR-002", "IN", 5, "Delivery from the leather supplier", at(addDays(firstDay, 1), 9));
@@ -278,7 +293,8 @@ export async function seedDemoWeek(
         created,
       );
       rolls += 1;
-      // The leather roll leaves the shelf when it is laid out for capture (a plain OUT, A-22).
+      // The leather roll leaves the shelf when it is laid out for capture; the Floor Manager
+      // enters it as Used on the next stock update (nothing is taken automatically, A-22).
       await stock(school ? "LR-001" : "LR-002", "OUT", 1, `Laid out as ${roll.code}`, created);
       let t = created;
 
@@ -317,9 +333,8 @@ export async function seedDemoWeek(
       }
       t = plus(t, prep);
 
-      // All of it is in: Finish roll at Capture. What the line used (thread, cement, nails) is
-      // taken from stock the same afternoon, so the ledger still moves. The newest roll stays open,
-      // so Capture opens on a roll.
+      // All of it is in: Finish roll at Capture. What the line used (thread, cement, nails) goes
+      // on the next stock update. The newest roll stays open, so Capture opens on a roll.
       if (past(t) && !newest && captured > 0) {
         await finishRoll(roll.id, capturer, t);
         await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE));
@@ -350,7 +365,7 @@ export async function seedDemoWeek(
   }
 
   // ── two more deliveries: thread and tacks on the second working day, leather and tacks on the
-  //    fourth. The shelf ends where the demo week of D-090 left it. ──
+  //    fourth. They reach the ledger on the next stock update. ──
   const workingDay = (i: number) => workingDays[Math.min(i, workingDays.length - 1)];
   const deliveryFrom = (supplier: { name: string } | undefined) =>
     supplier ? `Delivery from ${supplier.name}` : "Delivery received";
@@ -360,6 +375,9 @@ export async function seedDemoWeek(
   await stock("NL-001", "IN", 5, supplies, at(workingDay(1), 14));
   await stock("LR-001", "IN", 2, leather, at(workingDay(3), 11));
   await stock("NL-001", "IN", 5, leather, at(workingDay(3), 11));
+
+  // ── stock updates (Phase 29): the Floor Manager's Wednesday and Friday sheets ──
+  const stockUpdates = await seedStockUpdates();
 
   // ── attendance (D-077, D-081): the past working days, taken by the Floor Manager ──
   const attendanceSaved = await seedAttendance();
@@ -373,10 +391,54 @@ export async function seedDemoWeek(
     scans,
     attendanceDays: attendanceSaved,
     checkIns,
+    stockUpdates,
     ms: Date.now() - started,
   };
   logger.info(result, "Demo week seeded");
   return result;
+
+  /**
+   * The Update stock sheet through the real service (Phase 29, D-102, C-32): on each of the week's
+   * Wednesday and Friday at 16:30 the Floor Manager enters per item what came in and what the line
+   * used since the last update (leather rolls laid out, thread, cement, tacks). Used is capped at
+   * what's on the shelf. Friday's sheet also corrects the tacks after a recount. What happens after
+   * the last update waits for the next one, as on the floor.
+   */
+  async function seedStockUpdates(): Promise<number> {
+    const days = workingDays.filter((d) => [3, 5].includes(isoWeekday(d)));
+    let since = new Date(0);
+    let saved = 0;
+    for (const [n, day] of days.entries()) {
+      const when = at(day, 16.5);
+      if (!past(when)) continue;
+      const lines = [];
+      for (const [sku, itemId] of itemIds) {
+        const events = shelf.filter((e) => e.sku === sku && e.t > since && e.t <= when);
+        const sum = (type: "IN" | "OUT") =>
+          events.filter((e) => e.type === type).reduce((t, e) => t + e.quantity, 0);
+        const item = await findInventoryItem(itemId);
+        if (!item) continue;
+        const onHand = Number(item.quantityOnHand);
+        const added = sum("IN");
+        const used = Math.min(sum("OUT"), onHand + added);
+        const recount = n === 1 && sku === "NL-001" && onHand + added - used >= 1;
+        if (!added && !used && !recount) continue;
+        lines.push({
+          itemId,
+          seenQuantity: onHand,
+          added: added || undefined,
+          used: used || undefined,
+          correction: recount ? -1 : undefined,
+          reason: recount ? "Recounted the shelf: one box was damp and thrown out." : undefined,
+        });
+      }
+      since = when;
+      if (lines.length === 0) continue;
+      await saveStockUpdate({ lines }, fm!, when);
+      saved += 1;
+    }
+    return saved;
+  }
 
   /**
    * A week of attendance through the real service (D-077, D-081): the demo week's working days

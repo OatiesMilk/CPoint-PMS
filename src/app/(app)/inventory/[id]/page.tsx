@@ -1,10 +1,10 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Floor Manager, when a delivery arrives, stock is taken to the line, or at a count.
- * What:  record what came in or went out in a few seconds, and read the item's history like the
- *        log book: each entry with the balance after it.
+ * Who:   the Floor Manager, checking one material between stock updates.
+ * What:  read the item's history like the log book: each entry (Added, Used, Correction) with the
+ *        balance after it. Stock changes on the Update stock sheet (Phase 29, D-102).
  * Worst: stock drifts from the shelf without anyone noticing. On hand is the hero number, every
- *        change is an entry with who and why, and counts state the difference.
+ *        change is an entry with who and why, and corrections say why.
  */
 import type { Metadata } from "next";
 import { TablePager } from "@/components/features/table-pager";
@@ -79,6 +79,7 @@ export default async function InventoryItemPage({
             </div>
             <p className="mt-1 text-lg text-muted-foreground">
               <span className="font-mono">{item.sku}</span> · {CATEGORY_LABELS[item.category]}
+              {item.supplier && <> · {item.supplier.name}</>}
             </p>
           </div>
           <div className="text-right">
@@ -98,8 +99,8 @@ export default async function InventoryItemPage({
         <CardHeader>
           <CardTitle>Stock history</CardTitle>
           <CardDescription>
-            Every change to the stock, newest first. Entries are never edited: a mistake is undone
-            with an opposite entry or corrected by a stock count.
+            Every change to the stock, newest first. Entries are never edited: a mistake is fixed
+            with a Correction on the Update stock sheet.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -107,8 +108,8 @@ export default async function InventoryItemPage({
             <p className="text-sm text-muted-foreground">
               No stock recorded yet.{" "}
               {canManage
-                ? "Use Receive stock when a delivery arrives."
-                : "Entries appear when the Floor Manager records stock."}
+                ? "Use Update stock to record what was added or used."
+                : "Entries appear when the Floor Manager updates stock."}
             </p>
           ) : (
             <div className="flex flex-col gap-3">

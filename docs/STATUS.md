@@ -3,27 +3,20 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-25 (Phase 28 QA passed, run 2)
-**Branch:** `main` has Phase 27 (#25, QA run 5 passed, CI green). Phase 28 is **uncommitted** in
-`C:\dev\CPoint-PMS`; Dylan commits it after Codex QA passes.
+**Last updated:** 2026-10-25 (Phase 29 QA passed, run 2)
+**Branch:** `main` has Phase 28 (#26). Phase 29 is **uncommitted** in `C:\dev\CPoint-PMS`; QA
+passed, so Dylan commits it and opens the PR next.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 28, each role sees only its modules, and the demo sign-in tools (D-100,
-D-101). Codex run 1 (`qa/reports/2026-10-25-phase-28-roles-and-demo-tools.md`): FAIL, 21 of 25
-scenarios, e2e 78 passed, 2 failed, 3 skipped; demo e2e 1 passed, 2 failed. All six findings fixed:
-the notice's Finish batch on Batches opened no dialog (F1); the first click on a demo button or
-Reset demo data was lost to Email's blur check (F3, F4, F6: Email isn't auto-focused with the
-tools on, and a blur towards them doesn't validate); the reset's audit row came after the default
-lunch (F5); the smoke test's axe needed `browser.newContext()` (F2). `npm run check` passed (548
-unit tests). **Run 2 PASS** (`qa/reports/2026-10-25-phase-28-run2.md`): 8 of 9 checks, 1 blocked
-(the manual Finish batch from a notice: Sunday, no due batch; the e2e test covers it); the demo
-buttons and Reset work on the first click; e2e 83 passed, 0 failed, 3 skipped; demo e2e 3 passed,
-1 skipped; axe 0 violations. Commit and PR next.
-Phase 27 passed QA (run 5) and is merged (#25).
-**Then: Phases 29 to 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
+**Current phase:** Phase 29, stock updated on one sheet, reminders on Wednesdays and Fridays, and
+Reports → Materials (D-102). Codex run 1 FAIL (F1 to F3 non-leather items refused for a missing
+supplier; F4 per 100 pairs blank), fixed (`npm run check` 572 unit tests). **Run 2 PASS**
+(`qa/reports/2026-10-25-phase-29-run2.md`): R1 to R5 passed, build passed, e2e 87 passed, 0
+failed, 2 skipped, ledger `off_ledger = 0`. Commit and PR next.
+**Then: Phases 30 and 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
 `docs/prompts/factory-visit-changes.md`, C-1 to C-41).
-**Overall:** 29 phases built (0 to 28); 3 planned (29 to 31, Phase 30 in two parts)
+**Overall:** 30 phases built (0 to 29); 2 planned (30 and 31, Phase 30 in two parts)
 
 ## Phase progress
 
@@ -61,14 +54,37 @@ Phase 27 passed QA (run 5) and is merged (#25).
 - [x] 26. Capture on the constructors' own phones; rolls start and finish there (QA passed, run 2)
 - [x] 27. Batches are the check-in intervals (lunch break, notices, failed pairs, no shoe types)
       (QA passed, run 5; merged #25)
-- [x] 28. Each role sees only its modules; demo sign-in and reset on the login page (built; QA
-      next)
-- [ ] 29. Inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
+- [x] 28. Each role sees only its modules; demo sign-in and reset on the login page (QA passed,
+      run 2; merged #26)
+- [x] 29. Stock updated on one sheet, reminders on Wednesdays and Fridays, Reports → Materials
+      (QA passed, run 2)
 - [ ] 30. The whole-roll check (A, with real rolls) and the return to the supplier (B)
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
 
+- **Stock updates (Phase 29, D-102, C-16, C-32):**
+  - **Inventory → Update stock** (`/inventory/update`, FM, any day): every active item with
+    **Added (+)**, **Used (−)**, **Correction** and a **Reason** (only with a correction), and
+    After shown live. Blank rows are left alone; **Save update (N items)** saves the rest in one
+    transaction with one audit row; an item changed since the sheet loaded is `409 STALE`, named.
+    Find box, Category filter, 15-row pager, a warning before leaving with unsaved entries,
+    Recent updates.
+  - The item page has **Update stock** (opens the sheet on that item), Edit and Deactivate; the
+    Receive, Use and Stock count dialogs and Undo are gone (`POST …/movements` is `405`). The
+    Inventory list shows **Last updated** and the supplier.
+  - A **Leather roll** item needs its **Supplier**; other materials have none.
+  - **Reminder:** on Wednesday and Friday (set on the sheet), until an update is saved that day,
+    the FM home shows **Stock update today** first and the bell lists it.
+  - **Reports → Materials** (FM): per item this week and last week with the change, an 8-week
+    trend, per 100 pairs and days left (last 28 days, or since the item's first stock entry), "May run out
+    before the next update"; leather rolls used beside rolls checked; `materials-used.csv`.
+    Corrections and Added are never use. `stock.csv` says "Added in period".
+  - Demo week: the FM saves an update on each past Wednesday and Friday at 16:30 (the Friday one
+    corrects the tacks by −1 with a reason); LR-001 is from Meycauayan Tannery, LR-002 from
+    Marikina Leather Trading. `demo:reset` removes the updates and puts Wednesday and Friday back.
+  - Where the bullets below mention Receive stock, Use stock, Stock count or Undo, Phase 29
+    replaced them.
 - **Each role sees only its modules (Phase 28, D-100, C-18):**
   - Sidebars, one flat list each: constructor **Capture**; QI **Batches** (its home;
     `/quality-inspector` is 404); FM **Overview, Batches, Attendance, Reports, Inventory**; Admin
@@ -306,6 +322,17 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
+  - Phase 29 (Codex, 2026-10-25): run 1 FAIL, 8 of 17 passed, 4 failed, 5 blocked; e2e 86
+    passed, 1 failed, 2 skipped (F1 to F4, fixed). Run 2 **PASS**: R1 to R5, e2e 87 passed, 0
+    failed, 2 skipped, ledger 0. (Run 2's first attempt stopped at a `.next` delete step that
+    Codex's policy blocks; the step was removed from the prompt.)
+  - Phase 29 run 1 fixes: `npm run check` passed, **572 unit tests** (a round-trip test of the item
+    form's parsed values).
+  - Phase 29: `npm run check` passed, **571 unit tests** (the sheet's line rules, stock rules, the
+    update and materials services, validators, the demo seed). E2E: `inventory.spec.ts` (the sheet
+    with a refused Used and a correction, STALE, `405` on the old API, reminder days, Materials and
+    its CSV, a leather roll's supplier, access) and `smoke.spec.ts`; CI's Docker job checks the
+    stock updates. Not run (Codex).
   - Phase 28: `npm run check` passed, **548 unit tests** (the matrix and sidebars per role, the demo
     endpoints off → 404, the reset lock, the demo sign-in audit). E2E: `auth.spec.ts` (nav, homes,
     refused pages per role, the demo tools both ways, axe on the login page) and nine other specs
@@ -412,12 +439,12 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. Done: Codex QA passed (run 2). Dylan: on a working day, as the QI, press a notice's Finish
-   batch on `/batches`, then Not now, then Finish batch again (the one blocked check).
-2. After PASS, Dylan commits Phase 28 on a new branch from `main`, pushes and opens the PR (D-032).
+1. Done: Codex QA passed (run 2).
+2. Dylan commits Phase 29 on a new branch from `main`, pushes and opens the PR (D-032).
    Claude gives the git commands when asked; CI runs on the PR and Claude fixes any failure.
-3. Phase 29 in a new session: "Read `docs/prompts/factory-visit-changes.md` and run Phase 29. Stop
-   for my approval before writing code."
+3. Phase 30A in a new session, with real rolls at the station: "Read
+   `docs/prompts/factory-visit-changes.md` and run Phase 30A. Stop for my approval before writing
+   code."
 4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
 5. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
    an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the
@@ -437,6 +464,17 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-10-25, Phase 29 plan): no deliveries to receive, the FM enters + or − per
+  item; a leather roll item has a supplier, other materials don't; pairs that failed inspection
+  count as made; a partial save clears the reminder; days left from the last 4 weeks; a
+  Correction with a reason that isn't use (D-102). Tell CPoint the sheet replaces the item
+  dialogs.
+- ASSUMPTION (D-102): the sheet has three boxes per item (Added, Used, Correction) instead of the
+  plan's one box with a type, so a delivery and the week's use go in one save.
+- ASSUMPTION (D-102): "May run out before the next update" compares days left with the days to
+  the next reminder day; an item whose first stock entry is less than 28 days ago is paced from
+  that day.
+- ASSUMPTION (D-102): the demo week's updates are saved at 16:30 on Wednesday and Friday.
 - Decided (Dylan, 2026-10-25, Phase 28 plan): the Scans list is removed (A-26); the FM home cards as
   the brief lists them, with Rolls today; the flag is `DEMO_LOGIN_TOOLS`; one flat sidebar per role
   (D-100, D-101). Tell CPoint the QI's phone opens on Batches and the Admin no longer sees

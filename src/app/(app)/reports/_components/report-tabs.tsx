@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-export type ReportTab = "operations" | "quality" | "rolls";
+export type ReportTab = "operations" | "quality" | "rolls" | "materials";
 
-/** Operations, Quality and Rolls (Phase 26) for the Floor Manager. */
+/** Operations, Quality, Rolls (Phase 26) and Materials (Phase 29) for the Floor Manager. */
 export function ReportTabs({ current, qs }: { current: ReportTab; qs?: string }) {
   const tabs = [
     {
@@ -13,6 +13,7 @@ export function ReportTabs({ current, qs }: { current: ReportTab; qs?: string })
     },
     { id: "quality", label: "Quality", href: `/reports?view=quality${qs ? `&${qs}` : ""}` },
     { id: "rolls", label: "Rolls", href: "/reports/rolls" },
+    { id: "materials", label: "Materials", href: "/reports/materials" },
   ] as const;
   return (
     <nav aria-label="Report" className="flex gap-6 border-b">

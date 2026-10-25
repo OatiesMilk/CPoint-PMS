@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { managerApi } from "./cv-helpers";
+import { managerApi, supplierId } from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -42,7 +42,7 @@ async function onHand(api: APIRequestContext, id: string): Promise<number> {
   return (await res.json()).data.item.quantityOnHand;
 }
 
-test("the Floor Manager adds an item, receives, uses (and undoes), and counts stock", async ({
+test("the Floor Manager adds an item and updates its stock on the sheet (Phase 29, D-102)", async ({
   page,
 }) => {
   const sku = uniqueCode("TH");
@@ -55,6 +55,8 @@ test("the Floor Manager adds an item, receives, uses (and undoes), and counts st
     await page.getByLabel("Category").selectOption("THREAD");
     await expect(page.getByLabel("Unit")).toHaveValue("spool", { timeout: 1_000 });
   }).toPass({ timeout: 15_000 });
+  // Only a leather roll has a supplier.
+  await expect(page.getByLabel("Supplier")).toHaveCount(0);
   await page.getByLabel("Code").fill(sku);
   await page.getByLabel("Name").fill(name);
   await page.getByLabel("Reorder at").fill("4");
@@ -62,53 +64,134 @@ test("the Floor Manager adds an item, receives, uses (and undoes), and counts st
   await page.getByRole("button", { name: "Add item" }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
   await expect(page.getByTestId("on-hand")).toHaveText("5 spools");
+  // No Receive, Use or Stock count dialogs any more: stock changes only on the sheet.
+  await expect(
+    page.getByRole("button", { name: /Receive stock|Use stock|Stock count/ }),
+  ).toHaveCount(0);
 
-  // Receive 3.
-  await page.getByRole("button", { name: "Receive stock" }).click();
-  await page.getByRole("dialog").getByLabel("Quantity").fill("3");
-  await page.getByRole("dialog").getByRole("button", { name: "Record delivery" }).click();
-  await expect(page.getByTestId("on-hand")).toHaveText("8 spools");
+  // Update stock opens the sheet found on this item.
+  await page.getByRole("link", { name: "Update stock" }).click();
+  await expect(page).toHaveURL(/\/inventory\/update\?q=/);
+  const row = page.getByRole("row", { name: new RegExp(sku) });
+  await expect(row).toContainText("not updated yet");
 
-  // Using more than is on hand is refused in the dialog.
-  await page.getByRole("button", { name: "Use stock" }).click();
-  const use = page.getByRole("dialog");
-  // Usage names no roll any more (Phase 26).
-  await expect(use.getByLabel(/For roll/)).toHaveCount(0);
-  await use.getByLabel("Quantity").fill("9");
-  await use.getByRole("button", { name: "Record usage" }).click();
-  await expect(use.getByText("Only 8 spools in stock")).toBeVisible();
-  await use.getByLabel("Quantity").fill("6");
-  await use.getByRole("button", { name: "Record usage" }).click();
-  await expect(page.getByTestId("on-hand")).toHaveText("2 spools");
-  await expect(page.getByText("Low", { exact: true })).toBeVisible();
+  // Using more than is on hand (with what was added) is refused under its field.
+  await page.getByLabel(`Added to ${name}`).fill("3");
+  await page.getByLabel(`Used of ${name}`).fill("9");
+  await page.getByRole("button", { name: "Save update (1 item)" }).click();
+  await expect(row.getByText(/Only 8 spools of .* in stock/)).toBeVisible();
+  await expect(page.getByLabel(`Used of ${name}`)).toBeFocused();
 
-  // Undo from the toast puts it back (as an opposite entry).
+  // A correction needs a reason; the reason box opens only with a correction.
+  await expect(page.getByLabel(`Reason for the ${name} correction`)).toBeDisabled();
+  await page.getByLabel(`Used of ${name}`).fill("6");
+  await page.getByLabel(`Correction for ${name}`).fill("-0.5");
+  await page.getByRole("button", { name: "Save update (1 item)" }).click();
+  await expect(row.getByText(/Enter a reason for the .* correction/)).toBeVisible();
+  await page.getByLabel(`Reason for the ${name} correction`).fill("Half a spool was tangled");
+  await expect(row.getByTestId("on-hand-after")).toHaveText("1.5 spools");
+  await page.getByRole("button", { name: "Save update (1 item)" }).click();
+  await expect(page.getByText("Stock updated: 1 item.")).toBeVisible();
+  await expect(row).toContainText("1.5 spools");
+  await expect(row).not.toContainText("not updated yet");
+
+  // History, newest first: Correction, Used, Added, then the opening stock.
+  await page.goto("/inventory?q=" + sku);
+  await expect(page.getByRole("row", { name: new RegExp(sku) })).toContainText("Low");
   await page
-    .getByRole("listitem")
-    .filter({ hasText: "Used 6 spools" })
-    .getByRole("button", { name: "Undo" })
+    .getByRole("link", { name: new RegExp(sku) })
+    .first()
     .click();
-  await expect(page.getByTestId("on-hand")).toHaveText("8 spools");
-
-  // Stock count: shows the difference, needs a reason.
-  await page.getByRole("button", { name: "Stock count…" }).click();
-  const count = page.getByRole("dialog");
-  await count.getByLabel("Counted quantity").fill("7.5");
-  await expect(count.getByTestId("count-difference")).toHaveText("Difference: −0.5 spool");
-  await count.getByRole("button", { name: "Save count" }).click();
-  await expect(count.getByText(/Enter a reason .*count difference/)).toBeVisible();
-  await count.getByLabel("Reason").fill("Half a spool was tangled");
-  await count.getByRole("button", { name: "Save count" }).click();
-  await expect(page.getByTestId("on-hand")).toHaveText("7.5 spools");
-
-  // History, newest first, with the balance after each entry.
+  await expect(page.getByTestId("on-hand")).toHaveText("1.5 spools");
   const rows = page.getByTestId("movement-row");
-  await expect(rows).toHaveCount(5);
-  await expect(rows.nth(0)).toContainText("Stock count");
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0)).toContainText("Correction");
   await expect(rows.nth(0)).toContainText("−0.5");
-  await expect(rows.nth(0)).toContainText("7.5");
-  await expect(rows.nth(1)).toContainText("Undo: Used in production");
-  await expect(rows.nth(4)).toContainText("Opening stock");
+  await expect(rows.nth(0)).toContainText("Half a spool was tangled");
+  await expect(rows.nth(1)).toContainText("Used");
+  await expect(rows.nth(1)).toContainText("−6");
+  await expect(rows.nth(2)).toContainText("Added");
+  await expect(rows.nth(3)).toContainText("Opening stock");
+});
+
+test("a sheet saved on stock that changed since it loaded is refused (STALE)", async ({
+  browser,
+}) => {
+  const api = await managerApi(browser);
+  const item = await createItem(api, { reorderLevel: 0, openingStock: 10 });
+  const first = await api.post("/api/v1/inventory/updates", {
+    data: { lines: [{ itemId: item.id, seenQuantity: 10, used: 2 }] },
+  });
+  expect(first.status()).toBe(201);
+  expect((await first.json()).data.items).toBe(1);
+  // A second sheet that still saw 10 changes nothing.
+  const stale = await api.post("/api/v1/inventory/updates", {
+    data: { lines: [{ itemId: item.id, seenQuantity: 10, added: 1 }] },
+  });
+  expect(stale.status()).toBe(409);
+  expect(await onHand(api, item.id)).toBe(8);
+  // A line with nothing in it is refused under its own field.
+  const empty = await api.post("/api/v1/inventory/updates", {
+    data: { lines: [{ itemId: item.id, seenQuantity: 8 }] },
+  });
+  expect(empty.status()).toBe(422);
+  // The old one-movement API is gone.
+  const old = await api.post(`/api/v1/inventory/${item.id}/movements`, {
+    data: { type: "OUT", quantity: 1 },
+  });
+  expect(old.status()).toBe(405);
+});
+
+test("reminder days need at least one day", async ({ browser }) => {
+  const api = await managerApi(browser);
+  const res = await api.get("/api/v1/inventory/settings");
+  expect(res.status()).toBe(200);
+  const { reminderDays } = (await res.json()).data;
+  expect(Array.isArray(reminderDays)).toBe(true);
+  expect(reminderDays.length).toBeGreaterThan(0);
+  const none = await api.put("/api/v1/inventory/settings", { data: { reminderDays: [] } });
+  expect(none.status()).toBe(422);
+  // Saving the same days back changes nothing for the other tests.
+  const same = await api.put("/api/v1/inventory/settings", { data: { reminderDays } });
+  expect(same.status()).toBe(200);
+});
+
+test("Reports → Materials shows what an item used this week, and the CSV", async ({
+  browser,
+  page,
+}) => {
+  const api = await managerApi(browser);
+  const item = await createItem(api, {
+    reorderLevel: 0,
+    openingStock: 10,
+    name: `E2E cement ${Date.now()}`,
+  });
+  const saved = await api.post("/api/v1/inventory/updates", {
+    data: {
+      lines: [{ itemId: item.id, seenQuantity: 10, used: 4, correction: -1, reason: "Recount" }],
+    },
+  });
+  expect(saved.status()).toBe(201);
+
+  await signInAs(page, ACCOUNTS.manager);
+  await page.goto("/reports/materials");
+  await expect(page.getByRole("heading", { name: "Used per material" })).toBeVisible();
+  // Page through until the item shows (earlier runs add items).
+  const row = page.getByRole("row", { name: new RegExp(item.sku) });
+  for (let i = 0; i < 20 && (await row.count()) === 0; i++) {
+    const next = page.getByRole("link", { name: /Next/ });
+    if ((await next.count()) === 0) break;
+    await next.first().click();
+  }
+  // The correction is not use: 4 this week, 5 on hand.
+  await expect(row.getByRole("cell").nth(1)).toHaveText("4 boxes");
+  await expect(row).toContainText("5 boxes");
+
+  const csv = await api.get("/api/v1/reports/materials-used.csv");
+  expect(csv.status()).toBe(200);
+  const text = await csv.text();
+  expect(text).toContain("Week (Monday),Item code,Item,Category,Supplier,Unit,Used");
+  expect(text).toMatch(new RegExp(`${item.sku},[^\\n]*,4,`));
 });
 
 test("a low item shows on the Floor Manager home", async ({ browser, page }) => {
@@ -124,30 +207,34 @@ test("a low item shows on the Floor Manager home", async ({ browser, page }) => 
   await page.goto(`/inventory?stock=low&q=${item.sku}`);
   const row = page.getByRole("row", { name: new RegExp(item.sku) });
   await expect(row).toContainText("Low");
-  // The badge is all the row offers besides the item's own page: stock comes in by Receive stock.
+  // The badge is all the row offers besides the item's own page: stock changes on Update stock.
   await expect(row.getByRole("link")).toHaveCount(1);
 });
 
-test("using a leather roll from stock links no roll (Phase 26)", async ({ browser }) => {
+test("a leather roll needs its supplier (Phase 29, D-102)", async ({ browser }) => {
   const api = await managerApi(browser);
-  const item = await createItem(api, {
-    category: "LEATHER_ROLL",
-    unit: "roll",
-    reorderLevel: 0,
-    openingStock: 2,
+  const sku = uniqueCode("LR");
+  const without = await api.post("/api/v1/inventory", {
+    data: { sku, name: `E2E roll ${sku}`, category: "LEATHER_ROLL", unit: "roll", reorderLevel: 0 },
   });
-  const res = await api.post(`/api/v1/inventory/${item.id}/movements`, {
+  expect(without.status()).toBe(422);
+  expect(JSON.stringify(await without.json())).toContain(
+    "Choose the supplier of this leather roll.",
+  );
+  const res = await api.post("/api/v1/inventory", {
     data: {
-      type: "OUT",
-      quantity: 1,
-      reason: "Laid out at Capture",
-      rollId: "0199a000-0000-7000-8000-000000000001",
+      sku,
+      name: `E2E roll ${sku}`,
+      category: "LEATHER_ROLL",
+      unit: "roll",
+      reorderLevel: 0,
+      supplierId: await supplierId(),
     },
   });
   expect(res.status()).toBe(201);
-  expect(await onHand(api, item.id)).toBe(1);
-  const history = await (await api.get(`/api/v1/inventory/${item.id}/movements`)).json();
-  expect(history.data.movements[0]).toMatchObject({ type: "OUT", quantityDelta: -1, roll: null });
+  const { id } = (await res.json()).data;
+  const detail = (await (await api.get(`/api/v1/inventory/${id}`)).json()).data.item;
+  expect(detail.supplier?.name).toBeTruthy();
 });
 
 test("Inventory is the Floor Manager's alone (D-100): the Admin and the QI are refused", async ({
@@ -163,10 +250,12 @@ test("Inventory is the Floor Manager's alone (D-100): the Admin and the QI are r
     await expect(page).toHaveURL("/forbidden");
   }
   expect((await page.request.get("/api/v1/inventory")).status()).toBe(403);
-  const post = await page.request.post(`/api/v1/inventory/${item.id}/movements`, {
-    data: { type: "IN", quantity: 1 },
+  const post = await page.request.post("/api/v1/inventory/updates", {
+    data: { lines: [{ itemId: item.id, seenQuantity: 3, added: 1 }] },
   });
   expect(post.status()).toBe(403);
+  await page.goto("/reports/materials");
+  await expect(page).toHaveURL("/forbidden");
 
   const qi = await browser.newPage();
   await signInAs(qi, ACCOUNTS.inspector);

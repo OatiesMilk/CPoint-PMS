@@ -65,18 +65,21 @@ vi.mock("@/server/models/roll.model", () => ({
 }));
 vi.mock("@/server/models/inventory.model", () => ({
   findInventoryItemBySku: mocks.findInventoryItemBySku,
+  findInventoryItem: vi.fn(async (id: string) => ({ id, quantityOnHand: 20 })),
 }));
 vi.mock("@/server/models/reference-data.model", () => ({
   listActiveSuppliers: mocks.listActiveSuppliers,
   listDefectTypes: mocks.listDefectTypes,
-  ensureSupplier: vi.fn(),
+  ensureSupplier: vi.fn(async (s: { name: string }) => ({ id: `sup-${s.name}` })),
 }));
 vi.mock("@/server/models/user.model", () => ({ findUserByEmail: mocks.findUserByEmail }));
 const setCameraOperator = vi.fn(async () => ({}));
 vi.mock("@/server/services/camera.service", () => ({ setCameraOperator }));
 vi.mock("@/server/services/roll.service", () => svc);
-const inventory = { createItem: vi.fn(async () => ({ id: "item" })), recordMovement: vi.fn() };
+const inventory = { createItem: vi.fn(async () => ({ id: "item" })) };
 vi.mock("@/server/services/inventory.service", () => inventory);
+const stockUpdates = { saveStockUpdate: vi.fn(async () => ({ id: "u", items: 1 })) };
+vi.mock("@/server/services/stock-update.service", () => stockUpdates);
 // Twelve demo constructors, as the bootstrap creates (D-081).
 const roster = [
   ...Array.from({ length: 12 }, (_, i) => ({ id: `c${i + 1}`, role: "SHOE_CONSTRUCTOR" })),
@@ -301,12 +304,13 @@ describe("seedDemoWeek", () => {
     // The newest roll with shots stays open, so Capture opens on a roll.
     const closed = new Set([...finished.map((f) => f.rollId), cancelledId]);
     expect(started.filter((s) => !closed.has(s.rollId))).toHaveLength(1);
-    // The leather roll leaves the shelf when it is laid out (a plain OUT, no roll link).
-    const laidOut = (
-      inventory.recordMovement.mock.calls as unknown as [string, { type: string; reason: string }][]
-    ).filter(([, i]) => i.reason.startsWith("Laid out as R-"));
-    expect(laidOut.length).toBeGreaterThan(5);
-    for (const [, i] of laidOut) expect(i).not.toHaveProperty("rollId");
+    // The leather rolls laid out are entered as Used on the next stock update (Phase 29).
+    const leatherUsed = (
+      stockUpdates.saveStockUpdate.mock.calls as unknown as [
+        { lines: { itemId: string; used?: number }[] },
+      ][]
+    ).flatMap(([b]) => b.lines.filter((l) => l.itemId.startsWith("LR-")).map((l) => l.used ?? 0));
+    expect(leatherUsed.reduce((t, n) => t + n, 0)).toBeGreaterThan(5);
   });
 
   it("finishes the batches as the QI, with one late and one missed, and three short days that line up with the absences", async () => {
@@ -377,7 +381,7 @@ describe("seedDemoWeek", () => {
     expect(below).toEqual(["2026-09-29", "2026-10-01", "2026-10-02"]);
   });
 
-  it("records the week's two later deliveries as plain stock IN, and nothing else (D-091)", async () => {
+  it("enters the week's stock on Wednesday and Friday through Update stock (Phase 29, D-102)", async () => {
     const result = await seedDemoWeek({ now, seed: 1 });
     expect(Object.keys(result).sort()).toEqual([
       "attendanceDays",
@@ -386,22 +390,42 @@ describe("seedDemoWeek", () => {
       "rolls",
       "scans",
       "seeded",
+      "stockUpdates",
     ]);
-    const movements = inventory.recordMovement.mock.calls as unknown as [
-      string,
-      { type: string; quantity: number; reason: string },
+    const saves = stockUpdates.saveStockUpdate.mock.calls as unknown as [
+      {
+        lines: {
+          itemId: string;
+          seenQuantity: number;
+          added?: number;
+          used?: number;
+          correction?: number;
+          reason?: string;
+        }[];
+      },
       { id: string },
       Date,
     ][];
-    // This test has one supplier, named "Supplier"; the deliveries name it.
-    const later = movements
-      .filter(([, input]) => input.reason === "Delivery from Supplier")
-      .map(([sku, input, actor, when]) => [sku, input.type, input.quantity, actor.id, when]);
-    expect(later).toEqual([
-      ["TH-001", "IN", 4, "manager@cpoint.local", new Date("2026-09-29T06:00:00.000Z")],
-      ["NL-001", "IN", 5, "manager@cpoint.local", new Date("2026-09-29T06:00:00.000Z")],
-      ["LR-001", "IN", 2, "manager@cpoint.local", new Date("2026-10-01T03:00:00.000Z")],
-      ["NL-001", "IN", 5, "manager@cpoint.local", new Date("2026-10-01T03:00:00.000Z")],
+    expect(result).toMatchObject({ stockUpdates: 2 });
+    // Wednesday 30 Sep and Friday 2 Oct, 16:30 Manila, by the Floor Manager.
+    expect(saves.map(([, actor, when]) => [actor.id, when.toISOString()])).toEqual([
+      ["manager@cpoint.local", "2026-09-30T08:30:00.000Z"],
+      ["manager@cpoint.local", "2026-10-02T08:30:00.000Z"],
     ]);
+    const [wednesday, friday] = saves.map(([body]) => body.lines);
+    // Every line says something, nothing below zero, and the deliveries came in as Added.
+    for (const line of [...wednesday, ...friday]) {
+      expect((line.added ?? 0) + (line.used ?? 0) + Math.abs(line.correction ?? 0)).toBeGreaterThan(
+        0,
+      );
+      expect(line.seenQuantity - (line.used ?? 0) + (line.added ?? 0)).toBeGreaterThanOrEqual(0);
+    }
+    expect(wednesday.find((l) => l.itemId === "TH-001")).toMatchObject({ added: 14 });
+    // Friday's sheet corrects the tacks after a recount, with a reason.
+    expect(friday.find((l) => l.itemId === "NL-001")).toMatchObject({
+      correction: -1,
+      reason: expect.stringMatching(/Recounted/),
+    });
+    expect(wednesday.some((l) => l.correction)).toBe(false);
   });
 });

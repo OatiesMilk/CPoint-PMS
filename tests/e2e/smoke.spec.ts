@@ -84,7 +84,7 @@ for (const [role, account] of Object.entries(ACCOUNTS)) {
   });
 }
 
-test("Floor Manager journey: read the rolls, receive stock, read the report", async ({
+test("Floor Manager journey: read the rolls, update stock, read the report", async ({
   browser,
   page,
 }) => {
@@ -117,10 +117,13 @@ test("Floor Manager journey: read the rolls, receive stock, read the report", as
     .getByRole("link", { name: new RegExp(sku) })
     .first()
     .click();
-  await page.getByRole("button", { name: "Receive stock" }).click();
-  await page.getByRole("dialog").getByLabel("Quantity").fill("1");
-  await page.getByRole("dialog").getByRole("button", { name: "Record delivery" }).click();
-  await expect(page.getByRole("dialog")).toBeHidden();
+  // Stock changes on the Update stock sheet (Phase 29, D-102).
+  await page.getByRole("link", { name: "Update stock" }).click();
+  await page.getByLabel(`Added to Smoke cement ${sku}`).fill("1");
+  await page.getByRole("button", { name: "Save update (1 item)" }).click();
+  await expect(page.getByText("Stock updated: 1 item.")).toBeVisible();
+  await expectAccessible(page);
+  await page.goto("/reports/materials");
   await expectAccessible(page);
 
   await page.getByRole("link", { name: "Reports" }).click();

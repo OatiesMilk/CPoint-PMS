@@ -1890,3 +1890,52 @@ production pages.
 `src/components/features/demo-band.tsx`, `src/server/lib/{env,auth}.ts`,
 `src/server/services/{auth,demo-reset}.service.ts`, `.env.example`, `docker-compose.yml`.
 **Consequences:** never set `DEMO_LOGIN_TOOLS=true` at CPoint; the reset can't be undone.
+
+### D-102 · 2026-10-25 · Accepted — Stock is updated on one sheet; reminders on Wednesday and Friday; Reports → Materials (Phase 29)
+
+**Context:** CPoint keeps stock by hand (C-16) and wants a reminder on Wednesdays and Fridays to
+update it (C-32). Dylan (2026-10-25, plan): there are no deliveries to receive any more, the Floor
+Manager just enters what went up or down per item; a leather roll item carries its supplier
+(CPoint's own leather suppliers), other materials are bought anywhere; a correction for a
+miscount needs a reason and is not use. Pairs that failed final inspection count as made: the
+camera is a pre-filter on leather, not a verdict on shoes.
+**Decision:**
+
+- **Update stock** (`/inventory/update`, FM, any day): one sheet of every active item with
+  **Added (+)**, **Used (−)** and **Correction** (signed) and a **Reason** that opens only with a
+  correction (at least 3 characters). Blank rows are left alone; **Save update (N items)** saves
+  every filled row in one transaction (`StockUpdate`) with one `inventory.update` audit row.
+  Each entry is a ledger movement linked by `updateId` (D-023 kept): Added = `IN`, Used = `OUT`,
+  Correction = `ADJUST`. Every movement applies only to the stock the sheet saw, so an item that
+  changed since the sheet loaded is `409 STALE`, named. Used can't take an item below zero (after
+  what was added); nor can a correction.
+- The item page loses **Receive stock**, **Use stock**, **Stock count** and **Undo**:
+  `POST /api/v1/inventory/{id}/movements` answers `405` and the undo route is gone. Its **Update
+  stock** opens the sheet found on that item. The opening stock on Add item stays an `IN`.
+- **Supplier on leather rolls:** `InventoryItem.supplierId` (optional, `SET NULL`), required for a
+  Leather roll ("Choose the supplier of this leather roll."), cleared for other categories.
+- **Reminder** (C-32): `InventorySettings.reminderDays` (ISO weekdays, default Wednesday and
+  Friday), set on the Update stock page. On a reminder day with no update saved that day (Manila),
+  the FM home shows **Stock update today** first and the bell lists it. Any save clears it, even
+  of one item.
+- **Reports → Materials** (FM, `report:production`): per item Used this week and last week (with
+  the change), an 8-week trend, used per 100 pairs and days left over the last 28 days, and "May
+  run out before the next update" when days left is fewer than the days to the next reminder day.
+  An item whose first stock entry is less than 28 days ago is paced from that day. Leather rolls
+  used (from Used) beside rolls the camera checked, per week. `materials-used.csv` (one row per
+  item and week). Only Used counts as use; Added and Correction never do. Per item and week, never per
+  person (D-008).
+- Pairs for "per 100 pairs" are the finished pairs of the batches (`production_check_ins.pairs`),
+  failed ones included.
+
+**Amends:** D-023 (stock changes through the sheet; the one-item dialogs and undo are gone), D-033
+(stock.csv's "Received in period" is "Added in period"). Supersedes the brief's count-based design
+(`StockCount` with counted quantities) and Phase 24 of `production-progression.md`.
+**Where:** `prisma/migrations/20261027090000_stock_updates`, `src/lib/{inventory-rules,stock-rules}.ts`,
+`src/server/{models/stock-update.model,models/materials.model,services/stock-update.service,services/materials.service,controllers/stock-update.controller}.ts`,
+`src/app/(app)/inventory/update/**`, `src/app/(app)/reports/materials/page.tsx`,
+`src/app/api/v1/inventory/{updates,settings}/route.ts`,
+`src/app/api/v1/reports/{materials,materials-used.csv}/route.ts`,
+`src/components/features/inventory/stock-update-card.tsx`, `batch-notices.tsx` (the bell).
+**Consequences:** tell CPoint stock is updated on one sheet, with a reason for any correction, and
+that the reminder comes on Wednesday and Friday (changeable).

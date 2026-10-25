@@ -5,7 +5,9 @@ import { managerCancelSchema, startRollSchema } from "@/server/validators/roll.v
 import {
   activeSchema,
   inventoryItemFormSchema,
-  movementSchema,
+  inventorySettingsSchema,
+  stockLineSchema,
+  stockUpdateSchema,
 } from "@/server/validators/inventory.validator";
 import { ingestFieldsSchema } from "@/server/validators/scan.validator";
 import {
@@ -105,24 +107,39 @@ const CASES: [string, ZodType, unknown[]][] = [
         reorderLevel: "1",
         openingStock: "99999999",
       },
+      { sku: "LR-1", name: "Roll", category: "LEATHER_ROLL", unit: "roll", reorderLevel: "1" },
+      {
+        sku: "LR-1",
+        name: "Roll",
+        category: "LEATHER_ROLL",
+        unit: "roll",
+        reorderLevel: "1",
+        supplierId: "nope",
+      },
     ],
   ],
   [
-    "stock movement",
-    movementSchema,
+    "stock update",
+    stockUpdateSchema,
     [
       {},
-      { type: "SIDEWAYS" },
-      { type: "IN", quantity: "" },
-      { type: "IN", quantity: "0" },
-      { type: "IN", quantity: "abc", reason: long(301) },
-      { type: "OUT", quantity: "1.999" },
-      { type: "OUT", quantity: "99999999" },
-      { type: "ADJUST", counted: "-1", expectedQuantity: "abc", reason: "" },
-      { type: "ADJUST", counted: "1", expectedQuantity: 1 },
-      { type: "ADJUST", counted: "1", expectedQuantity: 1, reason: long(301) },
+      { lines: [] },
+      { lines: "all" },
+      {
+        lines: [
+          {
+            itemId: "0192f000-0000-7000-8000-000000000001",
+            seenQuantity: 1,
+            added: "abc",
+            used: "1.999",
+            correction: "99999999",
+            reason: long(301),
+          },
+        ],
+      },
     ],
   ],
+  ["reminder days", inventorySettingsSchema, [{}, { reminderDays: [] }, { reminderDays: "Wed" }]],
   ["item active", activeSchema, [{}, { isActive: "yes" }]],
   [
     "scan ingest (device)",
@@ -254,11 +271,58 @@ describe("validator messages are specific (D-038)", () => {
     });
   }
 
-  it("uses the brief's wording for the common cases", () => {
-    const received = (quantity: string) =>
-      messages(movementSchema, { type: "IN", quantity, reason: "Delivery received" });
-    expect(received("0")).toContain("Enter a quantity greater than 0.");
-    expect(received("1.234")).toContain("Quantity can have at most 2 decimal places.");
+  it("uses the brief's wording for the common cases (Phase 29)", () => {
+    const line = (fields: Record<string, string>) =>
+      messages(stockLineSchema("Nails"), {
+        itemId: "0192f000-0000-7000-8000-000000000001",
+        seenQuantity: 1,
+        ...fields,
+      });
+    expect(line({ added: "12.345" })).toContain(
+      "Enter what was added to Nails as a number with at most 2 decimals, like 6.",
+    );
+    expect(line({ used: "lots" })).toContain("Enter what was used of Nails as a number, like 3.");
+    expect(line({ used: "−3" })).toEqual([]);
+    expect(messages(inventorySettingsSchema, { reminderDays: [] })).toEqual([
+      "Pick at least one reminder day.",
+    ]);
+    expect(
+      messages(inventoryItemFormSchema, {
+        sku: "LR-1",
+        name: "Roll",
+        category: "LEATHER_ROLL",
+        unit: "roll",
+        reorderLevel: "1",
+      }),
+    ).toEqual(["Choose the supplier of this leather roll."]);
+  });
+
+  it("re-parses the form's own output: a non-leather item's null supplier is fine (QA F1 to F3)", () => {
+    // The browser validates first and sends the parsed values, so the server sees supplierId null.
+    for (const category of ["THREAD", "NAILS", "OTHER"]) {
+      const once = inventoryItemFormSchema.parse({
+        sku: "QA29-B",
+        name: "Thread",
+        category,
+        unit: "spool",
+        reorderLevel: "0",
+        openingStock: "5",
+        supplierId: "",
+      });
+      expect(once.supplierId).toBeNull();
+      expect(inventoryItemFormSchema.parse(once)).toMatchObject({ category, supplierId: null });
+    }
+    // A leather roll sent with a null supplier is still refused.
+    expect(
+      messages(inventoryItemFormSchema, {
+        sku: "LR-1",
+        name: "Roll",
+        category: "LEATHER_ROLL",
+        unit: "roll",
+        reorderLevel: "1",
+        supplierId: null,
+      }),
+    ).toEqual(["Choose the supplier of this leather roll."]);
   });
 });
 

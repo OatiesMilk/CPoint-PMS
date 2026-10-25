@@ -35,6 +35,7 @@ const LABELS: Record<string, string> = {
   scans: "scans",
   inventoryItems: "inventory items (the demo ones come back with opening stock)",
   movements: "stock movements",
+  stockUpdates: "stock updates (the demo week adds its own; reminder days back to Wed and Fri)",
   auditLogs: "audit log rows",
   suppliers: "suppliers tests added",
   defectTypes: "defect types tests added",

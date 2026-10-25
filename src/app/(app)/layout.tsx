@@ -7,6 +7,7 @@ import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { requireUser } from "@/server/policies/guard";
 import { navigationFor } from "@/server/policies/navigation";
+import { stockUpdateReminder } from "@/server/services/stock-update.service";
 import { signOutAction } from "./actions";
 
 // Everything inside (app) requires a signed-in, active user. Desktop first; the layout adapts to narrower windows (D-034)
@@ -16,6 +17,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const user = await requireUser();
   // Batch notices (Phase 27, A-9): the QI, and the FM on a day they cover (the browser asks).
   const notices = user.role === "QUALITY_INSPECTOR" || user.role === "FLOOR_MANAGER";
+  // The stock update reminder (Phase 29, C-32): the Floor Manager, on a reminder day, until saved.
+  const stockDue = user.role === "FLOOR_MANAGER" ? (await stockUpdateReminder()).due : false;
 
   return (
     <QueryProvider>
@@ -28,6 +31,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             user={{ name: user.name, email: user.email, roleLabel: ROLE_LABELS[user.role] }}
             signOutAction={signOutAction}
             bell={notices}
+            stockDue={stockDue}
           />
         </div>
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-10 lg:py-8 print:p-0">

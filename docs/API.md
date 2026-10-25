@@ -214,29 +214,41 @@ Station and Salvage, with `/api/v1/rework/**`, `/api/v1/salvage/**` and
 ## Inventory (session)
 
 Stock is a ledger (D-023): `quantityOnHand` changes **only** through a movement, and movements are
-never edited or deleted. Quantities are numbers with at most 2 decimals.
+never edited or deleted. Quantities are numbers with at most 2 decimals. Since Phase 29 (D-102)
+stock changes on the **Update stock** sheet: one save posts, per item, an `IN` (Added), an `OUT`
+(Used) and an `ADJUST` (Correction), each linked to the save by `updateId`.
 
-| Method & path                                | Permission         | Body / query                                                                            |
-| -------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------- |
-| `GET /api/v1/inventory`                      | `inventory:read`   | `?category=&stock=low\|out&q=&inactive=1&page=` → `{ rows, total, page, pageCount }`    |
-| `POST /api/v1/inventory`                     | `inventory:manage` | `ItemForm` → `201`                                                                      |
-| `GET /api/v1/inventory/{id}`                 | `inventory:read`   | `?page=` → `{ item, movements, total, page, pageCount }` (newest first, `balanceAfter`) |
-| `PATCH /api/v1/inventory/{id}`               | `inventory:manage` | `ItemForm` (quantity is never editable), or `{ isActive }`                              |
-| `GET /api/v1/inventory/{id}/movements`       | `inventory:read`   | `?page=`                                                                                |
-| `POST /api/v1/inventory/{id}/movements`      | `inventory:manage` | `Movement` → `201 { movementId, onHandAfter, message }`                                 |
-| `POST /api/v1/inventory/movements/{id}/undo` | `inventory:manage` | records the opposite of a recent IN/OUT (within 10 minutes, once)                       |
+| Method & path                          | Permission         | Body / query                                                                            |
+| -------------------------------------- | ------------------ | --------------------------------------------------------------------------------------- |
+| `GET /api/v1/inventory`                | `inventory:read`   | `?category=&stock=low\|out&q=&inactive=1&page=` → `{ rows, total, page, pageCount }`    |
+| `POST /api/v1/inventory`               | `inventory:manage` | `ItemForm` → `201`                                                                      |
+| `GET /api/v1/inventory/{id}`           | `inventory:read`   | `?page=` → `{ item, movements, total, page, pageCount }` (newest first, `balanceAfter`) |
+| `PATCH /api/v1/inventory/{id}`         | `inventory:manage` | `ItemForm` (quantity is never editable), or `{ isActive }`                              |
+| `GET /api/v1/inventory/{id}/movements` | `inventory:read`   | `?page=`                                                                                |
+| `GET /api/v1/inventory/updates`        | `inventory:read`   | the 15 latest saves: `{ id, createdAt, by, items, note }` (items changed, not entries)  |
+| `POST /api/v1/inventory/updates`       | `inventory:manage` | `StockUpdate` → `201 { id, items }`                                                     |
+| `GET /api/v1/inventory/settings`       | `inventory:read`   | `{ reminderDays }` (ISO weekdays, 1 = Monday)                                           |
+| `PUT /api/v1/inventory/settings`       | `inventory:manage` | `{ "reminderDays": [3, 5] }` (at least one day: "Pick at least one reminder day.")      |
+
+Gone since Phase 29: `POST /api/v1/inventory/{id}/movements` answers `405`, and
+`POST /api/v1/inventory/movements/{id}/undo` is removed.
 
 **`ItemForm`**: `sku` (2–20, letters/numbers/dashes, unique; stored upper-case), `name` (2–80),
 `category` (`LEATHER_ROLL|NAILS|ADHESIVE|THREAD|EQUIPMENT|OTHER`), `unit` (1–20, e.g. `roll`),
-`reorderLevel` (≥ 0), `openingStock?` (create only; recorded as an IN "Opening stock").
+`reorderLevel` (≥ 0), `openingStock?` (create only; recorded as an IN "Opening stock"),
+`supplierId?` (required for `LEATHER_ROLL`: "Choose the supplier of this leather roll."; ignored
+and cleared for the other categories).
 
-**`Movement`**:
+**`StockUpdate`**: `{ "lines": [{ "itemId", "seenQuantity", "added"?, "used"?, "correction"?,
+"reason"? }], "note"? }`, 1 to 1,000 lines, one per item.
 
-- `{ "type": "IN", "quantity": 3, "reason"? }`: stock received (default note "Delivery received").
-- `{ "type": "OUT", "quantity": 1, "reason"? }`: stock used. `409` if it would go below zero
-  ("Only 2 rolls in stock…"). Usage names no roll since Phase 26; older movements keep their link.
-- `{ "type": "ADJUST", "counted": 4, "expectedQuantity": 5, "reason" }`: a stock count. The stored
-  change is `counted − current`; `409 STALE` if the stock isn't `expectedQuantity` any more.
+- `seenQuantity` is the stock the sheet showed. If the item has changed since, the whole save is
+  `409 STALE`, naming the item.
+- `added` and `used` are ≥ 0; `correction` is signed (`-1`, `+2`). At least one of them per line.
+- Used can't take the item below zero after what was added ("Only 8 spools of … in stock. Enter a
+  smaller amount."); a correction can't either; a correction needs a `reason` (3–300).
+- Problems come back as `422` under `lines.<itemId>.<added|used|correction|reason>`. Nothing is
+  saved unless every line is fine. One `inventory.update` audit row per save.
 
 Low stock means an active item with `quantityOnHand ≤ reorderLevel` (out of stock at 0).
 
@@ -370,7 +382,9 @@ default is the last 14 days, at most 92, and never past today.
 | `GET /api/v1/reports/production.csv`     | `report:production` | one row per day: pairs finished, failed, % failed, passed, quota, % of quota (passed), batches, constructors, shortfall   |
 | `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], stock, suppliers[], rejectedRolls[], lineRejectShare, forSalvage, checkpoint }` |
 | `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, sections scanned, Pass, Reject (for salvage)                                 |
-| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and received, days of cover, status                                       |
+| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and added, days of cover, status                                          |
+| `GET /api/v1/reports/materials`          | `report:production` | `{ today, weeks[], rows[], leather[], pace, reminderDays, daysToNextReminder }` (Phase 29, D-102)                         |
+| `GET /api/v1/reports/materials-used.csv` | `report:production` | one row per item and week (8 weeks): week, item, category, supplier, unit, used, pairs finished, used per 100 pairs       |
 | `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072)                     |
 | `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, tag number, supplier, sections, rejected, main defects (D-072)                 |
 
