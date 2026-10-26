@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SUPPLIER_CODE_MESSAGE, SUPPLIER_CODE_PATTERN } from "@/lib/roll-rules";
 import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
 
 const sortOrder = z.preprocess(
@@ -92,7 +93,20 @@ export const defectTypeCreateSchema = requireOutcome(defectTypeBase);
 /** The key is fixed after creation: the camera sends it, and past detections reference it. */
 export const defectTypeUpdateSchema = requireOutcome(defectTypeBase.omit({ key: true }));
 
+/**
+ * A supplier's short code for roll codes, LR-MLT-001 (Phase 30A, D-104). Optional: left blank, a new
+ * supplier gets one from its name's initials and an edit keeps the old one.
+ */
+const supplierCode = z.preprocess(
+  (v) => (typeof v === "string" ? v.trim().toUpperCase() || undefined : v),
+  z
+    .string({ error: SUPPLIER_CODE_MESSAGE })
+    .regex(SUPPLIER_CODE_PATTERN, SUPPLIER_CODE_MESSAGE)
+    .optional(),
+);
+
 export const supplierSchema = z.object({
+  code: supplierCode,
   name: z
     .string({ error: "Enter the supplier's name." })
     .trim()

@@ -42,18 +42,26 @@ Put the word on every bin as well as the colour: some people can't tell red from
 
 ## Each roll
 
-1. **Start a roll.** Choose the **Supplier** (required) and type the number on the supplier's tag
-   under **Roll code** (optional), then **Start roll**. The roll gets a code like `R-2026-0012`.
-2. Check the large line above the camera: "Roll R-2026-0012 · Marikina Leather Trading · 0 shots".
-   That is where the next shot goes. With several rolls open, choose the right one under **Roll**.
+Each roll is added first by the Floor Manager in **Inventory**, on its leather item, with its
+area; its code is on the list, like `LR-MLT-001` (write it on the roll's label).
+
+1. **Pick the roll.** Under **Scan a roll**, find the roll on the table (the Find box takes its
+   code, tag, item or supplier) and press **Scan this roll**. No roll on the list? Ask the Floor
+   Manager to add it in Inventory.
+2. Check the large line above the camera: "Roll LR-MLT-001 · Black cowhide · 24.5 sq ft · 0
+   shots". That is where the next shot goes. With several rolls being scanned, choose the right
+   one under **Roll**; **Scan another roll** picks the next.
 3. **Capture** (or Space on a keyboard). Wait for the colour, about a second: green Pass or red
    Reject, with each defect marked Usable or Not accepted. Put that part in the bin of its colour.
 4. Move the roll on, edge to edge, and capture again until all of it is in.
-5. **Finish roll.** The app asks "Is all of R-2026-0012 scanned?" with the number of shots. A
+5. **Finish roll.** The app asks "Is all of LR-MLT-001 scanned?" with the number of shots. A
    finished roll can't take more shots.
 
-Started a roll by mistake? While it has no shots, **Cancel roll** at Capture. A roll with shots is
-cancelled only by the Floor Manager, with a reason, from Reports → Rolls. Nothing is deleted.
+Picked the wrong roll? While it has no shots, **Put roll back** at Capture: it waits on the list
+again. A roll with shots is removed only by the Floor Manager, with a reason. Nothing is deleted.
+
+When a scanned roll is all used up, someone on the line tells the Quality Inspector, who ticks it
+**Fully used** when finishing the batch. Only then does it leave the leather stock.
 
 The Floor Manager reads every roll, its shots and its rejects in **Reports → Rolls**.
 
@@ -62,18 +70,19 @@ The Floor Manager reads every roll, its shots and its rejects in **Reports → R
 On a PC, **Floor view** fills the screen with the live camera and shows the chosen roll. Press
 **Space** to capture; the frame and the band turn green or red with the shot number, and stay until
 the next capture. The PC remembers Floor view (press **F11** for full screen). **Esc** leaves it;
-choose or start a roll on the normal page first.
+choose or pick a roll on the normal page first.
 
 ## When something goes wrong
 
 The page (or the band in Floor view) says what happened and what to do.
 
-| The page says                                               | What to do                                                          |
-| ----------------------------------------------------------- | ------------------------------------------------------------------- |
-| "Ask the System Admin for camera access."                   | The System Admin gives access under Users → More actions            |
-| "Choose the roll this shot belongs to."                     | Pick the roll under **Roll**, or **Start another roll**             |
-| "R-… was finished or cancelled, so this shot wasn't saved." | Choose another roll, or start one                                   |
-| "Not sent: the server didn't answer."                       | Check the Wi-Fi, then press **Send again**. Nothing is saved twice  |
-| "Another app is using this camera."                         | Close the other app, then press **Try again**                       |
-| "The camera only works on a secure address."                | Open the site through its `https://` tunnel address                 |
-| "The camera model isn't installed on the server."           | Tell whoever looks after the main PC (the files go in `cv/models/`) |
+| The page says                                                   | What to do                                                          |
+| --------------------------------------------------------------- | ------------------------------------------------------------------- |
+| "Ask the System Admin for camera access."                       | The System Admin gives access under Users → More actions            |
+| "Choose the roll this shot belongs to."                         | Pick the roll under **Roll**, or **Scan another roll**              |
+| "LR-… isn't being scanned any more, so this shot wasn't saved." | Choose another roll, or scan a new one                              |
+| "No rolls are waiting to be scanned."                           | Ask the Floor Manager to add the rolls in Inventory                 |
+| "Not sent: the server didn't answer."                           | Check the Wi-Fi, then press **Send again**. Nothing is saved twice  |
+| "Another app is using this camera."                             | Close the other app, then press **Try again**                       |
+| "The camera only works on a secure address."                    | Open the site through its `https://` tunnel address                 |
+| "The camera model isn't installed on the server."               | Tell whoever looks after the main PC (the files go in `cv/models/`) |

@@ -6,9 +6,11 @@ import { type Db, defaultDb } from "./db";
 export type RollListFilters = {
   status?: RollStatus;
   supplierId?: string;
-  /** Rolls started on or after this instant (the "days" filter). */
+  /** Rolls added on or after this instant (the "days" filter). */
   since?: Date;
   q?: string;
+  /** One leather item's rolls (Inventory → the item, Phase 30A). */
+  itemId?: string;
 };
 
 /** No person on a roll list: who started or finished a roll is never shown or totalled (D-008). */
@@ -17,10 +19,15 @@ const listSelect = {
   code: true,
   tagCode: true,
   status: true,
+  areaSqFt: true,
+  receivedAt: true,
+  createdAt: true,
   startedAt: true,
   finishedAt: true,
   cancelledAt: true,
+  usedAt: true,
   supplier: { select: { id: true, name: true } },
+  item: { select: { id: true, sku: true, name: true } },
   _count: { select: { scans: true } },
 } satisfies Prisma.RollSelect;
 
@@ -31,7 +38,8 @@ function listWhere(filters: RollListFilters): Prisma.RollWhereInput {
   return {
     status: filters.status,
     supplierId: filters.supplierId,
-    ...(filters.since ? { startedAt: { gte: filters.since } } : {}),
+    itemId: filters.itemId,
+    ...(filters.since ? { createdAt: { gte: filters.since } } : {}),
     ...(q
       ? {
           OR: [
@@ -50,10 +58,38 @@ export async function listRolls(
 ): Promise<{ rows: RollListRow[]; total: number }> {
   const where = listWhere(filters);
   const [rows, total] = await Promise.all([
-    db.roll.findMany({ where, select: listSelect, orderBy: { startedAt: "desc" }, ...page }),
+    db.roll.findMany({
+      where,
+      select: listSelect,
+      orderBy: [{ createdAt: "desc" }, { code: "desc" }],
+      ...page,
+    }),
     db.roll.count({ where }),
   ]);
   return { rows, total };
+}
+
+/**
+ * The defects found on a page of rolls (Inventory → the item, Phase 30A): per roll and class, the
+ * detections the decision engine counted (a known type, or an unknown class), never per person.
+ */
+export async function countDefectsForRolls(
+  rollIds: string[],
+  foundAtOrAbove: number,
+  db: Db = defaultDb(),
+) {
+  if (rollIds.length === 0) return [];
+  return db.$queryRaw<{ rollId: string; label: string; detections: bigint }[]>`
+    SELECT s."batchId" AS "rollId", coalesce(t.label, d."rawClassKey") AS label,
+      count(*) AS detections
+    FROM detections d
+    JOIN scans s ON s.id = d."scanId"
+    LEFT JOIN defect_types t ON t.id = d."defectTypeId"
+    WHERE s."batchId" = ANY(${rollIds}::uuid[])
+      AND d.confidence >= ${foundAtOrAbove}
+      AND (t.id IS NULL OR t."isActive")
+    GROUP BY 1, 2
+    ORDER BY 1, 3 DESC, 2`;
 }
 
 /** Sections per verdict for a page of rolls, for the list's Passed and Rejected columns. */
@@ -68,8 +104,9 @@ export async function countVerdictsForRolls(rollIds: string[], db: Db = defaultD
 
 const detailSelect = {
   ...listSelect,
-  receivedAt: true,
+  tagCode: true,
   cancelledReason: true,
+  usedCheckIn: { select: { id: true, day: true, slotAt: true } },
   scans: {
     orderBy: { sequence: "asc" },
     select: {
@@ -104,13 +141,60 @@ const openSelect = {
   code: true,
   tagCode: true,
   status: true,
+  itemId: true,
+  areaSqFt: true,
   startedAt: true,
-  createdById: true,
+  startedById: true,
+  usedCheckInId: true,
   supplier: { select: { name: true } },
+  item: { select: { name: true } },
   _count: { select: { scans: true } },
 } satisfies Prisma.RollSelect;
 
 export type OpenRollRow = Prisma.RollGetPayload<{ select: typeof openSelect }>;
+
+/** Rolls in stock and not scanned yet, the oldest first, for Capture's Scan a roll (Phase 30A). */
+export function listReadyRolls(db: Db = defaultDb()): Promise<OpenRollRow[]> {
+  return db.roll.findMany({
+    where: { status: "IN_STOCK", item: { isActive: true } },
+    select: openSelect,
+    orderBy: [{ receivedAt: "asc" }, { createdAt: "asc" }, { code: "asc" }],
+    take: 200,
+  });
+}
+
+/**
+ * Scanned rolls from Inventory not yet fully used, the oldest scan first, for Finish batch's
+ * Rolls fully used (Phase 30A); with `checkInId`, also the rolls ticked in that batch.
+ */
+export function listRollsToTick(checkInId?: string, db: Db = defaultDb()): Promise<OpenRollRow[]> {
+  return db.roll.findMany({
+    where: {
+      itemId: { not: null },
+      OR: [
+        { status: "FINISHED" },
+        ...(checkInId ? [{ status: "USED" as const, usedCheckInId: checkInId }] : []),
+      ],
+    },
+    select: openSelect,
+    orderBy: [{ finishedAt: "asc" }, { code: "asc" }],
+    take: 200,
+  });
+}
+
+/** The rolls ticked Fully used in these batches, for Batches' rows. */
+export function listRollsUsedIn(checkInIds: string[], db: Db = defaultDb()) {
+  if (checkInIds.length === 0) return Promise.resolve([]);
+  return db.roll.findMany({
+    where: { usedCheckInId: { in: checkInIds } },
+    select: { id: true, code: true, usedCheckInId: true },
+    orderBy: { code: "asc" },
+  });
+}
+
+export function findRollsState(ids: string[], db: Db = defaultDb()): Promise<OpenRollRow[]> {
+  return db.roll.findMany({ where: { id: { in: ids } }, select: openSelect });
+}
 
 /** Every open roll, the newest first, for the Capture page's Roll dropdown. */
 export function listOpenRolls(db: Db = defaultDb()): Promise<OpenRollRow[]> {
@@ -131,33 +215,49 @@ export function insertRoll(data: Prisma.RollUncheckedCreateInput, db: Db = defau
   return db.roll.create({ data, select: openSelect });
 }
 
+type RollMove =
+  | { status: "OPEN"; startedAt: Date; startedById: string }
+  | { status: "IN_STOCK"; startedAt: null; startedById: null }
+  | { status: "FINISHED"; finishedAt: Date; finishedById: string }
+  | {
+      status: "CANCELLED";
+      cancelledAt: Date;
+      cancelledById: string;
+      cancelledReason: string | null;
+    }
+  | { status: "USED"; usedAt: Date; usedById: string; usedCheckInId: string }
+  | { status: "FINISHED"; usedAt: null; usedById: null; usedCheckInId: null };
+
 /**
- * Closes a roll only if it is still open (optimistic concurrency, D-019). Returns false when
- * someone else finished or cancelled it first.
+ * Moves a roll only if it is still in the status the caller saw (optimistic concurrency, D-019).
+ * Returns false when someone else moved it first.
  */
-export async function closeRoll(
+export async function moveRoll(
   id: string,
-  data:
-    | { status: "FINISHED"; finishedAt: Date; finishedById: string }
-    | {
-        status: "CANCELLED";
-        cancelledAt: Date;
-        cancelledById: string;
-        cancelledReason: string | null;
-      },
+  from: RollStatus,
+  data: RollMove,
   db: Db = defaultDb(),
+  extra: { usedCheckInId?: string } = {},
 ): Promise<boolean> {
-  const { count } = await db.roll.updateMany({ where: { id, status: "OPEN" }, data });
+  const { count } = await db.roll.updateMany({ where: { id, status: from, ...extra }, data });
   return count === 1;
 }
 
-/** Atomically reserves the next yearly roll number (1, 2, 3, …), safe under concurrent starts. */
-export async function nextRollNumber(year: number, db: Db = defaultDb()): Promise<number> {
+/**
+ * Atomically reserves the next number for a roll-code prefix ("LR-MLT": 1, 2, 3, …), safe under
+ * concurrent adds. Keyed by the prefix, so a code that changes and comes back never repeats.
+ */
+export async function nextRollCodeNumber(prefix: string, db: Db = defaultDb()): Promise<number> {
   const rows = await db.$queryRaw<{ lastValue: number }[]>`
-    INSERT INTO batch_sequences ("year", "lastValue") VALUES (${year}, 1)
-    ON CONFLICT ("year") DO UPDATE SET "lastValue" = batch_sequences."lastValue" + 1
+    INSERT INTO roll_code_sequences ("prefix", "lastValue") VALUES (${prefix}, 1)
+    ON CONFLICT ("prefix") DO UPDATE SET "lastValue" = roll_code_sequences."lastValue" + 1
     RETURNING "lastValue"`;
   return rows[0].lastValue;
+}
+
+/** Whether a code is taken already (a roll from before could hold an LR- code as its tag only). */
+export async function rollCodeTaken(code: string, db: Db = defaultDb()): Promise<boolean> {
+  return (await db.roll.count({ where: { code } })) > 0;
 }
 
 /** Rolls open now (being captured), for the reports and the Camera page. */
@@ -177,4 +277,9 @@ export async function lockOpenRoll(id: string, db: Db): Promise<boolean> {
 
 export function countRolls(db: Db = defaultDb()) {
   return db.roll.count();
+}
+
+/** How many rolls a leather item has (any status), so its category can't change under them. */
+export function countItemRolls(itemId: string, db: Db = defaultDb()): Promise<number> {
+  return db.roll.count({ where: { itemId } });
 }

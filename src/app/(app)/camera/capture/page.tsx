@@ -2,7 +2,7 @@
  * Intent brief (ui-craft §1)
  * Who:   a Shoe Constructor the System Admin allows (C-23), with their own phone on a stand at a
  *        fixed position (C-24), or at a PC with Floor view; capturing one roll shot by shot.
- * What:  start a roll, choose it, capture it edge to edge, see Pass or Reject for each shot,
+ * What:  pick a roll from Inventory (Phase 30A), choose it, capture it edge to edge, see Pass or Reject for each shot,
  *        finish it once all of it is in (Phase 26, D-095).
  * Worst: a shot sent to the wrong roll, a capture saved twice, or a verdict trusted when the model
  *        never ran. The chosen roll is repeated in large text; one press makes one scan; Capture is
@@ -15,7 +15,7 @@ import { requireRole } from "@/server/policies/guard";
 import { canCaptureFor } from "@/server/policies/permissions";
 import { cameraStatus } from "@/server/services/camera.service";
 import { captureModelStatus } from "@/server/services/capture.service";
-import { openRollsForCapture, supplierOptions } from "@/server/services/roll.service";
+import { openRollsForCapture, readyRollsForCapture } from "@/server/services/roll.service";
 import { CaptureClient } from "./capture-client";
 
 export const metadata: Metadata = { title: "Capture" };
@@ -36,22 +36,22 @@ export default async function CapturePage() {
     );
   }
 
-  const [status, model, rolls, suppliers] = await Promise.all([
+  const [status, model, rolls, ready] = await Promise.all([
     cameraStatus(),
     captureModelStatus(),
     openRollsForCapture(user),
-    supplierOptions(),
+    readyRollsForCapture(),
   ]);
 
   return (
     <>
       <PageHeader
         title="Capture"
-        description="Start a roll, then capture it shot by shot. The app checks each shot and gives the verdict."
+        description="Pick the roll on the table, then capture it shot by shot. The app checks each shot and gives the verdict."
       />
       <CaptureClient
         initialRolls={rolls}
-        suppliers={suppliers}
+        ready={ready}
         model={model}
         earlyModelNotice={status.earlyModelNotice}
       />

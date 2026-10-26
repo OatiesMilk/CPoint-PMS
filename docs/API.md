@@ -65,36 +65,64 @@ answer within 2 s):
 
 `status` is `"degraded"` and `checks.database` is `"down"` in the 503 case.
 
-## Rolls (`/api/v1/rolls`, Phase 26)
+## Rolls (`/api/v1/rolls`, Phase 26; from Inventory since Phase 30A)
 
-A roll is one leather roll from a supplier (D-095). A Shoe Constructor with camera access starts it
-at Capture, captures it shot by shot and finishes it once all of it is in; several rolls may be
-open at once. The Floor Manager reads every roll (Reports → Rolls) and may cancel an open one with
-a reason. Nothing is deleted: a cancelled roll keeps its shots, which the reports leave out. Every
-write is audited (`roll.start`, `roll.finish`, `roll.cancel`). No response names a person (D-008).
+A roll is one leather roll from a supplier (D-095). Since Phase 30A (D-103, D-104) the Floor
+Manager adds each roll to its leather item in Inventory with its own area; a Shoe Constructor with
+camera access picks it at Capture, captures it shot by shot and finishes it; the Quality Inspector
+ticks it **Fully used** at Finish batch, and only then does it leave stock. Several rolls may be
+scanned at once. Nothing is deleted: a removed roll keeps its shots, which the reports leave out.
+Every write is audited (`roll.add`, `roll.start`, `roll.finish`, `roll.cancel`, `roll.remove`; a
+tick is in `production.checkin` or `production.checkin.correct`). No response names a person
+(D-008).
 
-| Method & path                    | Who                                                             | Body / query                                            | Returns                                                                                                     |
-| -------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/rolls`              | `roll:read` (Floor Manager)                                     | `status`, `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
-| `GET /api/v1/rolls/{id}`         | `roll:read`                                                     | —                                                       | the roll with its shots and their detections                                                                |
-| `POST /api/v1/rolls`             | a Shoe Constructor with camera access                           | `{ supplierId, tagCode? }`                              | `201 { data: OpenRoll }`, status `OPEN`, code `R-YYYY-NNNN`                                                 |
-| `GET /api/v1/rolls/open`         | a Shoe Constructor with camera access                           | —                                                       | `{ data: OpenRoll[] }`, every open roll (the Capture page's Roll dropdown)                                  |
-| `POST /api/v1/rolls/{id}/finish` | a Shoe Constructor with camera access                           | `{}`                                                    | `{ data: { id, code, status: "FINISHED", shots } }`                                                         |
-| `POST /api/v1/rolls/{id}/cancel` | camera access (an empty roll), or `roll:manage` (any open roll) | `{}`, or `{ reason }` from the Floor Manager            | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
-| `GET /api/v1/rolls/current`      | a device token (`scans:create`)                                 | —                                                       | the roll open the longest, or `404 NO_OPEN_ROLL`                                                            |
+| Status (`status`) | Reads         | How it gets there                                 | Stock |
+| ----------------- | ------------- | ------------------------------------------------- | ----- |
+| `IN_STOCK`        | Not scanned   | the FM adds it (`POST /inventory/{id}/rolls`)     | +1    |
+| `OPEN`            | Being scanned | picked at Capture (`POST /rolls/{id}/start`)      |       |
+| `FINISHED`        | Scanned       | `POST /rolls/{id}/finish`, at least one shot      |       |
+| `USED`            | Fully used    | ticked at Finish batch (`usedRollIds`)            | −1    |
+| `CANCELLED`       | Removed       | the FM's `POST /rolls/{id}/remove`, with a reason | −1    |
 
-**`OpenRoll`**: `{ id, code, tagCode, supplier, shots, startedAt, mine }`; `mine` only says whether
-the person asking started it, to start the dropdown on their own roll. `/current` leaves it out.
+| Method & path                       | Who                                   | Body / query                                            | Returns                                                                                                     |
+| ----------------------------------- | ------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/inventory/{id}/rolls` | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagCode? }] }`       | `201 { data: { added: [{ id, code, areaSqFt, tagCode }], quantityOnHand } }`, codes `LR-<supplier>-001`     |
+| `GET /api/v1/rolls`                 | `roll:read` (Floor Manager)           | `status`, `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
+| `GET /api/v1/rolls/{id}`            | `roll:read`                           | —                                                       | the roll with its item, area, shots and their detections                                                    |
+| `POST /api/v1/rolls`                | —                                     | —                                                       | `405`: rolls are added in Inventory and picked at Capture                                                   |
+| `GET /api/v1/rolls/ready`           | a Shoe Constructor with camera access | —                                                       | `{ data: ReadyRoll[] }`, rolls not scanned yet, oldest first                                                |
+| `POST /api/v1/rolls/{id}/start`     | a Shoe Constructor with camera access | `{}`                                                    | `{ data: OpenRoll }`, status `OPEN`; `409` named when it isn't `IN_STOCK` any more                          |
+| `GET /api/v1/rolls/open`            | a Shoe Constructor with camera access | —                                                       | `{ data: OpenRoll[] }`, every roll being scanned (the Capture page's Roll dropdown)                         |
+| `POST /api/v1/rolls/{id}/finish`    | a Shoe Constructor with camera access | `{}`                                                    | `{ data: { id, code, status: "FINISHED", shots } }`                                                         |
+| `POST /api/v1/rolls/{id}/cancel`    | a Shoe Constructor with camera access | `{}`                                                    | put back: an empty roll from Inventory returns to `IN_STOCK`; one from before Phase 30A is `CANCELLED`      |
+| `POST /api/v1/rolls/{id}/remove`    | `roll:manage` (Floor Manager)         | `{ reason }` (1 to 200 characters)                      | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
+| `GET /api/v1/rolls/current`         | a device token (`scans:create`)       | —                                                       | the roll being scanned the longest, or `404 NO_OPEN_ROLL`                                                   |
 
-- `supplierId` is required and must be an active supplier (`422` on `supplierId`, "Choose the
-  supplier this roll came from."). `tagCode` is the number on the supplier's tag, up to 40.
-- Finish needs at least one shot (`409` "A roll needs at least one shot to finish. Cancel it
-  instead."). At Capture only an empty roll can be cancelled; the Floor Manager's cancel needs a
-  `reason` of 1 to 200 characters.
-- A roll that is already finished or cancelled answers `409 CONFLICT`; if someone else closed it
+**`ReadyRoll`**: `{ id, code, tagCode, supplier, item, areaSqFt }`. **`OpenRoll`**: the same plus
+`{ shots, startedAt, mine, fromInventory }`; `mine` only says whether the person asking picked it,
+to start the dropdown on their own roll. `/current` leaves it out.
+
+- **Add rolls:** the item must be an active Leather roll item with an active supplier (its code
+  makes the roll codes), else `409` named. `receivedOn` is a date, not after today (Manila).
+  `areaSqFt` is 0.1 to 200 with at most two decimals; each message names the roll ("Roll 2: enter
+  its area in square feet, like 24.5."), at `rolls.<i>.areaSqFt`. `tagCode` is the number on the
+  supplier's tag, up to 40. Up to 50 rolls a save. Each roll is an `IN` +1 with its `rollId`.
+- **Finish** needs at least one shot (`409` "A roll needs at least one shot to finish. Put it back
+  instead."). **Cancel** at Capture only for a roll with no shots.
+- **Remove:** any roll from Inventory that isn't fully used (`OUT` −1 unless it already left
+  stock); a roll from before Phase 30A only while it is open. A fully used roll is `409` ("LR-… is
+  already marked fully used.").
+- **Fully used** is sent with the batch: `POST /api/v1/production/check-ins` and
+  `PATCH /api/v1/production/check-ins/{id}` take an optional `usedRollIds` (uuids, no repeats).
+  Only a `FINISHED` roll from Inventory can be ticked (`OUT` −1, "Fully used in Batch 2
+  (10:00–13:00)"); a correction may untick a roll ticked in that batch (`IN` +1). Anything else is
+  `409` with the roll's code ("LR-MT-004 isn’t scanned yet. Scan and finish it at Capture before
+  it’s used."). `GET /api/v1/production/today` lists `rollsToTick` for whoever may finish batches,
+  and each finished batch's `checkIn.usedRolls`.
+- A roll that is already finished or removed answers `409 CONFLICT`; if someone else changed it
   between the read and the write, `409 STALE` (D-019).
 - Removed (`404`): `/api/v1/batches/**`, `POST …/stages`, `PATCH` of a roll. Rolls from before
-  Phase 26 keep their `B-` codes; their stage history went with the migration `rolls_at_capture`.
+  Phase 30A keep their `R-` or `B-` codes, have no item or area and can't be ticked.
 
 ## Camera ingestion (device token)
 
@@ -277,7 +305,7 @@ duplicate email is `422` on `email`.
 | `GET / PUT /api/v1/settings/cv`    | `{ foundPercent, earlyModelNotice? }`, e.g. `50` (1 to 100, one decimal). `rejectPercent` or `reworkPercent` is refused with a named message (D-093) |
 | `GET /api/v1/defect-types/unknown` | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }`                                                       |
 | `GET / POST /api/v1/defect-types`  | `{ key, label, outcome, description?, sortOrder? }` (key fixed; `outcome` `USABLE` or `NOT_ACCEPTED`, required, D-093)                               |
-| `GET / POST /api/v1/suppliers`     | `{ name, contactPerson?, phone?, notes? }`                                                                                                           |
+| `GET / POST /api/v1/suppliers`     | `{ name, code?, contactPerson?, phone?, notes? }` (`code`: 2 to 6 capital letters or digits, unique; from the initials when left out, D-104)         |
 | `PUT /api/v1/settings/lunch-break` | `{ startTime, endTime }` (`HH:mm`, inside tomorrow's shift, end after start) or `{ none: true }`; applies from tomorrow (D-097)                      |
 | `PATCH /api/v1/<list>/{id}`        | the same fields, or `{ isActive }`. There are no deletes.                                                                                            |
 
@@ -324,14 +352,14 @@ whole line (D-008); the only name is who finished or corrected a batch. Days are
 days. The paths keep `production`; a finished batch is a `check-in` row whose `slotAt` is the
 batch's end.
 
-| Method & path                             | Permission           | Body / query                                             |
-| ----------------------------------------- | -------------------- | -------------------------------------------------------- |
-| `GET /api/v1/production/today`            | `production:read`    | —                                                        |
-| `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                     |
-| `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes? }`                |
-| `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason }`     |
-| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }` |
-| `PUT /api/v1/production/quotas`           | `production:plan`    | `{ pairs, suggestedPairs? }`                             |
+| Method & path                             | Permission           | Body / query                                                       |
+| ----------------------------------------- | -------------------- | ------------------------------------------------------------------ |
+| `GET /api/v1/production/today`            | `production:read`    | —                                                                  |
+| `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                               |
+| `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes?, usedRollIds? }`            |
+| `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason, usedRollIds? }` |
+| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }`           |
+| `PUT /api/v1/production/quotas`           | `production:plan`    | `{ pairs, suggestedPairs? }`                                       |
 
 `production:read` is the Floor Manager, the Quality Inspector and the System Admin;
 `production:checkin` the Quality Inspector, and the Floor Manager **only on a day attendance shows no

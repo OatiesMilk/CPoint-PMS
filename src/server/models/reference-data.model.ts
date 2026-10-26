@@ -16,8 +16,21 @@ export function ensureDefectType(
   return db.defectType.upsert({ where: { key: data.key }, create: data, update: {} });
 }
 
-export function ensureSupplier(data: { name: string; notes: string }, db: Db = defaultDb()) {
+/** Adds a supplier by name if missing; an existing one keeps its code and notes. */
+export function ensureSupplier(
+  data: { name: string; notes: string; code: string },
+  db: Db = defaultDb(),
+) {
   return db.supplier.upsert({ where: { name: data.name }, create: data, update: {} });
+}
+
+export function findSupplierByName(name: string, db: Db = defaultDb()) {
+  return db.supplier.findUnique({ where: { name } });
+}
+
+/** Every supplier's short code, for picking a free one (Phase 30A). */
+export async function listSupplierCodes(db: Db = defaultDb()): Promise<string[]> {
+  return (await db.supplier.findMany({ select: { code: true } })).map((s) => s.code);
 }
 
 export function ensureCvSettings(data: { foundAtOrAbove: number }, db: Db = defaultDb()) {
@@ -27,7 +40,7 @@ export function ensureCvSettings(data: { foundAtOrAbove: number }, db: Db = defa
 export function listActiveSuppliers(db: Db = defaultDb()) {
   return db.supplier.findMany({
     where: { isActive: true },
-    select: { id: true, name: true },
+    select: { id: true, name: true, code: true },
     orderBy: { name: "asc" },
   });
 }

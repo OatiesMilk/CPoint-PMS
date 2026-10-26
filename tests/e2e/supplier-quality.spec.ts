@@ -50,15 +50,18 @@ async function scan(
   expect(res.status()).toBe(201);
 }
 
-/** A supplier of its own, one roll from it started at Capture, and three shots: two rejected. */
+/**
+ * A supplier of its own (with its short code, Phase 30A), one roll from it added in Inventory and
+ * picked at Capture, and three shots: two rejected.
+ */
 async function rollWithRejects(api: APIRequestContext, request: APIRequestContext) {
   await ensureRuleTypes();
   const supplier = `E2E Tannery ${randomBytes(3).toString("hex").toUpperCase()}`;
   const supplierId = randomUUID();
   await withDb((db) =>
     db.query(
-      `INSERT INTO suppliers (id, name, "isActive", "createdAt") VALUES ($1, $2, true, now())`,
-      [supplierId, supplier],
+      `INSERT INTO suppliers (id, code, name, "isActive", "createdAt") VALUES ($1, $2, $3, true, now())`,
+      [supplierId, `Q${randomBytes(2).toString("hex").toUpperCase()}`, supplier],
     ),
   );
   const tagCode = `E2E-SQ-${randomBytes(3).toString("hex").toUpperCase()}`;

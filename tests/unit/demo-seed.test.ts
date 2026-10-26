@@ -3,17 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const calls: { fn: string; rollId?: string; now: Date; classKeys?: string[]; by?: string }[] = [];
 let nextRoll = 0;
 const svc = {
-  startRoll: vi.fn(async (_v: unknown, actor: { id: string }, now: Date) => {
-    nextRoll += 1;
-    const id = `r${nextRoll}`;
+  addRolls: vi.fn(
+    async (itemId: string, values: { rolls: unknown[] }, actor: { id: string }, now: Date) => {
+      const added = values.rolls.map(() => {
+        nextRoll += 1;
+        const id = `r${nextRoll}`;
+        calls.push({ fn: "addRoll", rollId: id, now, by: actor.id });
+        return { id, code: `LR-${itemId}-${String(nextRoll).padStart(3, "0")}` };
+      });
+      return { added, quantityOnHand: added.length };
+    },
+  ),
+  startRoll: vi.fn(async (id: string, actor: { id: string }, now: Date) => {
     calls.push({ fn: "startRoll", rollId: id, now, by: actor.id });
-    return { id, code: `R-2026-${String(nextRoll).padStart(4, "0")}` };
+    return { id, code: id };
   }),
   finishRoll: vi.fn(async (rollId: string, actor: { id: string }, now: Date) => {
     calls.push({ fn: "finishRoll", rollId, now, by: actor.id });
   }),
-  cancelRoll: vi.fn(async (rollId: string, _input: unknown, actor: { id: string }, now: Date) => {
-    calls.push({ fn: "cancelRoll", rollId, now, by: actor.id });
+  removeRoll: vi.fn(async (rollId: string, _reason: string, actor: { id: string }, now: Date) => {
+    calls.push({ fn: "removeRoll", rollId, now, by: actor.id });
   }),
   ingestScan: vi.fn(
     async (
@@ -70,7 +79,9 @@ vi.mock("@/server/models/inventory.model", () => ({
 vi.mock("@/server/models/reference-data.model", () => ({
   listActiveSuppliers: mocks.listActiveSuppliers,
   listDefectTypes: mocks.listDefectTypes,
-  ensureSupplier: vi.fn(async (s: { name: string }) => ({ id: `sup-${s.name}` })),
+}));
+vi.mock("@/server/services/supplier-code.service", () => ({
+  ensureSupplierWithCode: vi.fn(async (s: { name: string }) => ({ id: `sup-${s.name}` })),
 }));
 vi.mock("@/server/models/user.model", () => ({ findUserByEmail: mocks.findUserByEmail }));
 const setCameraOperator = vi.fn(async () => ({}));
@@ -284,33 +295,72 @@ describe("seedDemoWeek", () => {
     }
   });
 
-  it("starts and finishes each roll at Capture, leaves the newest open and has the FM cancel one (Phase 26)", async () => {
+  it("adds each leather roll in Inventory with its area, then picks, scans and finishes it (Phase 30A)", async () => {
     await seedDemoWeek({ now, seed: 1 });
+    // The Floor Manager adds the rolls, each with an area in range; never on the sheet.
+    expect(svc.addRolls.mock.calls.length).toBeGreaterThanOrEqual(4);
+    for (const [itemId, values, actor, when] of svc.addRolls.mock.calls as unknown as [
+      string,
+      { receivedOn: string; rolls: { areaSqFt: number }[] },
+      { id: string },
+      Date,
+    ][]) {
+      expect(itemId).toMatch(/^LR-00[123]$/);
+      expect(actor.id).toBe("manager@cpoint.local");
+      expect(when.getTime()).toBeLessThanOrEqual(now.getTime());
+      for (const r of values.rolls) {
+        expect(r.areaSqFt).toBeGreaterThanOrEqual(18);
+        expect(r.areaSqFt).toBeLessThanOrEqual(42);
+      }
+    }
+    const added = calls.filter((c) => c.fn === "addRoll");
     const started = calls.filter((c) => c.fn === "startRoll");
     const finished = calls.filter((c) => c.fn === "finishRoll");
     expect(finished.length).toBeGreaterThan(5);
-    // Whoever started a roll finishes it.
+    // A constructor picks only a roll already added, once, after it was added.
+    expect(new Set(started.map((s) => s.rollId)).size).toBe(started.length);
+    for (const s of started) {
+      const a = added.find((x) => x.rollId === s.rollId)!;
+      expect(a.now.getTime()).toBeLessThanOrEqual(s.now.getTime());
+      expect(s.by).not.toBe("manager@cpoint.local");
+    }
+    // Whoever picked a roll finishes it; the newest roll with shots stays open.
     for (const f of finished) expect(f.by).toBe(started.find((s) => s.rollId === f.rollId)!.by);
-    // One roll cancelled by the Floor Manager, with a reason; it has no shots.
-    expect(svc.cancelRoll).toHaveBeenCalledTimes(1);
-    const [cancelledId, input, actor] = svc.cancelRoll.mock.calls[0] as unknown as [
+    const closed = new Set(finished.map((f) => f.rollId));
+    expect(started.filter((s) => !closed.has(s.rollId))).toHaveLength(1);
+    // One roll on the shelf removed by the Floor Manager, with a reason; never scanned.
+    expect(svc.removeRoll).toHaveBeenCalledTimes(1);
+    const [removedId, reason, actor] = svc.removeRoll.mock.calls[0] as unknown as [
       string,
-      { by: string; reason: string },
+      string,
       { id: string },
     ];
-    expect(input).toMatchObject({ by: "manager", reason: expect.stringMatching(/wrong supplier/) });
+    expect(reason).toMatch(/Water damage/);
     expect(actor.id).toBe("manager@cpoint.local");
-    expect(calls.some((c) => c.fn === "scan" && c.rollId === cancelledId)).toBe(false);
-    // The newest roll with shots stays open, so Capture opens on a roll.
-    const closed = new Set([...finished.map((f) => f.rollId), cancelledId]);
-    expect(started.filter((s) => !closed.has(s.rollId))).toHaveLength(1);
-    // The leather rolls laid out are entered as Used on the next stock update (Phase 29).
-    const leatherUsed = (
-      stockUpdates.saveStockUpdate.mock.calls as unknown as [
-        { lines: { itemId: string; used?: number }[] },
-      ][]
-    ).flatMap(([b]) => b.lines.filter((l) => l.itemId.startsWith("LR-")).map((l) => l.used ?? 0));
-    expect(leatherUsed.reduce((t, n) => t + n, 0)).toBeGreaterThan(5);
+    expect(started.some((s) => s.rollId === removedId)).toBe(false);
+    // Leather is never on the Update stock sheet (its count follows its rolls).
+    const sheetItems = (
+      stockUpdates.saveStockUpdate.mock.calls as unknown as [{ lines: { itemId: string }[] }][]
+    ).flatMap(([b]) => b.lines.map((l) => l.itemId));
+    expect(sheetItems.some((id) => id.startsWith("LR-"))).toBe(false);
+  });
+
+  it("has the QI tick scanned rolls Fully used at Finish batch, each once, after its scan (Phase 30A)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    const finishedAt = new Map(
+      calls.filter((c) => c.fn === "finishRoll").map((c) => [c.rollId!, c.now]),
+    );
+    const ticks = (
+      production.saveCheckIn.mock.calls as unknown as [{ usedRollIds?: string[] }, unknown, Date][]
+    ).flatMap(([input, , when]) => (input.usedRollIds ?? []).map((id) => ({ id, when })));
+    expect(ticks.length).toBeGreaterThan(3);
+    expect(new Set(ticks.map((t) => t.id)).size).toBe(ticks.length);
+    for (const t of ticks) {
+      expect(finishedAt.has(t.id)).toBe(true);
+      expect(finishedAt.get(t.id)!.getTime()).toBeLessThan(t.when.getTime());
+    }
+    // Some scanned rolls are left to tick, so Finish batch has something to show.
+    expect(finishedAt.size).toBeGreaterThan(ticks.length);
   });
 
   it("finishes the batches as the QI, with one late and one missed, and three short days that line up with the absences", async () => {

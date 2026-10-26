@@ -178,10 +178,14 @@ test("Reports → Materials shows what an item used this week, and the CSV", asy
   await expect(page.getByRole("heading", { name: "Used per material" })).toBeVisible();
   // Page through until the item shows (earlier runs add items).
   const row = page.getByRole("row", { name: new RegExp(item.sku) });
+  // Wait for each page to arrive before looking (QA 30A F3: the count was read too early).
   for (let i = 0; i < 20 && (await row.count()) === 0; i++) {
     const next = page.getByRole("link", { name: /Next/ });
     if ((await next.count()) === 0) break;
+    const before = page.url();
     await next.first().click();
+    await page.waitForURL((url) => url.toString() !== before);
+    await expect(page.getByRole("heading", { name: "Used per material" })).toBeVisible();
   }
   // The correction is not use: 4 this week, 5 on hand.
   await expect(row.getByRole("cell").nth(1)).toHaveText("4 boxes");
@@ -235,6 +239,75 @@ test("a leather roll needs its supplier (Phase 29, D-102)", async ({ browser }) 
   const { id } = (await res.json()).data;
   const detail = (await (await api.get(`/api/v1/inventory/${id}`)).json()).data.item;
   expect(detail.supplier?.name).toBeTruthy();
+});
+
+test("leather rolls are added on the item with their areas, never on the sheet (Phase 30A, D-103, D-104)", async ({
+  browser,
+  page,
+}) => {
+  const api = await managerApi(browser);
+  const sku = uniqueCode("LR");
+  const name = `E2E hide ${sku}`;
+  const base = { sku, name, category: "LEATHER_ROLL", unit: "roll", reorderLevel: 0 };
+  // A leather item starts at 0: its count follows its rolls.
+  const opening = await api.post("/api/v1/inventory", {
+    data: { ...base, supplierId: await supplierId(), openingStock: 3 },
+  });
+  expect(opening.status()).toBe(422);
+  expect(JSON.stringify(await opening.json())).toContain("A leather roll item starts at 0.");
+  const created = await api.post("/api/v1/inventory", {
+    data: { ...base, supplierId: await supplierId() },
+  });
+  expect(created.status()).toBe(201);
+  const { id } = (await created.json()).data;
+
+  // The sheet refuses a leather line, by name.
+  const sheet = await api.post("/api/v1/inventory/updates", {
+    data: { lines: [{ itemId: id, seenQuantity: 0, added: 2 }] },
+  });
+  expect(sheet.status()).toBe(422);
+  expect(JSON.stringify(await sheet.json())).toContain(`${name} is counted from its rolls.`);
+
+  await signInAs(page, ACCOUNTS.manager);
+  await page.goto(`/inventory/${id}`);
+  await expect(page.getByText("Counted from its rolls.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Update stock" })).toHaveCount(0);
+
+  // Add rolls: each roll has its own area; a missing or bad area is named by its roll.
+  await page.getByRole("button", { name: "Add rolls" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Add another roll" }).click();
+  await dialog.locator("#add-rolls-rolls-0-areaSqFt").fill("24.5");
+  await dialog.locator("#add-rolls-rolls-1-areaSqFt").fill("24.125");
+  await dialog.getByRole("button", { name: "Save 2 rolls" }).click();
+  await expect(dialog.getByText("Roll 2: use at most two decimals, like 24.75.")).toBeVisible();
+  await dialog.locator("#add-rolls-rolls-1-areaSqFt").fill("31.75");
+  await dialog.locator("#add-rolls-rolls-1-tagCode").fill("T-88");
+  await dialog.getByRole("button", { name: "Save 2 rolls" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText(/2 rolls added to .*: LR-[A-Z0-9]+-\d{3,} to LR-/)).toBeVisible();
+  await expect(page.getByTestId("on-hand")).toHaveText("2 rolls");
+
+  // The item's roll table: area, Not scanned, Defect % to be implemented.
+  const rows = page.getByTestId("item-roll-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.filter({ hasText: "31.75 sq ft" })).toContainText("Not scanned");
+  await expect(rows.first()).toContainText("To be implemented");
+
+  // Remove one with a reason: it leaves stock.
+  await rows.filter({ hasText: "31.75 sq ft" }).getByRole("button", { name: "Remove" }).click();
+  const remove = page.getByRole("dialog");
+  await remove.getByLabel("Reason").fill("Wrong colour delivered");
+  await remove.getByRole("button", { name: "Remove roll", exact: true }).click();
+  await expect(remove).toBeHidden();
+  await expect(page.getByTestId("on-hand")).toHaveText("1 roll");
+  expect(await onHand(api, id)).toBe(1);
+
+  // The item can no longer change category while it has rolls.
+  const change = await api.patch(`/api/v1/inventory/${id}`, {
+    data: { ...base, category: "OTHER", unit: "box" },
+  });
+  expect(change.status()).toBe(422);
 });
 
 test("Inventory is the Floor Manager's alone (D-100): the Admin and the QI are refused", async ({

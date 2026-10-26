@@ -4,6 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, navLabels, signIn } from "./helpers";
 import {
+  addInventoryRoll,
   adminApi,
   captureApi,
   createRoll,
@@ -11,11 +12,11 @@ import {
   makeConstructor,
   managerApi,
   sampleJpeg,
-  supplierId,
   withDb,
 } from "./cv-helpers";
 
-// The Capture page (Phase 18; Phase 26: constructors' phones, rolls start and finish there). The
+// The Capture page (Phase 18; Phase 26: constructors' phones; Phase 30A: rolls are picked from
+// Inventory, then scanned and finished there). The
 // model files are git-ignored, so CI has none: the tests that need a real capture run only where
 // `python -m cpoint_cv export-onnx` has been run (Dylan's laptop).
 const MODEL = process.env.CV_MODEL_PATH ?? "cv/models/yolo-v1.onnx";
@@ -65,7 +66,10 @@ test.describe("capture API (Phase 26)", () => {
       await managerApi(browser),
     ]) {
       expect((await capture(api, randomUUID())).status()).toBe(403);
-      expect((await api.post("/api/v1/rolls", { data: {} })).status()).toBe(403);
+      expect((await api.post(`/api/v1/rolls/${randomUUID()}/start`, { data: {} })).status()).toBe(
+        403,
+      );
+      expect((await api.get("/api/v1/rolls/ready")).status()).toBe(403);
     }
 
     const sc = await captureApi(browser);
@@ -96,24 +100,42 @@ test.describe("capture API (Phase 26)", () => {
     const empty = await sc.post(`/api/v1/rolls/${roll.id}/finish`, { data: {} });
     expect(empty.status()).toBe(409);
     expect((await empty.json()).error.message).toBe(
-      "A roll needs at least one shot to finish. Cancel it instead.",
+      "A roll needs at least one shot to finish. Put it back instead.",
     );
-    const cancel = await sc.post(`/api/v1/rolls/${roll.id}/cancel`, { data: {} });
-    expect(cancel.status()).toBe(200);
+    // Put back: picked by mistake, it waits in Inventory to be scanned again (Phase 30A).
+    const back = await sc.post(`/api/v1/rolls/${roll.id}/cancel`, { data: {} });
+    expect(back.status()).toBe(200);
+    expect((await back.json()).data).toMatchObject({ status: "IN_STOCK" });
     const late = await capture(sc, randomUUID(), roll.id);
     expect(late.status()).toBe(hasModel ? 409 : 503);
   });
 
-  test("start roll needs the supplier, named on its field", async ({ browser }) => {
+  test("a roll is picked from Inventory, once; nobody types a new roll (Phase 30A)", async ({
+    browser,
+  }) => {
     const sc = await captureApi(browser);
-    const res = await sc.post("/api/v1/rolls", { data: { tagCode: "LR-1" } });
-    expect(res.status()).toBe(422);
-    expect((await res.json()).error.details).toEqual([
-      expect.objectContaining({
-        path: ["supplierId"],
-        message: "Choose the supplier this roll came from.",
-      }),
-    ]);
+    // Starting a roll by typing its supplier is gone.
+    expect((await sc.post("/api/v1/rolls", { data: { supplierId: randomUUID() } })).status()).toBe(
+      405,
+    );
+    const roll = await addInventoryRoll({ areaSqFt: 31.25 });
+    const ready = (await (await sc.get("/api/v1/rolls/ready")).json()).data as {
+      id: string;
+      areaSqFt: number;
+    }[];
+    expect(ready.find((r) => r.id === roll.id)).toMatchObject({ areaSqFt: 31.25 });
+
+    const first = await sc.post(`/api/v1/rolls/${roll.id}/start`, { data: {} });
+    expect(first.status()).toBe(200);
+    expect((await first.json()).data).toMatchObject({ code: roll.code, shots: 0, mine: true });
+    const again = await sc.post(`/api/v1/rolls/${roll.id}/start`, { data: {} });
+    expect(again.status()).toBe(409);
+    expect((await again.json()).error.message).toBe(
+      `${roll.code} is being scanned at Capture. Choose another roll.`,
+    );
+    const open = (await (await sc.get("/api/v1/rolls/open")).json()).data as { id: string }[];
+    expect(open.some((r) => r.id === roll.id)).toBe(true);
+    expect((await sc.post(`/api/v1/rolls/${randomUUID()}/start`, { data: {} })).status()).toBe(404);
   });
 
   test("without the model files the app answers 503 with where to put them", async ({
@@ -173,9 +195,11 @@ test.describe("capture API (Phase 26)", () => {
 test.describe("Capture on a phone (Phase 26)", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("a constructor starts a roll, sees it in large text, and finishes or cancels it", async ({
+  test("a constructor picks a roll from Inventory, sees it in large text, and finishes or puts it back", async ({
     page,
   }) => {
+    const roll = await addInventoryRoll({ areaSqFt: 24.5 });
+    const code = roll.code;
     await signInCapturer(page);
     // One page only: no page menu in the phone bar, no sidebar.
     await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
@@ -186,20 +210,20 @@ test.describe("Capture on a phone (Phase 26)", () => {
       390,
     );
 
-    // Other tests' rolls may be open (the dropdown lists every open roll); start our own.
-    const start = page.getByRole("button", { name: "Start another roll" });
-    if (await start.isVisible()) await start.click();
-    await expect(page.getByRole("heading", { name: "Start a roll" })).toBeVisible();
-    await page.getByRole("button", { name: "Start roll" }).click();
-    await expect(page.getByText("Choose the supplier this roll came from.")).toBeVisible();
-    await page.getByLabel("Supplier").selectOption(await supplierId());
-    await page.getByLabel(/Roll code/).fill("LR-PHONE-1");
-    await page.getByRole("button", { name: "Start roll" }).click();
+    // Other tests' rolls may be open (the dropdown lists every open roll); pick our own. There is
+    // nothing to type: no supplier, no tag (Phase 30A).
+    const another = page.getByRole("button", { name: "Scan another roll" });
+    if (await another.isVisible()) await another.click();
+    await expect(page.getByRole("heading", { name: "Scan a roll" })).toBeVisible();
+    await expect(page.getByLabel("Supplier")).toHaveCount(0);
+    const find = page.getByLabel("Find a roll");
+    if (await find.isVisible()) await find.fill(code);
+    await page.getByRole("button", { name: `Scan ${code}` }).click();
 
     const line = page.getByTestId("capture-roll-line");
-    await expect(line).toContainText(/Roll R-\d{4}-\d{4}/);
+    await expect(line).toContainText(`Roll ${code}`);
+    await expect(line).toContainText("24.5 sq ft");
     await expect(line).toContainText("0 shots");
-    const code = (await line.innerText()).match(/R-\d{4}-\d{4}/)![0];
     await expect(page.getByRole("combobox", { name: "Roll" })).toContainText(code);
 
     // The Capture button sits at the bottom of the screen, in reach of a thumb.
@@ -215,11 +239,13 @@ test.describe("Capture on a phone (Phase 26)", () => {
 
     if (!hasModel) {
       await expect(button).toBeDisabled();
-      // An empty roll can't be finished, only cancelled.
+      // An empty roll can't be finished, only put back in Inventory.
       await expect(page.getByRole("button", { name: "Finish roll" })).toBeDisabled();
-      await page.getByRole("button", { name: "Cancel roll" }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "Cancel roll" }).click();
-      await expect(page.getByText(`${code} is cancelled.`)).toBeVisible();
+      await page.getByRole("button", { name: "Put roll back" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "Put roll back" }).click();
+      await expect(
+        page.getByText(`${code} is back with the rolls waiting to be scanned.`),
+      ).toBeVisible();
       return;
     }
 

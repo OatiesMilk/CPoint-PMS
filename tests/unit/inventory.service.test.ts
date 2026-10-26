@@ -17,6 +17,8 @@ const inventory = {
 };
 const recordAudit = vi.fn();
 const findSupplier = vi.fn();
+const countItemRolls = vi.fn(async () => 0);
+vi.mock("@/server/models/roll.model", () => ({ countItemRolls }));
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/inventory.model", () => inventory);
 vi.mock("@/server/models/reference-data.model", () => ({ findSupplier }));
@@ -67,8 +69,14 @@ beforeEach(() => {
 
 describe("items", () => {
   it("records opening stock as an IN movement in the create transaction", async () => {
-    inventory.insertInventoryItem.mockResolvedValue(row({ quantityOnHand: 0 }));
-    await svc.createItem({ ...form, openingStock: 5 }, actor, now);
+    inventory.insertInventoryItem.mockResolvedValue(
+      row({ category: "NAILS", supplierId: null, quantityOnHand: 0 }),
+    );
+    await svc.createItem(
+      { ...form, category: "NAILS", supplierId: null, openingStock: 5 },
+      actor,
+      now,
+    );
     expect(inventory.applyStockDelta).toHaveBeenCalledWith("i1", 5, {}, "tx");
     expect(inventory.insertMovement).toHaveBeenCalledWith(
       expect.objectContaining({ type: "IN", quantityDelta: 5, reason: "Opening stock" }),
@@ -78,6 +86,30 @@ describe("items", () => {
       "inventory.item.create",
       "inventory.movement.in",
     ]);
+  });
+
+  it("starts a leather roll item at 0: opening stock is refused on its field (Phase 30A)", async () => {
+    await expect(svc.createItem({ ...form, openingStock: 3 }, actor, now)).rejects.toMatchObject({
+      status: 422,
+      details: [{ path: ["openingStock"], message: svc.LEATHER_OPENING_STOCK }],
+    });
+    expect(inventory.insertInventoryItem).not.toHaveBeenCalled();
+  });
+
+  it("keeps an item with rolls or stock in or out of leather rolls (Phase 30A)", async () => {
+    inventory.findInventoryItem.mockResolvedValue(row({ quantityOnHand: 0 }));
+    countItemRolls.mockResolvedValueOnce(2);
+    await expect(
+      svc.updateItem("i1", { ...form, category: "NAILS", supplierId: null }, actor),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [{ path: ["category"], message: expect.stringContaining("This item has rolls") }],
+    });
+    inventory.findInventoryItem.mockResolvedValue(row({ category: "NAILS", quantityOnHand: 4 }));
+    await expect(svc.updateItem("i1", form, actor)).rejects.toMatchObject({
+      details: [{ path: ["category"], message: expect.stringContaining("This item has stock") }],
+    });
+    expect(inventory.updateInventoryItem).not.toHaveBeenCalled();
   });
 
   it("refuses a code another item uses, as a field error", async () => {

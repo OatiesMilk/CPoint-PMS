@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BellRing, LoaderCircle, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -337,43 +338,58 @@ export function UpdateSheet({ sheet, initialQuery }: { sheet: Sheet; initialQuer
                         <TableCell numeric className="align-top whitespace-nowrap">
                           {formatQuantity(item.quantityOnHand, item.unit)}
                         </TableCell>
-                        {numberCell("added", "Added to", "e.g. 6")}
-                        {numberCell("used", "Used of", "e.g. 3")}
-                        {numberCell("correction", "Correction for", "e.g. −2")}
-                        <TableCell className="align-top">
-                          <Label htmlFor={reasonField} className="sr-only">
-                            Reason for the {item.name} correction
-                          </Label>
-                          <Input
-                            id={reasonField}
-                            className="w-52"
-                            autoComplete="off"
-                            placeholder={
-                              correcting ? "e.g. Recounted the shelf" : "Only for a correction"
-                            }
-                            value={e.reason}
-                            disabled={pending || !correcting}
-                            aria-invalid={!!reasonError}
-                            aria-describedby={reasonError ? `${reasonField}-error` : undefined}
-                            onChange={(ev) => edit(item.id, { reason: ev.target.value })}
-                          />
-                          <FieldError
-                            id={`${reasonField}-error`}
-                            message={reasonError}
-                            className="mt-1 max-w-52"
-                          />
-                        </TableCell>
-                        <TableCell
-                          numeric
-                          className="align-top whitespace-nowrap"
-                          data-testid="on-hand-after"
-                        >
-                          {after === null ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : (
-                            formatQuantity(after, item.unit)
-                          )}
-                        </TableCell>
+                        {item.category === "LEATHER_ROLL" ? (
+                          <TableCell colSpan={5} className="align-top text-muted-foreground">
+                            Counted from its rolls.{" "}
+                            <Link
+                              href={`/inventory/${item.id}`}
+                              className="text-foreground underline underline-offset-4 hover:no-underline"
+                            >
+                              Add or remove rolls on the item
+                            </Link>
+                            .
+                          </TableCell>
+                        ) : (
+                          <>
+                            {numberCell("added", "Added to", "e.g. 6")}
+                            {numberCell("used", "Used of", "e.g. 3")}
+                            {numberCell("correction", "Correction for", "e.g. −2")}
+                            <TableCell className="align-top">
+                              <Label htmlFor={reasonField} className="sr-only">
+                                Reason for the {item.name} correction
+                              </Label>
+                              <Input
+                                id={reasonField}
+                                className="w-52"
+                                autoComplete="off"
+                                placeholder={
+                                  correcting ? "e.g. Recounted the shelf" : "Only for a correction"
+                                }
+                                value={e.reason}
+                                disabled={pending || !correcting}
+                                aria-invalid={!!reasonError}
+                                aria-describedby={reasonError ? `${reasonField}-error` : undefined}
+                                onChange={(ev) => edit(item.id, { reason: ev.target.value })}
+                              />
+                              <FieldError
+                                id={`${reasonField}-error`}
+                                message={reasonError}
+                                className="mt-1 max-w-52"
+                              />
+                            </TableCell>
+                            <TableCell
+                              numeric
+                              className="align-top whitespace-nowrap"
+                              data-testid="on-hand-after"
+                            >
+                              {after === null ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                formatQuantity(after, item.unit)
+                              )}
+                            </TableCell>
+                          </>
+                        )}
                       </TableRow>
                     );
                   })}

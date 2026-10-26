@@ -147,7 +147,11 @@ test("a device token without a roll is told the roll open the longest (D-020's f
   });
   expect(current.status()).toBe(200);
   const data = (await current.json()).data;
-  expect(data).toMatchObject({ rollId: expect.any(String), code: expect.stringMatching(/^[RB]-/) });
+  // LR-<supplier>-001 since Phase 30A; older rolls keep R- or B- (QA 30A run 2, F2).
+  expect(data).toMatchObject({
+    rollId: expect.any(String),
+    code: expect.stringMatching(/^(LR-[A-Z0-9]+-\d{3,}|[RB]-)/),
+  });
   // No person is named, not even "mine" (D-008).
   expect(data).not.toHaveProperty("mine");
 });

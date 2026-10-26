@@ -80,6 +80,7 @@ export function ItemForm({ suppliers, suggestedCode = "", item }: Props) {
   async function onCategoryChange(category: InventoryCategory) {
     if (item) return;
     if (!form.getFieldState("unit").isDirty) form.setValue("unit", DEFAULT_UNIT[category]);
+    if (category === "LEATHER_ROLL") form.setValue("openingStock", "");
     if (!form.getFieldState("sku").isDirty) {
       const code = await suggestCodeAction(category);
       if (code && !form.getFieldState("sku").isDirty) form.setValue("sku", code);
@@ -243,7 +244,13 @@ export function ItemForm({ suppliers, suggestedCode = "", item }: Props) {
             )}
           </div>
 
-          {!item && (
+          {!item && category === "LEATHER_ROLL" && (
+            <p className="text-sm text-muted-foreground">
+              A leather roll item starts at 0. After saving, use Add rolls on its page with each
+              roll’s area.
+            </p>
+          )}
+          {!item && category !== "LEATHER_ROLL" && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="openingStock">
                 Opening stock <span className="font-normal text-muted-foreground">(optional)</span>
@@ -274,8 +281,9 @@ export function ItemForm({ suppliers, suggestedCode = "", item }: Props) {
         </div>
         {item && (
           <p className="text-sm text-muted-foreground">
-            The quantity on hand changes only on the Update stock sheet: what was added, used or
-            corrected.
+            {item.values.category === "LEATHER_ROLL"
+              ? "The quantity on hand follows the item’s rolls: Add rolls, Fully used or Remove."
+              : "The quantity on hand changes only on the Update stock sheet: what was added, used or corrected."}
           </p>
         )}
       </fieldset>

@@ -27,6 +27,8 @@ vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn("tx"),
 }));
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
+const suggestSupplierCode = vi.fn(async () => "MLT");
+vi.mock("@/server/services/supplier-code.service", () => ({ suggestSupplierCode }));
 
 const svc = await import("@/server/services/settings.service");
 const admin = { id: "a1" };
@@ -132,6 +134,39 @@ describe("reference data", () => {
     const data = refs.updateReference.mock.calls[0][2];
     expect(data).not.toHaveProperty("key");
     expect(data).toMatchObject({ label: "Slit" });
+  });
+
+  it("gives a new supplier a code from its initials when none is typed (Phase 30A)", async () => {
+    await svc.createReferenceRow("supplier", { name: "Marikina Leather Trading" }, admin);
+    expect(suggestSupplierCode).toHaveBeenCalledWith("Marikina Leather Trading");
+    expect(refs.insertReference.mock.calls[0][1]).toMatchObject({ code: "MLT" });
+  });
+
+  it("takes a typed code in capitals, and refuses one another supplier has", async () => {
+    await svc.createReferenceRow("supplier", { name: "JM Leather", code: " jml " }, admin);
+    expect(refs.insertReference.mock.calls[0][1]).toMatchObject({ code: "JML" });
+    expect(suggestSupplierCode).not.toHaveBeenCalled();
+    refs.findReferenceByField.mockImplementation(async (...args: unknown[]) =>
+      args[1] === "code" ? { id: "other" } : null,
+    );
+    await expect(
+      svc.createReferenceRow("supplier", { name: "New One", code: "MT" }, admin),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [
+        {
+          path: ["code"],
+          message: expect.stringContaining("MT is already another supplier’s code"),
+        },
+      ],
+    });
+    refs.findReferenceByField.mockImplementation(async () => null);
+  });
+
+  it("keeps a supplier's code when the edit leaves it blank", async () => {
+    refs.findReference.mockResolvedValue({ id: "s1", name: "Acme", code: "AC", isActive: true });
+    await svc.updateReferenceRow("supplier", "s1", { name: "Acme", code: "" }, admin);
+    expect(refs.updateReference.mock.calls[0][2]).not.toHaveProperty("code");
   });
 
   it("clears optional supplier fields to null on edit", async () => {

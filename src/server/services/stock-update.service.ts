@@ -106,6 +106,14 @@ export async function saveStockUpdate(body: StockUpdateBody, actor: Actor, now =
       const item = items.get(line.itemId);
       if (!item)
         throw Errors.stale("An item on the sheet was removed. Refresh the page and try again.");
+      // A leather item's count follows its rolls (Phase 30A, D-104), never the sheet.
+      if (item.category === "LEATHER_ROLL") {
+        issues.push({
+          path: ["lines", line.itemId, "added"],
+          message: `${item.name} is counted from its rolls. Add or remove rolls on the item instead.`,
+        });
+        continue;
+      }
       const plan = planStockLine(item, line);
       if (!plan.ok) {
         if (plan.code === "STALE") throw Errors.stale(plan.reason);

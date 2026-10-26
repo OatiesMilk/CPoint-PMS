@@ -13,14 +13,11 @@ import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import { logger } from "@/server/lib/logger";
 import { countRolls } from "@/server/models/roll.model";
 import { findInventoryItem, findInventoryItemBySku } from "@/server/models/inventory.model";
-import {
-  ensureSupplier,
-  listActiveSuppliers,
-  listDefectTypes,
-} from "@/server/models/reference-data.model";
+import { listActiveSuppliers, listDefectTypes } from "@/server/models/reference-data.model";
 import { findUserByEmail } from "@/server/models/user.model";
 import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
-import { cancelRoll, finishRoll, startRoll } from "./roll.service";
+import { addRolls, finishRoll, removeRoll, startRoll } from "./roll.service";
+import { ensureSupplierWithCode } from "./supplier-code.service";
 import { setCameraOperator } from "./camera.service";
 import { saveCheckIn, saveQuota } from "./production.service";
 import { createItem } from "./inventory.service";
@@ -100,7 +97,8 @@ export function demoRate(most: number, workingHours: number): number {
 
 /**
  * Demo materials (also used by bootstrap when only demo users are on). A leather roll names its
- * supplier (Phase 29, D-102), one of the demo suppliers.
+ * supplier (Phase 29, D-102), one of the demo suppliers. A leather item starts at 0: its count
+ * follows the rolls the demo week adds (Phase 30A, D-104).
  */
 export const DEMO_INVENTORY = [
   {
@@ -109,7 +107,7 @@ export const DEMO_INVENTORY = [
     category: "LEATHER_ROLL",
     unit: "roll",
     reorderLevel: 3,
-    openingStock: 8,
+    openingStock: 0,
     supplier: "Meycauayan Tannery",
   },
   {
@@ -118,8 +116,17 @@ export const DEMO_INVENTORY = [
     category: "LEATHER_ROLL",
     unit: "roll",
     reorderLevel: 2,
-    openingStock: 2,
+    openingStock: 0,
     supplier: "Marikina Leather Trading",
+  },
+  {
+    sku: "LR-003",
+    name: "Black cowhide (store)",
+    category: "LEATHER_ROLL",
+    unit: "roll",
+    reorderLevel: 1,
+    openingStock: 0,
+    supplier: "JM Leather Supply (Divisoria)",
   },
   {
     sku: "NL-001",
@@ -152,7 +159,7 @@ export async function demoItemValues(item: (typeof DEMO_INVENTORY)[number]) {
   const { supplier, ...values } = item as (typeof DEMO_INVENTORY)[number] & { supplier?: string };
   if (!supplier) return { ...values, supplierId: null };
   const known = DEMO_SUPPLIERS.find((s) => s.name === supplier);
-  const row = await ensureSupplier(known ?? { name: supplier, notes: "" });
+  const row = await ensureSupplierWithCode(known ?? { name: supplier, notes: "" });
   return { ...values, supplierId: row.id };
 }
 
@@ -188,7 +195,7 @@ export async function seedDemoWeek(
   if (!fm || !qi || !admin)
     return { seeded: false, reason: "demo users are missing (set SEED_DEMO_USERS=true)" };
   // Three leather suppliers, so Supplier quality has something to compare (Phase 20, D-090).
-  for (const supplier of DEMO_SUPPLIERS) await ensureSupplier(supplier);
+  for (const supplier of DEMO_SUPPLIERS) await ensureSupplierWithCode(supplier);
   const [activeSuppliers, defectTypes] = await Promise.all([
     listActiveSuppliers(),
     listDefectTypes(),
@@ -241,14 +248,48 @@ export async function seedDemoWeek(
   ) => {
     if (past(t)) shelf.push({ sku, type, quantity, t });
   };
-  await stock("LR-001", "IN", 6, "Delivery from the leather supplier", at(addDays(firstDay, 2), 9));
-  await stock("LR-002", "IN", 5, "Delivery from the leather supplier", at(addDays(firstDay, 1), 9));
   await stock("NL-001", "IN", 10, "Delivery received", at(addDays(firstDay, 3), 10));
   await stock("TH-001", "IN", 10, "Delivery received", at(addDays(firstDay, 2), 14));
   await stock("AD-001", "IN", 3, "Delivery received", at(addDays(firstDay, 3), 14));
 
-  // ── rolls: two a working day (Mon–Sat), each started, captured shot by shot and finished at
-  //    Capture by a demo constructor (Phase 26) ──
+  // ── leather rolls (Phase 30A, D-103, D-104): the Floor Manager adds each roll to its item with
+  //    its own area, the evening before the week and when a delivery comes in. A constructor picks
+  //    the oldest roll of the item at Capture. ──
+  const shelfRolls = new Map<string, { id: string; code: string; addedAt: Date }[]>();
+  const addDemoRolls = async (sku: string, count: number, t: Date) => {
+    if (!past(t)) return;
+    const result = await addRolls(
+      itemIds.get(sku)!,
+      {
+        receivedOn: manilaToday(t),
+        rolls: Array.from({ length: count }, (_, i) => ({
+          areaSqFt: Math.round(between(18, 42) * 4) / 4,
+          tagCode:
+            i % 2 === 0 ? `T${manilaToday(t).slice(5).replace("-", "")}-${i + 1}` : undefined,
+        })),
+      },
+      fm,
+      t,
+    );
+    const list = shelfRolls.get(sku) ?? [];
+    for (const r of result.added) list.push({ id: r.id, code: r.code, addedAt: t });
+    shelfRolls.set(sku, list);
+  };
+  await addDemoRolls("LR-001", 5, at(addDays(firstDay, -1), 16));
+  await addDemoRolls("LR-002", 5, at(addDays(firstDay, -1), 16.1));
+  await addDemoRolls("LR-003", 2, at(addDays(firstDay, -1), 16.2));
+  await addDemoRolls("LR-001", 4, at(addDays(firstDay, 2), 9));
+  await addDemoRolls("LR-002", 3, at(addDays(firstDay, 3), 11));
+  /** The oldest roll of the item on the shelf at `t`, taken off the list. */
+  const pickRoll = (sku: string, t: Date) => {
+    const list = shelfRolls.get(sku) ?? [];
+    const i = list.findIndex((r) => r.addedAt.getTime() <= t.getTime());
+    return i === -1 ? null : list.splice(i, 1)[0];
+  };
+  const finishedRolls: { id: string; finishedAt: Date }[] = [];
+
+  // ── rolls: two a working day (Mon–Sat), each picked, captured shot by shot and finished at
+  //    Capture by a demo constructor (Phase 26, 30A) ──
   const workingDays: string[] = [];
   for (let d = firstDay; d <= today; d = addDays(d, 1)) {
     if (new Date(`${d}T00:00:00Z`).getUTCDay() !== 0) workingDays.push(d);
@@ -273,29 +314,17 @@ export async function seedDemoWeek(
       index += 1;
       // The newest roll to reach the camera; its last section shows an unknown class (A-12).
       const newest = day === newestSlot?.day && startHour === newestSlot.startHour;
-      const school = index % 3 !== 0;
       const capturer = capturers[index % capturers.length];
       const created = at(day, startHour + between(0, 0.3));
       if (!past(created)) continue;
-      // Rolls alternate between the two tanneries; every sixth comes from the fallback store. The
-      // first demo supplier's leather has more defects.
-      const supplier =
-        index % 6 === 0 && suppliers.length > 2
-          ? suppliers[2]
-          : suppliers[index % Math.min(2, suppliers.length)];
-      const worseLeather = supplier.name === DEMO_SUPPLIERS[0].name;
-      const roll = await startRoll(
-        {
-          supplierId: supplier.id,
-          tagCode: `LR-${day.slice(2).replaceAll("-", "")}-${String(index).padStart(2, "0")}`,
-        },
-        capturer,
-        created,
-      );
+      // Rolls alternate between the two tanneries' items; every sixth comes from the fallback
+      // store. Marikina's leather (the first demo supplier) has more defects.
+      const sku = index % 6 === 0 ? "LR-003" : index % 2 === 0 ? "LR-002" : "LR-001";
+      const picked = pickRoll(sku, created) ?? pickRoll("LR-001", created);
+      if (!picked) continue;
+      const worseLeather = sku === "LR-002";
+      const roll = await startRoll(picked.id, capturer, created);
       rolls += 1;
-      // The leather roll leaves the shelf when it is laid out for capture; the Floor Manager
-      // enters it as Used on the next stock update (nothing is taken automatically, A-22).
-      await stock(school ? "LR-001" : "LR-002", "OUT", 1, `Laid out as ${roll.code}`, created);
       let t = created;
 
       // Shot by shot from the Capture page, edge to edge.
@@ -337,6 +366,7 @@ export async function seedDemoWeek(
       // on the next stock update. The newest roll stays open, so Capture opens on a roll.
       if (past(t) && !newest && captured > 0) {
         await finishRoll(roll.id, capturer, t);
+        finishedRolls.push({ id: roll.id, finishedAt: t });
         await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE));
         await stock("AD-001", "OUT", 0.5, "Soling", plus(t, 20 * MINUTE));
         await stock("NL-001", "OUT", 1, "Soling", plus(t, 25 * MINUTE));
@@ -345,36 +375,23 @@ export async function seedDemoWeek(
     }
   }
 
-  // ── one roll started by mistake with the wrong supplier: the Floor Manager cancels it with a
-  //    reason (Phase 26); it has no shots ──
-  const cancelDay = workingDays[Math.max(0, workingDays.length - 3)];
-  const cancelCreated = at(cancelDay, 13);
-  if (past(plus(cancelCreated, 2 * HOUR))) {
-    const cancelled = await startRoll(
-      { supplierId: suppliers[0].id, tagCode: `LR-${cancelDay.slice(2).replaceAll("-", "")}-X` },
-      capturers[0],
-      cancelCreated,
-    );
-    rolls += 1;
-    await cancelRoll(
-      cancelled.id,
-      { by: "manager", reason: "Started with the wrong supplier; captured again as a new roll." },
-      fm,
-      plus(cancelCreated, 2 * HOUR),
-    );
-  }
+  // ── one roll on the shelf found water-damaged: the Floor Manager removes it with a reason
+  //    (Phase 30A); it never reached the camera and leaves stock ──
+  const removeDay = workingDays[Math.max(0, workingDays.length - 3)];
+  const removeAt = at(removeDay, 15);
+  const damaged = past(removeAt) ? (shelfRolls.get("LR-002") ?? []).pop() : undefined;
+  if (damaged)
+    await removeRoll(damaged.id, "Water damage in storage; the supplier was told.", fm, removeAt);
 
-  // ── two more deliveries: thread and tacks on the second working day, leather and tacks on the
-  //    fourth. They reach the ledger on the next stock update. ──
+  // ── two more deliveries: thread and tacks on the second working day, tacks on the fourth (with
+  //    the leather rolls added above). They reach the ledger on the next stock update. ──
   const workingDay = (i: number) => workingDays[Math.min(i, workingDays.length - 1)];
   const deliveryFrom = (supplier: { name: string } | undefined) =>
     supplier ? `Delivery from ${supplier.name}` : "Delivery received";
   const supplies = deliveryFrom(suppliers[3] ?? suppliers[1] ?? suppliers[0]);
-  const leather = deliveryFrom(suppliers[0]);
   await stock("TH-001", "IN", 4, supplies, at(workingDay(1), 14));
   await stock("NL-001", "IN", 5, supplies, at(workingDay(1), 14));
-  await stock("LR-001", "IN", 2, leather, at(workingDay(3), 11));
-  await stock("NL-001", "IN", 5, leather, at(workingDay(3), 11));
+  await stock("NL-001", "IN", 5, supplies, at(workingDay(3), 11));
 
   // ── stock updates (Phase 29): the Floor Manager's Wednesday and Friday sheets ──
   const stockUpdates = await seedStockUpdates();
@@ -413,6 +430,8 @@ export async function seedDemoWeek(
       if (!past(when)) continue;
       const lines = [];
       for (const [sku, itemId] of itemIds) {
+        // Leather is counted from its rolls (Phase 30A), never on the sheet.
+        if (sku.startsWith("LR-")) continue;
         const events = shelf.filter((e) => e.sku === sku && e.t > since && e.t <= when);
         const sum = (type: "IN" | "OUT") =>
           events.filter((e) => e.type === type).reduce((t, e) => t + e.quantity, 0);
@@ -519,6 +538,7 @@ export async function seedDemoWeek(
     const hours = fullDay.reduce((t, b) => t + b.workingMinutes, 0) / 60;
     const rate = hours > 0 ? demoRate(most, hours) : 0;
     let entered = 0;
+    const ticked = new Set<string>();
     for (const day of workingDays) {
       const batches = batchesFor(DEFAULT_SCHEDULE, [DEFAULT_LUNCH], day);
       const present = views.get(day) ?? 0;
@@ -530,12 +550,20 @@ export async function seedDemoWeek(
         if (!past(when)) continue;
         const pairs = Math.round(present * (batch.workingMinutes / 60) * rate);
         const failedPairs = Math.min(pairs, 1 + Math.floor(random() * 2));
+        // The line says which rolls ran out (Phase 30A): a roll scanned on an earlier day is
+        // ticked Fully used at the next batch finished; the last day's rolls stay Scanned, so
+        // Finish batch has rolls to tick.
+        const usedRollIds = finishedRolls
+          .filter((r) => !ticked.has(r.id) && manilaToday(r.finishedAt) < day)
+          .map((r) => r.id);
+        for (const id of usedRollIds) ticked.add(id);
         await saveCheckIn(
           {
             slotAt: batch.at.toISOString(),
             pairs,
             failedPairs,
             notes: late ? "Counted late: the sole press was down." : undefined,
+            usedRollIds,
           },
           day === qiAwayDay && qiMarkedAbsent ? fm! : qi!,
           when,

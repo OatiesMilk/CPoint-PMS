@@ -1,55 +1,162 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultRollId,
+  diffUsedRolls,
+  formatArea,
   formatRollCode,
+  freeSupplierCode,
   oldestOpenRoll,
   openSinceLine,
-  planCancel,
+  parseArea,
   planFinish,
+  planPutBack,
+  planRemove,
+  planStart,
+  planUnuse,
+  planUse,
   rollClosedMessage,
+  rollCodePrefix,
+  SUPPLIER_CODE_PATTERN,
+  supplierCodeFromName,
 } from "@/lib/roll-rules";
 
-describe("formatRollCode (Phase 26)", () => {
-  it("pads the yearly number to four digits with an R- prefix", () => {
-    expect(formatRollCode(2026, 7)).toBe("R-2026-0007");
-    expect(formatRollCode(2026, 12345)).toBe("R-2026-12345");
+describe("roll codes (Phase 30A)", () => {
+  it("is LR-, the supplier's code and a three-digit number that can grow", () => {
+    expect(rollCodePrefix("MLT")).toBe("LR-MLT");
+    expect(formatRollCode("MLT", 7)).toBe("LR-MLT-007");
+    expect(formatRollCode("JLS", 1000)).toBe("LR-JLS-1000");
+  });
+
+  it("makes a supplier code from the name's initials", () => {
+    expect(supplierCodeFromName("Marikina Leather Trading")).toBe("MLT");
+    expect(supplierCodeFromName("Meycauayan Tannery")).toBe("MT");
+    expect(supplierCodeFromName("JM Leather Supply (Divisoria)")).toBe("JLS");
+    expect(supplierCodeFromName("Tannery")).toBe("TAN");
+    expect(supplierCodeFromName("A")).toBe("SUP");
+    for (const name of ["Marikina Leather Trading", "Tannery", "A"])
+      expect(supplierCodeFromName(name)).toMatch(SUPPLIER_CODE_PATTERN);
+  });
+
+  it("adds a number when the code is taken, ignoring case", () => {
+    expect(freeSupplierCode("MT", [])).toBe("MT");
+    expect(freeSupplierCode("MT", ["mt"])).toBe("MT2");
+    expect(freeSupplierCode("MT", ["MT", "MT2"])).toBe("MT3");
+    expect(freeSupplierCode("ABCDEF", ["ABCDEF"])).toBe("ABCDE2");
   });
 });
 
-describe("planFinish", () => {
-  it("finishes an open roll with at least one shot", () => {
-    expect(planFinish({ status: "OPEN", shots: 1 })).toEqual({ ok: true });
+describe("parseArea (D-103)", () => {
+  it("takes 0.1 to 200 square feet with at most two decimals", () => {
+    expect(parseArea("24.5", 1)).toEqual({ ok: true, value: 24.5 });
+    expect(parseArea(" 0.1 ", 1)).toEqual({ ok: true, value: 0.1 });
+    expect(parseArea(200, 1)).toEqual({ ok: true, value: 200 });
   });
 
-  it("refuses an empty roll and points to Cancel", () => {
+  it("names the roll and the fix", () => {
+    expect(parseArea("", 2)).toEqual({
+      ok: false,
+      reason: "Roll 2: enter its area in square feet, like 24.5.",
+    });
+    expect(parseArea("abc", 3)).toMatchObject({ reason: expect.stringMatching(/^Roll 3: enter/) });
+    expect(parseArea("-4", 1)).toMatchObject({ ok: false });
+    expect(parseArea("0", 1)).toMatchObject({
+      reason: expect.stringContaining("between 0.1 and 200 sq ft"),
+    });
+    expect(parseArea("200.5", 1)).toMatchObject({ ok: false });
+    expect(parseArea("24.125", 4)).toEqual({
+      ok: false,
+      reason: "Roll 4: use at most two decimals, like 24.75.",
+    });
+  });
+
+  it("formats an area", () => {
+    expect(formatArea(24.5)).toBe("24.5 sq ft");
+    expect(formatArea(null)).toBe("—");
+  });
+});
+
+describe("a roll's moves (Phase 30A)", () => {
+  const inv = { fromInventory: true, code: "LR-MLT-001" };
+
+  it("picks only a roll in stock, not scanned yet", () => {
+    expect(planStart({ ...inv, status: "IN_STOCK" })).toEqual({ ok: true });
+    expect(planStart({ ...inv, status: "OPEN" })).toEqual({
+      ok: false,
+      reason: "LR-MLT-001 is being scanned at Capture. Choose another roll.",
+    });
+    expect(planStart({ ...inv, status: "USED" })).toMatchObject({ ok: false });
+  });
+
+  it("finishes an open roll with at least one shot, else says put it back", () => {
+    expect(planFinish({ status: "OPEN", shots: 1 })).toEqual({ ok: true });
     expect(planFinish({ status: "OPEN", shots: 0 })).toEqual({
       ok: false,
-      reason: "A roll needs at least one shot to finish. Cancel it instead.",
+      reason: "A roll needs at least one shot to finish. Put it back instead.",
+    });
+    expect(planFinish({ status: "FINISHED", shots: 5 })).toMatchObject({
+      reason: "This roll is already scanned.",
     });
   });
 
-  it("refuses a roll that is already closed, saying how", () => {
-    expect(planFinish({ status: "FINISHED", shots: 5 })).toMatchObject({
-      reason: "This roll is already finished.",
+  it("puts back only an open roll with no shots", () => {
+    expect(planPutBack({ status: "OPEN", shots: 0 })).toEqual({ ok: true });
+    expect(planPutBack({ status: "OPEN", shots: 2 })).toMatchObject({
+      reason: expect.stringMatching(/can’t be put back/),
     });
-    expect(planFinish({ status: "CANCELLED", shots: 0 })).toMatchObject({
-      reason: "This roll is already cancelled.",
+    expect(planPutBack({ status: "IN_STOCK", shots: 0 })).toMatchObject({ ok: false });
+  });
+
+  it("lets the Floor Manager remove any roll from Inventory that isn't fully used", () => {
+    for (const status of ["IN_STOCK", "OPEN", "FINISHED"] as const)
+      expect(planRemove({ ...inv, status })).toEqual({ ok: true });
+    expect(planRemove({ ...inv, status: "USED" })).toMatchObject({
+      reason: "LR-MLT-001 is already marked fully used.",
     });
+    expect(planRemove({ ...inv, status: "CANCELLED" })).toMatchObject({ ok: false });
+  });
+
+  it("removes a roll from before Phase 30A only while it is open, as the old Cancel", () => {
+    expect(planRemove({ status: "OPEN" })).toEqual({ ok: true });
+    expect(planRemove({ status: "FINISHED" })).toMatchObject({ ok: false });
   });
 });
 
-describe("planCancel", () => {
-  it("cancels an empty roll at Capture, but not one with shots", () => {
-    expect(planCancel({ status: "OPEN", shots: 0 }, "capture")).toEqual({ ok: true });
-    expect(planCancel({ status: "OPEN", shots: 3 }, "capture")).toMatchObject({
-      ok: false,
-      reason: expect.stringMatching(/can’t be cancelled here.*ask the Floor Manager/),
+describe("Fully used ticks (Phase 30A)", () => {
+  const inv = { fromInventory: true, code: "LR-MT-004" };
+
+  it("ticks only a scanned roll from Inventory", () => {
+    expect(planUse({ ...inv, status: "FINISHED" })).toEqual({ ok: true });
+  });
+
+  it("never ticks a roll before the camera has checked it", () => {
+    for (const status of ["IN_STOCK", "OPEN"] as const)
+      expect(planUse({ ...inv, status })).toEqual({
+        ok: false,
+        reason: "LR-MT-004 isn’t scanned yet. Scan and finish it at Capture before it’s used.",
+      });
+  });
+
+  it("refuses a second tick, a removed roll and an old roll, by name", () => {
+    expect(planUse({ ...inv, status: "USED" })).toMatchObject({
+      reason: "LR-MT-004 is already marked fully used.",
+    });
+    expect(planUse({ ...inv, status: "CANCELLED" })).toMatchObject({ ok: false });
+    expect(planUse({ code: "R-2026-0003", status: "FINISHED" })).toMatchObject({
+      reason: expect.stringContaining("R-2026-0003 is from before rolls came from Inventory"),
     });
   });
 
-  it("lets the Floor Manager cancel any open roll", () => {
-    expect(planCancel({ status: "OPEN", shots: 3 }, "manager")).toEqual({ ok: true });
-    expect(planCancel({ status: "FINISHED", shots: 3 }, "manager")).toMatchObject({ ok: false });
+  it("unticks only a roll ticked in the same batch", () => {
+    expect(planUnuse({ ...inv, status: "USED", usedCheckInId: "c1" }, "c1")).toEqual({ ok: true });
+    expect(planUnuse({ ...inv, status: "USED", usedCheckInId: "c2" }, "c1")).toEqual({
+      ok: false,
+      reason: "LR-MT-004 wasn’t ticked in this batch.",
+    });
+  });
+
+  it("works out what a correction ticks and unticks", () => {
+    expect(diffUsedRolls(["a", "b"], ["b", "c"])).toEqual({ add: ["c"], remove: ["a"] });
+    expect(diffUsedRolls([], [])).toEqual({ add: [], remove: [] });
   });
 });
 
@@ -97,8 +204,8 @@ describe("messages", () => {
   });
 
   it("names the closed roll when a shot couldn't be saved", () => {
-    expect(rollClosedMessage("R-2026-0003")).toBe(
-      "R-2026-0003 was finished or cancelled, so this shot wasn’t saved. Choose another roll, or start one.",
+    expect(rollClosedMessage("LR-MLT-003")).toBe(
+      "LR-MLT-003 isn’t being scanned any more, so this shot wasn’t saved. Choose another roll, or scan a new one.",
     );
   });
 });

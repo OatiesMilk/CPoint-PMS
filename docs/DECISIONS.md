@@ -1939,3 +1939,73 @@ camera is a pre-filter on leather, not a verdict on shoes.
 `src/components/features/inventory/stock-update-card.tsx`, `batch-notices.tsx` (the bell).
 **Consequences:** tell CPoint stock is updated on one sheet, with a reason for any correction, and
 that the reminder comes on Wednesday and Friday (changeable).
+
+### D-103 · 2026-10-26 · Accepted — A roll's area is entered by the Floor Manager, roll by roll (Phase 30A)
+
+**Context:** C-33 said a roll's total size would come from its shots, "if the model can measure
+it". Dylan (2026-10-26): adding up the shots would only complicate the system; each roll that
+arrives already has its area on the stamp or the receipt.
+**Decision:** each leather roll is its own record with **its own area** in square feet
+(`batches.areaSqFt`, Decimal(8,2)), entered by the Floor Manager when the roll is added: 0.1 to
+200 sq ft, at most two decimals ("Roll 2: enter its area in square feet, like 24.5."). The area is
+never added up from the shots, not even as a cross-check, and nothing looks for the leather's
+edge in a frame. Phase 30C's defect share is defect area ÷ this area.
+**Changes:** C-33 (the area is entered, not measured). **Where:** `src/lib/roll-rules.ts`
+(`parseArea`, `formatArea`), `src/server/validators/roll.validator.ts` (`addRollsSchema`).
+**Consequences:** tell CPoint the FM types each roll's area when it arrives.
+
+### D-104 · 2026-10-26 · Accepted — Leather rolls come from Inventory; the QI ticks them Fully used (Phase 30A)
+
+**Context:** Dylan (2026-10-26, with a screenshot): the rolls in Inventory should be the ones the
+constructor picks at Capture, and a leather item should show each roll: scanned or not, its area,
+the defects found. A roll may last more than one batch, so it leaves stock only when someone says
+it is fully used; and a roll can't be used before the camera has checked it.
+**Decision:**
+
+- **A roll's life** (`batches.status`): **Not scanned** (`IN_STOCK`, new; the FM's **Add rolls**
+  on the leather item, `IN` +1) → **Being scanned** (`OPEN`; a Shoe Constructor with camera access
+  picks it at Capture, **Scan this roll**) → **Scanned** (`FINISHED`; Finish roll, at least one
+  shot) → **Fully used** (`USED`, new; ticked at **Finish batch**, `OUT` −1). **Removed**
+  (`CANCELLED`): the FM removes any roll not fully used, with a reason (`OUT` −1 when it was in
+  stock). At Capture an empty roll is **put back** (`OPEN` → `IN_STOCK`, no movement).
+- **Codes** `LR-<supplier code>-001` (three digits, more past 999), one sequence per prefix
+  (`roll_code_sequences`). Rolls from before keep `R-`/`B-` codes and read "before rolls came from
+  Inventory": no item, no area, never tickable; Remove works on them only while open (the old
+  Cancel).
+- **Supplier codes** (`suppliers.code`, 2 to 6 capital letters or digits, unique): the migration
+  fills them from the initials (Marikina Leather Trading → MLT), a new supplier with none typed
+  gets one the same way, and the Admin can edit it in Settings → Suppliers; a blank code on edit
+  keeps the old one. A duplicate is refused with a suggestion ("MLT2").
+- **Leather counts follow the rolls**: a leather item starts at 0 (no opening stock), its row on
+  Update stock is read-only and the API refuses a leather line (422, by name); its category can't
+  change while it has stock or rolls. Each +1 and −1 is a ledger movement with the roll's
+  `rollId` (D-023 kept), so Reports → Materials counts a fully used roll as used.
+- **Fully used** (C-5): Finish batch has an optional **Rolls fully used** list of scanned rolls
+  from Inventory not yet used (check boxes, oldest scan first), sent as `usedRollIds`. Someone on
+  the line tells the QI which rolls are done; one tick per roll, no per-batch use. A same-day
+  **Correct** can tick or untick (an untick puts the roll back to Scanned with `IN` +1). A roll not
+  scanned, already used, removed or from before is `409`, named. The batch row shows "Fully used:
+  LR-…".
+- **The item page** (FM): a **Rolls** card with Add rolls (arrived on, then one row per roll with
+  Area and the supplier's tag), a status filter, and a 15-row table: Roll, Area, Arrived, Status,
+  Shots, Rejected (for salvage), Defects found, **Defect %** ("To be implemented" until Phase 30C)
+  and Remove. Never who scanned it (D-008).
+- **API**: `POST /api/v1/inventory/{id}/rolls`, `GET /api/v1/rolls/ready`,
+  `POST /api/v1/rolls/{id}/start`, `POST /api/v1/rolls/{id}/remove`; `POST /api/v1/rolls` answers
+  `405`; `…/cancel` at Capture puts a roll back.
+- **Demo week:** three leather items (LR-001 Meycauayan Tannery, LR-002 Marikina Leather
+  Trading, LR-003 JM Leather Supply) get rolls with areas from 18 to 42 sq ft, the constructors pick
+  the oldest on the shelf, the QI ticks each scanned roll at a Finish batch the day after its
+  scan, and the FM removes one shelf roll ("Water damage in storage; the supplier was told.").
+
+**Amends:** D-095 (rolls are picked, not started; the supplier comes from the item), D-102 (leather
+items are counted from their rolls, not on the sheet). **Where:**
+`prisma/migrations/20261028090000_rolls_from_inventory`, `src/lib/roll-rules.ts`,
+`src/server/{models/roll.model,services/roll.service,services/supplier-code.service,controllers/roll.controller}.ts`,
+`src/server/services/{production,inventory,stock-update,settings,demo-seed}.service.ts`,
+`src/app/(app)/inventory/[id]/{page,add-rolls-dialog}.tsx`, `src/app/(app)/camera/capture/**`,
+`src/app/(app)/batches/{page,finish-batch-dialog}.tsx`, `src/components/features/rolls/remove-roll.tsx`,
+`src/app/api/v1/{inventory/[id]/rolls,rolls/ready,rolls/[id]/start,rolls/[id]/remove}/route.ts`.
+**Consequences:** tell CPoint the FM adds every leather roll with its area, the constructor picks
+it at Capture, and the QI ticks rolls Fully used when finishing a batch. Leather counts on an
+existing database have no roll records until the FM adds them (or `demo:reset`).

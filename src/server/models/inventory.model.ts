@@ -13,7 +13,7 @@ const itemSelect = {
   quantityOnHand: true,
   reorderLevel: true,
   supplierId: true,
-  supplier: { select: { id: true, name: true } },
+  supplier: { select: { id: true, name: true, code: true } },
   isActive: true,
   createdAt: true,
   updatedAt: true,

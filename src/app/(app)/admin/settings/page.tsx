@@ -298,12 +298,20 @@ async function SuppliersTab() {
       noun="supplier"
       columns={[
         { key: "name", label: "Name" },
+        { key: "code", label: "Code", mono: true },
         { key: "contactPerson", label: "Contact" },
         { key: "phone", label: "Phone" },
         { key: "notes", label: "Notes" },
       ]}
       fields={[
         { name: "name", label: "Name" },
+        {
+          name: "code",
+          label: "Code",
+          optional: true,
+          placeholder: "e.g. MLT",
+          hint: "2 to 6 capital letters or digits, for roll codes like LR-MLT-001. Left blank, it is made from the name.",
+        },
         { name: "contactPerson", label: "Contact person", optional: true },
         { name: "phone", label: "Phone", optional: true, placeholder: "e.g. 0917 123 4567" },
         { name: "notes", label: "Notes", type: "textarea", optional: true },
@@ -311,6 +319,7 @@ async function SuppliersTab() {
       emptyText="No suppliers yet. Add the leather suppliers you order from."
       rows={rows.map((r): Row => {
         const v = {
+          code: str(r.code),
           name: str(r.name),
           contactPerson: str(r.contactPerson),
           phone: str(r.phone),

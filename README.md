@@ -134,9 +134,13 @@ real use.
    **Plan batches and quota** sets how often (every 1 to 4 hours, or once at the end of the day)
    with a preview of tomorrow's batches, and the one daily quota with its suggestion; **Use
    suggestion** fills it in.
-3. **Reports → Rolls:** every roll the constructors captured, newest first, with its supplier,
-   shots, passed and rejected (for salvage). The newest is still **Open**; one was **Cancelled**
-   by the Floor Manager with a reason. Open a finished roll: each shot with its photo, verdict and
+3. **Inventory → Black cowhide (school shoes):** the item's **Rolls**, each with its own code
+   (`LR-MT-001`), area, status (Not scanned, Being scanned, Scanned, Fully used, Removed), shots
+   and defects found. **Add rolls**: the day they arrived, then each roll's area. The count on hand
+   follows the rolls (Phase 30A, D-103, D-104).
+   **Reports → Rolls:** every roll, newest first, with its supplier, area, shots, passed and
+   rejected (for salvage). The newest scan is still **Being scanned**; one shelf roll was
+   **Removed** by the Floor Manager with a reason. Open a finished roll: each shot with its photo, verdict and
    defects, and a **Claim sheet**. No constructor is named.
 
 4. **Attendance** (Production → Attendance): **Mark everyone present**, untick two people, and
@@ -144,8 +148,8 @@ real use.
    follows. **Previous day** shows the demo week's days, a few with absences. It is a one-day log
    book: no per-person history or counts anywhere (D-008, D-077).
 5. **Capture on a phone** (`constructor@cpoint.local`, in a phone-sized window): Capture is the
-   only page. **Start roll** (supplier, tag number), then **Capture**: green Pass or red Reject
-   for each shot, each defect Usable or Not accepted. **Finish roll** once all of it is in.
+   only page. **Scan this roll** on a roll from Inventory, then **Capture**: green Pass or red
+   Reject for each shot, each defect Usable or Not accepted. **Finish roll** once all of it is in.
 6. To show live scans without a phone, run the simulator from a development checkout (see
    [Camera and simulator](#camera-and-simulator)); the System Admin's **Camera** page shows them.
 7. **Repair Station:** To handle → Being handled → Done, usable. Each card says what the
@@ -168,8 +172,9 @@ real use.
 1. **Batches on a phone** (`inspector@cpoint.local`, in a phone-sized window): near a batch's end
    a banner reads "Batch 2 ends at 17:00. Get ready to count the finished pairs.", and at the end
    "Batch 2 is due. Finish it now." with the bell and a "(1)" in the tab title. **Finish batch 2**:
-   the pairs finished and, of these, the pairs that failed inspection. A second finish is refused;
-   **Correct** needs a reason.
+   the pairs finished and, of these, the pairs that failed inspection, and tick any scanned roll
+   that is **Fully used** (it leaves stock then). A second finish is refused; **Correct** needs a
+   reason and can untick a roll.
 2. **Review queue** (`inspector@cpoint.local`): two scans with an unknown defect class
    ("scratch") wait for a person. Decide one: **Pass / Fixable / Reject**.
 
@@ -498,7 +503,7 @@ checkout:
 
 ```bash
 npm run cv:token -- --name "Simulator"   # prints a token once; put it in .env as CV_DEVICE_TOKEN
-# start a roll at Capture (a constructor with camera access), then:
+# pick a roll at Capture (a constructor with camera access), then:
 npm run cv:simulate -- --count 20 --interval 3
 ```
 
@@ -555,7 +560,8 @@ accounts stay) or add the two types by hand under Admin → Settings → Defect 
 ([`cv/README.md`](cv/README.md), "Defect types for yolo-v1").
 
 Now the page works on this machine: sign in as `constructor@cpoint.local` (the demo week gives
-them camera access), open `http://localhost:3000/camera/capture` and **Start roll**.
+them camera access), open `http://localhost:3000/camera/capture` and **Scan this roll** on a roll the Floor Manager
+added in Inventory.
 
 ### 3. Floor view at the station
 

@@ -1,7 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { captureApi, createRoll, createDeviceToken, managerApi, postScan } from "./cv-helpers";
+import {
+  captureApi,
+  createRoll,
+  createDeviceToken,
+  managerApi,
+  postScan,
+  withDb,
+} from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -223,13 +230,35 @@ test("a deactivated supplier disappears from the roll supplier lists (Phase 26)"
   await admin.getByRole("dialog").getByRole("button", { name: "Add supplier" }).click();
   await admin.getByLabel("Find supplier").fill(supplier);
   await expect(admin.getByRole("row", { name: supplier })).toContainText("0917 123 4567");
+  // Left blank, the code is made from the name's initials (Phase 30A): E2E Supplier … → ES…
+  // The Code cell, the row's second column (QA 30A run 2, F1: the row's text runs the cells together).
+  await expect(admin.getByRole("row", { name: supplier }).getByRole("cell").nth(1)).toHaveText(
+    /^ES[A-Z0-9]{0,4}$/,
+  );
+  // A code another supplier has is refused on its field.
+  await admin.getByRole("button", { name: "Add supplier" }).click();
+  await admin.getByRole("dialog").getByLabel("Name").fill(`${supplier} B`);
+  const taken = await withDb(
+    async (db) => (await db.query(`SELECT code FROM suppliers ORDER BY code LIMIT 1`)).rows[0].code,
+  );
+  await admin.getByRole("dialog").getByLabel("Code (optional)").fill(taken);
+  await admin.getByRole("dialog").getByRole("button", { name: "Add supplier" }).click();
+  await expect(admin.getByRole("dialog")).toContainText(
+    `${taken} is already another supplier’s code.`,
+  );
+  await admin.getByRole("dialog").getByLabel("Code (optional)").fill("2AB");
+  await admin.getByRole("dialog").getByRole("button", { name: "Add supplier" }).click();
+  await expect(admin.getByRole("dialog")).toContainText(
+    "Enter a short code of 2 to 6 capital letters or digits",
+  );
+  await admin.keyboard.press("Escape");
 
   // Shoe types are gone (Phase 27, C-8): no Settings tab, no API.
   await admin.goto("/admin/settings");
   await expect(admin.getByRole("link", { name: "Shoe types" })).toHaveCount(0);
   expect((await admin.request.get("/api/v1/shoe-types")).status()).toBe(404);
 
-  // The supplier is listed at Start roll and in Reports → Rolls.
+  // The supplier is listed in Reports → Rolls' filter.
   await signInAs(page, ACCOUNTS.manager);
   await page.goto("/reports/rolls?status=OPEN");
   await expect(page.getByLabel("Supplier").getByRole("option", { name: supplier })).toHaveCount(1);

@@ -74,18 +74,19 @@ export type ResetCounts = Awaited<ReturnType<typeof countResetTargets>>;
 
 /** Removes the production, stock and audit history, then what isn't kept. */
 export async function deleteResetTargets(keep: ResetKeep, db: Db) {
-  // Stock: the ledger and its Update stock saves, then the items (the demo week adds them back
-  // with opening stock), and the reminder days back to Wednesday and Friday (Phase 29).
+  // Production: scans, then rolls and their code numbers (LR-MLT-001 starts again, Phase 30A).
   await db.inventoryMovement.deleteMany();
-  await db.stockUpdate.deleteMany();
-  await db.inventoryItem.deleteMany();
-  await db.inventorySettings.deleteMany();
-  await db.inventorySettings.create({ data: { id: 1 } });
-  // Production: scans, then rolls.
   await db.detection.deleteMany();
   await db.scan.deleteMany();
   await db.roll.deleteMany();
   await db.rollSequence.deleteMany();
+  await db.rollCodeSequence.deleteMany();
+  // Stock: the Update stock saves, then the items (the demo week adds them back, leather with
+  // its rolls), and the reminder days back to Wednesday and Friday (Phase 29).
+  await db.stockUpdate.deleteMany();
+  await db.inventoryItem.deleteMany();
+  await db.inventorySettings.deleteMany();
+  await db.inventorySettings.create({ data: { id: 1 } });
   // Attendance (D-077): the marks, then the days, before any account goes.
   await db.attendanceMark.deleteMany();
   await db.attendanceDay.deleteMany();

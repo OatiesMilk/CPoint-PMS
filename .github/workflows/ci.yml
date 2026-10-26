@@ -149,6 +149,12 @@ jobs:
           test "$(q "select count(*) from stock_updates")" -ge 1
           test "$(q "select count(*) from inventory_movements where \"updateId\" is not null")" -ge 1
           q "select count(*) from inventory_items where category='LEATHER_ROLL' and \"supplierId\" is null" | grep -qx 0
+          # Rolls from Inventory (Phase 30A, D-103, D-104): every demo roll belongs to a leather item
+          # with its own area and an LR- code, some rolls are still
+          # on the shelf and some were ticked Fully used at Finish batch.
+          q "select count(*) from batches where \"itemId\" is null or \"areaSqFt\" is null or code not like 'LR-%'" | grep -qx 0
+          test "$(q "select count(*) from batches where status='IN_STOCK'")" -ge 1
+          test "$(q "select count(*) from batches where status='USED' and \"usedCheckInId\" is not null")" -ge 1
           # Every item's on-hand quantity equals the sum of its ledger.
           q "select count(*) from inventory_items i where i.\"quantityOnHand\" <> (select coalesce(sum(m.\"quantityDelta\"),0) from inventory_movements m where m.\"itemId\"=i.id)" | grep -qx 0
       - name: A restart doesn't seed again

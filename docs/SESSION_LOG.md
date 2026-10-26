@@ -14,6 +14,81 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-26 — Phase 30A: QA passed (run 4)
+
+**Who:** Dylan (Claude reading the report)
+**Summary:** Codex run 4 PASS with Playwright starting its own server: e2e 88 passed, 0 failed,
+2 skipped; `batches.spec.ts` alone 6/0; migration up to date, build passed, ledger 0 before and
+after. Phase 30A is ready for Dylan's commit and PR.
+**Changed:** STATUS, ROADMAP, SESSION_LOG; the commit commands.
+**Gates:** e2e ✅ (Codex run 4) · `npm run check` passed after the last code change (run 2 fixes)
+**Decisions:** none
+**Follow-ups:** Dylan applies the `ci.yml` change, commits, pushes and opens the PR; Claude fixes
+any CI failure.
+
+## 2026-10-26 — Phase 30A: QA run 3
+
+**Who:** Dylan (Claude reading the report)
+**Summary:** Codex run 3 FAIL: both run 2 fixes passed; one full-suite failure, `read ECONNRESET`
+on `GET /api/v1/attendance` (`batches.spec.ts:369`), which passed with the file alone. The tests
+ran against a server started by hand without `--keepAliveTimeout 70000`. No code change; run 4
+lets Playwright start its own server, as CI does.
+**Changed:** `qa/CODEX_PROMPT_PHASE_30A_RUN4.md`; STATUS, ROADMAP.
+**Gates:** no code changed, so `npm run check` not rerun · e2e by Codex (run 4 next)
+**Decisions:** none
+**Follow-ups:** Codex run 4; then the commit.
+
+## 2026-10-26 — Phase 30A: QA run 2 fixes
+
+**Who:** Dylan (Claude fixing)
+**Summary:** Codex run 2 FAIL with no app fault: R1, R2, R4 passed, R3's Finish and Correct
+blocked (no unfinished batch after the reset), e2e 86 passed, 2 failed. Fixed the two tests (the
+admin code read from the Code cell; `cv.spec.ts` takes `LR-` codes). PowerShell needs
+`npm run demo:reset '--' --yes`.
+**Changed:** `tests/e2e/{admin,cv}.spec.ts`; `qa/CODEX_PROMPT_PHASE_30A_RUN3.md`; STATUS,
+ROADMAP; vault.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (604) · build ✅ · e2e n/a (Codex run 3) · docker not run (CI)
+**Decisions:** none
+**Follow-ups:** Codex run 3.
+
+## 2026-10-26 — Phase 30A: QA run 1 fixes
+
+**Who:** Dylan (Claude fixing)
+**Summary:** Codex run 1 FAIL: the manual flow passed (21 of 22, S14 blocked without a reset) but
+the e2e suite had 4 failures. One app fault (Settings → Suppliers rows named by the code) and four
+test faults (shared leather item, early page reads, a click before the page opened, axe on a
+fading toast), all fixed.
+**Changed:** `admin/settings/page.tsx` (Name first); `tests/e2e/{cv-helpers,inventory.spec,smoke.spec}.ts`;
+`qa/CODEX_PROMPT_PHASE_30A_RUN2.md`; STATUS, ROADMAP; vault.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (604) · build ✅ · e2e n/a (Codex run 2) · docker not run (CI)
+**Decisions:** none
+**Follow-ups:** Dylan resets the dev database, then Codex run 2.
+
+## 2026-10-26 — Phase 30A: leather rolls come from Inventory
+
+**Who:** Dylan (Claude building)
+**Summary:** Dylan reordered Phase 30 (30A rolls from Inventory, 30B the measuring check, 30C the
+3-inch cut and the 10% return) and approved the 30A plan. The FM adds each leather roll with its
+own area, the constructor picks it at Capture, and the QI ticks it Fully used at Finish batch;
+only then does it leave stock.
+**Changed:**
+
+- Migration `rolls_from_inventory` (`IN_STOCK`, `USED`, the roll's item, area and users,
+  `suppliers.code`, `roll_code_sequences`); `roll-rules`, `roll.model`, `roll.service`,
+  `supplier-code.service`, the roll controller and four new routes; `POST /api/v1/rolls` 405.
+- Inventory: Add rolls, the item's Rolls card, Remove; leather starts at 0 and is read-only on
+  Update stock. Capture: Scan a roll. Batches: Rolls fully used, ticked or unticked in Correct.
+  Settings → Suppliers: Code. Reports → Rolls, the roll page and the claim sheet: area.
+- Demo week and `demo:reset`; CI's Docker job checks the demo rolls.
+- Unit tests (604) and the e2e specs (capture, rolls, batches, inventory, admin, smoke,
+  supplier-quality; not run). Docs: DECISIONS, ROADMAP, API, STATUS, README, STATION_SETUP, the
+  brief's Phase 30, the 30A and 30B plans; QA handoff and Codex prompt.
+
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (604) · build ✅ · e2e n/a (Codex) · docker not run (CI)
+**Decisions:** D-103, D-104
+**Follow-ups:** Codex QA from `qa/CODEX_PROMPT_PHASE_30A.md`; Dylan commits Phase 30A and opens
+the PR; `git rm` the old `reports/rolls/[id]/cancel-roll.tsx`.
+
 ## 2026-10-25 — Phase 29: QA run 2 passed
 
 **Who:** Dylan (Claude reading the report)

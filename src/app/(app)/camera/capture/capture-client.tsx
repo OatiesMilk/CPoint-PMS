@@ -23,7 +23,7 @@ import { defaultRollId } from "@/lib/roll-rules";
 import { FloorView, type FloorBand } from "./floor-view";
 import { LastScanSummary, type ScanSummary } from "./last-scan";
 import { RollBar, rollLine, type OpenRollView } from "./roll-bar";
-import { StartRollForm } from "./start-roll-form";
+import { PickRollForm, type ReadyRollView } from "./start-roll-form";
 
 type ModelStatus = { state: "ready"; modelVersion: string } | { state: "missing"; message: string };
 
@@ -127,13 +127,14 @@ type ApiError = { error?: { code?: string; message?: string; details?: unknown }
 
 export function CaptureClient({
   initialRolls,
-  suppliers,
+  ready,
   model,
   earlyModelNotice,
 }: {
   /** Every open roll (Phase 26: several may be open; the Roll dropdown chooses). */
   initialRolls: OpenRollView[];
-  suppliers: { id: string; name: string }[];
+  /** Rolls in stock, not scanned yet (Phase 30A): the constructor picks one. */
+  ready: ReadyRollView[];
   model: ModelStatus;
   earlyModelNotice: boolean;
 }) {
@@ -292,7 +293,9 @@ export function CaptureClient({
       const was = rollsRef.current.find((r) => r.id === id);
       setRolls(body.data);
       if (id && was && !body.data.some((r) => r.id === id)) {
-        setRollNotice(`${was.code} was finished or cancelled. Choose another roll, or start one.`);
+        setRollNotice(
+          `${was.code} was finished or put back. Choose another roll, or scan a new one.`,
+        );
         setChosenId(defaultRollId(body.data, { lastUsedId: null }));
       }
     } catch {
@@ -517,15 +520,15 @@ export function CaptureClient({
             className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-1"
           >
             <h2 id="start-roll-title" className="text-xl font-semibold">
-              Start a roll
+              Scan a roll
             </h2>
             {rollNotice && (
               <p role="status" className="rounded-md bg-caution-soft p-3 text-sm">
                 {rollNotice}
               </p>
             )}
-            <StartRollForm
-              suppliers={suppliers}
+            <PickRollForm
+              initialReady={ready}
               onCancel={rolls.length > 0 ? () => setStartOpen(false) : undefined}
               onStarted={(started) => {
                 setRolls((list) => [started, ...list.filter((r) => r.id !== started.id)]);

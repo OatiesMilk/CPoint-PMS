@@ -89,7 +89,7 @@ export function RollFilters({ suppliers }: { suppliers: { id: string; name: stri
         </Select>
       </div>
       <div className="flex w-full flex-col gap-1.5 sm:w-40">
-        <Label htmlFor="filter-days">Started</Label>
+        <Label htmlFor="filter-days">Added</Label>
         <Select
           id="filter-days"
           value={params.get("days") ?? ""}

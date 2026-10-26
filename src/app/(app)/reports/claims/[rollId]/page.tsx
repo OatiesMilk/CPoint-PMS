@@ -14,6 +14,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Button } from "@/components/ui/button";
 import { formatDayLabel, formatManilaDateTime, formatPercent } from "@/lib/format";
+import { formatArea } from "@/lib/roll-rules";
 import { requirePermission } from "@/server/policies/guard";
 import { claimSheet } from "@/server/services/ops-report.service";
 import { isRollId } from "@/server/validators/roll.validator";
@@ -67,6 +68,7 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
             {sheet.rollCode}
             {sheet.tagCode ? ` · tag ${sheet.tagCode}` : ""}
           </dd>
+          {sheet.areaSqFt !== null && <dd>Area {formatArea(sheet.areaSqFt)}</dd>}
           <dd>
             {sheet.receivedAt
               ? `Received ${formatDayLabel(sheet.receivedAt)}`

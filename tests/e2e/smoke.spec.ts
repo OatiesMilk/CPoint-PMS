@@ -104,11 +104,13 @@ test("Floor Manager journey: read the rolls, update stock, read the report", asy
   });
   expect(created.status()).toBe(201);
 
-  // A constructor starts a roll at Capture; the Floor Manager reads it in Reports → Rolls.
+  // The Floor Manager adds a roll in Inventory, a constructor picks it at Capture; the Floor Manager reads it in Reports → Rolls.
   const roll = await createRoll(await captureApi(browser));
   await signInAs(page, ACCOUNTS.manager);
   await page.goto(`/reports/rolls?q=${roll.code}`);
-  await expect(page.getByTestId("roll-row").filter({ hasText: roll.code })).toContainText("Open");
+  await expect(page.getByTestId("roll-row").filter({ hasText: roll.code })).toContainText(
+    "Being scanned",
+  );
   await expectAccessible(page);
 
   // Searched, not browsed: earlier e2e runs add items that push it past page 1.
@@ -117,11 +119,25 @@ test("Floor Manager journey: read the rolls, update stock, read the report", asy
     .getByRole("link", { name: new RegExp(sku) })
     .first()
     .click();
+  // Wait for the item's own page: the Inventory list has an Update stock link too, which opens the
+  // whole sheet instead of this item (QA 30A F4).
+  await expect(page.getByRole("heading", { level: 1, name: `Smoke cement ${sku}` })).toBeVisible();
   // Stock changes on the Update stock sheet (Phase 29, D-102).
   await page.getByRole("link", { name: "Update stock" }).click();
+  await expect(page).toHaveURL(/\/inventory\/update\?q=/);
   await page.getByLabel(`Added to Smoke cement ${sku}`).fill("1");
   await page.getByRole("button", { name: "Save update (1 item)" }).click();
   await expect(page.getByText("Stock updated: 1 item.")).toBeVisible();
+  // Let the toast finish fading in before axe reads its colours (QA 30A F5): half-faded text
+  // measures as low contrast. The toast itself is still checked.
+  await expect
+    .poll(() =>
+      page
+        .locator("[data-sonner-toast]")
+        .first()
+        .evaluate((el) => getComputedStyle(el).opacity),
+    )
+    .toBe("1");
   await expectAccessible(page);
   await page.goto("/reports/materials");
   await expectAccessible(page);

@@ -1,67 +1,103 @@
 import { describe, expect, it } from "vitest";
 import {
+  addRollsSchema,
   isRollId,
-  managerCancelSchema,
+  itemRollsQuerySchema,
+  removeRollSchema,
   rollListQuerySchema,
-  startRollSchema,
+  usedRollIdsSchema,
 } from "@/server/validators/roll.validator";
 
 const SUPPLIER = "0199a000-0000-7000-8000-000000000001";
 
-describe("startRollSchema (Phase 26)", () => {
-  it("needs the supplier and trims the optional tag number", () => {
-    expect(startRollSchema.parse({ supplierId: SUPPLIER, tagCode: " LR-0412 " })).toEqual({
-      supplierId: SUPPLIER,
-      tagCode: "LR-0412",
-    });
-    expect(startRollSchema.parse({ supplierId: SUPPLIER, tagCode: "  " })).toEqual({
-      supplierId: SUPPLIER,
-      tagCode: undefined,
+describe("addRollsSchema (Phase 30A, D-103)", () => {
+  it("takes the day they arrived and one area per roll, with an optional tag", () => {
+    expect(
+      addRollsSchema.parse({
+        receivedOn: " 2026-10-26 ",
+        rolls: [
+          { areaSqFt: "24.5", tagCode: " T-1 " },
+          { areaSqFt: 30, tagCode: "  " },
+        ],
+      }),
+    ).toEqual({
+      receivedOn: "2026-10-26",
+      rolls: [
+        { areaSqFt: 24.5, tagCode: "T-1" },
+        { areaSqFt: 30, tagCode: undefined },
+      ],
     });
   });
 
-  it("names the supplier field when it is missing or not a supplier", () => {
-    for (const supplierId of [undefined, "", "nope"]) {
-      const r = startRollSchema.safeParse({ supplierId });
-      expect(r.error?.issues).toEqual([
-        expect.objectContaining({
-          path: ["supplierId"],
-          message: "Choose the supplier this roll came from.",
-        }),
-      ]);
-    }
-  });
-
-  it("limits the tag number to 40 characters", () => {
-    const r = startRollSchema.safeParse({ supplierId: SUPPLIER, tagCode: "x".repeat(41) });
-    expect(r.error?.issues[0].message).toBe("Roll code can be up to 40 characters.");
-  });
-
-  it("ignores the old roll fields (shoe type, received date, notes)", () => {
-    const parsed = startRollSchema.parse({
-      supplierId: SUPPLIER,
-      shoeTypeId: SUPPLIER,
-      receivedAt: "2026-10-01",
-      notes: "x",
+  it("puts each message under its roll's field", () => {
+    const r = addRollsSchema.safeParse({
+      receivedOn: "2026-10-26",
+      rolls: [{ areaSqFt: "24" }, { areaSqFt: "" }, { areaSqFt: "5", tagCode: "x".repeat(41) }],
     });
-    expect(Object.keys(parsed)).toEqual(["supplierId"]);
+    expect(r.error?.issues.map((i) => [i.path.join("."), i.message])).toEqual([
+      ["rolls.1.areaSqFt", "Roll 2: enter its area in square feet, like 24.5."],
+      ["rolls.2.tagCode", "Roll 3: The supplier’s tag can be up to 40 characters."],
+    ]);
+  });
+
+  it("needs a real date and one to fifty rolls", () => {
+    expect(
+      addRollsSchema.safeParse({ receivedOn: "26 Oct", rolls: [{ areaSqFt: "2" }] }).error
+        ?.issues[0].message,
+    ).toBe("Enter the day the rolls arrived, like 2026-10-26.");
+    expect(
+      addRollsSchema.safeParse({ receivedOn: "2026-10-26", rolls: [] }).error?.issues[0].message,
+    ).toBe("Add at least one roll.");
+    expect(
+      addRollsSchema.safeParse({
+        receivedOn: "2026-10-26",
+        rolls: Array.from({ length: 51 }, () => ({ areaSqFt: "2" })),
+      }).error?.issues[0].message,
+    ).toBe("Add at most 50 rolls at a time.");
   });
 });
 
-describe("managerCancelSchema", () => {
+describe("removeRollSchema", () => {
   it("needs a reason of up to 200 characters", () => {
-    expect(managerCancelSchema.parse({ reason: "  Wrong supplier  " })).toEqual({
-      reason: "Wrong supplier",
+    expect(removeRollSchema.parse({ reason: "  Water damage  " })).toEqual({
+      reason: "Water damage",
     });
-    expect(managerCancelSchema.safeParse({ reason: " " }).error?.issues[0].message).toBe(
-      "Write why this roll is cancelled.",
+    expect(removeRollSchema.safeParse({ reason: " " }).error?.issues[0].message).toBe(
+      "Write why this roll is removed.",
     );
-    expect(managerCancelSchema.safeParse({}).error?.issues[0].message).toBe(
-      "Write why this roll is cancelled.",
+    expect(removeRollSchema.safeParse({}).error?.issues[0].message).toBe(
+      "Write why this roll is removed.",
     );
-    expect(
-      managerCancelSchema.safeParse({ reason: "x".repeat(201) }).error?.issues[0].message,
-    ).toBe("The reason can be up to 200 characters.");
+    expect(removeRollSchema.safeParse({ reason: "x".repeat(201) }).error?.issues[0].message).toBe(
+      "The reason can be up to 200 characters.",
+    );
+  });
+});
+
+describe("usedRollIdsSchema (Finish batch, Phase 30A)", () => {
+  it("takes no list, an empty list or roll ids", () => {
+    expect(usedRollIdsSchema.parse(undefined)).toBeUndefined();
+    expect(usedRollIdsSchema.parse([])).toEqual([]);
+    expect(usedRollIdsSchema.parse([SUPPLIER])).toEqual([SUPPLIER]);
+  });
+
+  it("refuses something that isn't a roll", () => {
+    expect(usedRollIdsSchema.safeParse(["LR-MLT-001"]).error?.issues[0].message).toBe(
+      "A ticked roll wasn’t found. Refresh the page.",
+    );
+  });
+});
+
+describe("itemRollsQuerySchema", () => {
+  it("keeps a valid status and page, drops the rest", () => {
+    expect(itemRollsQuerySchema.parse({ rollStatus: "IN_STOCK", rollPage: "2" })).toEqual({
+      rollStatus: "IN_STOCK",
+      rollPage: 2,
+    });
+    expect(itemRollsQuerySchema.parse({ rollStatus: "NOPE", rollPage: "0" })).toEqual({
+      rollStatus: undefined,
+      rollPage: undefined,
+    });
   });
 });
 

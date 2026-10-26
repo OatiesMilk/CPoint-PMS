@@ -5,6 +5,8 @@
  *        balance after it. Stock changes on the Update stock sheet (Phase 29, D-102).
  * Worst: stock drifts from the shelf without anyone noticing. On hand is the hero number, every
  *        change is an entry with who and why, and corrections say why.
+ * Leather (Phase 30A, D-104): the item lists its rolls, each with its own area; the count follows
+ *        them (Add rolls +1, Fully used or Remove −1), so its stock isn't on the Update stock sheet.
  */
 import type { Metadata } from "next";
 import { TablePager } from "@/components/features/table-pager";
@@ -23,7 +25,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatManilaDateTime } from "@/lib/format";
+import { RemoveRoll } from "@/components/features/rolls/remove-roll";
+import { RollStatusBadge } from "@/components/features/rolls/roll-status-badge";
+import { ROLL_STATUS_LABELS, RollStatus } from "@/lib/domain";
+import { formatCalendarDate, formatManilaDateTime } from "@/lib/format";
+import { formatArea } from "@/lib/roll-rules";
 import {
   CATEGORY_LABELS,
   MOVEMENT_LABELS,
@@ -33,7 +39,11 @@ import {
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { getItemDetail } from "@/server/services/inventory.service";
+import { listItemRolls } from "@/server/services/roll.service";
 import { isInventoryId } from "@/server/validators/inventory.validator";
+import { itemRollsQuerySchema } from "@/server/validators/roll.validator";
+import { removeRollAction } from "../../reports/rolls/actions";
+import { AddRollsDialog } from "./add-rolls-dialog";
 import { StockActions } from "./stock-actions";
 
 export const metadata: Metadata = { title: "Inventory item" };
@@ -48,13 +58,32 @@ export default async function InventoryItemPage({
   await connection();
   const { id } = await params;
   if (!isInventoryId(id)) notFound();
-  const pageParam = Number((await searchParams).page);
+  const sp = await searchParams;
+  const pageParam = Number(sp.page);
   const page = Number.isInteger(pageParam) && pageParam > 1 ? pageParam : 1;
+  const rollQuery = itemRollsQuerySchema.parse(sp);
   const detail = await getItemDetail(id, page);
   if (!detail) notFound();
   const { item, movements, total, pageCount } = detail;
   const canManage = can(user.role, "inventory:manage");
   const canReadRolls = can(user.role, "roll:read");
+  const canRemoveRolls = can(user.role, "roll:manage");
+  const isLeather = item.category === "LEATHER_ROLL";
+  const rolls = isLeather
+    ? await listItemRolls(id, { status: rollQuery.rollStatus, page: rollQuery.rollPage })
+    : null;
+  // Both tables page on their own; each link keeps the other's place and the roll filter.
+  const hrefWith = (next: { page?: number; rollPage?: number; rollStatus?: string | null }) => {
+    const q = new URLSearchParams();
+    const p = next.page ?? page;
+    const rp = next.rollPage ?? rollQuery.rollPage ?? 1;
+    const rs = next.rollStatus === undefined ? rollQuery.rollStatus : next.rollStatus;
+    if (p > 1) q.set("page", String(p));
+    if (rs) q.set("rollStatus", rs);
+    if (rp > 1) q.set("rollPage", String(rp));
+    const qs = q.toString();
+    return `/inventory/${id}${qs ? `?${qs}` : ""}`;
+  };
   // Only stock used before Phase 26 names a roll (D-095), so the column shows only when one does.
   const showRoll = movements.some((m) => m.roll);
 
@@ -92,8 +121,148 @@ export default async function InventoryItemPage({
             </p>
           </div>
         </div>
-        {canManage && <StockActions item={item} />}
+        {canManage && <StockActions item={item} countedFromRolls={isLeather} />}
       </header>
+
+      {rolls && (
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col gap-1.5">
+              <CardTitle>Rolls</CardTitle>
+              <CardDescription>
+                Each roll with its own area. A roll leaves stock when it is ticked Fully used at
+                Finish batch, or removed. Never who scanned it.
+              </CardDescription>
+            </div>
+            {canManage && item.isActive && (
+              <div className="flex flex-col items-end gap-1">
+                <AddRollsDialog
+                  item={{ id: item.id, name: item.name }}
+                  supplierCode={item.supplier?.code ?? null}
+                />
+                {!item.supplier && (
+                  <p className="text-sm text-muted-foreground">
+                    Choose the item’s supplier first (Edit).
+                  </p>
+                )}
+              </div>
+            )}
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <nav aria-label="Roll status" className="flex flex-wrap gap-2">
+              {([null, ...Object.values(RollStatus)] as (RollStatus | null)[]).map((st) => {
+                const current = (rollQuery.rollStatus ?? null) === st;
+                return (
+                  <Link
+                    key={st ?? "all"}
+                    href={hrefWith({ rollStatus: st, rollPage: 1 })}
+                    aria-current={current ? "page" : undefined}
+                    className={
+                      current
+                        ? "rounded-full border border-foreground bg-accent px-3 py-1 text-sm font-medium"
+                        : "rounded-full border px-3 py-1 text-sm text-muted-foreground hover:text-foreground"
+                    }
+                  >
+                    {st ? ROLL_STATUS_LABELS[st] : "All"}
+                  </Link>
+                );
+              })}
+            </nav>
+            {rolls.total === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {rollQuery.rollStatus
+                  ? `No rolls are ${ROLL_STATUS_LABELS[rollQuery.rollStatus].toLowerCase()}.`
+                  : canManage
+                    ? "No rolls yet. Use Add rolls when a delivery arrives."
+                    : "No rolls yet. The Floor Manager adds them when a delivery arrives."}
+              </p>
+            ) : (
+              <>
+                <Table label="Rolls">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Roll</TableHead>
+                      <TableHead numeric>Area</TableHead>
+                      <TableHead>Arrived</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead numeric>Shots</TableHead>
+                      <TableHead numeric>Rejected (for salvage)</TableHead>
+                      <TableHead>Defects found</TableHead>
+                      <TableHead>Defect %</TableHead>
+                      {canRemoveRolls && (
+                        <TableHead>
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rolls.rows.map((r) => (
+                      <TableRow key={r.id} data-testid="item-roll-row">
+                        <TableCell>
+                          {canReadRolls ? (
+                            <Link
+                              href={`/reports/rolls/${r.id}`}
+                              className="font-mono font-medium underline-offset-4 hover:underline"
+                            >
+                              {r.code}
+                            </Link>
+                          ) : (
+                            <span className="font-mono font-medium">{r.code}</span>
+                          )}
+                          {r.tagCode && (
+                            <span className="block font-mono text-sm text-muted-foreground">
+                              Tag {r.tagCode}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell numeric>{formatArea(r.areaSqFt)}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {r.receivedAt ? formatCalendarDate(r.receivedAt) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <RollStatusBadge status={r.status} />
+                        </TableCell>
+                        <TableCell numeric>{r._count.scans}</TableCell>
+                        <TableCell numeric>{r.rejected}</TableCell>
+                        <TableCell className="max-w-64 whitespace-normal">
+                          {r.defectsFound || (
+                            <span className="text-muted-foreground">
+                              {r._count.scans > 0 ? "None" : "—"}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">To be implemented</TableCell>
+                        {canRemoveRolls && (
+                          <TableCell>
+                            {r.canRemove && (
+                              <RemoveRoll
+                                size="sm"
+                                code={r.code}
+                                shots={r._count.scans}
+                                fromInventory
+                                action={removeRollAction.bind(null, r.id)}
+                              />
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <TablePager
+                  page={rolls.page}
+                  pageCount={rolls.pageCount}
+                  total={rolls.total}
+                  noun={["roll", "rolls"]}
+                  label="Roll pages"
+                  href={(p) => hrefWith({ rollPage: p })}
+                />
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -170,7 +339,7 @@ export default async function InventoryItemPage({
                 label="History pages"
                 previousLabel="Newer"
                 nextLabel="Older"
-                href={(p) => `/inventory/${id}${p > 1 ? `?page=${p}` : ""}`}
+                href={(p) => hrefWith({ page: p })}
               />
             </div>
           )}

@@ -1,8 +1,8 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   the Floor Manager, at the desk, a few times a day.
- * What:  every leather roll the constructors captured at Capture: from which supplier, when, how
- *        many shots and how many passed or were rejected (for salvage). Open rolls first in mind.
+ * What:  every leather roll: added in Inventory with its area (Phase 30A), scanned at Capture,
+ *        how many shots passed or were rejected (for salvage), and whether it is fully used.
  * Worst: a roll left open for days goes unnoticed, or a roll is read as a person's work. No person
  *        is named or counted on this page (D-008).
  */
@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatManilaDateTime } from "@/lib/format";
+import { formatArea } from "@/lib/roll-rules";
 import { requirePermission } from "@/server/policies/guard";
 import { listRollsForReport, supplierOptions } from "@/server/services/roll.service";
 import { rollListQuerySchema } from "@/server/validators/roll.validator";
@@ -52,7 +53,7 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
     <>
       <PageHeader
         title="Reports"
-        description="Every leather roll captured at Capture: its supplier, its shots and what passed. Never per person."
+        description="Every leather roll: added in Inventory, scanned at Capture, its shots and what passed. Never per person."
       />
       <ReportTabs current="rolls" />
 
@@ -62,8 +63,8 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-16 text-center">
           <h2 className="text-xl font-semibold">No rolls yet</h2>
           <p className="max-w-md text-muted-foreground">
-            A Shoe Constructor with camera access starts each roll at Capture on their phone. Rolls
-            appear here as soon as they start.
+            The Floor Manager adds each leather roll on its item in Inventory. Rolls appear here as
+            soon as they are added.
           </p>
         </div>
       ) : total === 0 ? (
@@ -83,8 +84,8 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
               <TableRow className="hover:bg-transparent">
                 <TableHead>Roll</TableHead>
                 <TableHead>Supplier</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead>Finished</TableHead>
+                <TableHead numeric>Area</TableHead>
+                <TableHead>Scanned</TableHead>
                 <TableHead numeric>Shots</TableHead>
                 <TableHead numeric>Passed</TableHead>
                 <TableHead numeric>Rejected (for salvage)</TableHead>
@@ -108,12 +109,14 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                     )}
                   </TableCell>
                   <TableCell>{r.supplier?.name ?? "Not recorded"}</TableCell>
-                  <TableCell>{formatManilaDateTime(r.startedAt)}</TableCell>
+                  <TableCell numeric>{formatArea(r.areaSqFt)}</TableCell>
                   <TableCell>
                     {r.finishedAt ? (
                       formatManilaDateTime(r.finishedAt)
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <span className="text-muted-foreground">
+                        {r.startedAt ? "Being scanned" : "—"}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell numeric>{r._count.scans}</TableCell>

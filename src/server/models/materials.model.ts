@@ -103,7 +103,7 @@ export async function rollsCheckedByWeek(start: Date, db: Db = defaultDb()) {
     SELECT date_trunc('week', ("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date AS week,
       count(*) AS rolls
     FROM batches
-    WHERE status = 'FINISHED' AND "finishedAt" >= (${iso(start)}::timestamptz AT TIME ZONE 'UTC')
+    WHERE status IN ('FINISHED', 'USED') AND "finishedAt" >= (${iso(start)}::timestamptz AT TIME ZONE 'UTC')
     GROUP BY week`;
   return new Map(rows.map((r) => [r.week.toISOString().slice(0, 10), Number(r.rolls)]));
 }

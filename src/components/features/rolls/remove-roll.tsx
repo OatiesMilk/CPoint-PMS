@@ -14,13 +14,33 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field-error";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CANCEL_REASON_MAX, ROLL_MESSAGES } from "@/lib/roll-rules";
-import { cancelRollAction } from "../actions";
 
-/** The Floor Manager cancels an open roll, with a reason. Its shots stay, out of the reports. */
-export function CancelRoll({ id, code, shots }: { id: string; code: string; shots: number }) {
+/** What removeRollAction answers (an ActionResult). */
+type RemoveResult =
+  { ok: true } | { ok: false; error: string; code?: string; fieldErrors?: Record<string, string> };
+
+/**
+ * Remove a roll (the Floor Manager, Phase 30A): damaged, lost or added by mistake. The dialog names
+ * the roll and asks why. A roll from Inventory leaves stock; its shots stay, out of the reports.
+ */
+export function RemoveRoll({
+  code,
+  shots,
+  fromInventory,
+  action,
+  size = "md",
+}: {
+  code: string;
+  shots: number;
+  fromInventory: boolean;
+  /** removeRollAction bound to the roll's id. */
+  action: (input: { reason: string }) => Promise<RemoveResult>;
+  size?: "md" | "sm";
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -28,17 +48,18 @@ export function CancelRoll({ id, code, shots }: { id: string; code: string; shot
   const [reasonError, setReasonError] = useState<string | null>(null);
   const [stale, setStale] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fieldId = `remove-reason-${code}`;
 
   function submit() {
     const trimmed = reason.trim();
-    if (!trimmed) return setReasonError(ROLL_MESSAGES.cancelReason);
+    if (!trimmed) return setReasonError(ROLL_MESSAGES.removeReason);
     if (trimmed.length > CANCEL_REASON_MAX)
-      return setReasonError(ROLL_MESSAGES.cancelReasonTooLong);
+      return setReasonError(ROLL_MESSAGES.removeReasonTooLong);
     setReasonError(null);
     startTransition(async () => {
-      const result = await cancelRollAction(id, { reason: trimmed });
+      const result = await action({ reason: trimmed });
       if (result.ok) {
-        toast.success(`${code} is cancelled.`);
+        toast.success(fromInventory ? `${code} is removed and left stock.` : `${code} is removed.`);
         setOpen(false);
         setReason("");
         router.refresh();
@@ -52,10 +73,12 @@ export function CancelRoll({ id, code, shots }: { id: string; code: string; shot
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       <div>
         <Button
-          variant="destructive"
+          variant={size === "sm" ? "ghost" : "destructive"}
+          size={size}
+          aria-label={size === "sm" ? `Remove ${code}` : undefined}
           onClick={() => {
             setReason("");
             setReasonError(null);
@@ -64,7 +87,7 @@ export function CancelRoll({ id, code, shots }: { id: string; code: string; shot
           }}
         >
           <X aria-hidden />
-          Cancel roll…
+          {size === "sm" ? "Remove" : "Remove roll…"}
         </Button>
       </div>
       {stale && (
@@ -88,38 +111,37 @@ export function CancelRoll({ id, code, shots }: { id: string; code: string; shot
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <DialogTitle>Cancel {code}?</DialogTitle>
+          <DialogTitle>Remove {code}?</DialogTitle>
           <DialogDescription>
-            It can’t take more shots. Its {shots} {shots === 1 ? "shot stays" : "shots stay"} on
-            record but {shots === 1 ? "is" : "are"} left out of the reports. Nothing is deleted.
+            {fromInventory ? "It leaves stock and can’t be scanned or ticked. " : ""}
+            {shots > 0
+              ? `Its ${shots} ${shots === 1 ? "shot stays" : "shots stay"} on record but ${shots === 1 ? "is" : "are"} left out of the reports. `
+              : ""}
+            Nothing is deleted.
           </DialogDescription>
           <form
+            noValidate
             className="flex flex-col gap-1.5"
             onSubmit={(e) => {
               e.preventDefault();
               submit();
             }}
           >
-            <Label htmlFor="cancel-reason">Reason</Label>
+            <Label htmlFor={fieldId}>Reason</Label>
             <Textarea
-              id="cancel-reason"
+              id={fieldId}
               rows={3}
               value={reason}
               autoFocus
-              maxLength={CANCEL_REASON_MAX + 50}
               aria-invalid={!!reasonError}
-              aria-describedby={reasonError ? "cancel-reason-error" : undefined}
-              placeholder="e.g. Started with the wrong supplier"
+              aria-describedby={reasonError ? `${fieldId}-error` : undefined}
+              placeholder="e.g. Water damage in storage"
               onChange={(e) => {
                 setReason(e.target.value);
                 if (reasonError && e.target.value.trim()) setReasonError(null);
               }}
             />
-            {reasonError && (
-              <p id="cancel-reason-error" className="text-sm text-reject">
-                {reasonError}
-              </p>
-            )}
+            <FieldError id={`${fieldId}-error`} message={reasonError ?? undefined} />
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="ghost">
@@ -128,7 +150,7 @@ export function CancelRoll({ id, code, shots }: { id: string; code: string; shot
               </DialogClose>
               <Button type="submit" variant="destructive" disabled={pending}>
                 {pending && <LoaderCircle aria-hidden className="animate-spin" />}
-                Cancel roll
+                Remove roll
               </Button>
             </DialogFooter>
           </form>

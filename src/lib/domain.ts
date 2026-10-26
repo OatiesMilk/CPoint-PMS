@@ -31,8 +31,11 @@ export const ROLE_HOME: Record<Role, string> = {
   SHOE_CONSTRUCTOR: "/camera/capture",
 };
 
+/** A roll's life since Phase 30A (D-104): added, picked at Capture, scanned, fully used, removed. */
 export const ROLL_STATUS_LABELS: Record<RollStatus, string> = {
-  OPEN: "Open",
-  FINISHED: "Finished",
-  CANCELLED: "Cancelled",
+  IN_STOCK: "Not scanned",
+  OPEN: "Being scanned",
+  FINISHED: "Scanned",
+  USED: "Fully used",
+  CANCELLED: "Removed",
 };

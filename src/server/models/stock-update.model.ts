@@ -28,7 +28,15 @@ export function listSheetItems(db: Db = defaultDb()) {
 export function findItemsForUpdate(ids: string[], db: Db) {
   return db.inventoryItem.findMany({
     where: { id: { in: ids } },
-    select: { id: true, sku: true, name: true, unit: true, quantityOnHand: true, isActive: true },
+    select: {
+      id: true,
+      sku: true,
+      name: true,
+      unit: true,
+      quantityOnHand: true,
+      isActive: true,
+      category: true,
+    },
   });
 }
 

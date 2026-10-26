@@ -15,7 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { formatManilaWeekdayDate, manilaToday } from "@/lib/format";
-import { openSinceLine } from "@/lib/roll-rules";
+import { formatArea, openSinceLine } from "@/lib/roll-rules";
 
 /** An open roll as GET /api/v1/rolls/open sends it. */
 export type OpenRollView = {
@@ -23,16 +23,28 @@ export type OpenRollView = {
   code: string;
   tagCode: string | null;
   supplier: string | null;
+  /** The leather item's name, for a roll from Inventory (Phase 30A). */
+  item: string | null;
+  areaSqFt: number | null;
   shots: number;
   startedAt: string;
   mine: boolean;
+  /** Added in Inventory: Put back returns it there. A roll from before Phase 30A is cancelled. */
+  fromInventory: boolean;
 };
 
 const shotsText = (n: number) => `${n} ${n === 1 ? "shot" : "shots"}`;
 
-/** "Roll R-2026-0012 · Marikina Leather Trading · 6 shots" */
+/** "Roll LR-MLT-001 · Black cowhide · 24.5 sq ft · 6 shots" */
 export function rollLine(roll: OpenRollView): string {
-  return [`Roll ${roll.code}`, roll.supplier, shotsText(roll.shots)].filter(Boolean).join(" · ");
+  return [
+    `Roll ${roll.code}`,
+    roll.item ?? roll.supplier,
+    roll.areaSqFt !== null ? formatArea(roll.areaSqFt) : null,
+    shotsText(roll.shots),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** "Open since Tue, 22 Oct. Finish it or keep capturing." for a roll from an earlier day. */
@@ -48,7 +60,8 @@ type ApiError = { error?: { code?: string; message?: string } };
 
 /**
  * Which roll the next shot goes to (Phase 26): the Roll dropdown (every open roll), the chosen roll
- * in large text, Start another roll, Finish roll and, for an empty roll, Cancel roll.
+ * in large text, Scan another roll, Finish roll and, for an empty roll, Put roll back (Phase 30A;
+ * a roll from before then is cancelled instead).
  */
 export function RollBar({
   rolls,
@@ -87,7 +100,9 @@ export function RollBar({
           chosen.id,
           kind === "finish"
             ? `${chosen.code} is finished with ${shotsText(chosen.shots)}.`
-            : `${chosen.code} is cancelled.`,
+            : chosen.fromInventory
+              ? `${chosen.code} is back with the rolls waiting to be scanned.`
+              : `${chosen.code} is cancelled.`,
         );
       } else {
         setError(body.error?.message ?? "That didn’t work. Refresh the page and try again.");
@@ -129,7 +144,7 @@ export function RollBar({
         </div>
         <Button size="lg" variant="secondary" onClick={onStartAnother} disabled={disabled}>
           <Plus aria-hidden />
-          Start another roll
+          Scan another roll
         </Button>
       </div>
 
@@ -170,12 +185,14 @@ export function RollBar({
               onClick={() => setDialog("cancel")}
             >
               <X aria-hidden />
-              Cancel roll
+              {chosen.fromInventory ? "Put roll back" : "Cancel roll"}
             </Button>
           )}
           {chosen.shots === 0 && (
             <p id="finish-off" className="basis-full text-sm text-muted-foreground">
-              Take the first shot to finish this roll, or cancel it if it was started by mistake.
+              {chosen.fromInventory
+                ? "Take the first shot to finish this roll, or put it back if it was picked by mistake."
+                : "Take the first shot to finish this roll, or cancel it if it was started by mistake."}
             </p>
           )}
         </div>
@@ -204,9 +221,13 @@ export function RollBar({
 
       <Dialog open={dialog === "cancel"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
-          <DialogTitle>Cancel {chosen?.code}?</DialogTitle>
+          <DialogTitle>
+            {chosen?.fromInventory ? `Put ${chosen.code} back?` : `Cancel ${chosen?.code}?`}
+          </DialogTitle>
           <DialogDescription>
-            It has no shots yet. Cancel it if it was started by mistake.
+            {chosen?.fromInventory
+              ? "It has no shots yet. It goes back to the rolls waiting to be scanned."
+              : "It has no shots yet. Cancel it if it was started by mistake."}
           </DialogDescription>
           <DialogFooter>
             <DialogClose asChild>
@@ -221,7 +242,7 @@ export function RollBar({
               onClick={() => void close("cancel")}
             >
               {spinner}
-              Cancel roll
+              {chosen?.fromInventory ? "Put roll back" : "Cancel roll"}
             </Button>
           </DialogFooter>
         </DialogContent>

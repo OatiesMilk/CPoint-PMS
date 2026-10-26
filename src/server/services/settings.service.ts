@@ -20,6 +20,7 @@ import {
   type ThresholdsInput,
 } from "@/server/validators/settings.validator";
 import { recordAudit } from "./audit.service";
+import { suggestSupplierCode } from "./supplier-code.service";
 
 type Actor = { id: string };
 
@@ -106,7 +107,13 @@ const UNIQUE: Record<ReferenceKind, { field: string; message: (v: string) => str
   defectType: [
     { field: "key", message: (v) => `"${v}" is already a defect type. Edit that one instead.` },
   ],
-  supplier: [{ field: "name", message: (v) => `"${v}" is already a supplier.` }],
+  supplier: [
+    { field: "name", message: (v) => `"${v}" is already a supplier.` },
+    {
+      field: "code",
+      message: (v) => `${v} is already another supplier’s code. Choose another, like ${v}2.`,
+    },
+  ],
 };
 
 export function listReferenceRows(kind: ReferenceKind): Promise<ReferenceRow[]> {
@@ -151,6 +158,9 @@ function toColumns(kind: ReferenceKind, values: Record<string, unknown>) {
 export async function createReferenceRow(kind: ReferenceKind, input: unknown, actor: Actor) {
   const values = referenceSchemas[kind].create.parse(input) as Record<string, unknown>;
   await assertUnique(kind, values);
+  // A new supplier without a code gets one from its initials (Phase 30A, Dylan 26 Oct 2026).
+  if (kind === "supplier" && !values.code)
+    values.code = await suggestSupplierCode(String(values.name));
   return runInTransaction(async (tx) => {
     const row = await insertReference(kind, toColumns(kind, values), tx).catch((e: unknown) =>
       uniqueRace(kind, e),
@@ -175,6 +185,8 @@ export async function updateReferenceRow(
   const before = await findReference(kind, id);
   if (!before) throw Errors.notFound(WHAT[kind]);
   const values = referenceSchemas[kind].update.parse(input) as Record<string, unknown>;
+  // A supplier's code left blank on edit keeps the one it has (roll codes already use it).
+  if (kind === "supplier" && !values.code) delete values.code;
   await assertUnique(kind, values, id);
   return runInTransaction(async (tx) => {
     const after = await updateReference(kind, id, toColumns(kind, values), tx).catch((e: unknown) =>

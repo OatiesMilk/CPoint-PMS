@@ -32,13 +32,93 @@ export async function createDeviceToken(
   return { token, id };
 }
 
-/** The first active supplier: Start roll needs one (Phase 26). */
+/** The first active supplier (a leather item's rolls are coded from its short code). */
 export async function supplierId(): Promise<string> {
   return withDb(
     async (db) =>
       (await db.query(`SELECT id FROM suppliers WHERE "isActive" ORDER BY name LIMIT 1`)).rows[0]
         .id,
   );
+}
+
+/**
+ * Adds one leather roll to Inventory as the Floor Manager would (Phase 30A, D-104): an e2e leather
+ * item per supplier (LR-E2E-<code>), the next LR-<code>-NNN code, the roll In stock with its area,
+ * and +1 on the ledger, all in one transaction, so stock still equals the ledger.
+ */
+export async function addInventoryRoll(
+  options: { supplierId?: string; tagCode?: string; areaSqFt?: number } = {},
+): Promise<{ id: string; code: string; itemId: string }> {
+  const supplier = options.supplierId ?? (await supplierId());
+  return withDb(async (db) => {
+    await db.query("BEGIN");
+    try {
+      const { code: supplierCode } = (
+        await db.query(`SELECT code FROM suppliers WHERE id = $1`, [supplier])
+      ).rows[0];
+      const fm = (
+        await db.query(
+          `SELECT id FROM users WHERE role = 'FLOOR_MANAGER' AND "isActive" ORDER BY "createdAt" LIMIT 1`,
+        )
+      ).rows[0].id as string;
+      // An item of its own per roll, so tests running in parallel never share a count (QA 30A F2).
+      const sku = `LR-E2E-${supplierCode}-${randomBytes(2).toString("hex").toUpperCase()}`;
+      await db.query(
+        `INSERT INTO inventory_items (id, sku, name, category, unit, "quantityOnHand", "reorderLevel",
+           "isActive", "updatedAt", "supplierId")
+         VALUES (gen_random_uuid(), $1, $2, 'LEATHER_ROLL', 'roll', 0, 0, true, now(), $3)
+         ON CONFLICT (sku) DO NOTHING`,
+        [sku, `E2E leather ${sku}`, supplier],
+      );
+      const itemId = (
+        await db.query(`SELECT id FROM inventory_items WHERE sku = $1 FOR UPDATE`, [sku])
+      ).rows[0].id as string;
+      const prefix = `LR-${supplierCode}`;
+      let code = "";
+      for (;;) {
+        const n = (
+          await db.query(
+            `INSERT INTO roll_code_sequences ("prefix", "lastValue") VALUES ($1, 1)
+             ON CONFLICT ("prefix") DO UPDATE SET "lastValue" = roll_code_sequences."lastValue" + 1
+             RETURNING "lastValue"`,
+            [prefix],
+          )
+        ).rows[0].lastValue as number;
+        code = `${prefix}-${String(n).padStart(3, "0")}`;
+        if ((await db.query(`SELECT 1 FROM batches WHERE code = $1`, [code])).rowCount === 0) break;
+      }
+      const id = randomUUID();
+      await db.query(
+        `INSERT INTO batches (id, code, "rollCode", "supplierId", "itemId", "areaSqFt", "receivedAt",
+           status, "createdById", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, date_trunc('day', now()), 'IN_STOCK', $7, now())`,
+        [
+          id,
+          code,
+          options.tagCode ?? `E2E-${randomBytes(3).toString("hex").toUpperCase()}`,
+          supplier,
+          itemId,
+          options.areaSqFt ?? 24.5,
+          fm,
+        ],
+      );
+      await db.query(
+        `INSERT INTO inventory_movements (id, "itemId", type, "quantityDelta", reason, "batchId", "createdById")
+         VALUES (gen_random_uuid(), $1, 'IN', 1, $2, $3, $4)`,
+        [itemId, `Roll ${code} added`, id, fm],
+      );
+      await db.query(
+        `UPDATE inventory_items SET "quantityOnHand" = "quantityOnHand" + 1, "updatedAt" = now()
+         WHERE id = $1`,
+        [itemId],
+      );
+      await db.query("COMMIT");
+      return { id, code, itemId };
+    } catch (error) {
+      await db.query("ROLLBACK");
+      throw error;
+    }
+  });
 }
 
 /**
@@ -86,20 +166,18 @@ export async function captureApi(browser: Browser): Promise<APIRequestContext> {
   return apiAs(browser, { email: sc.email, home: "/camera/capture" });
 }
 
-/** Start roll at Capture, as a constructor with camera access. The roll is open. */
+/**
+ * A roll being scanned (Phase 30A): added to Inventory, then picked at Capture by a constructor
+ * with camera access (POST /api/v1/rolls/{id}/start). The roll is open.
+ */
 export async function createRoll(
   api: APIRequestContext,
-  options: { supplierId?: string; tagCode?: string } = {},
-): Promise<{ id: string; code: string }> {
-  const res = await api.post("/api/v1/rolls", {
-    data: {
-      supplierId: options.supplierId ?? (await supplierId()),
-      tagCode: options.tagCode ?? `E2E-${randomBytes(3).toString("hex").toUpperCase()}`,
-    },
-  });
-  expect(res.status()).toBe(201);
-  const { id, code } = (await res.json()).data;
-  return { id, code };
+  options: { supplierId?: string; tagCode?: string; areaSqFt?: number } = {},
+): Promise<{ id: string; code: string; itemId: string }> {
+  const roll = await addInventoryRoll(options);
+  const res = await api.post(`/api/v1/rolls/${roll.id}/start`, { data: {} });
+  expect(res.status()).toBe(200);
+  return roll;
 }
 
 /** Finish roll at Capture (it needs at least one shot). */
