@@ -482,9 +482,10 @@ was never built. Each phase gets its own criteria here when its plan is approved
       Rolls (merged #24; QA passed, run 2)
 - [x] Phase 27: batches are the check-in intervals (lunch break, on-screen notices, pairs finished
       and failed, no shoe types); QA passed, run 5, 2026-10-25
-- [x] Phase 28: each role sees only its modules; demo sign-in and reset on the login page (built;
-      QA next)
-- [ ] Phase 29: inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption
+- [x] Phase 28: each role sees only its modules; demo sign-in and reset on the login page (merged
+      #26; QA passed, run 2)
+- [x] Phase 29: stock updated on one sheet (Added, Used, Correction), reminders on Wednesdays and
+      Fridays, Reports → Materials (QA passed, run 2)
 - [ ] Phase 30A: can the camera measure a whole roll? A check with real rolls (`cv/` only)
 - [ ] Phase 30B: cuts from 3 inches Not accepted; a roll over 10% defects marked Return to
       supplier, the FM decides
@@ -590,4 +591,21 @@ Brief: `docs/prompts/factory-visit-changes.md`, Phase 28. Plan: `docs/prompts/pl
 - [x] FM home with Rolls today; Admin home with Camera and Lunch break
 - [x] Demo sign-in and Reset demo data behind `DEMO_LOGIN_TOOLS` (404 when off), the Demo mode band
 - [x] `npm run check` passes (548 unit tests); e2e specs updated, not run
-- [ ] Codex QA from `qa/CODEX_PROMPT_PHASE_28.md`
+- [x] Codex QA from `qa/CODEX_PROMPT_PHASE_28.md` (run 2 passed; merged #26)
+
+## Phase 29 — Stock updated on one sheet, reminders, and what was used
+
+Brief: `docs/prompts/factory-visit-changes.md`, Phase 29. Plan: `docs/prompts/plans/phase-29-plan.md`
+(approved 2026-10-25 with Dylan's answers: no deliveries, a supplier on leather rolls, failed pairs
+count as made, the correction option). Decision: D-102.
+
+- [x] Migration `stock_updates`: `StockUpdate`, `InventorySettings` (Wednesday and Friday),
+      `InventoryItem.supplierId`, `InventoryMovement.updateId`
+- [x] Update stock sheet (Added, Used, Correction with a reason; one save, `409 STALE`); the item
+      page's dialogs and undo removed
+- [x] Reminder on the FM home and the bell; reminder days on the sheet
+- [x] Reports → Materials and `materials-used.csv`; demo week saves on Wednesday and Friday
+- [x] `npm run check` passes (571 unit tests); e2e `inventory.spec.ts` and `smoke.spec.ts`
+      updated, not run
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_29.md` (FAIL, F1 to F4 fixed)
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_29_RUN2.md` (PASS)

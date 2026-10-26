@@ -71,6 +71,8 @@ type Props = {
   signOutAction: () => Promise<void>;
   /** Show the batch notices bell (Phase 27): the Quality Inspector and the Floor Manager. */
   bell?: boolean;
+  /** A stock update is due today (Phase 29, C-32): the bell lists it for the Floor Manager. */
+  stockDue?: boolean;
 };
 
 /** Sections match their sub-pages; a role's home (e.g. /admin) only matches itself. */
@@ -88,7 +90,7 @@ function activeHref(pathname: string, sections: SidebarSection[]): string | null
   return best;
 }
 
-export function Sidebar({ sections, user, signOutAction, bell }: Props) {
+export function Sidebar({ sections, user, signOutAction, bell, stockDue }: Props) {
   const pathname = usePathname();
   const current = activeHref(pathname, sections);
 
@@ -100,6 +102,7 @@ export function Sidebar({ sections, user, signOutAction, bell }: Props) {
         user={user}
         signOutAction={signOutAction}
         bell={bell}
+        stockDue={stockDue}
       />
       <DesktopSidebar
         sections={sections}
@@ -107,6 +110,7 @@ export function Sidebar({ sections, user, signOutAction, bell }: Props) {
         user={user}
         signOutAction={signOutAction}
         bell={bell}
+        stockDue={stockDue}
       />
     </>
   );
@@ -118,14 +122,14 @@ type BarProps = Props & { current: string | null };
  * Below 640 px (a phone, Phase 26, D-096): a top bar with the logo, the page's name, a page menu
  * when the role has more than one page, and the account menu. A Shoe Constructor has only Capture.
  */
-function PhoneBar({ sections, current, user, signOutAction, bell }: BarProps) {
+function PhoneBar({ sections, current, user, signOutAction, bell, stockDue }: BarProps) {
   const items = sections.flatMap((s) => s.items).filter((i) => !i.phase);
   const title = items.find((i) => i.href === current)?.label ?? "CPoint";
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-sidebar-border bg-sidebar px-3 text-sidebar-foreground sm:hidden">
       <Image src={logo} alt="CPoint" className="size-8 rounded-md" priority />
       <p className="min-w-0 flex-1 truncate text-lg font-semibold">{title}</p>
-      {bell && <BatchBell compact />}
+      {bell && <BatchBell compact stockDue={stockDue} />}
       {items.length > 1 && (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -158,7 +162,7 @@ function PhoneBar({ sections, current, user, signOutAction, bell }: BarProps) {
   );
 }
 
-function DesktopSidebar({ sections, current, user, signOutAction, bell }: BarProps) {
+function DesktopSidebar({ sections, current, user, signOutAction, bell, stockDue }: BarProps) {
   return (
     <aside className="sticky top-0 hidden h-screen w-14 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground sm:flex lg:w-60">
       <div className="flex items-center justify-center gap-2.5 px-2 py-4 lg:justify-start lg:px-4">
@@ -169,13 +173,13 @@ function DesktopSidebar({ sections, current, user, signOutAction, bell }: BarPro
         </div>
         {bell && (
           <div className="hidden lg:ml-auto lg:block">
-            <BatchBell />
+            <BatchBell stockDue={stockDue} />
           </div>
         )}
       </div>
       {bell && (
         <div className="flex justify-center pb-2 lg:hidden">
-          <BatchBell />
+          <BatchBell stockDue={stockDue} />
         </div>
       )}
 

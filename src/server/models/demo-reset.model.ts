@@ -23,6 +23,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     scans,
     inventoryItems,
     movements,
+    stockUpdates,
     auditLogs,
     suppliers,
     defectTypes,
@@ -38,6 +39,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.scan.count(),
     db.inventoryItem.count(),
     db.inventoryMovement.count(),
+    db.stockUpdate.count(),
     db.auditLog.count(),
     db.supplier.count({ where: { name: notIn(keep.supplierNames) } }),
     db.defectType.count({ where: { key: notIn(keep.defectTypeKeys) } }),
@@ -56,6 +58,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     scans,
     inventoryItems,
     movements,
+    stockUpdates,
     auditLogs,
     suppliers,
     defectTypes,
@@ -71,9 +74,13 @@ export type ResetCounts = Awaited<ReturnType<typeof countResetTargets>>;
 
 /** Removes the production, stock and audit history, then what isn't kept. */
 export async function deleteResetTargets(keep: ResetKeep, db: Db) {
-  // Stock: the ledger, then the items (the demo week adds them back with opening stock).
+  // Stock: the ledger and its Update stock saves, then the items (the demo week adds them back
+  // with opening stock), and the reminder days back to Wednesday and Friday (Phase 29).
   await db.inventoryMovement.deleteMany();
+  await db.stockUpdate.deleteMany();
   await db.inventoryItem.deleteMany();
+  await db.inventorySettings.deleteMany();
+  await db.inventorySettings.create({ data: { id: 1 } });
   // Production: scans, then rolls.
   await db.detection.deleteMany();
   await db.scan.deleteMany();

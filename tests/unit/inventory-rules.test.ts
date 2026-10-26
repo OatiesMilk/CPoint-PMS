@@ -3,16 +3,17 @@ import {
   formatDelta,
   formatQuantity,
   hasAtMostTwoDecimals,
+  MOVEMENT_LABELS,
   nextItemCode,
-  planMovement,
-  reversalOf,
+  planStockLine,
   stockLevel,
 } from "@/lib/inventory-rules";
 
 const item = (quantityOnHand: number, isActive = true) => ({
+  name: "Tacks",
   quantityOnHand,
   isActive,
-  unit: "roll",
+  unit: "box",
 });
 
 describe("quantities", () => {
@@ -56,59 +57,78 @@ describe("nextItemCode", () => {
   });
 });
 
-describe("planMovement", () => {
-  it("stores receipts as + and usage as −, with default notes", () => {
-    expect(planMovement(item(2), { type: "IN", quantity: 3 })).toEqual({
-      ok: true,
-      delta: 3,
-      reason: "Delivery received",
-    });
+describe("planStockLine (Phase 29, D-102)", () => {
+  it("turns added, used and a correction into IN, OUT and ADJUST, in that order", () => {
     expect(
-      planMovement(item(2), { type: "OUT", quantity: 2, reason: " For B-2026-0001 " }),
+      planStockLine(item(4), {
+        seenQuantity: 4,
+        added: 6,
+        used: 3,
+        correction: -1,
+        reason: " Recounted the shelf ",
+      }),
     ).toEqual({
       ok: true,
-      delta: -2,
-      reason: "For B-2026-0001",
+      after: 6,
+      entries: [
+        { type: "IN", delta: 6, reason: "Added on a stock update" },
+        { type: "OUT", delta: -3, reason: "Used on the line" },
+        { type: "ADJUST", delta: -1, reason: "Recounted the shelf" },
+      ],
     });
   });
 
-  it("refuses using more than is in stock", () => {
-    expect(planMovement(item(2), { type: "OUT", quantity: 3 })).toEqual({
+  it("keeps hundredths exact", () => {
+    const plan = planStockLine(item(0.3), { seenQuantity: 0.3, used: 0.1 });
+    expect(plan).toMatchObject({ ok: true, after: 0.2 });
+  });
+
+  it("refuses using more than is on the shelf, counting what was added", () => {
+    expect(planStockLine(item(1), { seenQuantity: 1, added: 2, used: 4 })).toEqual({
       ok: false,
-      reason: "Only 2 rolls in stock. Record a delivery first, or use less.",
+      field: "used",
+      reason: "Only 3 boxes of Tacks in stock. Enter a smaller amount.",
     });
   });
 
-  it("turns a stock count into the difference, and needs a reason", () => {
+  it("refuses a correction below zero", () => {
     expect(
-      planMovement(item(5), { type: "ADJUST", counted: 4.5, expectedQuantity: 5, reason: "Count" }),
-    ).toEqual({ ok: true, delta: -0.5, reason: "Count" });
-    expect(
-      planMovement(item(5), { type: "ADJUST", counted: 4, expectedQuantity: 5 }),
+      planStockLine(item(2), { seenQuantity: 2, correction: -3, reason: "Recount" }),
     ).toMatchObject({
       ok: false,
-      reason: "Say why the count differs.",
+      field: "correction",
     });
-    expect(
-      planMovement(item(5), { type: "ADJUST", counted: 5, expectedQuantity: 5, reason: "x" }),
-    ).toMatchObject({ ok: false });
   });
 
-  it("marks a count STALE when stock moved while counting", () => {
-    expect(
-      planMovement(item(6), { type: "ADJUST", counted: 4, expectedQuantity: 5, reason: "x" }),
-    ).toMatchObject({ ok: false, code: "STALE" });
+  it("needs a reason for a correction, and nothing else", () => {
+    expect(planStockLine(item(2), { seenQuantity: 2, correction: 1 })).toEqual({
+      ok: false,
+      field: "reason",
+      reason: "Enter a reason for the Tacks correction, like “Recounted the shelf.”",
+    });
+    expect(planStockLine(item(2), { seenQuantity: 2, added: 1 })).toMatchObject({ ok: true });
   });
 
-  it("refuses any movement on a deactivated item", () => {
-    expect(planMovement(item(5, false), { type: "IN", quantity: 1 })).toMatchObject({ ok: false });
+  it("needs at least one number", () => {
+    expect(planStockLine(item(2), { seenQuantity: 2, added: 0 })).toMatchObject({
+      ok: false,
+      field: "added",
+    });
   });
-});
 
-describe("reversalOf", () => {
-  it("undoes receipts and usage, but not stock counts", () => {
-    expect(reversalOf({ type: "IN", quantityDelta: 3 })).toEqual({ type: "OUT", quantity: 3 });
-    expect(reversalOf({ type: "OUT", quantityDelta: -2 })).toEqual({ type: "IN", quantity: 2 });
-    expect(reversalOf({ type: "ADJUST", quantityDelta: -1 })).toBeNull();
+  it("is STALE, naming the item, when stock moved since the sheet loaded", () => {
+    expect(planStockLine(item(5), { seenQuantity: 4, added: 1 })).toEqual({
+      ok: false,
+      code: "STALE",
+      reason: "Tacks changed while you were updating (now 5 boxes). Check it and save again.",
+    });
+  });
+
+  it("refuses a deactivated item", () => {
+    expect(planStockLine(item(2, false), { seenQuantity: 2, added: 1 }).ok).toBe(false);
+  });
+
+  it("labels the ledger types Added, Used and Correction", () => {
+    expect(MOVEMENT_LABELS).toEqual({ IN: "Added", OUT: "Used", ADJUST: "Correction" });
   });
 });

@@ -1,7 +1,8 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Floor Manager (manages) and the System Admin (reads), a few times a day.
- * What:  see what's on the shelf and what needs reordering, then record what came in or went out.
+ * Who:   the Floor Manager, a few times a week and on the reminder days (Wed and Fri).
+ * What:  see what's on the shelf and what needs reordering, then update stock: what was added,
+ *        used or corrected (Phase 29, D-102).
  * Worst: a leather roll runs out unnoticed and stops the line. Low and out-of-stock items carry a
  *        labelled badge, and the Stock filter narrows to them.
  */
@@ -9,7 +10,7 @@ import type { Metadata } from "next";
 import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { Plus } from "lucide-react";
+import { ClipboardPen, Plus } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { PageHeader } from "@/components/features/page-header";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatManilaWeekdayDate } from "@/lib/format";
 import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
@@ -50,15 +52,25 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
     <>
       <PageHeader
         title="Inventory"
-        description="Leather rolls and supplies. Stock changes only when something is received, used or counted."
+        description="Leather rolls and supplies. Stock changes only on Update stock: what was added, used or corrected."
         actions={
           canManage && (
-            <Button asChild>
-              <Link href="/inventory/new">
-                <Plus aria-hidden />
-                Add item
-              </Link>
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {total > 0 && (
+                <Button asChild>
+                  <Link href="/inventory/update">
+                    <ClipboardPen aria-hidden />
+                    Update stock
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant={total > 0 ? "secondary" : "primary"}>
+                <Link href="/inventory/new">
+                  <Plus aria-hidden />
+                  Add item
+                </Link>
+              </Button>
+            </div>
           )
         }
       />
@@ -102,6 +114,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                 <TableHead numeric>On hand</TableHead>
                 <TableHead numeric>Reorder at</TableHead>
                 <TableHead>Stock</TableHead>
+                <TableHead>Last updated</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -115,6 +128,9 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                     >
                       {item.name}
                     </Link>
+                    {item.supplier && (
+                      <p className="text-sm text-muted-foreground">{item.supplier.name}</p>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {CATEGORY_LABELS[item.category]}
@@ -127,6 +143,9 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                   </TableCell>
                   <TableCell>
                     <StockBadge level={item.level} inactive={!item.isActive} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {item.lastUpdatedAt ? formatManilaWeekdayDate(item.lastUpdatedAt) : "Not yet"}
                   </TableCell>
                 </TableRow>
               ))}

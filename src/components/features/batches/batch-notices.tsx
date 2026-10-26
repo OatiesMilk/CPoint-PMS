@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, BellRing, Hourglass, X } from "lucide-react";
+import { Bell, BellRing, ClipboardPen, Hourglass, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -148,16 +148,30 @@ export function BatchNoticeBanner() {
   );
 }
 
-/** The bell beside the logo: lists the batches due or late, each with Finish batch. */
-export function BatchBell({ compact = false }: { compact?: boolean }) {
+/**
+ * The bell beside the logo: lists the batches due or late, each with Finish batch, and for the
+ * Floor Manager on a reminder day the stock update (Phase 29, C-32) until one is saved.
+ */
+export function BatchBell({
+  compact = false,
+  stockDue = false,
+}: {
+  compact?: boolean;
+  stockDue?: boolean;
+}) {
   const { data } = useToday();
   const due = useNotices().filter((n) => n.kind === "DUE");
-  // Only for whoever finishes today's batches: the QI, or the FM covering (D-088).
-  if (!data?.canEnter) return null;
-  const label =
-    due.length === 0
+  // Only for whoever finishes today's batches: the QI, or the FM covering (D-088); and the FM
+  // when a stock update is due.
+  const batches = Boolean(data?.canEnter);
+  if (!batches && !stockDue) return null;
+  const count = due.length + (stockDue ? 1 : 0);
+  const batchText = `${due.length} batch${due.length === 1 ? "" : "es"} due`;
+  const label = stockDue
+    ? `Notices: ${due.length > 0 ? `${batchText}, ` : ""}stock update due`
+    : due.length === 0
       ? "Batch notices: none due"
-      : `Batch notices: ${due.length} batch${due.length === 1 ? "" : "es"} due`;
+      : `Batch notices: ${batchText}`;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -169,36 +183,53 @@ export function BatchBell({ compact = false }: { compact?: boolean }) {
           compact ? "size-11" : "size-8",
         )}
       >
-        {due.length > 0 ? (
+        {count > 0 ? (
           <BellRing aria-hidden className="size-5 text-info" />
         ) : (
           <Bell aria-hidden className="size-5" />
         )}
-        {due.length > 0 && (
+        {count > 0 && (
           <span
             aria-hidden
             className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-xs leading-none font-semibold text-primary-foreground"
           >
-            {due.length}
+            {count}
           </span>
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-[calc(100vw-1rem)]">
-        <DropdownMenuLabel>Batches to finish</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {due.length === 0 ? (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">
-            No batch is due. You’ll see a notice 10 minutes before each batch ends.
-          </p>
-        ) : (
-          due.map((n) => (
-            <DropdownMenuItem key={n.slotAt} asChild>
-              <Link href={finishHref(n)}>
-                <Hourglass aria-hidden />
-                Batch {n.number} is due. Finish it now.
+        {stockDue && (
+          <>
+            <DropdownMenuLabel>Stock</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/inventory/update" data-testid="stock-update-notice">
+                <ClipboardPen aria-hidden />
+                Stock update today. Update stock.
               </Link>
             </DropdownMenuItem>
-          ))
+          </>
+        )}
+        {batches && (
+          <>
+            {stockDue && <DropdownMenuSeparator />}
+            <DropdownMenuLabel>Batches to finish</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {due.length === 0 ? (
+              <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                No batch is due. You’ll see a notice 10 minutes before each batch ends.
+              </p>
+            ) : (
+              due.map((n) => (
+                <DropdownMenuItem key={n.slotAt} asChild>
+                  <Link href={finishHref(n)}>
+                    <Hourglass aria-hidden />
+                    Batch {n.number} is due. Finish it now.
+                  </Link>
+                </DropdownMenuItem>
+              ))
+            )}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>

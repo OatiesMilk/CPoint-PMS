@@ -8,6 +8,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/features/page-header";
 import { requirePermission } from "@/server/policies/guard";
 import { suggestItemCode } from "@/server/services/inventory.service";
+import { supplierOptions } from "@/server/services/roll.service";
 import { ItemForm } from "../item-form";
 
 export const metadata: Metadata = { title: "Add item" };
@@ -20,7 +21,10 @@ export default async function NewItemPage() {
         title="Add item"
         description="A material you keep on the shelf. Opening stock is recorded as the first entry."
       />
-      <ItemForm suggestedCode={await suggestItemCode("LEATHER_ROLL")} />
+      <ItemForm
+        suppliers={await supplierOptions()}
+        suggestedCode={await suggestItemCode("LEATHER_ROLL")}
+      />
     </>
   );
 }

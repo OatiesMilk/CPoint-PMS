@@ -102,6 +102,8 @@ model User {
   quotasSet         DailyQuota[]
   checkInsEntered   ProductionCheckIn[]  @relation("CheckInEnteredBy")
   checkInsCorrected ProductionCheckIn[]  @relation("CheckInCorrectedBy")
+  stockUpdates      StockUpdate[]
+  inventorySettings InventorySettings[]
 
   @@index([role, isActive])
   @@map("users")
@@ -177,7 +179,8 @@ model Supplier {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
-  rolls Roll[]
+  rolls          Roll[]
+  inventoryItems InventoryItem[]
 
   @@map("suppliers")
 }
@@ -319,13 +322,17 @@ model InventoryItem {
   unit           String // "roll", "box", "kg", "m"
   quantityOnHand Decimal           @default(0) @db.Decimal(12, 2) // changed only via movements
   reorderLevel   Decimal           @default(0) @db.Decimal(12, 2)
+  /// The leather roll's supplier (Phase 29, D-102); required for LEATHER_ROLL, null otherwise.
+  supplierId     String?           @db.Uuid
   isActive       Boolean           @default(true)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
+  supplier  Supplier?           @relation(fields: [supplierId], references: [id])
   movements InventoryMovement[]
 
   @@index([category, isActive])
+  @@index([supplierId])
   @@map("inventory_items")
 }
 
@@ -336,17 +343,53 @@ model InventoryMovement {
   quantityDelta Decimal      @db.Decimal(12, 2) // + for IN, - for OUT, either sign for ADJUST
   reason        String
   rollId        String?      @map("batchId") @db.Uuid
+  /// The Update stock save this entry came from (Phase 29); null for older entries.
+  updateId      String?      @db.Uuid
   createdById   String       @db.Uuid
   createdAt     DateTime     @default(now())
 
   item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
   roll      Roll?         @relation(fields: [rollId], references: [id])
+  update    StockUpdate?  @relation(fields: [updateId], references: [id])
   createdBy User          @relation(fields: [createdById], references: [id])
 
   @@index([itemId, createdAt])
   @@index([rollId])
+  @@index([updateId])
   @@index([createdById])
+  @@index([type, createdAt])
   @@map("inventory_movements")
+}
+
+/// One save of the Update stock sheet (Phase 29, D-102): what was added (+), used (−) or
+/// corrected, per item, as ledger movements. A save on a reminder day clears the reminder.
+model StockUpdate {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  day         DateTime @db.Date // the Manila calendar date
+  createdById String   @db.Uuid
+  note        String?
+  createdAt   DateTime @default(now())
+
+  createdBy User                @relation(fields: [createdById], references: [id])
+  movements InventoryMovement[]
+
+  @@index([day])
+  @@index([createdById])
+  @@map("stock_updates")
+}
+
+/// Single row: the days the Floor Manager is reminded to update stock (Phase 29, C-32).
+model InventorySettings {
+  id           Int      @id @default(1)
+  /// ISO weekdays (1 Monday … 7 Sunday); default Wednesday and Friday.
+  reminderDays Int[]    @default([3, 5])
+  updatedById  String?  @db.Uuid
+  updatedAt    DateTime @updatedAt
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedById])
+  @@map("inventory_settings")
 }
 
 // ───────────── attendance (Phase 22, D-077 to D-081) ─────────────

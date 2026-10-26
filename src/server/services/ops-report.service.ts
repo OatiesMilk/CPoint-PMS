@@ -267,7 +267,7 @@ export async function stockCsv(range: ReportRange) {
     { header: "On hand", value: (i) => i.onHand },
     { header: "Reorder level", value: (i) => i.reorderLevel },
     { header: "Used in period", value: (i) => i.used },
-    { header: "Received in period", value: (i) => i.received },
+    { header: "Added in period", value: (i) => i.received },
     { header: "Days of cover", value: (i) => (i.coverDays === null ? "" : i.coverDays.toFixed(1)) },
     { header: "Status", value: (i) => i.level },
   ]);

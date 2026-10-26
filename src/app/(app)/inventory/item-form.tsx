@@ -31,16 +31,26 @@ const DEFAULT_UNIT: Record<InventoryCategory, string> = {
   EQUIPMENT: "piece",
   OTHER: "",
 };
-const FIELDS = ["sku", "name", "category", "unit", "reorderLevel", "openingStock"] as const;
+const FIELDS = [
+  "sku",
+  "name",
+  "category",
+  "supplierId",
+  "unit",
+  "reorderLevel",
+  "openingStock",
+] as const;
 
 type Props = {
+  /** Active suppliers, for a leather roll's Supplier (Phase 29, D-102). */
+  suppliers: { id: string; name: string }[];
   /** Create mode: the code suggested for the default category. */
   suggestedCode?: string;
   /** Edit mode: the item id, name and current values. */
   item?: { id: string; name: string; values: InventoryItemFormInput };
 };
 
-export function ItemForm({ suggestedCode = "", item }: Props) {
+export function ItemForm({ suppliers, suggestedCode = "", item }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [formError, setFormError] = useState<string | null>(null);
@@ -53,6 +63,7 @@ export function ItemForm({ suggestedCode = "", item }: Props) {
       sku: suggestedCode,
       name: "",
       category: "LEATHER_ROLL",
+      supplierId: "",
       unit: DEFAULT_UNIT.LEATHER_ROLL,
       reorderLevel: "",
       openingStock: "",
@@ -62,6 +73,7 @@ export function ItemForm({ suggestedCode = "", item }: Props) {
   const describedBy = (field: string, hint?: string) =>
     errors[field as keyof typeof errors] ? `${field}-error` : hint;
   const unit = useWatch({ control: form.control, name: "unit" });
+  const category = useWatch({ control: form.control, name: "category" });
 
   // Keep suggesting codes and units on create until the user types their own (setValue
   // doesn't mark a field dirty, so only typing does).
@@ -160,6 +172,33 @@ export function ItemForm({ suggestedCode = "", item }: Props) {
           />
           <FieldError id="name-error" message={errors.name?.message} />
         </div>
+
+        {category === "LEATHER_ROLL" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="supplierId">Supplier</Label>
+            <Select
+              id="supplierId"
+              aria-invalid={!!errors.supplierId}
+              aria-describedby={describedBy("supplierId", "supplierId-hint")}
+              {...form.register("supplierId")}
+            >
+              <option value="">Choose a supplier</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+            {errors.supplierId ? (
+              <FieldError id="supplierId-error" message={errors.supplierId.message} />
+            ) : (
+              <p id="supplierId-hint" className="text-sm text-muted-foreground">
+                Who CPoint buys this leather from. A roll from another supplier is its own item.
+                Suppliers are set up in Settings by the System Admin.
+              </p>
+            )}
+          </div>
+        )}
       </fieldset>
 
       <fieldset className="flex flex-col gap-5">
@@ -235,8 +274,8 @@ export function ItemForm({ suggestedCode = "", item }: Props) {
         </div>
         {item && (
           <p className="text-sm text-muted-foreground">
-            The quantity on hand changes only by receiving, using or counting stock on the item’s
-            page.
+            The quantity on hand changes only on the Update stock sheet: what was added, used or
+            corrected.
           </p>
         )}
       </fieldset>

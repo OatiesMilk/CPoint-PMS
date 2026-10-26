@@ -8,6 +8,7 @@ import {
   suppliersCsv,
 } from "@/server/services/ops-report.service";
 import { requireApiPermission } from "@/server/policies/guard";
+import { materialsCsv, materialsReport } from "@/server/services/materials.service";
 import { productionCsv, productionReport } from "@/server/services/production.service";
 import { dailyCsv, defectsCsv, qualityReport } from "@/server/services/report.service";
 import { reportQuerySchema } from "@/server/validators/report.validator";
@@ -29,6 +30,19 @@ function csv(body: string, name: string, range: { from: string; to: string }): R
 }
 
 export const reportController = {
+  /** GET /api/v1/reports/materials: what each material was used for, the last 8 weeks (Phase 29) */
+  materials: handle(async () => {
+    await requireApiPermission("report:production");
+    return json({ data: await materialsReport() });
+  }),
+
+  /** GET /api/v1/reports/materials-used.csv: one row per item and week */
+  materialsCsv: handle(async () => {
+    await requireApiPermission("report:production");
+    const { body, from, to } = await materialsCsv();
+    return csv(body, "materials-used", { from, to });
+  }),
+
   /** GET /api/v1/reports/quality?preset=|from=&to= */
   quality: handle(async (request: Request) => {
     await requireApiPermission("report:quality");

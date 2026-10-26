@@ -14,6 +14,65 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-25 — Phase 29: QA run 2 passed
+
+**Who:** Dylan (Claude reading the report)
+**Summary:** Codex run 2 PASS: R1 to R5 (non-leather items save, the sheet's errors, correction,
+history, STALE, Materials and per 100 pairs), build passed, e2e 87 passed, 0 failed, 2 skipped,
+ledger 0. The first attempt stopped at a `.next` delete step Codex's policy blocks; removed.
+**Changed:** `qa/CODEX_PROMPT_PHASE_29_RUN2.md` (no `.next` delete); STATUS, ROADMAP; vault.
+**Gates:** e2e ✅ (Codex, 87/0/2) · build ✅ (Codex) · docker not run (CI runs it)
+**Decisions:** none
+**Follow-ups:** Dylan commits Phase 29 and opens the PR; Claude fixes any CI failure.
+
+## 2026-10-25 — Phase 29: QA run 1 fixes
+
+**Who:** Dylan (Claude fixing)
+**Summary:** Codex run 1 failed (8 of 17 passed, 4 failed, 5 blocked; e2e 86 passed, 1 failed).
+Both app faults fixed; run 2 prompt written.
+**Changed:**
+
+- `inventory.validator.ts`: `supplierId` treats `null` as blank, so the form's parsed values
+  (a non-leather item's supplier is `null`) pass the server's second check (F1 to F3).
+- `materials.model.ts`, `materials.service.ts`: an item's pace starts at its first ledger entry,
+  not its row's `createdAt` (the demo items are created at app start, after their back-dated
+  history), so per 100 pairs and days left are right (F4); the Materials card says so.
+- Tests: a round trip of the item form's parsed values; the materials test uses `since`. Handoff
+  S13 explains the per-item pairs.
+  **Gates:** lint ✅ · typecheck ✅ · test ✅ (572) · build ✅ · e2e not run (Codex run 2) · docker not run
+  **Decisions:** none (D-102 stands)
+  **Follow-ups:** Codex run 2 `qa/CODEX_PROMPT_PHASE_29_RUN2.md`; then the commit and PR.
+
+## 2026-10-25 — Phase 29: stock updated on one sheet, reminders, Reports → Materials
+
+**Who:** Dylan (Claude building)
+**Summary:** Plan approved with Dylan's answers: no deliveries (the FM enters + or − per item), a
+supplier on leather roll items, failed pairs count as made, a partial save clears the reminder,
+days left from the last 4 weeks, and a Correction with a reason that isn't use. The FM updates
+stock on one sheet, is reminded on Wednesday and Friday, and Reports → Materials shows what each
+material was used for per week and per 100 pairs.
+**Changed:**
+
+- Data: migration `stock_updates` (`StockUpdate`, `InventorySettings` with Wednesday and Friday,
+  `InventoryItem.supplierId`, `InventoryMovement.updateId`).
+- Rules: `planStockLine` (Added, Used, Correction; below zero, reason, STALE), `stock-rules.ts`
+  (weeks, reminder due, per 100 pairs, days left, may run out).
+- Inventory: the Update stock sheet (`/inventory/update`), `POST /api/v1/inventory/updates`,
+  `GET`/`PUT /api/v1/inventory/settings`; the item page's Receive, Use, Stock count and Undo
+  removed (`POST …/movements` 405, the undo route deleted); Supplier on a leather roll; Last
+  updated on the list.
+- Reminder: Stock update today on the FM home, in the bell.
+- Reports → Materials, `GET /api/v1/reports/materials`, `materials-used.csv`; `stock.csv` "Added in
+  period".
+- Demo week saves updates on Wednesday and Friday; `demo:reset` clears them; bootstrap makes the
+  settings row.
+- Tests: unit `stock-rules`, `stock-update.service`, `materials.service`, and five updated; e2e
+  `inventory.spec.ts`, `smoke.spec.ts`; CI Docker checks. Docs: D-102, API, DESIGN, ROADMAP,
+  STATUS; QA handoff and `qa/CODEX_PROMPT_PHASE_29.md`; vault.
+  **Gates:** lint ✅ · typecheck ✅ · test ✅ (571) · build ✅ · e2e not run (Codex) · docker not run
+  **Decisions:** D-102
+  **Follow-ups:** Codex QA run 1; then the commit and PR.
+
 ## 2026-10-25 — Phase 28: QA run 1 fixes
 
 **Who:** Dylan (Claude fixing)

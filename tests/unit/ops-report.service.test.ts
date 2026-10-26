@@ -352,7 +352,7 @@ describe("CSV", () => {
     const lines = (await svc.stockCsv(range)).trim().split("\r\n");
     expect(lines).toHaveLength(4);
     expect(lines[0]).toBe(
-      "SKU,Item,Category,Unit,On hand,Reorder level,Used in period,Received in period,Days of cover,Status",
+      "SKU,Item,Category,Unit,On hand,Reorder level,Used in period,Added in period,Days of cover,Status",
     );
     expect(lines[1]).toContain("LR-001,Leather roll");
     expect(lines[1]).toContain("OUT");

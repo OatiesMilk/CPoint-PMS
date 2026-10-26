@@ -6,16 +6,16 @@ import { toActionError, type ActionResult } from "@/server/lib/action-result";
 import { requirePermission } from "@/server/policies/guard";
 import {
   createItem,
-  recordMovement,
-  reverseMovement,
   setItemActive,
   suggestItemCode,
   updateItem,
 } from "@/server/services/inventory.service";
+import { saveReminderDays, saveStockUpdate } from "@/server/services/stock-update.service";
 import {
   inventoryItemFormSchema,
+  inventorySettingsSchema,
   isInventoryId,
-  movementSchema,
+  stockUpdateSchema,
 } from "@/server/validators/inventory.validator";
 
 export type { ActionResult };
@@ -26,7 +26,6 @@ const NOT_FOUND = { ok: false as const, error: "This item doesn't exist." };
 function refresh(id?: string) {
   revalidatePath("/inventory");
   revalidatePath("/floor-manager");
-  revalidatePath("/rolls/new");
   if (id) revalidatePath(`/inventory/${id}`);
 }
 
@@ -74,35 +73,26 @@ export async function setItemActiveAction(id: string, isActive: boolean): Promis
   }
 }
 
-export async function recordMovementAction(
-  id: string,
+/** The Update stock sheet (Phase 29, D-102). Also refreshes the bell and the FM home. */
+export async function saveStockUpdateAction(
   input: unknown,
-): Promise<ActionResult<{ movementId: string; message: string; onHandAfter: number }>> {
+): Promise<ActionResult<{ items: number }>> {
   const user = await requirePermission("inventory:manage");
-  if (!isInventoryId(id)) return NOT_FOUND;
   try {
-    const result = await recordMovement(id, movementSchema.parse(input), user);
-    refresh(id);
-    return {
-      ok: true,
-      movementId: result.movementId,
-      message: result.message,
-      onHandAfter: result.onHandAfter,
-    };
+    const result = await saveStockUpdate(stockUpdateSchema.parse(input), user);
+    revalidatePath("/", "layout");
+    return { ok: true, items: result.items };
   } catch (error) {
     return toResult(error);
   }
 }
 
-export async function undoMovementAction(
-  itemId: string,
-  movementId: string,
-): Promise<ActionResult> {
+export async function saveReminderDaysAction(input: unknown): Promise<ActionResult> {
   const user = await requirePermission("inventory:manage");
-  if (!isInventoryId(itemId) || !isInventoryId(movementId)) return NOT_FOUND;
   try {
-    await reverseMovement(movementId, user);
-    refresh(itemId);
+    const { reminderDays } = inventorySettingsSchema.parse(input);
+    await saveReminderDays(reminderDays, user);
+    revalidatePath("/", "layout");
     return { ok: true };
   } catch (error) {
     return toResult(error);

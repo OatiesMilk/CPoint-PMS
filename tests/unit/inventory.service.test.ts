@@ -4,8 +4,6 @@ const inventory = {
   applyStockDelta: vi.fn(async () => true),
   findInventoryItem: vi.fn(),
   findInventoryItemBySku: vi.fn(async () => null),
-  findMovement: vi.fn(),
-  findReversal: vi.fn(async () => null),
   insertInventoryItem: vi.fn(),
   insertMovement: vi.fn(async () => ({ id: "m1" })),
   listInventoryItems: vi.fn(),
@@ -18,8 +16,13 @@ const inventory = {
   updateInventoryItem: vi.fn(),
 };
 const recordAudit = vi.fn();
+const findSupplier = vi.fn();
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/inventory.model", () => inventory);
+vi.mock("@/server/models/reference-data.model", () => ({ findSupplier }));
+vi.mock("@/server/models/stock-update.model", () => ({
+  lastUpdatedAt: vi.fn(async () => new Map()),
+}));
 vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn("tx"),
 }));
@@ -37,6 +40,8 @@ const row = (overrides: Record<string, unknown> = {}) => ({
   unit: "roll",
   quantityOnHand: 4,
   reorderLevel: 2,
+  supplierId: "s1",
+  supplier: { id: "s1", name: "Meycauayan Tannery" },
   isActive: true,
   createdAt: now,
   updatedAt: now,
@@ -48,9 +53,17 @@ const form = {
   category: "LEATHER_ROLL" as const,
   unit: "roll",
   reorderLevel: 2,
+  supplierId: "s1",
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  inventory.applyStockDelta.mockResolvedValue(true);
+  inventory.findInventoryItemBySku.mockResolvedValue(null);
+  inventory.insertMovement.mockResolvedValue({ id: "m1" });
+  inventory.sumNewerDeltas.mockResolvedValue(0);
+  findSupplier.mockResolvedValue({ id: "s1", isActive: true });
+});
 
 describe("items", () => {
   it("records opening stock as an IN movement in the create transaction", async () => {
@@ -92,110 +105,79 @@ describe("items", () => {
   });
 });
 
-describe("recordMovement", () => {
-  it("uses stock with a guard against going below zero, and audits it", async () => {
+describe("leather roll supplier (Phase 29, D-102)", () => {
+  it("saves the supplier on a leather roll", async () => {
+    inventory.insertInventoryItem.mockResolvedValue(row());
+    await svc.createItem(form, actor, now);
+    expect(inventory.insertInventoryItem).toHaveBeenCalledWith(
+      expect.objectContaining({ supplierId: "s1" }),
+      "tx",
+    );
+  });
+
+  it("refuses a supplier that is no longer active, as a field error", async () => {
+    findSupplier.mockResolvedValueOnce({ id: "s1", isActive: false });
+    await expect(svc.createItem(form, actor, now)).rejects.toMatchObject({
+      status: 422,
+      details: [expect.objectContaining({ path: ["supplierId"] })],
+    });
+  });
+
+  it("keeps an item's deactivated supplier when it isn't changed", async () => {
     inventory.findInventoryItem.mockResolvedValue(row());
-    const result = await svc.recordMovement("i1", { type: "OUT", quantity: 3 }, actor, now);
-    expect(inventory.applyStockDelta).toHaveBeenCalledWith("i1", -3, { min: 3 }, "tx");
-    expect(result).toMatchObject({ onHandAfter: 1, message: "Used 3 rolls of Black cowhide." });
+    inventory.updateInventoryItem.mockResolvedValue(row({ name: "Brown" }));
+    findSupplier.mockResolvedValue({ id: "s1", isActive: false });
+    await svc.updateItem("i1", { ...form, name: "Brown" }, actor);
+    expect(findSupplier).not.toHaveBeenCalled();
+  });
+});
+
+describe("postMovement", () => {
+  const item = { id: "i1", sku: "NL-001", name: "Tacks", unit: "box", quantityOnHand: 4 };
+
+  it("applies an Update stock line only to the stock the sheet saw, and never below zero", async () => {
+    await svc.postMovement(
+      "tx" as never,
+      item,
+      { type: "OUT", delta: -3, reason: "Used on the line", updateId: "u1" },
+      actor,
+      now,
+    );
+    expect(inventory.applyStockDelta).toHaveBeenCalledWith("i1", -3, { expected: 4, min: 3 }, "tx");
+    expect(inventory.insertMovement).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "OUT", quantityDelta: -3, updateId: "u1" }),
+      "tx",
+    );
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
       expect.objectContaining({
         action: "inventory.movement.out",
-        before: { quantityOnHand: 4 },
         after: expect.objectContaining({ change: -3, quantityOnHand: 1 }),
       }),
     );
   });
 
-  it("refuses using more than is on hand before touching the database", async () => {
-    inventory.findInventoryItem.mockResolvedValue(row({ quantityOnHand: 1 }));
-    await expect(
-      svc.recordMovement("i1", { type: "OUT", quantity: 2 }, actor, now),
-    ).rejects.toMatchObject({ status: 409, message: expect.stringContaining("Only 1 roll") });
-    expect(inventory.applyStockDelta).not.toHaveBeenCalled();
-  });
-
-  it("answers 409 when another usage took the stock first (conditional update missed)", async () => {
-    inventory.findInventoryItem
-      .mockResolvedValueOnce(row({ quantityOnHand: 2 }))
-      .mockResolvedValueOnce(row({ quantityOnHand: 0 }));
+  it("is STALE, naming the item, when the stock moved since the sheet loaded", async () => {
     inventory.applyStockDelta.mockResolvedValueOnce(false);
+    inventory.findInventoryItem.mockResolvedValueOnce(row({ quantityOnHand: 9 }));
     await expect(
-      svc.recordMovement("i1", { type: "OUT", quantity: 2 }, actor, now),
-    ).rejects.toMatchObject({ status: 409, message: expect.stringContaining("Only 0 rolls") });
-    expect(inventory.insertMovement).not.toHaveBeenCalled();
-  });
-
-  it("applies a stock count only to the stock the counter saw", async () => {
-    inventory.findInventoryItem.mockResolvedValue(row());
-    await svc.recordMovement(
-      "i1",
-      { type: "ADJUST", counted: 3, expectedQuantity: 4, reason: "Monthly count" },
-      actor,
-      now,
-    );
-    expect(inventory.applyStockDelta).toHaveBeenCalledWith("i1", -1, { expected: 4 }, "tx");
-
-    inventory.applyStockDelta.mockResolvedValueOnce(false);
-    await expect(
-      svc.recordMovement(
-        "i1",
-        { type: "ADJUST", counted: 3, expectedQuantity: 4, reason: "Monthly count" },
+      svc.postMovement(
+        "tx" as never,
+        item,
+        { type: "IN", delta: 2, reason: "Added", updateId: "u1" },
         actor,
         now,
       ),
-    ).rejects.toMatchObject({ code: "STALE" });
-  });
-
-  it("refuses movements on a deactivated item", async () => {
-    inventory.findInventoryItem.mockResolvedValue(row({ isActive: false }));
-    await expect(
-      svc.recordMovement("i1", { type: "IN", quantity: 1 }, actor, now),
-    ).rejects.toMatchObject({ status: 409 });
-  });
-});
-
-describe("reverseMovement (Undo)", () => {
-  const movement = (overrides: Record<string, unknown> = {}) => ({
-    id: "m1",
-    itemId: "i1",
-    type: "IN",
-    quantityDelta: 3,
-    reason: "Delivery received",
-    createdAt: new Date(now.getTime() - 5_000),
-    roll: null,
-    createdBy: { name: "FM" },
-    item: row({ quantityOnHand: 7 }),
-    ...overrides,
-  });
-
-  it("records the opposite movement with an Undo note", async () => {
-    inventory.findMovement.mockResolvedValue(movement());
-    await svc.reverseMovement("m1", actor, now);
-    expect(inventory.insertMovement).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "OUT",
-        quantityDelta: -3,
-        reason: "Undo: Delivery received",
-      }),
-      "tx",
-    );
-  });
-
-  it("refuses stock counts, old entries and double undo", async () => {
-    inventory.findMovement.mockResolvedValueOnce(movement({ type: "ADJUST" }));
-    await expect(svc.reverseMovement("m1", actor, now)).rejects.toMatchObject({ status: 409 });
-    inventory.findMovement.mockResolvedValueOnce(
-      movement({ createdAt: new Date(now.getTime() - 3_600_000) }),
-    );
-    await expect(svc.reverseMovement("m1", actor, now)).rejects.toMatchObject({ status: 409 });
-    inventory.findMovement.mockResolvedValueOnce(movement());
-    inventory.findReversal.mockResolvedValueOnce({ id: "m2" } as never);
-    await expect(svc.reverseMovement("m1", actor, now)).rejects.toMatchObject({
-      message: "This entry was already undone.",
-    });
+    ).rejects.toMatchObject({ code: "STALE", message: expect.stringContaining("Tacks changed") });
     expect(inventory.insertMovement).not.toHaveBeenCalled();
+  });
+
+  it("refuses a deactivated item", async () => {
+    inventory.applyStockDelta.mockResolvedValueOnce(false);
+    inventory.findInventoryItem.mockResolvedValueOnce(row({ isActive: false }));
+    await expect(
+      svc.postMovement("tx" as never, item, { type: "IN", delta: 1, reason: "x" }, actor, now),
+    ).rejects.toMatchObject({ status: 409, message: expect.stringContaining("deactivated") });
   });
 });
 

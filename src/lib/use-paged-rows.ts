@@ -7,8 +7,13 @@ import { PAGE_SIZE, pageCountFor, pageOf } from "./pagination";
  * A find box and pages for a small list already in the browser (D-047). Typing goes back to
  * page 1, and a page past the end (after rows changed) shows the last page instead.
  */
-export function usePagedRows<T>(rows: readonly T[], text: (row: T) => string, size = PAGE_SIZE) {
-  const [query, setQueryState] = useState("");
+export function usePagedRows<T>(
+  rows: readonly T[],
+  text: (row: T) => string,
+  size = PAGE_SIZE,
+  initialQuery = "",
+) {
+  const [query, setQueryState] = useState(initialQuery);
   const [page, setPage] = useState(1);
 
   const matches = useMemo(() => {

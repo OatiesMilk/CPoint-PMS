@@ -12,8 +12,9 @@ import {
 } from "@/server/models/reference-data.model";
 import { countActiveUsersWithRole, createUser, findUserByEmail } from "@/server/models/user.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
+import { ensureInventorySettings } from "@/server/models/stock-update.model";
 import { recordAudit } from "./audit.service";
-import { DEMO_INVENTORY, seedDemoWeek } from "./demo-seed.service";
+import { DEMO_INVENTORY, demoItemValues, seedDemoWeek } from "./demo-seed.service";
 import { createItem } from "./inventory.service";
 
 const SYSTEM = { type: "SYSTEM" } as const;
@@ -107,8 +108,9 @@ export const DEMO_CONSTRUCTORS: { name: string; email: string }[] = [
 const DEMO_ACCOUNT_AGE_DAYS = 30;
 
 /**
- * Defect types, the CV rule, a sample supplier, the default batch schedule (D-083) and the default
- * lunch break (A-4). Never overwrites existing rows. No shoe types since Phase 27 (C-8).
+ * Defect types, the CV rule, a sample supplier, the default batch schedule (D-083), the default
+ * lunch break (A-4) and the stock reminder days (Wednesday and Friday, Phase 29). Never
+ * overwrites existing rows. No shoe types since Phase 27 (C-8).
  */
 export async function ensureReferenceData(): Promise<void> {
   await runInTransaction(async (tx) => {
@@ -117,6 +119,7 @@ export async function ensureReferenceData(): Promise<void> {
     await ensureCvSettings(REFERENCE_DATA.cvSettings, tx);
     await ensureDefaultSchedule(tx);
     await ensureDefaultLunchBreak(tx);
+    await ensureInventorySettings(tx);
   });
 }
 
@@ -231,7 +234,7 @@ export async function ensureDemoInventory(): Promise<number> {
   let created = 0;
   for (const item of DEMO_INVENTORY) {
     if (await findInventoryItemBySku(item.sku)) continue;
-    await createItem({ ...item }, manager);
+    await createItem(await demoItemValues(item), manager);
     created += 1;
   }
   if (created > 0) logger.info({ created }, "Created demo inventory items");

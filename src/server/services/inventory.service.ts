@@ -3,22 +3,20 @@ import { PAGE_SIZE } from "@/lib/pagination";
 import type { InventoryCategory, MovementType } from "@/lib/domain";
 import {
   CATEGORY_PREFIX,
-  formatQuantity,
   nextItemCode,
   notEnoughStock,
-  planMovement,
-  reversalOf,
+  staleLine,
   stockLevel,
   type StockLevel,
 } from "@/lib/inventory-rules";
 import { Errors } from "@/server/lib/errors";
 import { runInTransaction } from "@/server/models/db";
+import { findSupplier } from "@/server/models/reference-data.model";
+import { lastUpdatedAt } from "@/server/models/stock-update.model";
 import {
   applyStockDelta,
   findInventoryItem,
   findInventoryItemBySku,
-  findMovement,
-  findReversal,
   insertInventoryItem,
   insertMovement,
   listInventoryItems,
@@ -34,14 +32,11 @@ import {
 import type {
   InventoryItemFormValues,
   InventoryListQuery,
-  MovementBody,
 } from "@/server/validators/inventory.validator";
 import { recordAudit } from "./audit.service";
 
 export const INVENTORY_PAGE_SIZE = PAGE_SIZE;
 export const MOVEMENT_PAGE_SIZE = PAGE_SIZE;
-/** The Undo toast lasts 6 s; allow a generous window, then corrections go through a stock count. */
-const UNDO_WINDOW_MS = 10 * 60_000;
 
 type Actor = { id: string };
 type Tx = Prisma.TransactionClient;
@@ -72,8 +67,9 @@ export async function listItems(query: InventoryListQuery) {
     skip: (page - 1) * INVENTORY_PAGE_SIZE,
     take: INVENTORY_PAGE_SIZE,
   });
+  const last = await lastUpdatedAt(rows.map((r) => r.id));
   return {
-    rows: rows.map(toItem),
+    rows: rows.map((r) => ({ ...toItem(r), lastUpdatedAt: last.get(r.id)?.toISOString() ?? null })),
     total,
     page,
     pageCount: Math.max(1, Math.ceil(total / INVENTORY_PAGE_SIZE)),
@@ -148,9 +144,29 @@ function codeTaken(error: unknown, sku: string): never {
   throw error;
 }
 
-export async function createItem(values: InventoryItemFormValues, actor: Actor, now = new Date()) {
+/** A leather roll names an active supplier from Settings → Suppliers (Phase 29, D-102). */
+async function assertSupplier(supplierId: string | null) {
+  if (!supplierId) return;
+  const supplier = await findSupplier(supplierId);
+  if (!supplier || !supplier.isActive) {
+    throw Errors.validation([
+      {
+        path: ["supplierId"],
+        message: "This supplier is no longer active. Choose another supplier.",
+      },
+    ]);
+  }
+}
+
+export async function createItem(
+  values: Omit<InventoryItemFormValues, "supplierId"> & { supplierId?: string | null },
+  actor: Actor,
+  now = new Date(),
+) {
   await assertCodeFree(values.sku);
-  const { openingStock, ...columns } = values;
+  await assertSupplier(values.supplierId ?? null);
+  const { openingStock, ...rest } = values;
+  const columns = { ...rest, supplierId: rest.supplierId ?? null };
   return runInTransaction(async (tx) => {
     const row = await insertInventoryItem(columns, tx).catch((e) => codeTaken(e, values.sku));
     await recordAudit(tx, {
@@ -177,11 +193,12 @@ export async function updateItem(id: string, values: InventoryItemFormValues, ac
   const before = await findInventoryItem(id);
   if (!before) throw Errors.notFound("This item");
   await assertCodeFree(values.sku, id);
-  const { sku, name, category, unit, reorderLevel } = values;
+  if (values.supplierId !== before.supplierId) await assertSupplier(values.supplierId);
+  const { sku, name, category, unit, reorderLevel, supplierId } = values;
   return runInTransaction(async (tx) => {
     const after = await updateInventoryItem(
       id,
-      { sku, name, category, unit, reorderLevel },
+      { sku, name, category, unit, reorderLevel, supplierId },
       tx,
     ).catch((e) => codeTaken(e, sku));
     await recordAudit(tx, {
@@ -222,34 +239,33 @@ const AUDIT: Record<MovementType, string> = {
   ADJUST: "inventory.movement.adjust",
 };
 
-const STALE_COUNT =
-  "Stock changed while you were counting. Check the new quantity and count again.";
-
 /**
  * Writes one movement and its stock change in the caller's transaction (D-023). The update is
- * conditional: usage can't take stock below zero, and a count only applies to the stock it saw.
- * The Undo keeps an old movement's roll link (from before Phase 26); new usage names no roll.
+ * conditional: nothing takes stock below zero, and an Update stock line (`updateId`) only applies
+ * to the stock the sheet saw (`item.quantityOnHand`), else it is STALE. Only Opening stock and
+ * the sheet post movements since Phase 29 (D-102).
  */
 export async function postMovement(
   tx: Tx,
   item: Pick<InventoryItem, "id" | "sku" | "name" | "unit" | "quantityOnHand">,
-  input: { type: MovementType; delta: number; reason: string; rollId?: string | null },
+  input: { type: MovementType; delta: number; reason: string; updateId?: string | null },
   actor: Actor,
   now: Date,
 ) {
-  const guard =
-    input.type === "ADJUST"
-      ? { expected: item.quantityOnHand }
-      : input.delta < 0
-        ? { min: -input.delta }
-        : {};
+  const guard = input.updateId
+    ? { expected: item.quantityOnHand, ...(input.delta < 0 ? { min: -input.delta } : {}) }
+    : input.delta < 0
+      ? { min: -input.delta }
+      : {};
   const applied = await applyStockDelta(item.id, input.delta, guard, tx);
   if (!applied) {
-    if (input.type === "ADJUST") throw Errors.stale(STALE_COUNT);
     const fresh = await findInventoryItem(item.id, tx);
     if (fresh && !fresh.isActive)
-      throw Errors.conflict("This item is deactivated. Reactivate it to record stock.");
-    throw Errors.conflict(notEnoughStock(Number(fresh?.quantityOnHand ?? 0), item.unit));
+      throw Errors.conflict(`${item.name} is deactivated. Reactivate it to record stock.`);
+    const onHand = Number(fresh?.quantityOnHand ?? 0);
+    if (input.updateId && Math.round(onHand * 100) !== Math.round(item.quantityOnHand * 100))
+      throw Errors.stale(staleLine({ ...item, quantityOnHand: onHand }));
+    throw Errors.conflict(notEnoughStock(onHand, item.unit, item.name));
   }
   const movement = await insertMovement(
     {
@@ -257,7 +273,7 @@ export async function postMovement(
       type: input.type,
       quantityDelta: input.delta,
       reason: input.reason,
-      rollId: input.rollId ?? null,
+      updateId: input.updateId ?? null,
       createdById: actor.id,
       createdAt: now,
     },
@@ -275,76 +291,8 @@ export async function postMovement(
       change: input.delta,
       quantityOnHand: onHandAfter,
       reason: input.reason,
-      rollId: input.rollId ?? null,
+      updateId: input.updateId ?? null,
     },
   });
   return { movementId: movement.id, onHandAfter };
-}
-
-export async function recordMovement(
-  id: string,
-  body: MovementBody,
-  actor: Actor,
-  now = new Date(),
-) {
-  const row = await findInventoryItem(id);
-  if (!row) throw Errors.notFound("This item");
-  const item = toItem(row);
-  const plan = planMovement(item, body);
-  if (!plan.ok) {
-    if (plan.code === "STALE") throw Errors.stale(plan.reason);
-    throw Errors.conflict(plan.reason);
-  }
-  const result = await runInTransaction((tx) =>
-    postMovement(
-      tx,
-      item,
-      {
-        type: body.type,
-        delta: plan.delta,
-        reason: plan.reason,
-      },
-      actor,
-      now,
-    ),
-  );
-  return {
-    ...result,
-    type: body.type,
-    message: `${MOVEMENT_VERB[body.type]} ${formatQuantity(Math.abs(plan.delta), item.unit)} of ${item.name}.`,
-  };
-}
-
-const MOVEMENT_VERB: Record<MovementType, string> = {
-  IN: "Received",
-  OUT: "Used",
-  ADJUST: "Counted; corrected by",
-};
-
-/** The Undo toast: records the opposite movement (the ledger keeps both). */
-export async function reverseMovement(movementId: string, actor: Actor, now = new Date()) {
-  const movement = await findMovement(movementId);
-  if (!movement) throw Errors.notFound("This stock entry");
-  const delta = Number(movement.quantityDelta);
-  const reversal = reversalOf({ type: movement.type, quantityDelta: delta });
-  if (!reversal) throw Errors.conflict("A stock count can't be undone. Count again to correct it.");
-  if (now.getTime() - movement.createdAt.getTime() > UNDO_WINDOW_MS)
-    throw Errors.conflict("It's too late to undo this. Record a correction instead.");
-  if (await findReversal({ ...movement, quantityDelta: delta }))
-    throw Errors.conflict("This entry was already undone.");
-  const item = toItem(movement.item);
-  return runInTransaction((tx) =>
-    postMovement(
-      tx,
-      item,
-      {
-        type: reversal.type,
-        delta: -delta,
-        reason: `Undo: ${movement.reason}`,
-        rollId: movement.roll?.id,
-      },
-      actor,
-      now,
-    ),
-  );
 }

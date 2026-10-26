@@ -12,6 +12,8 @@ const itemSelect = {
   unit: true,
   quantityOnHand: true,
   reorderLevel: true,
+  supplierId: true,
+  supplier: { select: { id: true, name: true } },
   isActive: true,
   createdAt: true,
   updatedAt: true,
@@ -90,6 +92,7 @@ type ItemColumns = {
   category: InventoryCategory;
   unit: string;
   reorderLevel: number;
+  supplierId: string | null;
 };
 
 export function insertInventoryItem(data: ItemColumns, db: Db = defaultDb()) {
@@ -136,6 +139,7 @@ export function insertMovement(
     quantityDelta: number;
     reason: string;
     rollId?: string | null;
+    updateId?: string | null;
     createdById: string;
     createdAt?: Date;
   },
@@ -193,30 +197,6 @@ export async function sumNewerDeltas(
     _sum: { quantityDelta: true },
   });
   return Number(_sum.quantityDelta ?? 0);
-}
-
-export function findMovement(id: string, db: Db = defaultDb()) {
-  return db.inventoryMovement.findUnique({
-    where: { id },
-    select: { ...movementSelect, item: { select: itemSelect } },
-  });
-}
-
-/** A later movement that already undid this one (same item, the "Undo:" note, opposite delta). */
-export function findReversal(
-  movement: { id: string; itemId: string; createdAt: Date; reason: string; quantityDelta: number },
-  db: Db = defaultDb(),
-) {
-  return db.inventoryMovement.findFirst({
-    where: {
-      itemId: movement.itemId,
-      createdAt: { gte: movement.createdAt },
-      id: { not: movement.id },
-      reason: `Undo: ${movement.reason}`,
-      quantityDelta: -movement.quantityDelta,
-    },
-    select: { id: true },
-  });
 }
 
 /** Active items at or below their reorder level, emptiest first. */
