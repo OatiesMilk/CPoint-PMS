@@ -12,6 +12,7 @@ import {
 import { Errors } from "@/server/lib/errors";
 import { runInTransaction } from "@/server/models/db";
 import { findSupplier } from "@/server/models/reference-data.model";
+import { countItemRolls } from "@/server/models/roll.model";
 import { lastUpdatedAt } from "@/server/models/stock-update.model";
 import {
   applyStockDelta,
@@ -158,6 +159,9 @@ async function assertSupplier(supplierId: string | null) {
   }
 }
 
+export const LEATHER_OPENING_STOCK =
+  "A leather roll item starts at 0. Save it, then use Add rolls on its page with each roll’s area.";
+
 export async function createItem(
   values: Omit<InventoryItemFormValues, "supplierId"> & { supplierId?: string | null },
   actor: Actor,
@@ -165,6 +169,9 @@ export async function createItem(
 ) {
   await assertCodeFree(values.sku);
   await assertSupplier(values.supplierId ?? null);
+  // A leather item's count follows its rolls (Phase 30A, D-104): it starts at 0, then Add rolls.
+  if (values.category === "LEATHER_ROLL" && values.openingStock && values.openingStock > 0)
+    throw Errors.validation([{ path: ["openingStock"], message: LEATHER_OPENING_STOCK }]);
   const { openingStock, ...rest } = values;
   const columns = { ...rest, supplierId: rest.supplierId ?? null };
   return runInTransaction(async (tx) => {
@@ -194,6 +201,18 @@ export async function updateItem(id: string, values: InventoryItemFormValues, ac
   if (!before) throw Errors.notFound("This item");
   await assertCodeFree(values.sku, id);
   if (values.supplierId !== before.supplierId) await assertSupplier(values.supplierId);
+  const leatherChange =
+    (values.category === "LEATHER_ROLL") !== (before.category === "LEATHER_ROLL");
+  if (leatherChange && (Number(before.quantityOnHand) !== 0 || (await countItemRolls(id)) > 0))
+    throw Errors.validation([
+      {
+        path: ["category"],
+        message:
+          before.category === "LEATHER_ROLL"
+            ? "This item has rolls, so it stays a leather roll item. Add a new item for the other material."
+            : "This item has stock, so it can’t become a leather roll item. Add a new leather roll item instead.",
+      },
+    ]);
   const { sku, name, category, unit, reorderLevel, supplierId } = values;
   return runInTransaction(async (tx) => {
     const after = await updateInventoryItem(
@@ -248,7 +267,14 @@ const AUDIT: Record<MovementType, string> = {
 export async function postMovement(
   tx: Tx,
   item: Pick<InventoryItem, "id" | "sku" | "name" | "unit" | "quantityOnHand">,
-  input: { type: MovementType; delta: number; reason: string; updateId?: string | null },
+  input: {
+    type: MovementType;
+    delta: number;
+    reason: string;
+    updateId?: string | null;
+    /** The roll this entry is for (Phase 30A: a roll added, fully used or removed). */
+    rollId?: string | null;
+  },
   actor: Actor,
   now: Date,
 ) {
@@ -274,6 +300,7 @@ export async function postMovement(
       quantityDelta: input.delta,
       reason: input.reason,
       updateId: input.updateId ?? null,
+      rollId: input.rollId ?? null,
       createdById: actor.id,
       createdAt: now,
     },
@@ -292,6 +319,7 @@ export async function postMovement(
       quantityOnHand: onHandAfter,
       reason: input.reason,
       updateId: input.updateId ?? null,
+      ...(input.rollId ? { rollId: input.rollId } : {}),
     },
   });
   return { movementId: movement.id, onHandAfter };

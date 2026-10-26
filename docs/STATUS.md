@@ -3,20 +3,28 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-25 (Phase 29 QA passed, run 2)
-**Branch:** `main` has Phase 28 (#26). Phase 29 is **uncommitted** in `C:\dev\CPoint-PMS`; QA
-passed, so Dylan commits it and opens the PR next.
+**Last updated:** 2026-10-26 (Phase 30A QA passed, run 4)
+**Branch:** `main` has Phase 29 (#27). Phase 30A (QA passed) is **uncommitted** in
+`C:\dev\CPoint-PMS`; Dylan commits it on a new branch and opens the PR.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 29, stock updated on one sheet, reminders on Wednesdays and Fridays, and
-Reports → Materials (D-102). Codex run 1 FAIL (F1 to F3 non-leather items refused for a missing
-supplier; F4 per 100 pairs blank), fixed (`npm run check` 572 unit tests). **Run 2 PASS**
-(`qa/reports/2026-10-25-phase-29-run2.md`): R1 to R5 passed, build passed, e2e 87 passed, 0
-failed, 2 skipped, ledger `off_ledger = 0`. Commit and PR next.
-**Then: Phases 30 and 31 from the 23 Oct factory visit** (`docs/CPOINT_VISIT_10232026.md`, brief
-`docs/prompts/factory-visit-changes.md`, C-1 to C-41).
-**Overall:** 30 phases built (0 to 29); 2 planned (30 and 31, Phase 30 in two parts)
+**Current phase:** Phase 30A, leather rolls come from Inventory (D-103, D-104): the FM adds each
+roll with its own area, the constructor picks it at Capture, the QI ticks it Fully used at Finish
+batch. Codex run 1 FAIL (`qa/reports/2026-10-26-phase-30a-rolls-from-inventory.md`): 21 of 22
+scenarios passed (S14 blocked, no reset), e2e 81 passed, 4 failed, 2 skipped (F1 supplier rows
+named by code, F2 to F5 test timing and isolation). Fixed. Run 2 FAIL (`qa/reports/2026-10-26-phase-30a-run2.md`): R1, R2, R4
+passed, R3's Finish and Correct blocked (no batch left after the reset; passed in run 1), e2e 86
+passed, 2 failed (test faults: a whole-row regex, an old `R-` code pattern), fixed. Run 3 FAIL
+(`qa/reports/2026-10-26-phase-30a-run3.md`): both run 2 fixes verified, e2e 85 passed, 1 failed
+(`read ECONNRESET` on an attendance GET; a hand-started server without the 70 s keep-alive, the
+file passed alone). No code change. Run 4 **PASS** (`qa/reports/2026-10-26-phase-30a-run4.md`):
+e2e 88 passed, 0 failed, 2 skipped; batches alone 6/0; ledger 0. **Dylan commits and opens the
+PR.** Phase 29 merged (#27).
+**Then:** 30B, the measuring check (`docs/prompts/plans/phase-30b-plan.md`, an A4 piece of leather
+with cuts), 30C the 3-inch cut and the 10% return, and 31 the docs. Phase 30 was reordered by
+Dylan on 2026-10-26.
+**Overall:** 31 phases built (0 to 29, and 30A); 3 planned (30B, 30C, 31)
 
 ## Phase progress
 
@@ -57,12 +65,38 @@ failed, 2 skipped, ledger `off_ledger = 0`. Commit and PR next.
 - [x] 28. Each role sees only its modules; demo sign-in and reset on the login page (QA passed,
       run 2; merged #26)
 - [x] 29. Stock updated on one sheet, reminders on Wednesdays and Fridays, Reports → Materials
-      (QA passed, run 2)
-- [ ] 30. The whole-roll check (A, with real rolls) and the return to the supplier (B)
+      (QA passed, run 2; merged #27)
+- [x] 30A. Leather rolls come from Inventory, each with its own area; picked at Capture; ticked
+      Fully used at Finish batch (QA passed, run 4; PR next)
+- [ ] 30B. The measuring check: a cut in inches, on an A4 piece of leather (`cv/` only)
+- [ ] 30C. Cuts from 3 inches Not accepted; a roll over 10% defects marked Return to supplier
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
 
+- **Rolls from Inventory (Phase 30A, D-103, D-104):**
+  - A leather roll is added by the FM on its leather item (**Add rolls**: the day they arrived,
+    then one row per roll with its **Area** in sq ft, 0.1 to 200, two decimals, and the supplier's
+    tag). Codes `LR-<supplier code>-001`. Each roll is +1 on the item; the item starts at 0 and its
+    row on Update stock is read-only ("Counted from its rolls").
+  - Statuses: **Not scanned** → **Being scanned** (picked at Capture) → **Scanned** (Finish roll)
+    → **Fully used** (ticked at Finish batch, −1). **Removed** by the FM with a reason (any roll
+    not fully used). An empty roll picked by mistake is **put back** at Capture.
+  - The item page lists its rolls: Roll, Area, Arrived, Status, Shots, Rejected, Defects found,
+    **Defect %** ("To be implemented" until 30C), Remove; a status filter; 15 a page. No person.
+  - **Capture:** "Scan a roll" lists the rolls not scanned (Find box above five) with **Scan this
+    roll**; the line reads "Roll LR-MLT-001 · item · 24.5 sq ft · N shots". `POST /api/v1/rolls`
+    is `405`.
+  - **Finish batch:** an optional **Rolls fully used** list of scanned rolls; a same-day
+    **Correct** ticks or unticks (an untick puts the roll back in stock). A roll not scanned or
+    already used is `409`, named. The batch row reads "Fully used: LR-…".
+  - **Settings → Suppliers:** a **Code** (2 to 6 capital letters or digits, unique), filled from the
+    initials when left blank; the migration filled the existing ones (MLT, MT, JLS).
+  - Reports → Rolls and the claim sheet show the area; old `R-`/`B-` rolls stay, with no item or
+    area, and can't be ticked.
+  - Demo week: rolls with areas on three leather items (LR-003 "Black cowhide (store)" is new),
+    picked oldest first, ticked Fully used at a batch the day after their scan; one shelf roll
+    removed for water damage. `demo:reset` deletes rolls before items.
 - **Stock updates (Phase 29, D-102, C-16, C-32):**
   - **Inventory → Update stock** (`/inventory/update`, FM, any day): every active item with
     **Added (+)**, **Used (−)**, **Correction** and a **Reason** (only with a correction), and
@@ -322,6 +356,35 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
+  - Phase 30A (Codex, 2026-10-26, run 4): **PASS**. Playwright started its own server (port 3100,
+    `--keepAliveTimeout 70000`): e2e 88 passed, 0 failed, 2 skipped (demo tools off, model
+    missing); `batches.spec.ts` alone 6/0; migration up to date, build passed, ledger 0 before and
+    after.
+  - Phase 30A (Codex, 2026-10-26, run 3): FAIL. Run 2's F1 and F2 passed (admin 6/0, cv 7/0
+    alone); R1 not needed. E2E 85 passed, 1 failed, 2 skipped, 2 not run: `batches.spec.ts:369`
+    `read ECONNRESET` on `GET /api/v1/attendance`, then batches alone 6/0. The tests ran against a
+    server started with plain `npm run start` (E2E_BASE_URL), which closes idle connections after
+    5 s; Playwright's own launch uses `--keepAliveTimeout 70000` (the 2026-10-14 fix). Ledger 0.
+  - Phase 30A (Codex, 2026-10-26, run 2): FAIL. R1 (demo item chips), R2 (Name first, codes), R4
+    (axe 0) passed; R3 Add rolls and Capture passed, Finish and Correct blocked (both of today's
+    batches finished by the reset; they passed in run 1). E2E 86 passed, 2 failed, 2 skipped;
+    files: admin 5/1, batches 6/0, inventory 8/0, smoke 10/0. Both failures were tests (the admin
+    code read from the whole row; `cv.spec.ts` expected `R-`/`B-` codes), fixed. The first attempt
+    was blocked: in PowerShell `npm run demo:reset -- --yes` drops the `--`; use
+    `npm run demo:reset '--' --yes`.
+  - Phase 30A (Codex, 2026-10-26, run 1): FAIL. Manual 21 of 22 passed (S14 blocked: the dev
+    database wasn't reset, so the demo item had no rolls); ledger 0 throughout. E2E 81 passed, 4
+    failed, 2 skipped, 3 not run. F1: Settings → Suppliers rows were named by the new Code column
+    (Name is first again). F2: e2e rolls shared one item per supplier (now one each). F3: the
+    Materials test read the next page too early. F4: the smoke test clicked the list's Update
+    stock before the item page opened. F5: axe ran on a toast still fading in (the test waits for
+    it). `npm run check` passed (604).
+  - Phase 30A: `npm run check` passed, **604 unit tests** (roll codes, supplier codes, areas, the
+    moves and ticks, the services, validators, the demo seed). The demo week and `demo:reset` ran
+    on a scratch database: every item's count equals its ledger. E2E: `capture`, `rolls`,
+    `batches` (tick and untick), `inventory` (Add rolls, the sheet refuses leather), `admin`
+    (supplier codes), `smoke` and `supplier-quality` updated; CI's Docker job checks the demo
+    rolls. Not run (Codex).
   - Phase 29 (Codex, 2026-10-25): run 1 FAIL, 8 of 17 passed, 4 failed, 5 blocked; e2e 86
     passed, 1 failed, 2 skipped (F1 to F4, fixed). Run 2 **PASS**: R1 to R5, e2e 87 passed, 0
     failed, 2 skipped, ledger 0. (Run 2's first attempt stopped at a `.next` delete step that
@@ -439,17 +502,16 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. Done: Codex QA passed (run 2).
-2. Dylan commits Phase 29 on a new branch from `main`, pushes and opens the PR (D-032).
-   Claude gives the git commands when asked; CI runs on the PR and Claude fixes any failure.
-3. Phase 30A in a new session, with real rolls at the station: "Read
-   `docs/prompts/factory-visit-changes.md` and run Phase 30A. Stop for my approval before writing
+1. Dylan applies the `ci.yml` change by hand (protected file), then commits Phase 30A on a new branch from `main` with the commands Claude gave,
+   pushes and opens the PR (D-032). CI runs on the PR and Claude fixes any failure.
+2. Phase 30B in a new session, with an A4 piece of leather at the station: "Read
+   `docs/prompts/plans/phase-30b-plan.md` and run Phase 30B. Stop for my approval before writing
    code."
-4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
-5. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
+3. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
+4. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
    an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the
    "Simulator" token first (it was pasted in chat).
-6. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
+5. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
    `docker image prune -a -f` frees about 8.4 GB.
 
 Later:
@@ -464,6 +526,20 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-10-26, Phase 30A plan): each roll's area is entered by the FM, never added
+  up from the shots (D-103, changes C-33); rolls come from Inventory, picked at Capture, ticked
+  Fully used at Finish batch by whoever finishes it; a roll can't be ticked before it's scanned;
+  supplier codes from initials, editable; area 0.1 to 200 sq ft; Correct ticks or unticks; the FM
+  removes any roll not fully used; Defect % reads "To be implemented" (D-104). Tell CPoint.
+- ASSUMPTION (D-104): someone on the line tells the QI which rolls are fully used; the system
+  doesn't track how much of a roll each batch used.
+- ASSUMPTION (D-104, A-10): leather counts on an existing database keep their number but have no
+  roll records until the FM adds the rolls (or `demo:reset`); the bootstrap's demo inventory has 0
+  leather rolls.
+- ASSUMPTION (D-104): an empty roll put back at Capture returns to Not scanned with no movement;
+  Remove on a roll that is being scanned or scanned takes it out of stock (−1).
+- ASSUMPTION: the demo week ticks a roll Fully used at a batch on a later day than its scan, so the
+  last day's scanned rolls stay Scanned for the demo.
 - Decided (Dylan, 2026-10-25, Phase 29 plan): no deliveries to receive, the FM enters + or − per
   item; a leather roll item has a supplier, other materials don't; pairs that failed inspection
   count as made; a partial save clears the reminder; days left from the last 4 weeks; a
@@ -606,6 +682,8 @@ Later:
 ## Environment notes
 
 - Timezone: `Asia/Manila` for display; UTC for storage.
+- PowerShell drops a bare `--`, so `npm run demo:reset -- --yes` only dry-runs there. Use
+  `npm run demo:reset '--' --yes` in PowerShell.
 - On Dylan's PC another project's Vite server often holds port 3000. Start this app with
   `PORT=3001` then (`npm run dev -- --port` doesn't work here).
 - Proof-of-delivery files from before Phase 24 may remain under `UPLOADS_DIR/pod` (nothing reads

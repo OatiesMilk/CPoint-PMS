@@ -5,6 +5,7 @@ import {
   MAX_PAIRS_PER_CHECK_IN,
   minutesOf,
 } from "@/lib/production-rules";
+import { usedRollIdsSchema } from "./roll.validator";
 import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
 import { attendanceDaySchema } from "./attendance.validator";
 
@@ -100,6 +101,8 @@ export const checkInSchema = z.object({
   pairs: z.unknown().optional(),
   failedPairs: z.unknown().optional(),
   notes: optionalText(500, "notes"),
+  /** Rolls ticked Fully used (Phase 30A); none is fine. */
+  usedRollIds: usedRollIdsSchema,
 });
 export type CheckInInput = z.infer<typeof checkInSchema>;
 
@@ -109,6 +112,8 @@ export const correctionSchema = z.object({
   pairs: z.unknown().optional(),
   failedPairs: z.unknown().optional(),
   reason: correctionReasonSchema,
+  /** The full list of rolls ticked in this batch after the correction; left out = unchanged. */
+  usedRollIds: usedRollIdsSchema,
 });
 export type CorrectionInput = z.infer<typeof correctionSchema>;
 

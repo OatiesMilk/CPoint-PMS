@@ -292,7 +292,8 @@ export async function claimSheet(rollId: string) {
     rollCode: roll.code,
     tagCode: roll.tagCode,
     receivedAt: roll.receivedAt?.toISOString().slice(0, 10) ?? null,
-    startedAt: roll.startedAt.toISOString(),
+    startedAt: (roll.startedAt ?? roll.createdAt).toISOString(),
+    areaSqFt: roll.areaSqFt === null ? null : Number(roll.areaSqFt),
     supplier: roll.supplier,
     totals: {
       sections,

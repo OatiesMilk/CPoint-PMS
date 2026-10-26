@@ -485,10 +485,13 @@ was never built. Each phase gets its own criteria here when its plan is approved
 - [x] Phase 28: each role sees only its modules; demo sign-in and reset on the login page (merged
       #26; QA passed, run 2)
 - [x] Phase 29: stock updated on one sheet (Added, Used, Correction), reminders on Wednesdays and
-      Fridays, Reports → Materials (QA passed, run 2)
-- [ ] Phase 30A: can the camera measure a whole roll? A check with real rolls (`cv/` only)
-- [ ] Phase 30B: cuts from 3 inches Not accepted; a roll over 10% defects marked Return to
-      supplier, the FM decides
+      Fridays, Reports → Materials (merged #27; QA passed, run 2)
+- [x] Phase 30A: leather rolls come from Inventory, each with its own area; the constructor picks
+      one at Capture; the QI ticks rolls Fully used at Finish batch (QA passed, run 4; PR next)
+- [ ] Phase 30B: the measuring test: does the camera measure a cut in inches? An A4 piece of
+      leather with cuts made on purpose (`cv/` only; plan `docs/prompts/plans/phase-30b-plan.md`)
+- [ ] Phase 30C: cuts from 3 inches Not accepted; a roll over 10% defects (of its entered area)
+      marked Return to supplier, the FM decides
 - [ ] Phase 31: the documentation and the paper's figures match the system
 
 ## Phase 24 — Remove Material Requests and Procurement
@@ -609,3 +612,29 @@ count as made, the correction option). Decision: D-102.
       updated, not run
 - [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_29.md` (FAIL, F1 to F4 fixed)
 - [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_29_RUN2.md` (PASS)
+
+## Phase 30A — Leather rolls come from Inventory
+
+Brief: `docs/prompts/factory-visit-changes.md`, Phase 30 (reordered by Dylan on 2026-10-26: 30A
+rolls from Inventory, 30B the measuring test, 30C the 3-inch cut and the 10% return). Plan:
+`docs/prompts/plans/phase-30a-plan.md` (approved 2026-10-26: supplier codes from initials, area
+0.1 to 200 sq ft, Correct ticks or unticks, Remove any roll not fully used, Defect % "To be
+implemented"). Decisions: D-103, D-104.
+
+- [x] Migration `rolls_from_inventory`: `IN_STOCK` and `USED`, the roll's item, area and who
+      picked and used it, `suppliers.code` filled from initials, `roll_code_sequences`
+- [x] Inventory: Add rolls with each roll's area, the item's Rolls table (status filter, Defect %
+      "To be implemented"), Remove with a reason; leather starts at 0 and is read-only on the sheet
+- [x] Capture: Scan a roll from the list of rolls not scanned (Find box), put back an empty roll
+- [x] Finish batch: Rolls fully used (optional), ticked or unticked in a same-day Correct; the
+      roll leaves stock only then
+- [x] Settings → Suppliers: the Code; Reports → Rolls and the claim sheet show the area
+- [x] Demo week and `demo:reset` add rolls in Inventory and tick them; CI's Docker job checks it
+- [x] `npm run check` passes (604 unit tests); e2e `capture`, `rolls`, `batches`, `inventory`,
+      `admin`, `smoke` and `supplier-quality` specs updated, not run
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_30A.md` (FAIL: F1 supplier rows, F2 to F5 e2e
+      timing and isolation; fixed)
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_30A_RUN2.md` (FAIL: two e2e test faults; fixed)
+- [x] Codex QA run 3 (FAIL: one ECONNRESET from a hand-started server; no code fault)
+- [x] Codex QA run 4: **PASS** (e2e 88 passed, 0 failed, 2 skipped; ledger 0)
+- [ ] Dylan commits on a new branch and opens the PR; CI green

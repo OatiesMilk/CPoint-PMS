@@ -20,9 +20,14 @@ enum Role {
 }
 
 /// A roll is captured shot by shot at Capture until all of it is in (Phase 26, D-095).
+/// A roll's life (Phase 30A, D-104): added to Inventory by the Floor Manager (IN_STOCK), picked at
+/// Capture (OPEN), finished there (FINISHED, scanned), ticked Fully used at Finish batch (USED), or
+/// removed with a reason (CANCELLED).
 enum RollStatus {
+  IN_STOCK
   OPEN
   FINISHED
+  USED
   CANCELLED
 }
 
@@ -90,6 +95,8 @@ model User {
   rollsCreated      Roll[]               @relation("RollCreatedBy")
   rollsFinished     Roll[]               @relation("RollFinishedBy")
   rollsCancelled    Roll[]               @relation("RollCancelledBy")
+  rollsStarted      Roll[]               @relation("RollStartedBy")
+  rollsUsed         Roll[]               @relation("RollUsedBy")
   movements         InventoryMovement[]
   apiTokensCreated  ApiToken[]
   cvSettingsUpdates CvSettings[]
@@ -176,6 +183,8 @@ model Supplier {
   contactPerson String?
   phone         String?
   notes         String?
+  /// Short code in roll codes, LR-<code>-001 (Phase 30A, D-104): 2 to 6 capital letters or digits.
+  code          String   @unique
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
@@ -218,6 +227,7 @@ model CvSettings {
 }
 
 // ───────────── production ─────────────
+/// The yearly R-YYYY-NNNN numbers of Phases 26 to 29 (history; no new codes since Phase 30A).
 model RollSequence {
   year      Int @id
   lastValue Int @default(0)
@@ -225,39 +235,68 @@ model RollSequence {
   @@map("batch_sequences")
 }
 
-/// One leather roll from a supplier (the table keeps its old name, D-095). A Shoe Constructor
-/// with camera access starts it at Capture, captures it shot by shot and finishes it.
+/// The next number per roll-code prefix, e.g. "LR-MLT" (Phase 30A, D-104).
+model RollCodeSequence {
+  prefix    String @id
+  lastValue Int    @default(0)
+
+  @@map("roll_code_sequences")
+}
+
+/// One leather roll from a supplier (the table keeps its old name, D-095). Since Phase 30A
+/// (D-104) the Floor Manager adds it to Inventory with its area; a Shoe Constructor picks it at
+/// Capture, captures it shot by shot and finishes it; the QI ticks it Fully used at Finish batch.
 model Roll {
   id              String     @id @default(uuid(7)) @db.Uuid
-  code            String     @unique // R-YYYY-NNNN; rolls from before Phase 26 keep B-YYYY-NNNN
+  /// LR-MLT-001 since Phase 30A; R-YYYY-NNNN (Phases 26 to 29) and B-YYYY-NNNN rolls keep theirs
+  code            String     @unique
   /// The number on the supplier's tag, optional.
   tagCode         String?    @map("rollCode")
-  supplierId      String?    @db.Uuid // required at Start roll; older rolls may have none
-  receivedAt      DateTime?  @db.Date // older rolls only
-  status          RollStatus @default(OPEN)
-  /// Who started it: kept to default the Roll dropdown and in the audit log, never shown or
-  /// totalled per person (D-008).
+  supplierId      String?    @db.Uuid // the leather item's supplier; older rolls may have none
+  /// The leather item it belongs to (Phase 30A); null for rolls from before.
+  itemId          String?    @db.Uuid
+  /// Its area in square feet, from the stamp or the receipt (D-103); null for rolls from before.
+  areaSqFt        Decimal?   @db.Decimal(8, 2)
+  receivedAt      DateTime?  @db.Date
+  status          RollStatus // always set by the service; no default (the enum value is new)
+  /// Who added the record (the Floor Manager; before Phase 30A, who started it). Kept for the
+  /// audit only, never shown or totalled per person (D-008).
   createdById     String     @db.Uuid
-  startedAt       DateTime   @default(now())
+  /// Picked at Capture: when, and by whom (only to start the Roll dropdown on their roll, D-008).
+  startedAt       DateTime?
+  startedById     String?    @db.Uuid
   finishedAt      DateTime?
   finishedById    String?    @db.Uuid
   cancelledAt     DateTime?
   cancelledById   String?    @db.Uuid
   cancelledReason String?
+  /// Ticked Fully used at Finish batch (Phase 30A): when, by whom (audit only) and in which batch.
+  usedAt          DateTime?
+  usedById        String?    @db.Uuid
+  usedCheckInId   String?    @db.Uuid
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   supplier    Supplier?           @relation(fields: [supplierId], references: [id])
+  item        InventoryItem?      @relation(fields: [itemId], references: [id])
   createdBy   User                @relation("RollCreatedBy", fields: [createdById], references: [id])
+  startedBy   User?               @relation("RollStartedBy", fields: [startedById], references: [id])
   finishedBy  User?               @relation("RollFinishedBy", fields: [finishedById], references: [id])
   cancelledBy User?               @relation("RollCancelledBy", fields: [cancelledById], references: [id])
+  usedBy      User?               @relation("RollUsedBy", fields: [usedById], references: [id])
+  usedCheckIn ProductionCheckIn?  @relation(fields: [usedCheckInId], references: [id])
   scans       Scan[]
-  movements   InventoryMovement[] // history only: rolls taken from stock before Phase 26
+  /// Its stock entries: added (+1), and fully used or removed (−1) since Phase 30A
+  movements   InventoryMovement[]
 
   @@index([status, startedAt])
-  @@index([status, createdById])
+  @@index([status, startedById])
+  @@index([itemId, status])
   @@index([supplierId])
   @@index([createdById])
+  @@index([startedById])
+  @@index([usedById])
+  @@index([usedCheckInId])
   @@index([finishedById])
   @@index([cancelledById])
   @@index([createdAt])
@@ -330,6 +369,8 @@ model InventoryItem {
 
   supplier  Supplier?           @relation(fields: [supplierId], references: [id])
   movements InventoryMovement[]
+  /// A leather roll item's rolls, one record each (Phase 30A, D-104)
+  rolls     Roll[]
 
   @@index([category, isActive])
   @@index([supplierId])
@@ -501,8 +542,10 @@ model ProductionCheckIn {
   correctionReason     String?
   updatedAt            DateTime  @updatedAt
 
-  enteredBy   User  @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
-  correctedBy User? @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
+  enteredBy   User   @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
+  correctedBy User?  @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
+  /// Rolls ticked Fully used when this batch was finished or corrected (Phase 30A)
+  rollsUsed   Roll[]
 
   @@unique([day, slotAt])
   @@index([enteredById])

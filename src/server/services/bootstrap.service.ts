@@ -5,15 +5,12 @@ import { getEnv } from "@/server/lib/env";
 import { logger } from "@/server/lib/logger";
 import { hashPassword } from "@/server/lib/password";
 import { runInTransaction } from "@/server/models/db";
-import {
-  ensureCvSettings,
-  ensureDefectType,
-  ensureSupplier,
-} from "@/server/models/reference-data.model";
+import { ensureCvSettings, ensureDefectType } from "@/server/models/reference-data.model";
 import { countActiveUsersWithRole, createUser, findUserByEmail } from "@/server/models/user.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
 import { ensureInventorySettings } from "@/server/models/stock-update.model";
 import { recordAudit } from "./audit.service";
+import { ensureSupplierWithCode } from "./supplier-code.service";
 import { DEMO_INVENTORY, demoItemValues, seedDemoWeek } from "./demo-seed.service";
 import { createItem } from "./inventory.service";
 
@@ -115,7 +112,7 @@ const DEMO_ACCOUNT_AGE_DAYS = 30;
 export async function ensureReferenceData(): Promise<void> {
   await runInTransaction(async (tx) => {
     for (const defectType of REFERENCE_DATA.defectTypes) await ensureDefectType(defectType, tx);
-    for (const supplier of REFERENCE_DATA.suppliers) await ensureSupplier(supplier, tx);
+    for (const supplier of REFERENCE_DATA.suppliers) await ensureSupplierWithCode(supplier, tx);
     await ensureCvSettings(REFERENCE_DATA.cvSettings, tx);
     await ensureDefaultSchedule(tx);
     await ensureDefaultLunchBreak(tx);

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ZodError, type ZodType } from "zod";
 import { passwordChangeSchema, loginSchema } from "@/server/validators/auth.validator";
-import { managerCancelSchema, startRollSchema } from "@/server/validators/roll.validator";
+import { addRollsSchema, removeRollSchema } from "@/server/validators/roll.validator";
 import {
   activeSchema,
   inventoryItemFormSchema,
@@ -81,15 +81,17 @@ const CASES: [string, ZodType, unknown[]][] = [
     ],
   ],
   [
-    "start roll",
-    startRollSchema,
-    [{}, { supplierId: "", tagCode: "" }, { supplierId: "nope", tagCode: long(41) }],
+    "add rolls (Phase 30A)",
+    addRollsSchema,
+    [
+      {},
+      { receivedOn: "", rolls: [] },
+      { receivedOn: "26/10/2026", rolls: [{ areaSqFt: "" }] },
+      { receivedOn: "2026-10-26", rolls: [{ areaSqFt: "big", tagCode: long(41) }] },
+      { receivedOn: "2026-10-26", rolls: [{ areaSqFt: "0" }, { areaSqFt: "24.555" }] },
+    ],
   ],
-  [
-    "roll cancel (Floor Manager)",
-    managerCancelSchema,
-    [{}, { reason: "  " }, { reason: long(201) }],
-  ],
+  ["remove roll (Floor Manager)", removeRollSchema, [{}, { reason: "  " }, { reason: long(201) }]],
   [
     "inventory item",
     inventoryItemFormSchema,
@@ -191,6 +193,9 @@ const CASES: [string, ZodType, unknown[]][] = [
     [
       {},
       { name: "x", phone: "call me" },
+      { name: "Marikina Leather", code: "m" },
+      { name: "Marikina Leather", code: "1AB" },
+      { name: "Marikina Leather", code: "TOOLONG" },
       { name: long(81), contactPerson: long(81), phone: long(31), notes: long(301) },
     ],
   ],
@@ -492,10 +497,13 @@ describe("batch messages (D-038, Phase 27)", () => {
     ).toEqual(["Say why you're correcting this batch, at least 5 characters."]);
   });
 
-  it("asks for the supplier at Start roll, and a reason to cancel (Phase 26)", () => {
-    expect(messages(startRollSchema, {})).toEqual(["Choose the supplier this roll came from."]);
-    expect(messages(managerCancelSchema, { reason: "" })).toEqual([
-      "Write why this roll is cancelled.",
+  it("names the roll and the fix when adding rolls, and asks why one is removed (Phase 30A)", () => {
+    expect(
+      messages(addRollsSchema, { receivedOn: "2026-10-26", rolls: [{}, { areaSqFt: "x" }] }),
+    ).toEqual([
+      "Roll 1: enter its area in square feet, like 24.5.",
+      "Roll 2: enter the area as a number of square feet, like 24.5.",
     ]);
+    expect(messages(removeRollSchema, { reason: "" })).toEqual(["Write why this roll is removed."]);
   });
 });

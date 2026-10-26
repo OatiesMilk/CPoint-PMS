@@ -12,21 +12,25 @@
 > This file **replaces Phase 24 of `docs/prompts/production-progression.md`** (materials used,
 > worked out from the check-ins). It was never built, and CPoint now counts stock by hand (C-16).
 
-| Phase | What it does                                                                                        | Who sees it             | Needs first                                |
-| ----- | --------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------ |
-| 24    | Remove Material Requests and Procurement                                                            | FM, Admin, constructors | —                                          |
-| 25    | Pass or Reject, and the camera's verdict is final; remove the Review Queue, Repair Station, Salvage | the camera, FM reports  | —                                          |
-| 26    | Capture on the constructors' own phones; rolls start and finish there; rolls in Reports             | constructors, FM        | —                                          |
-| 27    | Batches are the check-in intervals: lunch break, on-screen notices, failed pairs, no shoe types     | QI, FM, Admin           | —                                          |
-| 28    | Each role sees only its modules; demo quick sign-in and reset on the login page                     | everyone                | —                                          |
-| 29    | Inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption                   | FM                      | —                                          |
-| 30A   | Can the camera measure a whole roll? A check with real rolls (`cv/` toolkit only)                   | Dylan at the station    | real rolls, a ruler, an A4 sheet, 2 phones |
-| 30B   | Large cuts from 3 inches; a roll over 10% defects is marked Return to supplier, the FM decides      | constructors, FM        | 30A's report                               |
-| 31    | The documentation and the paper's figures match the system                                          | anyone reading the docs | all of the above                           |
+| Phase | What it does                                                                                        | Who sees it             | Needs first                              |
+| ----- | --------------------------------------------------------------------------------------------------- | ----------------------- | ---------------------------------------- |
+| 24    | Remove Material Requests and Procurement                                                            | FM, Admin, constructors | —                                        |
+| 25    | Pass or Reject, and the camera's verdict is final; remove the Review Queue, Repair Station, Salvage | the camera, FM reports  | —                                        |
+| 26    | Capture on the constructors' own phones; rolls start and finish there; rolls in Reports             | constructors, FM        | —                                        |
+| 27    | Batches are the check-in intervals: lunch break, on-screen notices, failed pairs, no shoe types     | QI, FM, Admin           | —                                        |
+| 28    | Each role sees only its modules; demo quick sign-in and reset on the login page                     | everyone                | —                                        |
+| 29    | Inventory by stock count, reminders on Wednesdays and Fridays, weekly consumption                   | FM                      | —                                        |
+| 30A   | Leather rolls come from Inventory with their areas; picked at Capture; ticked Fully used (D-104)    | FM, constructors, QI    | —                                        |
+| 30B   | Can the camera measure a cut in inches? An A4 piece of leather with cuts (`cv/` toolkit only)       | Dylan at the station    | an A4 piece of leather, a ruler, 1 phone |
+| 30C   | Large cuts from 3 inches; a roll over 10% defects is marked Return to supplier, the FM decides      | constructors, FM        | 30B's report                             |
+| 31    | The documentation and the paper's figures match the system                                          | anyone reading the docs | all of the above                         |
 
 Order (DQ-3): removals first (less code to keep green), then the two new flows (Capture, Batches),
-then access, inventory and measuring. **30A can run any time after Phase 24**: it changes only
-`cv/` and its long pole is Dylan with real rolls at the station, so book that early.
+then access, inventory and measuring. **Reordered by Dylan on 2026-10-26:** 30A is now the rolls
+in Inventory (each with its own area, D-103: the area is entered, never added up from the shots,
+which changes C-33), 30B the measuring check (Part A below, now with one A4 piece of leather
+instead of whole rolls) and 30C the app part (Part B below). Plans:
+`docs/prompts/plans/phase-30a-plan.md` and `phase-30b-plan.md`.
 
 ---
 
@@ -1052,7 +1056,10 @@ the report; the reminder on a reminder day and gone after a count (mocked clock)
 
 ## Phase 30 — The whole-roll check and the return to the supplier
 
-### Part A — Can the camera measure a whole roll? (a check with real rolls)
+### Part A (now 30B) — Can the camera measure a whole roll? (a check with real rolls)
+
+> Since D-103 the roll's area is entered, so 30B only checks that defects are measured in inches,
+> on an A4 piece of leather; see `docs/prompts/plans/phase-30b-plan.md`.
 
 **Goal:** answer C-10 and C-33 with numbers before building C-9.
 
@@ -1071,7 +1078,7 @@ the report; the reminder on a reminder day and gone after a count (mocked clock)
    the frame; how far apart the two phones' figures are; the formula to use. Dylan picks; a
    DECISIONS entry records it before Part B.
 
-### Part B — Large cuts from 3 inches, and the 10% rule in the app
+### Part B (now 30C) — Large cuts from 3 inches, and the 10% rule in the app
 
 **Goal:** a cut of 3 inches or more is Not accepted, each finished roll shows its defect share, and
 a roll over the limit is marked Return to supplier for the FM to decide.
@@ -1091,7 +1098,7 @@ D-072 (the claim sheet).
 4. **Engine.** A type with a length limit is Not accepted at or above it and Usable below it: a cut
    under 3 in is small, from 3 in large (C-11, C-12, C-37).
 5. **Rolls.** At Finish roll: share = defect area (the union per shot, every found defect, C-35) ÷
-   the roll's area (the sum of its shots, C-33). **More than** the limit, and the system marks the
+   the roll's area as the FM entered it (D-103; it replaces "the sum of its shots", C-33). **More than** the limit, and the system marks the
    roll **Return to supplier** (C-20). The constructor sees "12.4% of this roll has defects (limit
    10%). Set it aside for the Floor Manager." Reports → Rolls gets **To return**: the roll's
    findings (area, defect area, share, the limit, defects by type, the photos) and the FM's decision,

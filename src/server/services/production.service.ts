@@ -74,6 +74,14 @@ import {
 } from "@/server/validators/production.validator";
 import { qualityInspectorPresentOn, workforceByDay } from "./attendance.service";
 import { recordAudit } from "./audit.service";
+import {
+  markRollsUsed,
+  rollsToTick,
+  rollsUsedByCheckIn,
+  unmarkRollsUsed,
+  type RollToTick,
+} from "./roll.service";
+import { diffUsedRolls } from "@/lib/roll-rules";
 
 type Actor = { id: string; name?: string };
 /** Who finishes a batch: the role decides whether they may (D-088). */
@@ -347,6 +355,8 @@ export type BatchView = {
     attendanceChanged: boolean;
     notes: string | null;
     correction: { at: string; by: string; reason: string } | null;
+    /** Rolls ticked Fully used at this finish (Phase 30A). */
+    usedRolls: { id: string; code: string }[];
   } | null;
 };
 
@@ -355,6 +365,7 @@ function batchView(
   row: CheckInRow | undefined,
   now: Date,
   todayPresent: number | null,
+  usedRolls: { id: string; code: string }[] = [],
 ): BatchView {
   const state = batchState(batch, row ?? null, now);
   const opens = finishOpensAt(batch);
@@ -394,6 +405,7 @@ function batchView(
                   reason: row.correctionReason,
                 }
               : null,
+          usedRolls,
         }
       : null,
   };
@@ -411,14 +423,15 @@ export async function productionToday(viewer: { role: Role }, now: Date = new Da
   const rule = scheduleRule(inForceOn(data.schedules, day));
   const lunch = lunchOn(data.lunches, day);
   const batches = batchesOn(data, day);
-  const rows = batches.map((b) =>
-    batchView(
-      b,
-      data.checkIns.find((c) => c.slotAt.getTime() === b.at.getTime()),
-      now,
-      wf.constructorsPresent,
-    ),
-  );
+  const canEnter = mayEnterCheckIns(viewer.role, qiPresent);
+  const [used, toTick] = await Promise.all([
+    rollsUsedByCheckIn(data.checkIns.map((c) => c.id)),
+    canEnter ? rollsToTick() : Promise.resolve([] as RollToTick[]),
+  ]);
+  const rows = batches.map((b) => {
+    const row = data.checkIns.find((c) => c.slotAt.getTime() === b.at.getTime());
+    return batchView(b, row, now, wf.constructorsPresent, row ? (used.get(row.id) ?? []) : []);
+  });
   const quota = quotaOn(data.quotas, day);
   const finished = data.checkIns.reduce((s, c) => s + c.pairs, 0);
   const failed = data.checkIns.reduce((s, c) => s + c.failedPairs, 0);
@@ -438,7 +451,6 @@ export async function productionToday(viewer: { role: Role }, now: Date = new Da
     rows.find((r) => r.state === "IN_PROGRESS") ??
     rows.find((r) => r.state === "UPCOMING") ??
     null;
-  const canEnter = mayEnterCheckIns(viewer.role, qiPresent);
   return {
     day,
     dayLabel: formatAttendanceDay(day),
@@ -458,6 +470,8 @@ export async function productionToday(viewer: { role: Role }, now: Date = new Da
     covering: viewer.role === "FLOOR_MANAGER" && canEnter,
     /** Why this viewer can't finish batches, or null. */
     enterNote: checkInCoverReason(viewer.role, qiPresent),
+    /** Scanned rolls not yet fully used, to tick at Finish batch (Phase 30A); empty if !canEnter. */
+    rollsToTick: toTick,
   };
 }
 
@@ -741,6 +755,13 @@ export async function saveCheckIn(
         },
         tx,
       );
+      const usedRolls = await markRollsUsed(
+        tx,
+        input.usedRollIds ?? [],
+        { checkInId: row.id, label: batch.label },
+        actor,
+        now,
+      );
       await recordAudit(tx, {
         actor: { type: "USER", userId: actor.id },
         action: "production.checkin",
@@ -753,10 +774,11 @@ export async function saveCheckIn(
           failedPairs,
           constructorsPresent: wf.constructorsPresent,
           notes: input.notes ?? null,
+          ...(usedRolls.length > 0 ? { rollsFullyUsed: usedRolls } : {}),
           ...(covering ? { coveringForQualityInspector: true } : {}),
         },
       });
-      return { id: row.id, number: batch.number, time: batch.time };
+      return { id: row.id, number: batch.number, time: batch.time, usedRolls };
     });
   } catch (error) {
     // Two people finishing the same batch at once: the unique slot decides, the second is stale.
@@ -794,7 +816,16 @@ export async function correctCheckIn(
     (b) => b.at.getTime() === row.slotAt.getTime(),
   );
   const number = batch?.number ?? 0;
+  const label = batch?.label ?? `the batch ending at ${clockTime(row.slotAt)}`;
   const next = counts(number, input);
+  // Phase 30A: a correction may tick or untick rolls; no list sent leaves the ticks as they are.
+  const before = (await rollsUsedByCheckIn([id])).get(id) ?? [];
+  const diff = input.usedRollIds
+    ? diffUsedRolls(
+        before.map((r) => r.id),
+        input.usedRollIds,
+      )
+    : { add: [], remove: [] };
 
   return runInTransaction(async (tx) => {
     const ok = await correctCheckInRow(
@@ -804,15 +835,31 @@ export async function correctCheckIn(
       tx,
     );
     if (!ok) throw Errors.stale("This batch was changed by someone else. Refresh to see it.");
+    const unticked = await unmarkRollsUsed(
+      tx,
+      diff.remove,
+      { checkInId: id, label, reason: input.reason },
+      actor,
+      now,
+    );
+    const ticked = await markRollsUsed(tx, diff.add, { checkInId: id, label }, actor, now);
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "production.checkin.correct",
       entity: "ProductionCheckIn",
       entityId: id,
-      before: { pairs: row.pairs, failedPairs: row.failedPairs },
+      before: {
+        pairs: row.pairs,
+        failedPairs: row.failedPairs,
+        ...(diff.add.length + diff.remove.length > 0
+          ? { rollsFullyUsed: before.map((r) => r.code) }
+          : {}),
+      },
       after: {
         ...next,
         reason: input.reason,
+        ...(ticked.length > 0 ? { rollsTicked: ticked } : {}),
+        ...(unticked.length > 0 ? { rollsUnticked: unticked } : {}),
         ...(covering ? { coveringForQualityInspector: true } : {}),
       },
     });

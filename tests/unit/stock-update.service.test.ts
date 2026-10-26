@@ -85,6 +85,43 @@ describe("saveStockUpdate (Phase 29, D-102)", () => {
     });
   });
 
+  it("refuses a leather roll line: its count follows its rolls (Phase 30A)", async () => {
+    model.findItemsForUpdate.mockResolvedValue([
+      ...items,
+      {
+        id: "0192f000-0000-7000-8000-00000000000c",
+        sku: "LR-001",
+        name: "Black cowhide",
+        unit: "roll",
+        quantityOnHand: 3,
+        isActive: true,
+        category: "LEATHER_ROLL",
+      },
+    ]);
+    await expect(
+      svc.saveStockUpdate(
+        {
+          lines: [
+            { itemId: A, seenQuantity: 4, added: 1 },
+            { itemId: "0192f000-0000-7000-8000-00000000000c", seenQuantity: 3, used: 1 },
+          ],
+        },
+        actor,
+        now,
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [
+        {
+          path: ["lines", "0192f000-0000-7000-8000-00000000000c", "added"],
+          message:
+            "Black cowhide is counted from its rolls. Add or remove rolls on the item instead.",
+        },
+      ],
+    });
+    expect(model.insertStockUpdate).not.toHaveBeenCalled();
+  });
+
   it("is STALE, naming the item, when its stock moved since the sheet loaded", async () => {
     await expect(
       svc.saveStockUpdate({ lines: [{ itemId: A, seenQuantity: 3, added: 1 }] }, actor, now),

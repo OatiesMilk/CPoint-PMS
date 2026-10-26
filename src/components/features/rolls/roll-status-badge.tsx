@@ -1,14 +1,16 @@
-import { CircleCheck, CircleSlash, LoaderCircle } from "lucide-react";
+import { CircleCheck, CircleSlash, LoaderCircle, PackageCheck, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ROLL_STATUS_LABELS, type RollStatus } from "@/lib/domain";
 
 const STYLE = {
+  IN_STOCK: { tone: "neutral", Icon: Warehouse },
   OPEN: { tone: "info", Icon: LoaderCircle },
   FINISHED: { tone: "success", Icon: CircleCheck },
+  USED: { tone: "neutral", Icon: PackageCheck },
   CANCELLED: { tone: "neutral", Icon: CircleSlash },
 } as const;
 
-/** Open (being captured), Finished or Cancelled (Phase 26, D-095). */
+/** Not scanned, Being scanned, Scanned, Fully used or Removed (Phase 30A, D-104). */
 export function RollStatusBadge({ status }: { status: RollStatus }) {
   const { tone, Icon } = STYLE[status];
   return (

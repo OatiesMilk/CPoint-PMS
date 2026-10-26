@@ -190,6 +190,8 @@ export function findClaimRoll(rollId: string, db: Db = defaultDb()) {
       tagCode: true,
       receivedAt: true,
       startedAt: true,
+      createdAt: true,
+      areaSqFt: true,
       supplier: { select: { name: true, contactPerson: true, phone: true } },
       scans: {
         where: { finalVerdict: "REJECT" },

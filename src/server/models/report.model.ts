@@ -37,13 +37,17 @@ export async function dailyScanStats(range: Range, db: Db = defaultDb()): Promis
   }));
 }
 
-/** Rolls started and finished per Manila day (Phase 26: the roll's own start and finish times). */
+/**
+ * Rolls started and finished per Manila day (Phase 26: the roll's own start and finish times). A
+ * roll from Inventory counts once scanning starts, and stays finished when it is fully used (30A).
+ */
 export async function dailyProduction(range: Range, db: Db = defaultDb()) {
   const rows = await db.$queryRaw<{ day: string; started: bigint; completed: bigint }[]>`
     WITH started AS (
-      SELECT b."startedAt" AS at FROM batches b WHERE b.status <> 'CANCELLED'
+      SELECT b."startedAt" AS at FROM batches b
+      WHERE b.status <> 'CANCELLED' AND b."startedAt" IS NOT NULL
     ), completed AS (
-      SELECT b."finishedAt" AS at FROM batches b WHERE b.status = 'FINISHED'
+      SELECT b."finishedAt" AS at FROM batches b WHERE b.status IN ('FINISHED', 'USED')
     ), events AS (
       SELECT at, 1 AS s, 0 AS c FROM started UNION ALL SELECT at, 0, 1 FROM completed
     )

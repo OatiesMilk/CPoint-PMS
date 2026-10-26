@@ -1,27 +1,24 @@
 import { Errors } from "@/server/lib/errors";
 import { handle, json, readJsonBody } from "@/server/lib/http";
+import { requireApiCapture, requireApiPermission, requireDevice } from "@/server/policies/guard";
 import {
-  requireApiCapture,
-  requireApiPermission,
-  requireApiUser,
-  requireDevice,
-} from "@/server/policies/guard";
-import { can, canCaptureFor } from "@/server/policies/permissions";
-import {
-  cancelRoll,
+  addRolls,
   deviceTargetRoll,
   finishRoll,
   getRollDetail,
   listRollsForReport,
   openRollsForCapture,
+  putBackRoll,
+  readyRollsForCapture,
+  removeRoll,
   startRoll,
 } from "@/server/services/roll.service";
+import { isInventoryId } from "@/server/validators/inventory.validator";
 import {
+  addRollsSchema,
   isRollId,
-  managerCancelSchema,
+  removeRollSchema,
   rollListQuerySchema,
-  startRollSchema,
-  type StartRollValues,
 } from "@/server/validators/roll.validator";
 import { AppError } from "@/server/lib/errors";
 import { ROLL_MESSAGES } from "@/lib/roll-rules";
@@ -43,17 +40,29 @@ export const rollController = {
     return json({ data: rows, meta: { total, page, pageCount } });
   }),
 
-  /** POST /api/v1/rolls { supplierId, tagCode? }: start a roll at Capture. */
-  create: handle(async (request: Request) => {
-    const user = await requireApiCapture();
-    const values = startRollSchema.parse(await readJsonBody(request)) as StartRollValues;
-    return json({ data: await startRoll(values, user) }, 201);
+  /**
+   * POST /api/v1/inventory/{id}/rolls { receivedOn, rolls: [{ areaSqFt, tagCode? }] }: the Floor
+   * Manager adds rolls to a leather item (Phase 30A). Starting a roll at Capture is
+   * POST /api/v1/rolls/{id}/start; POST /api/v1/rolls answers 405 since then.
+   */
+  add: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("inventory:manage");
+    const { id } = await ctx.params;
+    if (!isInventoryId(id)) throw Errors.notFound("This item");
+    const values = addRollsSchema.parse(await readJsonBody(request));
+    return json({ data: await addRolls(id, values, user) }, 201);
   }),
 
-  /** GET /api/v1/rolls/open: every open roll, for the Capture page's Roll dropdown. */
+  /** GET /api/v1/rolls/open: every roll being scanned, for the Capture page's Roll dropdown. */
   open: handle(async () => {
     const user = await requireApiCapture();
     return json({ data: await openRollsForCapture(user) });
+  }),
+
+  /** GET /api/v1/rolls/ready: rolls in stock, not scanned yet, for Capture's Scan a roll. */
+  ready: handle(async () => {
+    await requireApiCapture();
+    return json({ data: await readyRollsForCapture() });
   }),
 
   /** GET /api/v1/rolls/{id}: a roll and its shots (the Floor Manager). */
@@ -64,6 +73,12 @@ export const rollController = {
     return json({ data: detail });
   }),
 
+  /** POST /api/v1/rolls/{id}/start: pick a roll at Capture; it is now being scanned. */
+  start: handle(async (_request: Request, ctx: IdContext) => {
+    const user = await requireApiCapture();
+    return json({ data: await startRoll(await rollIdFrom(ctx), user) });
+  }),
+
   /** POST /api/v1/rolls/{id}/finish: at Capture, once all of the roll is scanned. */
   finish: handle(async (_request: Request, ctx: IdContext) => {
     const user = await requireApiCapture();
@@ -71,18 +86,20 @@ export const rollController = {
   }),
 
   /**
-   * POST /api/v1/rolls/{id}/cancel { reason? }. The Floor Manager cancels any open roll with a
-   * reason; someone at Capture cancels only an empty roll.
+   * POST /api/v1/rolls/{id}/cancel: at Capture, put back a roll picked by mistake (no shots). A
+   * roll from Inventory waits to be scanned again; one from before Phase 30A is cancelled.
    */
-  cancel: handle(async (request: Request, ctx: IdContext) => {
-    const user = await requireApiUser();
+  cancel: handle(async (_request: Request, ctx: IdContext) => {
+    const user = await requireApiCapture();
+    return json({ data: await putBackRoll(await rollIdFrom(ctx), user) });
+  }),
+
+  /** POST /api/v1/rolls/{id}/remove { reason }: the Floor Manager removes a roll (Phase 30A). */
+  remove: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("roll:manage");
     const id = await rollIdFrom(ctx);
-    if (can(user.role, "roll:manage")) {
-      const { reason } = managerCancelSchema.parse(await readJsonBody(request));
-      return json({ data: await cancelRoll(id, { by: "manager", reason }, user) });
-    }
-    if (!canCaptureFor(user)) throw Errors.forbidden();
-    return json({ data: await cancelRoll(id, { by: "capture" }, user) });
+    const { reason } = removeRollSchema.parse(await readJsonBody(request));
+    return json({ data: await removeRoll(id, reason, user) });
   }),
 
   /** GET /api/v1/rolls/current: for a device token (the simulator), where its next scan goes. */

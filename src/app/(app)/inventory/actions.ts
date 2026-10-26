@@ -10,7 +10,9 @@ import {
   suggestItemCode,
   updateItem,
 } from "@/server/services/inventory.service";
+import { addRolls } from "@/server/services/roll.service";
 import { saveReminderDays, saveStockUpdate } from "@/server/services/stock-update.service";
+import { addRollsSchema } from "@/server/validators/roll.validator";
 import {
   inventoryItemFormSchema,
   inventorySettingsSchema,
@@ -94,6 +96,23 @@ export async function saveReminderDaysAction(input: unknown): Promise<ActionResu
     await saveReminderDays(reminderDays, user);
     revalidatePath("/", "layout");
     return { ok: true };
+  } catch (error) {
+    return toResult(error);
+  }
+}
+
+/** Add rolls to a leather item, each with its own area (Phase 30A, D-103). */
+export async function addRollsAction(
+  id: string,
+  input: unknown,
+): Promise<ActionResult<{ codes: string[] }>> {
+  const user = await requirePermission("inventory:manage");
+  if (!isInventoryId(id)) return NOT_FOUND;
+  try {
+    const result = await addRolls(id, addRollsSchema.parse(input), user);
+    refresh(id);
+    revalidatePath("/reports/rolls");
+    return { ok: true, codes: result.added.map((r) => r.code) };
   } catch (error) {
     return toResult(error);
   }

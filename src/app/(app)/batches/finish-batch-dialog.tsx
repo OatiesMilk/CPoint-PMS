@@ -29,13 +29,23 @@ type Props = {
   batch: { number: number; slotAt: string; times: string };
   /** "14 of 16", or null when attendance isn't taken. */
   workforceLine: string | null;
-  /** For a correction: the saved batch. */
-  checkIn?: { id: string; updatedAt: string; pairs: number; failedPairs: number };
+  /** For a correction: the saved batch, with the rolls ticked at its finish. */
+  checkIn?: {
+    id: string;
+    updatedAt: string;
+    pairs: number;
+    failedPairs: number;
+    usedRolls: { id: string; code: string }[];
+  };
+  /** Scanned rolls not yet fully used, oldest scan first (Phase 30A). */
+  rolls: TickableRoll[];
   /** Open as soon as the page loads (a notice's or the home's Finish batch link). */
   autoOpen?: boolean;
   /** The phone's bottom action (D-096): full width, fixed above the safe area below 640 px. */
   primary?: boolean;
 };
+
+export type TickableRoll = { id: string; code: string; line: string };
 
 const FIELD_IDS = { pairs: "batch-pairs", failedPairs: "batch-failed", reason: "batch-reason" };
 
@@ -49,6 +59,7 @@ export function FinishBatchDialog({
   batch,
   workforceLine,
   checkIn,
+  rolls,
   autoOpen,
   primary,
 }: Props) {
@@ -66,6 +77,13 @@ export function FinishBatchDialog({
   const [failed, setFailed] = useState(checkIn ? String(checkIn.failedPairs) : "0");
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState("");
+  const ticked0 = () => new Set(checkIn?.usedRolls.map((r) => r.id) ?? []);
+  const [ticked, setTicked] = useState<Set<string>>(ticked0);
+  // A correction lists the rolls ticked in this batch first, then the ones still to tick.
+  const options: TickableRoll[] = [
+    ...(checkIn?.usedRolls.map((r) => ({ ...r, line: "Ticked in this batch" })) ?? []),
+    ...rolls.filter((r) => !checkIn?.usedRolls.some((u) => u.id === r.id)),
+  ];
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [stale, setStale] = useState<string | null>(null);
@@ -76,6 +94,7 @@ export function FinishBatchDialog({
     setFailed(checkIn ? String(checkIn.failedPairs) : "0");
     setNotes("");
     setReason("");
+    setTicked(ticked0());
     setErrors({});
     setFormError(null);
   }
@@ -98,17 +117,26 @@ export function FinishBatchDialog({
     startTransition(async () => {
       const result =
         mode === "finish"
-          ? await finishBatchAction({ slotAt: batch.slotAt, pairs, failedPairs: failed, notes })
+          ? await finishBatchAction({
+              slotAt: batch.slotAt,
+              pairs,
+              failedPairs: failed,
+              notes,
+              usedRollIds: [...ticked],
+            })
           : await correctBatchAction(checkIn!.id, {
               expectedUpdatedAt: checkIn!.updatedAt,
               pairs,
               failedPairs: failed,
               reason,
+              usedRollIds: [...ticked],
             });
       if (result.ok) {
         toast.success(
           mode === "finish"
-            ? `Batch ${batch.number} finished.`
+            ? ticked.size > 0
+              ? `Batch ${batch.number} finished. ${ticked.size === 1 ? "1 roll" : `${ticked.size} rolls`} marked fully used.`
+              : `Batch ${batch.number} finished.`
             : `Batch ${batch.number} corrected. Both counts are kept in the audit log.`,
         );
         setOpen(false);
@@ -260,6 +288,47 @@ export function FinishBatchDialog({
               setFailed(v);
               recheck({ pairs, failed: v });
             })}
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-base font-medium">
+                Rolls fully used{" "}
+                <span className="font-normal text-muted-foreground">(optional)</span>
+              </legend>
+              <p className="text-sm text-muted-foreground">
+                Tick a roll only when the line says all of it is used. It then leaves stock.
+              </p>
+              {options.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No scanned rolls are waiting. A roll shows here once it is scanned at Capture.
+                </p>
+              ) : (
+                <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                  {options.map((r) => (
+                    <li key={r.id}>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-1 hover:bg-muted sm:min-h-9">
+                        <input
+                          type="checkbox"
+                          className="size-4 shrink-0 accent-(--primary)"
+                          checked={ticked.has(r.id)}
+                          disabled={pending}
+                          onChange={(e) =>
+                            setTicked((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(r.id);
+                              else next.delete(r.id);
+                              return next;
+                            })
+                          }
+                        />
+                        <span className="flex min-w-0 flex-col">
+                          <span className="font-medium tabular-nums">{r.code}</span>
+                          <span className="truncate text-sm text-muted-foreground">{r.line}</span>
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </fieldset>
             <p className="text-sm">
               <span className="text-muted-foreground">Shoe Constructors present today: </span>
               {workforceLine ?? "Attendance not taken yet. Ask the Floor Manager."}
