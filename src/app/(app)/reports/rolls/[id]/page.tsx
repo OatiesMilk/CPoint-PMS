@@ -23,6 +23,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableActionsHead,
+  TableViewLink,
 } from "@/components/ui/table";
 import { OUTCOME_LABELS } from "@/lib/decision-engine";
 import { formatCalendarDate, formatManilaDateTime } from "@/lib/format";
@@ -176,6 +178,7 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
                 <TableHead>Verdict</TableHead>
                 <TableHead>Defects</TableHead>
                 <TableHead>Captured</TableHead>
+                <TableActionsHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -217,6 +220,9 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
                     )}
                   </TableCell>
                   <TableCell>{formatManilaDateTime(s.capturedAt)}</TableCell>
+                  <TableCell className="text-right">
+                    <TableViewLink href={`/scans/${s.id}`} what={`shot #${s.sequence}`} />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -60,7 +60,9 @@ test.describe("Reports → Rolls (Floor Manager)", () => {
     // No person anywhere on the list (D-008).
     await expect(page.getByRole("columnheader", { name: /by|person|constructor/i })).toHaveCount(0);
 
-    await row.getByRole("link", { name: roll.code }).click();
+    // The row's View action names the roll too ("View roll LR-…").
+    await expect(row.getByRole("link", { name: `View roll ${roll.code}` })).toBeVisible();
+    await row.getByRole("link", { name: roll.code, exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(roll.code);
     await expect(page.getByText("2 shots · 1 passed · 1 rejected (for salvage)")).toBeVisible();
     const shots = page.getByTestId("shot-row");

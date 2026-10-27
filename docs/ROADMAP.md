@@ -637,4 +637,14 @@ implemented"). Decisions: D-103, D-104.
 - [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_30A_RUN2.md` (FAIL: two e2e test faults; fixed)
 - [x] Codex QA run 3 (FAIL: one ECONNRESET from a hand-started server; no code fault)
 - [x] Codex QA run 4: **PASS** (e2e 88 passed, 0 failed, 2 skipped; ledger 0)
-- [ ] Dylan commits on a new branch and opens the PR; CI green
+- [x] Committed on `feature/phase-30a-rolls-from-inventory` (e3c230c)
+- [x] Dylan's review: Day label above the day picker; View on rows that open a page
+- [x] Codex QA run 5: the UI checks passed; one e2e test ran before 01:00 Manila (timing)
+- [x] Codex QA run 6: the full suite passed; `batches` alone failed (focus moved mid-typing; fixed)
+- [x] Codex QA run 7: **PASS** (e2e 88 passed, 0 failed, 2 skipped; `batches` alone 6/0 three times)
+- [x] Dylan's review of Batches: one button size, aligned cards, a wider Finish batch window
+      (`npm run check` passed, 607)
+- [x] Codex QA run 8: **PASS** (e2e 88 passed, 0 failed; U3 to U7 and axe passed)
+- [x] Rolls fully used shows only code, area and item (Dylan's phone screenshot)
+- [x] Codex QA run 9: **PASS** (the trimmed roll lines at 1440 and 390 px, axe 0, `batches` 6/0)
+- [ ] Follow-up commit, PR open, CI green

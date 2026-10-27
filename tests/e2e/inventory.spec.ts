@@ -211,8 +211,9 @@ test("a low item shows on the Floor Manager home", async ({ browser, page }) => 
   await page.goto(`/inventory?stock=low&q=${item.sku}`);
   const row = page.getByRole("row", { name: new RegExp(item.sku) });
   await expect(row).toContainText("Low");
-  // The badge is all the row offers besides the item's own page: stock changes on Update stock.
-  await expect(row.getByRole("link")).toHaveCount(1);
+  // The row offers only the item's own page (its name and View): stock changes on Update stock.
+  await expect(row.getByRole("link")).toHaveCount(2);
+  await expect(row.getByRole("link", { name: `View ${item.name}` })).toBeVisible();
 });
 
 test("a leather roll needs its supplier (Phase 29, D-102)", async ({ browser }) => {

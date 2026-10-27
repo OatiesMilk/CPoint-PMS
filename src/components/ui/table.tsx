@@ -1,5 +1,8 @@
 import * as React from "react";
+import Link from "next/link";
+import { Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "./button";
 import { ScrollRegion } from "./scroll-region";
 
 // Dense data table (DESIGN.md → Hierarchy rules): one row height, numbers right-aligned via `numeric`.
@@ -73,5 +76,28 @@ export function TableCell({
       )}
       {...props}
     />
+  );
+}
+
+// The last column of a table whose rows open a page of their own: a visible "View" so nobody has
+// to guess that the first cell is a link. The header is named for screen readers only.
+export function TableActionsHead({ className, ...props }: React.ComponentProps<"th">) {
+  return (
+    <TableHead className={cn("text-right", className)} {...props}>
+      <span className="sr-only">Actions</span>
+    </TableHead>
+  );
+}
+
+// "View" with an eye, never the icon alone (ui-craft: icons need a word). `what` finishes the
+// accessible name for screen readers, e.g. "View roll LR-MLT-008".
+export function TableViewLink({ href, what }: { href: string; what: string }) {
+  return (
+    <Button asChild variant="ghost" size="sm">
+      <Link href={href}>
+        <Eye aria-hidden />
+        View<span className="sr-only"> {what}</span>
+      </Link>
+    </Button>
   );
 }

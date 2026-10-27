@@ -11,6 +11,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableActionsHead,
+  TableViewLink,
 } from "@/components/ui/table";
 import { formatPercent } from "@/lib/format";
 import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
@@ -287,9 +289,7 @@ export function SupplierQualityCard({
                   <TableHead>Supplier</TableHead>
                   <TableHead numeric>Rejected</TableHead>
                   <TableHead>Defects</TableHead>
-                  <TableHead>
-                    <span className="sr-only">Claim sheet</span>
-                  </TableHead>
+                  <TableActionsHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -306,16 +306,22 @@ export function SupplierQualityCard({
                     <TableCell>
                       {r.defects.map((d) => `${d.label} ${d.sections}`).join(" · ") || "None"}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button asChild size="sm" variant="secondary">
-                        <Link
-                          href={`/reports/claims/${r.rollId}`}
-                          aria-label={`Claim sheet for roll ${r.rollCode}`}
-                        >
-                          <FileText aria-hidden />
-                          Claim sheet
-                        </Link>
-                      </Button>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-2">
+                        <TableViewLink
+                          href={`/reports/rolls/${r.rollId}`}
+                          what={`roll ${r.rollCode}`}
+                        />
+                        <Button asChild size="sm" variant="secondary">
+                          <Link
+                            href={`/reports/claims/${r.rollId}`}
+                            aria-label={`Claim sheet for roll ${r.rollCode}`}
+                          >
+                            <FileText aria-hidden />
+                            Claim sheet
+                          </Link>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -52,11 +52,13 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
   const primary = today.canEnter ? today.rows.find((r) => r.canFinishNow) : undefined;
   // A notice or the QI home links here with ?finish=next (or a batch's end) to open it at once.
   const openSlot = finish === "next" ? primary?.slotAt : finish;
-  // Finish batch's Rolls fully used (Phase 30A): "Black cowhide · Marikina Leather Trading · 24.5 sq ft".
+  // Finish batch's Rolls fully used (Phase 30A): the code (it names the supplier, LR-MLT-…), the
+  // item and the area, all a QI needs to match the roll on the line.
   const tickable = today.rollsToTick.map((r) => ({
     id: r.id,
     code: r.code,
-    line: [r.item, r.supplier, formatArea(r.areaSqFt)].filter(Boolean).join(" · "),
+    item: r.item ?? null,
+    area: r.areaSqFt === null || r.areaSqFt === undefined ? null : formatArea(r.areaSqFt),
   }));
 
   return (
@@ -76,170 +78,173 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <section aria-labelledby="today-batches" className="flex flex-col gap-3 xl:col-span-2">
-          <div className="flex flex-col gap-1">
-            <h2 id="today-batches" className="text-lg font-semibold">
-              Today, {today.dayLabel}
-            </h2>
-            <p className="text-muted-foreground">
-              {today.schedule
-                ? `${today.schedule}. Lunch: ${today.lunch}.`
-                : "No batch schedule is set. The Floor Manager sets one under Plan batches and quota."}
-            </p>
-          </div>
-          {!today.workingDay ? (
-            <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
-              Today isn’t a working day on the schedule, so there are no batches.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-3" data-testid="today-batches">
-              {today.rows.map((r) => {
-                const c = r.checkIn;
-                const isPrimary = primary?.slotAt === r.slotAt;
-                return (
-                  <li key={r.slotAt}>
-                    <Card aria-label={`Batch ${r.number}`} data-testid={`batch-${r.number}`}>
-                      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex min-w-0 flex-col gap-1.5">
-                          <p className="text-xl font-semibold">
-                            Batch {r.number}
-                            <span className="ml-2 font-normal text-muted-foreground tabular-nums">
-                              {r.startTime}–{r.time}
-                            </span>
-                          </p>
-                          {r.lunch && (
-                            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                              <Coffee aria-hidden className="size-4" />
-                              Lunch {r.lunch.startTime}–{r.lunch.endTime}, not counted
+      <section aria-labelledby="today-batches" className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 id="today-batches" className="text-lg font-semibold">
+            Today, {today.dayLabel}
+          </h2>
+          <p className="text-muted-foreground">
+            {today.schedule
+              ? `${today.schedule}. Lunch: ${today.lunch}.`
+              : "No batch schedule is set. The Floor Manager sets one under Plan batches and quota."}
+          </p>
+        </div>
+        {/* The batch cards and the quota card start on the same line (xl), under one heading. */}
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
+          <div className="flex flex-col gap-3 xl:col-span-2">
+            {!today.workingDay ? (
+              <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
+                Today isn’t a working day on the schedule, so there are no batches.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-3" data-testid="today-batches">
+                {today.rows.map((r) => {
+                  const c = r.checkIn;
+                  const isPrimary = primary?.slotAt === r.slotAt;
+                  return (
+                    <li key={r.slotAt}>
+                      <Card aria-label={`Batch ${r.number}`} data-testid={`batch-${r.number}`}>
+                        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex min-w-0 flex-col gap-1.5">
+                            <p className="text-xl font-semibold">
+                              Batch {r.number}
+                              <span className="ml-2 font-normal text-muted-foreground tabular-nums">
+                                {r.startTime}–{r.time}
+                              </span>
                             </p>
-                          )}
-                          <BatchStateBadge
-                            state={r.state}
-                            late={c?.enteredLate}
-                            corrected={!!c?.correction}
-                            paused={r.pausedForLunch}
-                          />
-                          {r.lateBy && <p className="text-sm text-caution">{r.lateBy}</p>}
-                          {c ? (
-                            <div className="flex flex-col gap-0.5">
-                              <p className="text-lg tabular-nums">
-                                {n(c.pairs)} pairs, {n(c.failedPairs)} failed inspection
+                            {r.lunch && (
+                              <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                                <Coffee aria-hidden className="size-4" />
+                                Lunch {r.lunch.startTime}–{r.lunch.endTime}, not counted
                               </p>
-                              <p className="text-sm text-muted-foreground">
-                                Finished {c.enteredAtTime} by {c.enteredBy}
-                                {c.constructorsPresent !== null &&
-                                  ` · ${c.constructorsPresent} of ${c.constructorsOnRoster} constructors present`}
-                              </p>
-                              {c.attendanceChanged && (
-                                <p className="text-xs text-caution">
-                                  Attendance changed after this batch was finished
+                            )}
+                            <BatchStateBadge
+                              state={r.state}
+                              late={c?.enteredLate}
+                              corrected={!!c?.correction}
+                              paused={r.pausedForLunch}
+                            />
+                            {r.lateBy && <p className="text-sm text-caution">{r.lateBy}</p>}
+                            {c ? (
+                              <div className="flex flex-col gap-0.5">
+                                <p className="text-lg tabular-nums">
+                                  {n(c.pairs)} pairs, {n(c.failedPairs)} failed inspection
                                 </p>
-                              )}
-                              {c.correction && (
                                 <p className="text-sm text-muted-foreground">
-                                  Corrected by {c.correction.by} at {c.correction.at}:{" "}
-                                  {c.correction.reason}
+                                  Finished {c.enteredAtTime} by {c.enteredBy}
+                                  {c.constructorsPresent !== null &&
+                                    ` · ${c.constructorsPresent} of ${c.constructorsOnRoster} constructors present`}
                                 </p>
-                              )}
-                              {c.usedRolls.length > 0 && (
+                                {c.attendanceChanged && (
+                                  <p className="text-xs text-caution">
+                                    Attendance changed after this batch was finished
+                                  </p>
+                                )}
+                                {c.correction && (
+                                  <p className="text-sm text-muted-foreground">
+                                    Corrected by {c.correction.by} at {c.correction.at}:{" "}
+                                    {c.correction.reason}
+                                  </p>
+                                )}
+                                {c.usedRolls.length > 0 && (
+                                  <p className="text-sm text-muted-foreground">
+                                    Fully used: {c.usedRolls.map((u) => u.code).join(", ")}
+                                  </p>
+                                )}
+                                {c.notes && (
+                                  <p className="text-sm text-muted-foreground">Note: {c.notes}</p>
+                                )}
+                              </div>
+                            ) : (
+                              today.canEnter &&
+                              !r.canFinishNow &&
+                              r.state !== "MISSED" && (
                                 <p className="text-sm text-muted-foreground">
-                                  Fully used: {c.usedRolls.map((u) => u.code).join(", ")}
+                                  Can be finished from {r.finishOpensAt}.
                                 </p>
-                              )}
-                              {c.notes && (
-                                <p className="text-sm text-muted-foreground">Note: {c.notes}</p>
-                              )}
-                            </div>
-                          ) : (
-                            today.canEnter &&
-                            !r.canFinishNow &&
-                            r.state !== "MISSED" && (
-                              <p className="text-sm text-muted-foreground">
-                                Can be finished from {r.finishOpensAt}.
-                              </p>
-                            )
-                          )}
-                        </div>
-                        <div className="shrink-0">
-                          {today.canEnter && !c && r.canFinishNow && (
-                            <div
-                              className={cn(
-                                isPrimary &&
-                                  "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-20 max-sm:border-t max-sm:bg-background max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
-                              )}
-                            >
-                              {isPrimary && (
-                                <p className="mb-2 text-xl font-semibold sm:hidden">
-                                  Batch {r.number} · {r.startTime}–{r.time}
-                                </p>
-                              )}
+                              )
+                            )}
+                          </div>
+                          <div className="shrink-0 sm:w-44">
+                            {today.canEnter && !c && r.canFinishNow && (
+                              <div
+                                className={cn(
+                                  isPrimary &&
+                                    "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-20 max-sm:border-t max-sm:bg-background max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+                                )}
+                              >
+                                {isPrimary && (
+                                  <p className="mb-2 text-xl font-semibold sm:hidden">
+                                    Batch {r.number} · {r.startTime}–{r.time}
+                                  </p>
+                                )}
+                                <FinishBatchDialog
+                                  mode="finish"
+                                  batch={r}
+                                  workforceLine={workforceLine}
+                                  rolls={tickable}
+                                  autoOpen={openSlot === r.slotAt}
+                                  primary={isPrimary}
+                                />
+                              </div>
+                            )}
+                            {today.canEnter && c && (
                               <FinishBatchDialog
-                                mode="finish"
+                                mode="correct"
                                 batch={r}
                                 workforceLine={workforceLine}
+                                checkIn={c}
                                 rolls={tickable}
-                                autoOpen={openSlot === r.slotAt}
-                                primary={isPrimary}
                               />
-                            </div>
-                          )}
-                          {today.canEnter && c && (
-                            <FinishBatchDialog
-                              mode="correct"
-                              batch={r}
-                              workforceLine={workforceLine}
-                              checkIn={c}
-                              rolls={tickable}
-                            />
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {!wf.taken && today.workingDay && (
-            <p className="flex items-center gap-2 text-sm">
-              <TriangleAlert aria-hidden className="size-4 shrink-0 text-caution" />
-              Attendance for today hasn’t been taken, so batches are saved without a worker count.
-            </p>
-          )}
-          {today.covering && today.workingDay && (
-            <p className="text-sm" data-testid="covering-note">
-              No Quality Inspector is present today, so you can finish the batches. They are saved
-              under your name and marked in the audit log as covering.
-            </p>
-          )}
-          {today.enterNote && today.workingDay && (
-            <p className="text-sm text-muted-foreground" data-testid="enter-note">
-              {today.enterNote}
-            </p>
-          )}
-        </section>
-
-        <Card className="self-start">
-          <CardHeader>
-            <CardTitle>Today against the quota</CardTitle>
-            <CardDescription>
-              Only the pairs that passed inspection count.{" "}
-              {wf.taken
-                ? `${wf.constructorsPresent} of ${wf.constructorsOnRoster} Shoe Constructors present.`
-                : "Attendance not taken yet today."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <QuotaProgress progress={today.progress} />
-            {today.shortfall && (
-              <Alert tone="info" data-testid="today-shortfall">
-                {today.shortfall}
-              </Alert>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </CardContent>
-        </Card>
-      </div>
+            {!wf.taken && today.workingDay && (
+              <p className="flex items-center gap-2 text-sm">
+                <TriangleAlert aria-hidden className="size-4 shrink-0 text-caution" />
+                Attendance for today hasn’t been taken, so batches are saved without a worker count.
+              </p>
+            )}
+            {today.covering && today.workingDay && (
+              <p className="text-sm" data-testid="covering-note">
+                No Quality Inspector is present today, so you can finish the batches. They are saved
+                under your name and marked in the audit log as covering.
+              </p>
+            )}
+            {today.enterNote && today.workingDay && (
+              <p className="text-sm text-muted-foreground" data-testid="enter-note">
+                {today.enterNote}
+              </p>
+            )}
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Today against the quota</CardTitle>
+              <CardDescription>
+                Only the pairs that passed inspection count.{" "}
+                {wf.taken
+                  ? `${wf.constructorsPresent} of ${wf.constructorsOnRoster} Shoe Constructors present.`
+                  : "Attendance not taken yet today."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <QuotaProgress progress={today.progress} />
+              {today.shortfall && (
+                <Alert tone="info" data-testid="today-shortfall">
+                  {today.shortfall}
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
 
       {recent && (
         <Card>

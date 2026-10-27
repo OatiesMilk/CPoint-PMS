@@ -24,6 +24,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableActionsHead,
+  TableViewLink,
 } from "@/components/ui/table";
 import { RemoveRoll } from "@/components/features/rolls/remove-roll";
 import { RollStatusBadge } from "@/components/features/rolls/roll-status-badge";
@@ -189,11 +191,7 @@ export default async function InventoryItemPage({
                       <TableHead numeric>Rejected (for salvage)</TableHead>
                       <TableHead>Defects found</TableHead>
                       <TableHead>Defect %</TableHead>
-                      {canRemoveRolls && (
-                        <TableHead>
-                          <span className="sr-only">Actions</span>
-                        </TableHead>
-                      )}
+                      {(canReadRolls || canRemoveRolls) && <TableActionsHead />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -233,17 +231,25 @@ export default async function InventoryItemPage({
                           )}
                         </TableCell>
                         <TableCell className="text-muted-foreground">To be implemented</TableCell>
-                        {canRemoveRolls && (
+                        {(canReadRolls || canRemoveRolls) && (
                           <TableCell>
-                            {r.canRemove && (
-                              <RemoveRoll
-                                size="sm"
-                                code={r.code}
-                                shots={r._count.scans}
-                                fromInventory
-                                action={removeRollAction.bind(null, r.id)}
-                              />
-                            )}
+                            <div className="flex items-center justify-end gap-2">
+                              {canReadRolls && (
+                                <TableViewLink
+                                  href={`/reports/rolls/${r.id}`}
+                                  what={`roll ${r.code}`}
+                                />
+                              )}
+                              {canRemoveRolls && r.canRemove && (
+                                <RemoveRoll
+                                  size="sm"
+                                  code={r.code}
+                                  shots={r._count.scans}
+                                  fromInventory
+                                  action={removeRollAction.bind(null, r.id)}
+                                />
+                              )}
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>

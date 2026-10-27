@@ -45,7 +45,15 @@ type Props = {
   primary?: boolean;
 };
 
-export type TickableRoll = { id: string; code: string; line: string };
+/** A roll on Rolls fully used: its code (which names the supplier), item and area. `note` replaces
+ * the item for a roll already ticked in the batch being corrected. */
+export type TickableRoll = {
+  id: string;
+  code: string;
+  item?: string | null;
+  area?: string | null;
+  note?: string;
+};
 
 const FIELD_IDS = { pairs: "batch-pairs", failedPairs: "batch-failed", reason: "batch-reason" };
 
@@ -81,7 +89,7 @@ export function FinishBatchDialog({
   const [ticked, setTicked] = useState<Set<string>>(ticked0);
   // A correction lists the rolls ticked in this batch first, then the ones still to tick.
   const options: TickableRoll[] = [
-    ...(checkIn?.usedRolls.map((r) => ({ ...r, line: "Ticked in this batch" })) ?? []),
+    ...(checkIn?.usedRolls.map((r) => ({ ...r, note: "Ticked in this batch" })) ?? []),
     ...rolls.filter((r) => !checkIn?.usedRolls.some((u) => u.id === r.id)),
   ];
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -185,11 +193,11 @@ export function FinishBatchDialog({
   ) => {
     const id = FIELD_IDS[key];
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex min-w-0 flex-col gap-1.5">
         <Label htmlFor={id} className="text-base">
           {label}
         </Label>
-        <div className="relative sm:max-w-56">
+        <div className="relative">
           <Input
             id={id}
             inputMode="numeric"
@@ -213,9 +221,9 @@ export function FinishBatchDialog({
   return (
     <>
       <Button
-        size={primary ? "lg" : "sm"}
-        variant={mode === "finish" ? "primary" : "ghost"}
-        className={cn(primary && "h-11 w-full sm:w-auto")}
+        variant={mode === "finish" ? "primary" : "secondary"}
+        // One size on every card; the phone's bottom bar is full width and h-11 (D-096).
+        className={cn("sm:w-full", primary && "max-sm:h-11 max-sm:w-full")}
         onClick={() => {
           reset();
           setStale(null);
@@ -251,8 +259,9 @@ export function FinishBatchDialog({
         }}
       >
         <DialogContent
+          size="lg"
           className={cn(
-            "max-h-[90dvh] overflow-y-auto",
+            "max-h-[90dvh] overflow-x-hidden overflow-y-auto",
             // A sheet at the bottom of a phone (D-096).
             "max-sm:top-auto max-sm:bottom-0 max-sm:max-w-none max-sm:translate-y-0 max-sm:rounded-b-none",
             "max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))]",
@@ -275,20 +284,22 @@ export function FinishBatchDialog({
             }}
           >
             <FormErrorSummary errors={summary} outcome="saved" />
-            {numberField(
-              "pairs",
-              `Pairs finished in Batch ${batch.number} (${batch.times.split(",")[0]})`,
-              pairs,
-              (v) => {
-                setPairs(v);
-                recheck({ pairs: v, failed });
-              },
-            )}
-            {numberField("failedPairs", "Of these, failed inspection", failed, (v) => {
-              setFailed(v);
-              recheck({ pairs, failed: v });
-            })}
-            <fieldset className="flex flex-col gap-2">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] items-start gap-4">
+              {numberField(
+                "pairs",
+                `Pairs finished in Batch ${batch.number} (${batch.times.split(",")[0]})`,
+                pairs,
+                (v) => {
+                  setPairs(v);
+                  recheck({ pairs: v, failed });
+                },
+              )}
+              {numberField("failedPairs", "Of these, failed inspection", failed, (v) => {
+                setFailed(v);
+                recheck({ pairs, failed: v });
+              })}
+            </div>
+            <fieldset className="flex min-w-0 flex-col gap-2">
               <legend className="text-base font-medium">
                 Rolls fully used{" "}
                 <span className="font-normal text-muted-foreground">(optional)</span>
@@ -301,13 +312,13 @@ export function FinishBatchDialog({
                   No scanned rolls are waiting. A roll shows here once it is scanned at Capture.
                 </p>
               ) : (
-                <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                <ul className="flex max-h-56 flex-col gap-1 overflow-x-hidden overflow-y-auto rounded-md border p-1">
                   {options.map((r) => (
                     <li key={r.id}>
-                      <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-1 hover:bg-muted sm:min-h-9">
+                      <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-md px-2 py-1.5 hover:bg-muted sm:min-h-9">
                         <input
                           type="checkbox"
-                          className="size-4 shrink-0 accent-(--primary)"
+                          className="mt-1 size-4 shrink-0 accent-(--primary)"
                           checked={ticked.has(r.id)}
                           disabled={pending}
                           onChange={(e) =>
@@ -319,9 +330,20 @@ export function FinishBatchDialog({
                             })
                           }
                         />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="font-medium tabular-nums">{r.code}</span>
-                          <span className="truncate text-sm text-muted-foreground">{r.line}</span>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="flex items-baseline justify-between gap-3">
+                            <span className="font-medium break-all tabular-nums">{r.code}</span>
+                            {r.area && (
+                              <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+                                {r.area}
+                              </span>
+                            )}
+                          </span>
+                          {(r.note ?? r.item) && (
+                            <span className="truncate text-sm text-muted-foreground">
+                              {r.note ?? r.item}
+                            </span>
+                          )}
                         </span>
                       </label>
                     </li>
