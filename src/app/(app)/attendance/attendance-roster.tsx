@@ -127,13 +127,14 @@ export function AttendanceRoster({ view }: { view: AttendanceView }) {
 
   return (
     <section aria-labelledby="day-heading" className="mt-6 flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <Button variant="secondary" onClick={() => goTo(addDays(view.day, -1))}>
-          <ChevronLeft aria-hidden />
-          Previous day
-        </Button>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="attendance-day">Day</Label>
+      {/* The label sits over the whole day picker, so the buttons and the date line up in one row. */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="attendance-day">Day</Label>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="secondary" onClick={() => goTo(addDays(view.day, -1))}>
+            <ChevronLeft aria-hidden />
+            Previous day
+          </Button>
           <Input
             id="attendance-day"
             type="date"
@@ -142,16 +143,16 @@ export function AttendanceRoster({ view }: { view: AttendanceView }) {
             max={view.today}
             onChange={(e) => goTo(e.target.value)}
           />
-        </div>
-        <Button variant="secondary" disabled={isToday} onClick={() => goTo(addDays(view.day, 1))}>
-          Next day
-          <ChevronRight aria-hidden />
-        </Button>
-        {!isToday && (
-          <Button variant="ghost" onClick={() => goTo(view.today)}>
-            Back to today
+          <Button variant="secondary" disabled={isToday} onClick={() => goTo(addDays(view.day, 1))}>
+            Next day
+            <ChevronRight aria-hidden />
           </Button>
-        )}
+          {!isToday && (
+            <Button variant="ghost" onClick={() => goTo(view.today)}>
+              Back to today
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border bg-card px-5 py-4">

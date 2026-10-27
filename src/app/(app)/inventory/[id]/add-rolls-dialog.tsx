@@ -130,7 +130,7 @@ export function AddRollsDialog({
         Add rolls
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+        <DialogContent size="lg" className="max-h-[90dvh] overflow-x-hidden overflow-y-auto">
           <DialogTitle>Add rolls to {item.name}</DialogTitle>
           <DialogDescription>
             One row per roll, with its area from the stamp or the receipt. Codes run{" "}

@@ -23,6 +23,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableActionsHead,
+  TableViewLink,
 } from "@/components/ui/table";
 import { formatDayLabel } from "@/lib/format";
 import { formatDelta, formatQuantity } from "@/lib/inventory-rules";
@@ -151,6 +153,7 @@ export default async function MaterialsReportPage({
                     <TableHead numeric>Per 100 pairs</TableHead>
                     <TableHead numeric>On hand</TableHead>
                     <TableHead>Days left</TableHead>
+                    <TableActionsHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -206,6 +209,9 @@ export default async function MaterialsReportPage({
                             )}
                           </span>
                         )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <TableViewLink href={`/inventory/${row.id}`} what={row.name} />
                       </TableCell>
                     </TableRow>
                   ))}

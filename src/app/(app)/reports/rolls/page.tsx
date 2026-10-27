@@ -20,6 +20,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableActionsHead,
+  TableViewLink,
 } from "@/components/ui/table";
 import { formatManilaDateTime } from "@/lib/format";
 import { formatArea } from "@/lib/roll-rules";
@@ -90,6 +92,7 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                 <TableHead numeric>Passed</TableHead>
                 <TableHead numeric>Rejected (for salvage)</TableHead>
                 <TableHead>Status</TableHead>
+                <TableActionsHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -124,6 +127,9 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                   <TableCell numeric>{r.rejected}</TableCell>
                   <TableCell>
                     <RollStatusBadge status={r.status} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <TableViewLink href={`/reports/rolls/${r.id}`} what={`roll ${r.code}`} />
                   </TableCell>
                 </TableRow>
               ))}

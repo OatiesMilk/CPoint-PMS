@@ -14,6 +14,62 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-10-27 — Phase 30A: run 7 passed; Batches layout fixes
+
+**Who:** Dylan (Claude fixing)
+**Summary:** Run 7 passed (e2e 88/0/2, `batches` alone 6/0 three times). Dylan's review of
+Batches as the QI: Finish batch 1 and 2 were different sizes, the boxes didn't line up, and the
+Finish batch window was narrow and scrolled sideways. Every card's action column is now one width
+(Finish batch and Correct `md`, the phone bottom bar unchanged); the "Today" heading spans both
+columns so the quota card lines up with Batch 1; dialogs have two widths (`md`, `lg` 672 px),
+Finish batch and Add rolls are `lg`, the counts sit side by side. After Dylan's phone
+screenshot, each roll on Rolls fully used shows only its code (it names the supplier), the area
+and the item, so nothing scrolls sideways.
+**Changed:** `components/ui/dialog.tsx` (`size`), `batches/page.tsx`,
+`batches/finish-batch-dialog.tsx`, `inventory/[id]/add-rolls-dialog.tsx`, DESIGN.md; run 8 prompt;
+STATUS, ROADMAP.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (607) · build ✅ · e2e and browser: Codex run 8
+**Decisions:** none (DESIGN.md rules)
+**Follow-ups:** Run 8 PASS (built before the roll-line trim); run 9 PASS (the trim); Dylan
+commits the follow-up and opens the PR.
+
+## 2026-10-27 — Phase 30A: QA run 6 fix (focus after a refused save)
+
+**Who:** Dylan (Claude fixing)
+**Summary:** Run 6: the full suite passed (88), but `batches.spec.ts` alone failed at line 278:
+after the refused 3 finished / 4 failed, typing 12 left Pairs finished at 3 (Phase 27 run 5 saved
+"3 pairs" the same way). `focusFirstInvalid` moves focus to the invalid field a frame later, so
+it could take focus from the field being typed in. It now moves focus only if focus hasn't moved
+since the errors were set; the e2e test waits for that focus before typing.
+**Changed:** `src/lib/focus-first-invalid.ts` (used by 18 forms); `tests/unit/focus-first-invalid.test.ts`
+(3); `tests/e2e/batches.spec.ts`; run 7 prompt; STATUS, ROADMAP.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (607) · build ✅ · e2e: Codex run 7
+**Decisions:** none
+**Follow-ups:** Codex run 7; the follow-up commit.
+
+## 2026-10-26 — Phase 30A: QA run 5
+
+**Who:** Dylan (Claude reading the report)
+**Summary:** Run 5 passed the Day label, the View links on six tables and axe (0 on seven pages).
+The full suite's one failure was the QI batch notice test run at 00:09 Manila, before its
+documented 01:00. No code change; run 6 repeats the e2e gate after 01:00.
+**Changed:** `qa/CODEX_PROMPT_PHASE_30A_RUN6.md`; STATUS (a known test observation), ROADMAP.
+**Gates:** no code changed · e2e by Codex (run 6 next)
+**Decisions:** none
+**Follow-ups:** Codex run 6; the follow-up commit.
+
+## 2026-10-26 — Phase 30A: Day label and View on rows (Dylan's review)
+
+**Who:** Dylan (Claude building)
+**Summary:** After run 4 Dylan asked for two UI fixes. Attendance's "Day" label now sits above the
+whole day picker. Tables whose rows open a page end with a View link (eye + word): Reports →
+Rolls, Inventory, an item's Rolls, Materials, a roll's Shots and Rolls with the most rejects.
+**Changed:** `attendance-roster.tsx`; `components/ui/table.tsx` (`TableActionsHead`,
+`TableViewLink`); the six pages; `DESIGN.md` (the rule); e2e `rolls` and `inventory`; run 5 prompt.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (604) · build ✅ · e2e: Codex run 5
+**Decisions:** none (a UI rule in DESIGN.md)
+**Follow-ups:** Codex run 5; Dylan commits the follow-up on the same branch.
+
 ## 2026-10-26 — Phase 30A: QA passed (run 4)
 
 **Who:** Dylan (Claude reading the report)

@@ -3,7 +3,7 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-26 (Phase 30A QA passed, run 4)
+**Last updated:** 2026-10-27 (Phase 30A run 9 passed; follow-up ready to commit)
 **Branch:** `main` has Phase 29 (#27). Phase 30A (QA passed) is **uncommitted** in
 `C:\dev\CPoint-PMS`; Dylan commits it on a new branch and opens the PR.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
@@ -19,8 +19,27 @@ passed, 2 failed (test faults: a whole-row regex, an old `R-` code pattern), fix
 (`qa/reports/2026-10-26-phase-30a-run3.md`): both run 2 fixes verified, e2e 85 passed, 1 failed
 (`read ECONNRESET` on an attendance GET; a hand-started server without the 70 s keep-alive, the
 file passed alone). No code change. Run 4 **PASS** (`qa/reports/2026-10-26-phase-30a-run4.md`):
-e2e 88 passed, 0 failed, 2 skipped; batches alone 6/0; ledger 0. **Dylan commits and opens the
-PR.** Phase 29 merged (#27).
+e2e 88 passed, 0 failed, 2 skipped; batches alone 6/0; ledger 0. Committed and pushed on
+`feature/phase-30a-rolls-from-inventory` (e3c230c). Then Dylan's review: Attendance's Day label
+above the whole picker, and a **View** link (eye + word) ending every table whose rows open a page
+(`npm run check` passed, 604). Run 5 (`qa/reports/2026-10-26-phase-30a-run5.md`): U1, U2 and A1
+passed (axe 0); e2e 84 passed, 1 failed (`batches.spec.ts:244`, run at 00:09 Manila, before the
+test's documented 01:00), rolls 6/0, inventory 8/0. No code change. Run 6
+(`qa/reports/2026-10-27-phase-30a-run6.md`): full suite 88 passed, 0 failed; `batches` alone failed
+at line 278 (Pairs finished stayed 3 after typing 12, as in Phase 27 run 5). Cause: the focus move
+to the invalid field one frame later stole focus mid-typing. Fixed in `focus-first-invalid.ts`
+(only moves focus still on the button or nothing) and the test waits for it (`npm run check`
+passed, 607). Run 7 **PASS** (`qa/reports/2026-10-27-phase-30a-run7.md`): e2e 88 passed, 0 failed, 2
+skipped; `batches` alone 6/0 three times; the focus fix checked by hand. Then Dylan's review of
+Batches as the QI: every Finish batch and Correct button one size, the quota card lined up with
+the first batch, and a wider Finish batch window (dialogs `md` or `lg`; the counts side by side;
+no sideways scroll). Run 8 **PASS** (`qa/reports/2026-10-27-phase-30a-run8.md`): e2e 88 passed, 0
+failed; buttons 176 × 36 px with one right edge, quota card 0 px off Batch 1, dialogs 672 px with
+no sideways scroll, phone sheet full width, axe 0. Its build came before one more change: Rolls
+fully used shows only the code (it names the supplier), the area and the item (Dylan's phone
+screenshot; `npm run check` passed, 607). Run 9 **PASS** (`qa/reports/2026-10-27-phase-30a-run9.md`):
+code and area on one line with the item below at 1440 and 390 px, no supplier name, no sideways
+scroll, axe 0, `batches` 6/0. **Next:** Dylan commits the follow-up and opens the PR. Phase 29 merged (#27).
 **Then:** 30B, the measuring check (`docs/prompts/plans/phase-30b-plan.md`, an A4 piece of leather
 with cuts), 30C the 3-inch cut and the 10% return, and 31 the docs. Phase 30 was reordered by
 Dylan on 2026-10-26.
@@ -356,6 +375,24 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 - **Form messages** (D-038): every message names the field and the fix; errors sit under their
   field, focus goes to the first invalid one, and a summary shows at 3 or more.
 - **Quality:**
+  - Phase 30A (Codex, 2026-10-27, run 9): **PASS**. The trimmed Rolls fully used lines: code and
+    area on one line, item below (an ellipsis when long), none of the 14 supplier names, sheet
+    edges at 0 and 390 px with no sideways scroll after tabbing, axe 0; `batches` alone 6/0;
+    ledger 0. R3 (Ticked in this batch) not possible: no roll ticked in today's batches.
+  - Phase 30A (Codex, 2026-10-27, run 8): **PASS**. E2E 88 passed, 0 failed, 2 skipped; `batches`
+    alone 6/0; U3 to U7 (button sizes, alignment, 672 px dialogs, phone sheet, Add rolls) and axe
+    0 passed; ledger 0. Built before the roll lines were trimmed (run 9).
+  - Phase 30A (Codex, 2026-10-27, run 7): **PASS**. Full e2e 88 passed, 0 failed, 2 skipped;
+    `batches.spec.ts` alone 6/0 three times; F1 by hand (focus moves to the failed field after the
+    refused save, and Pairs finished keeps 12); migration up to date, build passed, ledger 0.
+  - Phase 30A (Codex, 2026-10-27, run 6): FAIL. Full suite 88 passed, 0 failed, 2 skipped;
+    `batches.spec.ts` alone 2 passed, 1 failed, 3 not run: after the refused 3/4, `fill("12")` left
+    Pairs finished at 3. `focusFirstInvalid` moved focus a frame later and took it from the field
+    being typed in; it now only moves focus that hasn't moved since (3 unit tests). Ledger 0.
+  - Phase 30A (Codex, 2026-10-27 Manila, run 5): FAIL on timing only. U1 (Day label), U2 (View on
+    six tables at 1440 and 1280, keyboard focus), A1 (axe 0 on seven pages) passed. E2E 84 passed,
+    1 failed, 2 skipped, 3 not run: the QI batch notice test ran at 00:09 Manila, before the first
+    hourly batch is due (01:00). Rolls 6/0, inventory 8/0; ledger 0.
   - Phase 30A (Codex, 2026-10-26, run 4): **PASS**. Playwright started its own server (port 3100,
     `--keepAliveTimeout 70000`): e2e 88 passed, 0 failed, 2 skipped (demo tools off, model
     missing); `batches.spec.ts` alone 6/0; migration up to date, build passed, ledger 0 before and
@@ -502,8 +539,8 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. Dylan applies the `ci.yml` change by hand (protected file), then commits Phase 30A on a new branch from `main` with the commands Claude gave,
-   pushes and opens the PR (D-032). CI runs on the PR and Claude fixes any failure.
+1. Dylan commits the follow-up on `feature/phase-30a-rolls-from-inventory`, pushes and opens the PR (D-032).
+   CI runs on the PR and Claude fixes any failure.
 2. Phase 30B in a new session, with an A4 piece of leather at the station: "Read
    `docs/prompts/plans/phase-30b-plan.md` and run Phase 30B. Stop for my approval before writing
    code."
@@ -676,6 +713,8 @@ Later:
 
 - Fixed: full e2e runs crashed Chromium late in the run, because helper pages were never closed.
   They're closed now; three local and two Docker full runs since passed 64/64.
+- `batches.spec.ts` needs a batch due today, so it fails between 00:00 and 01:00 Manila (16:00 to
+  17:00 UTC), in CI too. Rerun the job after that hour; no code fault (Phase 30A run 5).
 - The single admin sign-in timeout seen once earlier was probably the same resource exhaustion. It
   hasn't recurred since the fix. Watch CI.
 

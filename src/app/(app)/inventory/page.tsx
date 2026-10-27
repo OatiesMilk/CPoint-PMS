@@ -21,6 +21,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableActionsHead,
+  TableViewLink,
 } from "@/components/ui/table";
 import { formatManilaWeekdayDate } from "@/lib/format";
 import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
@@ -115,6 +117,7 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                 <TableHead numeric>Reorder at</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Last updated</TableHead>
+                <TableActionsHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -146,6 +149,9 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {item.lastUpdatedAt ? formatManilaWeekdayDate(item.lastUpdatedAt) : "Not yet"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <TableViewLink href={`/inventory/${item.id}`} what={item.name} />
                   </TableCell>
                 </TableRow>
               ))}

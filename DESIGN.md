@@ -62,6 +62,9 @@ Re-measure whenever a color token changes.
   `text-sm` + `muted-foreground`.
 - Tables: numbers right-aligned, text left-aligned, one row height (36px), sortable headers marked
   with an icon.
+- A table whose rows open a page of their own ends with an **Actions** column (header named for
+  screen readers only) holding **View** (eye icon + the word, ghost `sm`, `TableViewLink`), beside
+  any other row action. The first cell's link stays; View makes the way in visible.
 - Layout: desktop first, left sidebar + content. Below 1024px the sidebar is an icon rail, grids
   reflow (`auto-fit`, `xl:` stacking) and tables scroll inside their card (D-034). Phone layouts
   only where the brief asks for them: Capture (Phase 26) and Batches (Phase 27), see "Phone
@@ -88,7 +91,11 @@ Inspector, Phase 27). Every other page stays desktop first.
   with icon and word); the batch that can be finished now is the page's bottom action, with
   "Batch 2 · 10:00–13:00" in `text-xl` above **Finish batch 2**. The Finish batch dialog opens as a
   bottom sheet (`max-sm:bottom-0`, no bottom radius, safe-area padding) with `h-12` numeric fields
-  (`inputMode="numeric"`) and the buttons stacked `h-11`. The QI sees no tables there (today only);
+  (`inputMode="numeric"`) and the buttons stacked `h-11`. On desktop each card's action column is one width, so
+  every Finish batch and Correct button is the same size and lines up; the quota card's top lines up
+  with the first batch card. The dialog is `size="lg"`: the two counts side by side, the rolls
+  below in a bordered list: each roll shows only its code (it names the supplier) with the
+  area at the right, and the item under it, cut short if long. The QI sees no tables there (today only);
   the Floor Manager's Recent days table is desktop.
 
 ## Batch notices (D-098)
@@ -121,7 +128,7 @@ For whoever finishes today's batches (the QI, or the Floor Manager covering, D-0
 | `Table`                | Dense lists                            | `numeric` cells right-aligned                                                                                                                                                                                                    | one row height (44px); header row muted; hover wash                                                                                                                                                                            |
 | `Badge`                | Status labels                          | neutral, info, success, warning, danger, brand                                                                                                                                                                                   | always icon + label                                                                                                                                                                                                            |
 | `Select`               | Choices in forms and filters           | styled native `<select>`                                                                                                                                                                                                         | `aria-invalid`, disabled + hint explaining why                                                                                                                                                                                 |
-| `Dialog`               | Confirm / reason prompts               | —                                                                                                                                                                                                                                | title names the item; confirm repeats the verb; Escape/close button                                                                                                                                                            |
+| `Dialog`               | Confirm / reason prompts               | —                                                                                                                                                                                                                                | title names the item; confirm repeats the verb; Escape/close button; `size="md"` for a confirm or short form, `size="lg"` (672px) for a form with a list or fields side by side; never a sideways scroll, long lines wrap      |
 | Toast (`sonner`)       | Routine success                        | —                                                                                                                                                                                                                                | bottom-right, 4s; errors stay inline instead                                                                                                                                                                                   |
 | Roll list states       | Reports → Rolls (Phase 26)             | —                                                                                                                                                                                                                                | first-use empty (who starts rolls), no-match + Clear, skeleton, error + Try again                                                                                                                                              |
 | `ScanImage`            | Capture with detections                | box tone = what the detection does (Not accepted solid red, Usable green, unknown dashed red, below found-at muted)                                                                                                              | label chip per box; hover dims the others; alt text names roll + shot                                                                                                                                                          |

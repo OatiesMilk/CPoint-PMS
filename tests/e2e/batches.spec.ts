@@ -271,10 +271,13 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
   await expect(
     dialog.getByText("Failed inspection can't be more than the pairs finished (3)."),
   ).toBeVisible();
+  // Focus moves to the invalid field a frame after the message shows; typing before that sent
+  // "12" into the failed field and saved 3 pairs (Phase 27 run 5, Phase 30A run 6).
+  await expect(failed).toBeFocused();
 
   await finished.fill("12");
   await failed.fill("2");
-  // Run 5 saw "3 pairs" saved once under the full parallel suite: check what will be sent first.
+  // Check what will be sent before saving.
   await expect(finished).toHaveValue("12");
   await expect(failed).toHaveValue("2");
   await dialog.getByLabel("Notes (optional)").fill(note);
