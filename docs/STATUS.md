@@ -3,47 +3,27 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-10-27 (Phase 30A run 9 passed; follow-up ready to commit)
-**Branch:** `main` has Phase 29 (#27). Phase 30A (QA passed) is **uncommitted** in
-`C:\dev\CPoint-PMS`; Dylan commits it on a new branch and opens the PR.
+**Last updated:** 2026-11-02 (Phase 30B QA run 4 passed; follow-up ready to commit)
+**Branch:** `main` has Phase 30B (#30, c8d6410), merged before QA. Its QA fixes and these
+wrap-up docs are **uncommitted** in `C:\dev\CPoint-PMS`; Dylan commits them on a new branch and
+opens a follow-up PR.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 30A, leather rolls come from Inventory (D-103, D-104): the FM adds each
-roll with its own area, the constructor picks it at Capture, the QI ticks it Fully used at Finish
-batch. Codex run 1 FAIL (`qa/reports/2026-10-26-phase-30a-rolls-from-inventory.md`): 21 of 22
-scenarios passed (S14 blocked, no reset), e2e 81 passed, 4 failed, 2 skipped (F1 supplier rows
-named by code, F2 to F5 test timing and isolation). Fixed. Run 2 FAIL (`qa/reports/2026-10-26-phase-30a-run2.md`): R1, R2, R4
-passed, R3's Finish and Correct blocked (no batch left after the reset; passed in run 1), e2e 86
-passed, 2 failed (test faults: a whole-row regex, an old `R-` code pattern), fixed. Run 3 FAIL
-(`qa/reports/2026-10-26-phase-30a-run3.md`): both run 2 fixes verified, e2e 85 passed, 1 failed
-(`read ECONNRESET` on an attendance GET; a hand-started server without the 70 s keep-alive, the
-file passed alone). No code change. Run 4 **PASS** (`qa/reports/2026-10-26-phase-30a-run4.md`):
-e2e 88 passed, 0 failed, 2 skipped; batches alone 6/0; ledger 0. Committed and pushed on
-`feature/phase-30a-rolls-from-inventory` (e3c230c). Then Dylan's review: Attendance's Day label
-above the whole picker, and a **View** link (eye + word) ending every table whose rows open a page
-(`npm run check` passed, 604). Run 5 (`qa/reports/2026-10-26-phase-30a-run5.md`): U1, U2 and A1
-passed (axe 0); e2e 84 passed, 1 failed (`batches.spec.ts:244`, run at 00:09 Manila, before the
-test's documented 01:00), rolls 6/0, inventory 8/0. No code change. Run 6
-(`qa/reports/2026-10-27-phase-30a-run6.md`): full suite 88 passed, 0 failed; `batches` alone failed
-at line 278 (Pairs finished stayed 3 after typing 12, as in Phase 27 run 5). Cause: the focus move
-to the invalid field one frame later stole focus mid-typing. Fixed in `focus-first-invalid.ts`
-(only moves focus still on the button or nothing) and the test waits for it (`npm run check`
-passed, 607). Run 7 **PASS** (`qa/reports/2026-10-27-phase-30a-run7.md`): e2e 88 passed, 0 failed, 2
-skipped; `batches` alone 6/0 three times; the focus fix checked by hand. Then Dylan's review of
-Batches as the QI: every Finish batch and Correct button one size, the quota card lined up with
-the first batch, and a wider Finish batch window (dialogs `md` or `lg`; the counts side by side;
-no sideways scroll). Run 8 **PASS** (`qa/reports/2026-10-27-phase-30a-run8.md`): e2e 88 passed, 0
-failed; buttons 176 × 36 px with one right edge, quota card 0 px off Batch 1, dialogs 672 px with
-no sideways scroll, phone sheet full width, axe 0. Its build came before one more change: Rolls
-fully used shows only the code (it names the supplier), the area and the item (Dylan's phone
-screenshot; `npm run check` passed, 607). Run 9 **PASS** (`qa/reports/2026-10-27-phase-30a-run9.md`):
-code and area on one line with the item below at 1440 and 390 px, no supplier name, no sideways
-scroll, axe 0, `batches` 6/0. **Next:** Dylan commits the follow-up and opens the PR. Phase 29 merged (#27).
-**Then:** 30B, the measuring check (`docs/prompts/plans/phase-30b-plan.md`, an A4 piece of leather
-with cuts), 30C the 3-inch cut and the 10% return, and 31 the docs. Phase 30 was reordered by
-Dylan on 2026-10-26.
-**Overall:** 31 phases built (0 to 29, and 30A); 3 planned (30B, 30C, 31)
+**Current phase:** Phase 30B, the measuring check (D-106). `python -m cpoint_cv calibrate`
+(an A4 or letter sheet, white paper or a dark leather piece, gives px/in), `measure` (box and
+outline lengths and areas, the ruler, the 3-inch line, the share of the entered area, strict 10%)
+and `npm run cv:roll-photos` (a roll's shots, `shots.csv`, `roll.toml` with its code and area).
+Test piece: letter size (8.5 × 11 in, 0.649 sq ft), phone 19 to 20 in above, three pen lines:
+2.5 in not found, 3.5 in → 3.58 in by box, 5.5 in → 5.80 in; 19.4% of the piece by box against
+1.0% by outline. **Dylan chose the box (D-106).** Codex: run 1 stopped after C2; run 2 FAIL
+(mypy on OpenCV 5, the export crashed on a missing photo, an old local `cv/config.toml`, a test
+roll only on the PC), fixed; run 3 FAIL only on C5's outline spans (GPU vs the PC's CPU, every box
+number matched), C5 now checks the box; run 4 **PASS** (`qa/reports/2026-11-02-phase-30b-run4.md`;
+C7 NOT POSSIBLE, no roll without an area). Checks: ruff, mypy, pytest 102, `npm run check` 614.
+**Next:** Dylan commits the follow-up and opens the PR. **Then:** 30C (the 3-inch cut by the box
+diagonal and the 10% return, D-106), 31 the docs. Monday to Friday only (D-105) is its own thread.
+**Overall:** 32 phases built (0 to 29, 30A, 30B); 2 planned (30C, 31)
 
 ## Phase progress
 
@@ -86,8 +66,9 @@ Dylan on 2026-10-26.
 - [x] 29. Stock updated on one sheet, reminders on Wednesdays and Fridays, Reports → Materials
       (QA passed, run 2; merged #27)
 - [x] 30A. Leather rolls come from Inventory, each with its own area; picked at Capture; ticked
-      Fully used at Finish batch (QA passed, run 4; PR next)
-- [ ] 30B. The measuring check: a cut in inches, on an A4 piece of leather (`cv/` only)
+      Fully used at Finish batch (QA passed, run 4; merged #28, #29)
+- [x] 30B. The measuring check: a cut in inches, on a letter-size piece of leather (`cv/` only);
+      measured by the box, D-106 (QA passed, run 4; merged #30, follow-up PR next)
 - [ ] 30C. Cuts from 3 inches Not accepted; a roll over 10% defects marked Return to supplier
 - [ ] 31. The documentation and the paper's figures match the system
 
@@ -539,11 +520,11 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. Dylan commits the follow-up on `feature/phase-30a-rolls-from-inventory`, pushes and opens the PR (D-032).
-   CI runs on the PR and Claude fixes any failure.
-2. Phase 30B in a new session, with an A4 piece of leather at the station: "Read
-   `docs/prompts/plans/phase-30b-plan.md` and run Phase 30B. Stop for my approval before writing
-   code."
+1. Dylan commits the Phase 30B follow-up (QA fixes, run 2 to 4 reports, the wrap-up docs) on a new
+   branch, pushes and opens the PR (D-032). CI runs on the PR and Claude fixes any failure.
+2. Phase 30C in a new session: the 3-inch cut by the box diagonal and the 10% return (D-106).
+   Watch slanted cuts: their box is mostly clean leather. Optional first: a few real knife cuts on
+   scrap leather through `measure` (the pen lines aren't what the model learned).
 3. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
 4. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
    an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the

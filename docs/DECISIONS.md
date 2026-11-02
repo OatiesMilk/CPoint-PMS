@@ -2009,3 +2009,23 @@ items are counted from their rolls, not on the sheet). **Where:**
 **Consequences:** tell CPoint the FM adds every leather roll with its area, the constructor picks
 it at Capture, and the QI ticks rolls Fully used when finishing a batch. Leather counts on an
 existing database have no roll records until the FM adds them (or `demo:reset`).
+
+### D-106 · 2026-11-02 · Accepted — Defects are measured by the box (Phase 30B)
+
+**Context:** Phase 30B checked whether the camera measures a cut in inches (C-10, C-37) before 30C
+builds the 3-inch line and the 10% rule (C-9, C-35). Test piece: letter size, 8.5 × 11 in
+(0.649 sq ft), phone 19 to 20 in above, calibrated from the piece itself (about 164 px/in), three
+pen lines measured with a ruler (`cv/reports/2026-11-02-LETTER-TEST-measure.md`).
+**Evidence:** 2.5 in: not found by the model. 3.5 in: box diagonal 3.58, outline span 3.61.
+5.5 in: box diagonal 5.80, outline span 5.86. Both measures put each line on the right side of
+3 in. Area: the slanted 5.5 in line's box is 15.33 sq in (19.4% of the piece) against 0.54 sq in
+by outline (1.0%). The outline also shifts by about 0.1 in between CPU and GPU; the box doesn't.
+**Decision (Dylan):** measure by the **box**. A defect's length is its box diagonal in inches
+(the 3-inch line reads it); a shot's defect area is the union of its boxes, overlaps counted once
+(C-35); a roll's share is the sum over its shots ÷ its entered area (D-103), and more than 10% is
+strict (C-9). Claude recommended the outline; the `measure` report keeps it for comparison.
+**Consequences:** a slanted cut's box is mostly clean leather and can put a roll over 10% alone;
+30C must watch for it (and could revisit with real rolls). Pen lines aren't what the model learned
+from, so real knife cuts would be a stronger check. D-105 is the Monday to Friday schedule (its own
+thread). **Where:** `cv/cpoint_cv/{measure,calibration,cli}.py`,
+`src/server/services/roll-photos.service.ts`, `scripts/cv-roll-photos.ts`.

@@ -14,6 +14,25 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-11-02 — Phase 30B: the measuring check; measured by the box (D-106)
+
+**Who:** Dylan (Claude building, on the PC, then the laptop)
+**Summary:** `calibrate`, `measure` and `npm run cv:roll-photos` built and run on Dylan's three
+letter-size photos (pen lines 2.5, 3.5 and 5.5 in): 2.5 not found, 3.58 and 5.80 in by box, 19.4%
+by box against 1.0% by outline. Dylan chose the box (D-106). Merged as #30 before QA. Codex run 2
+FAIL (mypy on OpenCV 5; the export crashed on a missing photo and left an empty folder; the
+laptop's old `cv/config.toml`; a test roll only on the PC), fixed; run 3 FAIL only on C5's outline
+spans (GPU vs CPU), C5 now checks the box; run 4 PASS.
+**Changed:** `cv/cpoint_cv/{measure,calibration,cli}.py`, `cv/tests/test_measure.py`,
+`cv/reports/2026-11-02-LETTER-TEST-measure.md`, `src/server/services/roll-photos.service.ts`
+(reads every photo first, leaves out and names missing ones), `scripts/cv-roll-photos.ts`,
+`src/server/models/roll.model.ts`, `tests/unit/roll-photos.service.test.ts`, STATION_SETUP, cv
+README and MODEL_CARD, the plan and the brief; handoff, run 3 and 4 prompts, run 2 to 4 reports.
+**Gates:** ruff ✅ · mypy ✅ · pytest ✅ (102) · lint ✅ · typecheck ✅ · test ✅ (614) · build ✅ · e2e n/a (no app screen) · docker not run
+**Decisions:** D-106 (D-105 is Monday to Friday only, its own thread)
+**Follow-ups:** the follow-up PR; 30C reads the box diagonal and watches slanted cuts; optional
+real knife cuts.
+
 ## 2026-10-27 — Phase 30A: run 7 passed; Batches layout fixes
 
 **Who:** Dylan (Claude fixing)

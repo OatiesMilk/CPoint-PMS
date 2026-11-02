@@ -165,7 +165,7 @@ def save_sheet_overlay(path: Path, found: SheetFound, out_dir: Path) -> Path:
     import numpy as np
 
     image = read_image(path)
-    points = np.asarray(found.corners, dtype=np.int32).reshape((-1, 1, 2))
+    points: Any = np.asarray(found.corners, dtype=np.int32).reshape((-1, 1, 2))
     thickness = max(4, image.shape[1] // 300)
     cv2.polylines(image, [points], True, (0, 200, 0), thickness)
     text = f"{found.px_per_in:.1f} px/in, width seen {found.width_in:.2f} in"
