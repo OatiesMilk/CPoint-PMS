@@ -74,6 +74,14 @@ Inspector decides every flagged section (D-028).
   (Phase 15).
 - Trained on the team's own photos. Different lighting, leather colours or camera distance may
   lower accuracy.
+- **Measuring (Phase 30B).** `measure` uses each detection's mask outline (its area and longest
+  span) as well as its box. On the first check (2026-11-02, three phone photos of pen lines on a
+  letter-size piece, CPU) the model found 2 of 3 lines as `cut` (0.57 and 0.92) and missed the
+  2.5 in one; the lengths it found were 0.1 to 0.4 in over the ruler by box and by outline. Pen
+  lines aren't the cuts it was trained on: real knife cuts on scrap leather are the next check.
+  A slanted line's box counts about 19 times the outline's area, so the box overstates the 10%
+  share (`cv/reports/2026-11-02-LETTER-TEST-measure.md`).
+- Stretch marks are not a class (C-22).
 
 ## Baseline (2026-10-19)
 

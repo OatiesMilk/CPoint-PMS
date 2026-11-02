@@ -134,6 +134,33 @@ export function findRollDetail(id: string, db: Db = defaultDb()): Promise<RollDe
   return db.roll.findUnique({ where: { id }, select: detailSelect });
 }
 
+// ───────────── The photo export for measuring (Phase 30B) ─────────────
+
+/** A roll by its code with its shots' image keys, for `npm run cv:roll-photos`. Reads only. */
+export function findRollPhotos(code: string, db: Db = defaultDb()) {
+  return db.roll.findUnique({
+    where: { code },
+    select: {
+      code: true,
+      areaSqFt: true,
+      item: { select: { name: true } },
+      supplier: { select: { name: true } },
+      scans: {
+        orderBy: { sequence: "asc" },
+        select: {
+          sequence: true,
+          capturedAt: true,
+          imagePath: true,
+          imageMime: true,
+          finalVerdict: true,
+        },
+      },
+    },
+  });
+}
+
+export type RollPhotosRow = NonNullable<Awaited<ReturnType<typeof findRollPhotos>>>;
+
 // ───────────── Capture ─────────────
 
 const openSelect = {
