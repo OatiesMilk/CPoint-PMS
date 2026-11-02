@@ -18,6 +18,9 @@ export const WEEKDAY_LABELS: Record<number, string> = {
   7: "Sunday",
 };
 
+/** The days a stock reminder can fall on: Monday to Friday, the factory's working days (D-105). */
+export const REMINDER_DAY_CHOICES = [1, 2, 3, 4, 5] as const;
+
 /** Wednesday and Friday (C-32). */
 export const DEFAULT_REMINDER_DAYS = [3, 5];
 

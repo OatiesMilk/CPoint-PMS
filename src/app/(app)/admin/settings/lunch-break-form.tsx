@@ -141,7 +141,7 @@ export function LunchBreakForm({
         </div>
       </div>
       <p className="text-sm text-muted-foreground">
-        The same on every working day, Saturday too.{" "}
+        The same on every working day.{" "}
         {shift ? `It must sit inside the shift (${shift.shiftStart} to ${shift.shiftEnd}). ` : ""}
         Applies from tomorrow, {formatAttendanceDay(tomorrow)}.
       </p>

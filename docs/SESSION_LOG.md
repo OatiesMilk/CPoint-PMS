@@ -14,6 +14,44 @@ Template:
 **Follow-ups:** bullets
 ```
 
+## 2026-11-02 — D-105 Codex run 1 and fix
+
+**Who:** Dylan (Claude on the PC)
+**Summary:** Codex run 1 FAIL (`qa/reports/2026-11-02-weekdays-only-run1.md`): S1 to S7, S9 to
+S11, A11y, A1, A2 passed; e2e 88 passed, 0 failed, 2 skipped (focused run 14/0 on rerun). S8
+failed on the handoff's query (`startedAt` is UTC without a time zone; the corrected query gives 0
+weekend rolls). It also showed Recent days with Saturday 31 Oct "0 of 2 · 2 missed": `demo:reset`
+kept the bootstrap Mon–Sat default. Now `demo:reset` deletes every schedule and puts back the
+Mon–Fri default (`ensureDefaultSchedule`).
+**Changed:** `src/server/models/demo-reset.model.ts`, `src/server/services/demo-reset.service.ts`,
+`tests/unit/demo-reset.test.ts`; the handoff's S8 queries; `qa/CODEX_PROMPT_WEEKDAYS_ONLY_RUN2.md`.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (615) · build ✅ · e2e Codex run 2 next
+**Decisions:** none (D-105)
+**Follow-ups:** Codex run 2 **PASS** (`qa/reports/2026-11-02-weekdays-only-run2.md`): R1 to R3,
+e2e 88 passed, 0 failed, 2 skipped. Dylan commits on `feature/weekdays-only-schedule`.
+
+## 2026-11-02 — Follow-up: production works Monday to Friday, 08:00 to 17:00 (D-105)
+
+**Who:** Dylan (Claude building, on the PC through Remote Control, beside the 30B thread)
+**Summary:** The schedule now refuses Saturday and Sunday and times outside 08:00 to 17:00 (a
+shorter shift inside stays allowed); the plan form shows Monday to Friday with "The factory works
+Monday to Friday, 08:00 to 17:00."; stock reminder days are Monday to Friday; the demo week skips
+weekends. Migration `weekdays_only` keeps past schedule rows (so past Saturdays keep their
+batches) and adds a fixed copy from tomorrow; on the PC's dev database the default Mon–Sat row now
+has a Mon–Fri row from 2026-11-03. Reminder days were already {3,5}.
+**Changed:** `production-rules.ts`, `stock-rules.ts`, `production.validator.ts`,
+`inventory.validator.ts`, `plan-forms.tsx`, `update-sheet.tsx`, `lunch-break-form.tsx`
+("The same on every working day."), `production.service.ts` (comments), `demo-seed.service.ts`,
+`prisma/schema.prisma` (comments only), `prisma/migrations/20261102090000_weekdays_only`;
+unit tests `validator-messages.test.ts` (2 new tests), `production.service.test.ts`; e2e
+`batches.spec.ts` and `inventory.spec.ts` (new checks, not run); `docs/API.md`; QA handoff and
+`qa/CODEX_PROMPT_WEEKDAYS_ONLY.md`.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (613) · build ✅ ·
+e2e not run (Codex) · docker not run · migration applied with `npm run db:deploy`
+**Decisions:** D-105 (the 30B thread's box-or-outline decision moves to D-106)
+**Follow-ups:** Codex QA; commit on its own branch; vault not on this PC (laptop), so its Daily
+note wasn't updated.
+
 ## 2026-11-02 — Phase 30B: the measuring check; measured by the box (D-106)
 
 **Who:** Dylan (Claude building, on the PC, then the laptop)

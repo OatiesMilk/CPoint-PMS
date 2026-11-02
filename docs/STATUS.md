@@ -7,6 +7,15 @@
 **Branch:** `main` has Phase 30B (#30, c8d6410), merged before QA. Its QA fixes and these
 wrap-up docs are **uncommitted** in `C:\dev\CPoint-PMS`; Dylan commits them on a new branch and
 opens a follow-up PR.
+**Also uncommitted (PC):** D-105, production works Monday to Friday, 08:00 to 17:00 (schedule and
+reminder days refused outside it, migration `weekdays_only` applied to the PC's dev database from
+3 Nov, demo week skips weekends). Codex run 1 FAIL (`qa/reports/2026-11-02-weekdays-only-run1.md`):
+13 of 14 passed, e2e 88 passed, 0 failed, 2 skipped; S8's weekend query was wrong (UTC not
+applied; corrected, 0 weekend rolls), and `demo:reset` kept the old Mon–Sat default, so Recent
+days showed a missed Saturday: it now puts back one Mon–Fri default. `npm run check` passed (615).
+Run 2 **PASS** (`qa/reports/2026-11-02-weekdays-only-run2.md`): R1 to R3, weekend counts 0, one
+Mon–Fri default after the reset, e2e 88 passed, 0 failed, 2 skipped. Next: Dylan commits on
+`feature/weekdays-only-schedule` and opens the PR.
 **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
 included; Codex only tests and reports; every agent reads the Obsidian vault
 (`C:\dev\capstone-obsidian`) first and records each change there.
@@ -626,7 +635,9 @@ Later:
 - ASSUMPTION (D-084): Late starts 30 minutes after a check-in's time; a check-in can be entered
   until midnight and corrected the same day only.
 - Closed (D-095, C-33): the 10-pieces hint is gone; roll sizes vary and a section is a shot.
-- ASSUMPTION (D-083): Monday to Saturday are working days for production.
+- Decided (Dylan, 2026-11-02, D-105): production works Monday to Friday, 08:00 to 17:00 (replaces
+  D-083's Monday to Saturday); the FM may set a shorter shift inside that window; stock reminders
+  Monday to Friday. Tell CPoint.
 
 - Closed (D-078; Dylan, 2026-10-23, C-38): every Shoe Constructor gets an account from the System
   Admin.

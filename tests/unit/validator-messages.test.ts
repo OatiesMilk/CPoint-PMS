@@ -291,6 +291,14 @@ describe("validator messages are specific (D-038)", () => {
     expect(messages(inventorySettingsSchema, { reminderDays: [] })).toEqual([
       "Pick at least one reminder day.",
     ]);
+    // Reminders fall on the factory's working days only (D-105).
+    for (const day of [6, 7])
+      expect(messages(inventorySettingsSchema, { reminderDays: [3, day] })).toEqual([
+        "Reminder days are Monday to Friday.",
+      ]);
+    expect(inventorySettingsSchema.parse({ reminderDays: [5, 1, 5] })).toEqual({
+      reminderDays: [1, 5],
+    });
     expect(
       messages(inventoryItemFormSchema, {
         sku: "LR-1",
@@ -485,6 +493,34 @@ describe("batch messages (D-038, Phase 27)", () => {
       "Choose how often: every 1, 2, 3 or 4 hours, or once at the end of the day.",
       "Pick at least one working day.",
     ]);
+  });
+
+  it("keeps the schedule inside the factory's hours, Monday to Friday, 08:00 to 17:00 (D-105)", () => {
+    const base = { shiftStart: "08:00", shiftEnd: "17:00", intervalMinutes: 240 };
+    for (const day of [6, 7])
+      expect(messages(scheduleSchema, { ...base, workingDays: [1, day] })).toEqual([
+        "Working days are Monday to Friday.",
+      ]);
+    expect(messages(scheduleSchema, { ...base, shiftStart: "07:00", workingDays: [1] })).toEqual([
+      "Shift start must be 08:00 or later.",
+    ]);
+    expect(messages(scheduleSchema, { ...base, shiftEnd: "18:00", workingDays: [1] })).toEqual([
+      "Shift end must be 17:00 or earlier.",
+    ]);
+    expect(
+      messages(scheduleSchema, {
+        ...base,
+        shiftStart: "07:30",
+        shiftEnd: "17:30",
+        workingDays: [1],
+      }),
+    ).toEqual(["Shift start must be 08:00 or later.", "Shift end must be 17:00 or earlier."]);
+    // A shorter shift inside the window, and the whole window, are fine.
+    expect(
+      scheduleSchema.safeParse({ ...base, shiftEnd: "16:00", workingDays: [1, 2, 3, 4, 5] })
+        .success,
+    ).toBe(true);
+    expect(scheduleSchema.safeParse({ ...base, workingDays: [1, 2, 3, 4, 5] }).success).toBe(true);
   });
 
   it("asks for a reason to correct", () => {

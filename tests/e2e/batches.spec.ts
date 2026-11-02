@@ -124,8 +124,25 @@ test("the Floor Manager plans the batches, once at the end of the day, and the o
   await page.getByRole("link", { name: "Plan batches and quota" }).click();
   await expect(page).toHaveURL("/batches/plan");
 
-  // Schedule: a shift end before the start is caught under the field.
+  // Schedule: the factory's hours (D-105), Monday to Friday only, and times inside 08:00 to 17:00.
   const schedule = page.getByTestId("schedule-form");
+  await expect(schedule).toContainText("The factory works Monday to Friday, 08:00 to 17:00.");
+  await expect(schedule.getByLabel("Friday")).toBeVisible();
+  await expect(schedule.getByLabel("Saturday")).toHaveCount(0);
+  await expect(schedule.getByLabel("Sunday")).toHaveCount(0);
+  await schedule.getByLabel("Shift start").fill("07:00");
+  await schedule.getByLabel("Shift end").fill("18:00");
+  await schedule.getByRole("button", { name: "Save schedule" }).click();
+  await expect(schedule.getByText("Shift start must be 08:00 or later.")).toBeVisible();
+  await expect(schedule.getByText("Shift end must be 17:00 or earlier.")).toBeVisible();
+  await expect(schedule.getByLabel("Shift start")).toBeFocused();
+  const weekend = await page.request.put("/api/v1/production/schedule", {
+    data: { shiftStart: "08:00", shiftEnd: "17:00", intervalMinutes: 240, workingDays: [6] },
+  });
+  expect(weekend.status()).toBe(422);
+  expect(JSON.stringify(await weekend.json())).toContain("Working days are Monday to Friday.");
+
+  // A shift end before the start is caught under the field.
   await schedule.getByLabel("Shift start").fill("17:00");
   await schedule.getByLabel("Shift end").fill("08:00");
   await schedule.getByRole("button", { name: "Save schedule" }).click();

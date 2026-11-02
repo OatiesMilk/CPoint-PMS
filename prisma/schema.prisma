@@ -422,7 +422,7 @@ model StockUpdate {
 /// Single row: the days the Floor Manager is reminded to update stock (Phase 29, C-32).
 model InventorySettings {
   id           Int      @id @default(1)
-  /// ISO weekdays (1 Monday … 7 Sunday); default Wednesday and Friday.
+  /// ISO weekdays, Monday (1) to Friday (5) since D-105; default Wednesday and Friday.
   reminderDays Int[]    @default([3, 5])
   updatedById  String?  @db.Uuid
   updatedAt    DateTime @updatedAt
@@ -477,7 +477,7 @@ model ProductionSchedule {
   shiftStart      String // "HH:mm", Manila
   shiftEnd        String // "HH:mm", Manila
   intervalMinutes Int? // 60, 120, 180 or 240 working minutes; null = once at the end of the day
-  workingDays     Int[] // ISO weekdays, 1 = Monday
+  workingDays     Int[] // ISO weekdays, 1 = Monday; 1 to 5 since D-105 (older rows may hold 6)
   effectiveFrom   DateTime @db.Date
   createdById     String?  @db.Uuid // null for the bootstrap default
   createdAt       DateTime @default(now())

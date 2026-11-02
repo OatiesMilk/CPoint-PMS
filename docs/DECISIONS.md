@@ -2010,6 +2010,59 @@ items are counted from their rolls, not on the sheet). **Where:**
 it at Capture, and the QI ticks rolls Fully used when finishing a batch. Leather counts on an
 existing database have no roll records until the FM adds them (or `demo:reset`).
 
+### D-105 · 2026-11-02 · Accepted — Production works Monday to Friday, 08:00 to 17:00
+
+**Decision (Dylan, 2026-11-02):** the factory works **Monday to Friday, 08:00 to 17:00**. The
+Floor Manager's schedule (Batches → Plan batches and quota) can pick only Monday to Friday
+("Working days are Monday to Friday."), a shift start from 08:00 ("Shift start must be 08:00 or
+later.") and a shift end up to 17:00 ("Shift end must be 17:00 or earlier."); a shorter shift
+inside that window stays allowed, and shift end after start still holds. The form shows "The
+factory works Monday to Friday, 08:00 to 17:00." and only five day ticks. The bootstrap default is
+08:00 to 17:00, every 4 hours, Monday to Friday. The stock **reminder days** are Monday to Friday
+too ("Reminder days are Monday to Friday."). The demo week skips Saturday and Sunday. Attendance
+(any day, 7 days back) and the Monday-to-Sunday weeks of the reports are unchanged.
+
+**Migration** `20261102090000_weekdays_only` (data only): past schedule rows are kept as they were,
+so past days, Saturdays included, keep their batches and check-ins. A schedule starting tomorrow
+or later is fixed in place; when the one in force tomorrow has a weekend day or hours outside the
+window, a fixed copy starts tomorrow (Manila), with no author, like the bootstrap default. Reminder
+days lose Saturday and Sunday (none left → Wednesday and Friday). The migration writes no audit
+row.
+
+**Supersedes:** D-083's Monday to Saturday (the rest of D-083 stands: changes apply from tomorrow,
+every version kept). **Where:** `src/lib/production-rules.ts` (`WEEKDAYS`, `FACTORY_OPENS`,
+`FACTORY_CLOSES`, `FACTORY_DAYS`, `DEFAULT_SCHEDULE`), `src/lib/stock-rules.ts`
+(`REMINDER_DAY_CHOICES`), `src/server/validators/{production,inventory}.validator.ts`,
+`src/app/(app)/batches/plan/plan-forms.tsx`, `src/app/(app)/inventory/update/update-sheet.tsx`,
+`src/app/(app)/admin/settings/lunch-break-form.tsx`, `src/server/services/demo-seed.service.ts`.
+**Consequences:** tell CPoint there are no Saturday batches or reminders any more.
+
+### D-106 · 2026-11-02 · Accepted — Defects are measured by the box
+
+**Decision (Dylan, 2026-11-02, after the Phase 30B check):** a defect is measured by its
+detection **box**, not its mask outline. Its **length** is the box's diagonal in inches (the
+3-inch line of C-37 reads it). A roll's **defect area** is, per shot, the union of its boxes with
+overlaps counted once (C-35), summed over the roll's shots; the **share** is that area over the
+roll's entered area (D-103), and more than 10% is over (strict, C-9). The scale comes from a sheet
+of known size (A4 or letter) photographed from the stand (`python -m cpoint_cv calibrate`).
+
+**Evidence** (`cv/reports/2026-11-02-LETTER-TEST-measure.md`: a letter-size piece of dark leather,
+0.649 sq ft, three phone photos of pen lines, 163 to 164 px per inch): the box diagonal read
+**3.58 in** for the 3.5 in line and **5.80 in** for the 5.5 in line (the outline's span 3.61 and
+5.86); the **2.5 in pen line wasn't found** by the model. Both measures fall on the right side of
+the 3-inch line. Pen lines aren't the cuts the model was trained on.
+
+**Known cost:** a slanted cut's box is mostly clean leather. The 5.5 in line ran at a slant: its
+box covers **15.33 sq in**, **19.4%** of the piece, against 0.54 sq in (**1.0%**) by outline, so
+that one line alone puts the piece over 10% by box. Phase 30C should watch slanted cuts (for
+example, show the slanted ones on the roll's page, or check the share on real rolls before
+relying on Return to supplier). The outline stays available in `measure`'s report for comparison.
+
+**Where:** `cv/cpoint_cv/measure.py`, `cv/cpoint_cv/calibration.py`, `cv/cpoint_cv/cli.py`,
+`scripts/cv-roll-photos.ts`, `src/server/services/roll-photos.service.ts`. **Consequences:** the app
+already stores each detection's box (`detections` x, y, width, height), so Phase 30C can work out
+a roll's Defect % from it once each phone's scale is known (its plan settles how).
+
 ### D-106 · 2026-11-02 · Accepted — Defects are measured by the box (Phase 30B)
 
 **Context:** Phase 30B checked whether the camera measures a cut in inches (C-10, C-37) before 30C
