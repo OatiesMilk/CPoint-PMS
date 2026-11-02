@@ -20,6 +20,10 @@ async function main() {
   }
   const result = await exportRollPhotos(code, folder);
   console.log(`Roll ${result.roll}: ${result.shots.length} shots copied to ${result.folder}.`);
+  if (result.missing.length > 0)
+    console.log(
+      `Left out, no photo on this computer: shot ${result.missing.join(", ")}. Export on the computer that captured them to get every shot.`,
+    );
   console.log(
     "Next: calibrate (python -m cpoint_cv calibrate <sheet photo>), put width_in in roll.toml, then python -m cpoint_cv measure <folder>.",
   );

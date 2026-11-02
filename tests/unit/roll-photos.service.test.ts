@@ -106,6 +106,31 @@ describe("exportRollPhotos", () => {
     );
   });
 
+  it("leaves out a shot whose photo is missing on this computer and names it", async () => {
+    findRollPhotos.mockResolvedValue(roll);
+    read.mockImplementationOnce(async () => {
+      throw Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" });
+    });
+    const out = path.join(dir, "part");
+    const result = await exportRollPhotos("LR-MLT-001", out);
+    expect(result.missing).toEqual([1]);
+    expect(result.shots.map((s) => s.file)).toEqual(["shot-03.png"]);
+    expect((await readdir(out)).sort()).toEqual(["roll.toml", "shot-03.png", "shots.csv"]);
+  });
+
+  it("refuses when no photo is on this computer, and makes no folder", async () => {
+    findRollPhotos.mockResolvedValue(roll);
+    read.mockImplementation(async () => {
+      throw Object.assign(new Error("ENOENT: no such file"), { code: "ENOENT" });
+    });
+    const out = path.join(dir, "none");
+    await expect(exportRollPhotos("LR-MLT-001", out)).rejects.toThrow(
+      "None of roll LR-MLT-001's 2 photos is in the uploads folder",
+    );
+    await expect(readdir(out)).rejects.toThrow();
+    read.mockImplementation(async (key: string) => Buffer.from(`image ${key}`));
+  });
+
   it("writes Manila time", () => {
     expect(manilaIso(new Date("2026-11-02T16:30:05.123Z"))).toBe("2026-11-03T00:30:05+08:00");
   });

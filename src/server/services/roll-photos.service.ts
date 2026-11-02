@@ -63,7 +63,7 @@ export async function exportRollPhotos(
   code: string,
   folder: string,
   now: Date = new Date(),
-): Promise<{ roll: string; shots: ExportedShot[]; folder: string }> {
+): Promise<{ roll: string; shots: ExportedShot[]; missing: number[]; folder: string }> {
   const roll = await findRollPhotos(code.trim());
   if (!roll)
     throw new RollPhotosError(`No roll has the code ${code}. Check it under Reports → Rolls.`);
@@ -83,13 +83,30 @@ export async function exportRollPhotos(
     throw new RollPhotosError(
       `${target} isn't empty. Give a new folder so nothing is overwritten.`,
     );
+
+  // Read every photo before the folder is made, so a missing file leaves nothing behind.
+  const storage = getStorage();
+  const found: { shot: (typeof withImages)[number]; bytes: Buffer }[] = [];
+  const missing: number[] = [];
+  for (const shot of withImages) {
+    try {
+      found.push({ shot, bytes: await storage.read(shot.imagePath) });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      missing.push(shot.sequence);
+    }
+  }
+  if (found.length === 0)
+    throw new RollPhotosError(
+      `None of roll ${roll.code}'s ${withImages.length} photos is in the uploads folder on this computer (UPLOADS_DIR). Export it on the computer that captured it.`,
+    );
+
   await mkdir(target, { recursive: true });
 
-  const storage = getStorage();
   const shots: ExportedShot[] = [];
-  for (const shot of withImages) {
+  for (const { shot, bytes } of found) {
     const file = `shot-${String(shot.sequence).padStart(2, "0")}.${extensionFor(shot)}`;
-    await writeFile(path.join(target, file), await storage.read(shot.imagePath), { flag: "wx" });
+    await writeFile(path.join(target, file), bytes, { flag: "wx" });
     shots.push({
       file,
       sequence: shot.sequence,
@@ -99,5 +116,5 @@ export async function exportRollPhotos(
   }
   await writeFile(path.join(target, "shots.csv"), shotsCsv(shots), { flag: "wx" });
   await writeFile(path.join(target, "roll.toml"), rollToml(roll, now), { flag: "wx" });
-  return { roll: roll.code, shots, folder: target };
+  return { roll: roll.code, shots, missing, folder: target };
 }

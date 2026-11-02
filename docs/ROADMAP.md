@@ -487,9 +487,10 @@ was never built. Each phase gets its own criteria here when its plan is approved
 - [x] Phase 29: stock updated on one sheet (Added, Used, Correction), reminders on Wednesdays and
       Fridays, Reports → Materials (merged #27; QA passed, run 2)
 - [x] Phase 30A: leather rolls come from Inventory, each with its own area; the constructor picks
-      one at Capture; the QI ticks rolls Fully used at Finish batch (QA passed, run 4; PR next)
-- [ ] Phase 30B: the measuring test: does the camera measure a cut in inches? An A4 piece of
-      leather with cuts made on purpose (`cv/` only; plan `docs/prompts/plans/phase-30b-plan.md`)
+      one at Capture; the QI ticks rolls Fully used at Finish batch (QA passed, run 4; merged #28, #29)
+- [x] Phase 30B: the measuring test: does the camera measure a cut in inches? A letter-size piece
+      of leather with pen lines (`cv/` only; plan `docs/prompts/plans/phase-30b-plan.md`); measured
+      by the box, D-106 (QA passed, run 4; merged #30)
 - [ ] Phase 30C: cuts from 3 inches Not accepted; a roll over 10% defects (of its entered area)
       marked Return to supplier, the FM decides
 - [ ] Phase 31: the documentation and the paper's figures match the system
