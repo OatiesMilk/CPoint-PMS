@@ -10,6 +10,8 @@ model is checked and exported. It runs on a PC with Python, outside Docker, and 
   report to `reports/`. Posts nothing (D-058).
 - `export-onnx`: write `models/yolo-v1.onnx` and `models/yolo-v1.json`, the files the website
   reads (D-064).
+- `calibrate` and `measure`: the scale from a sheet of known size, then each defect in inches
+  and a roll's defect share of its area (Phase 30B). Posts nothing.
 
 The CPoint Camera station app and its `run` and `doctor` commands were retired in Phase 20
 (D-069): capture happens on the website.
@@ -23,6 +25,8 @@ cpoint_cv/
   preview.py        Python port of the app's rule (D-053, D-093), for the preview only
   evaluate.py       labels.csv, the verdict table, per-class scores and the sweep (D-058)
   onnx_export.py    the ONNX file and the JSON beside it
+  measure.py        inches, areas, overlaps once, the roll's share, roll.toml, ruler.csv, the report
+  calibration.py    finds the A4 or letter sheet (OpenCV)
   config.py         config.toml + environment overrides
   model_info.py     SHA-256 and modelVersion
   sources.py        finds the photos; summary.py: per-folder numbers; overlay.py: boxes and masks
@@ -154,6 +158,60 @@ cd .. && npm run cv:parity -- <folder> --compare storage/py.jsonl
 
 Each photo should say `agrees` (same classes in order, confidence ±0.02, box edges ±0.01). The
 five sample photos and two 16:9 crops agreed on 2026-10-19.
+
+## Measure defects (Phase 30B)
+
+A check of whether the camera can measure a defect in inches. It changes nothing in the app; Dylan
+chose the **box** from the first report (D-106, 2026-11-02): a defect's length is its box's
+diagonal and a roll's defect area is each shot's union of boxes. The outline is in the report for
+comparison only.
+
+1. **The scale.** Photograph a sheet of known size from the stand (`docs/STATION_SETUP.md`,
+   "Calibrate your phone"), then:
+
+   ```bash
+   .venv/Scripts/python -m cpoint_cv calibrate sheet.jpg --size letter --save-overlay out/sheet
+   ```
+
+   `--size` is `a4` (the default, 8.27 × 11.69 in), `letter` (8.5 × 11 in) or `WxH` in inches.
+   It finds the largest rectangle with a gap at every edge that stands out from the table (a white
+   paper or a dark leather piece) and has the sheet's shape, and prints the width the phone sees.
+
+2. **The shots.** One folder per roll. `npm run cv:roll-photos -- <roll-code> <folder>` copies a
+   roll's shots out of the app's uploads (`shot-01.jpg`…, `shots.csv` with each shot's time) and
+   writes `roll.toml` with the code and the area the Floor Manager entered (D-103). It reads only,
+   wants a new folder, and refuses a roll with no area (rolls from before Phase 30A) by name. In
+   PowerShell, quote the separator: `npm run cv:roll-photos '--' LR-MLT-001 cv/out/LR-MLT-001`.
+   Or write `roll.toml` by hand:
+
+   ```toml
+   code = "LR-MLT-001"
+   area_sq_ft = 24.5
+   width_in = 18.47          # from calibrate; or:
+   # calibration_photo = "sheet.jpg"   (in this folder, not measured as a shot)
+   # calibrate_each = true             (every shot has the sheet or piece in it)
+   sheet = "letter"          # for calibration_photo and calibrate_each; default a4
+   ```
+
+   Optional `ruler.csv` beside it, one line per defect measured with a ruler:
+
+   ```
+   photo,class,inches
+   cut-3.5in.jpeg,cut,3.5
+   ```
+
+3. **Measure.**
+
+   ```bash
+   .venv/Scripts/python -m cpoint_cv measure out/LR-MLT-001 [--width-in 18.47] [--size letter]
+   ```
+
+   It writes `reports/<date>-<code>-measure.md`: the scale per shot; each defect's box (w × h,
+   diagonal, area) and mask outline (area, longest span), centre or edge of the frame; each ruler
+   length beside the longest defect of its class on that photo, and which side of the 3-inch line
+   (C-37) each measure falls; per shot the union of its defects with overlaps counted once (C-35),
+   by box and by outline; the roll's defect area over its entered area, and whether that is more
+   than 10% (strict, C-9).
 
 ## Swap in a new model
 

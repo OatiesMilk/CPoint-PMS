@@ -6,6 +6,10 @@
 - ``evaluate <folder>``: compare preview verdicts with ``labels.csv`` and write a report.
 - ``export-onnx``: write the model as ONNX, with a JSON beside it, for the website's Capture page
   (Phase 18, D-064).
+- ``calibrate <photo>``: find a sheet of known size (A4 or letter) and print the width the phone
+  sees, for the scale (Phase 30B).
+- ``measure <folder>``: measure a roll's defects in inches against its entered area and the
+  ruler, and write a report (Phase 30B). Posts nothing.
 
 The station app and its ``run`` and ``doctor`` commands were retired in Phase 20 (D-069): capture
 happens on the website.
@@ -248,6 +252,122 @@ def _export_onnx(args: argparse.Namespace) -> int:
     return 0
 
 
+def _calibrate(args: argparse.Namespace) -> int:
+    from .calibration import CalibrationError, find_sheet, save_sheet_overlay
+    from .measure import MeasureError, parse_sheet_size
+
+    try:
+        sheet = parse_sheet_size(args.size)
+        images = collect_images(args.paths)
+    except (MeasureError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    if not images:
+        print("error: no images found (jpg, jpeg, png, webp or bmp).", file=sys.stderr)
+        return 2
+    failed = 0
+    for image in images:
+        try:
+            found = find_sheet(image, sheet)
+        except CalibrationError as error:
+            print(f"{image.name}: {error}", file=sys.stderr)
+            failed += 1
+            continue
+        print(
+            f"{image.name}: sheet {sheet[0]:g} x {sheet[1]:g} in found ({found.view}), "
+            f"{found.long_px:.0f} x {found.short_px:.0f} px, shape {found.aspect_found:.3f} "
+            f"(sheet {found.aspect_sheet:.3f}); {found.px_per_in:.1f} px per inch; the phone "
+            f"sees {found.width_in:.2f} in across a {found.image_width} px wide frame."
+        )
+        if args.save_overlay:
+            print(f"    overlay: {save_sheet_overlay(image, found, args.save_overlay)}")
+    if failed == len(images):
+        return 2
+    print(
+        "\nPut the width in the roll's roll.toml as width_in, or measure with --width-in. "
+        "It holds while the phone stays at the same height and zoom."
+    )
+    return 0
+
+
+def _measure(args: argparse.Namespace) -> int:
+    from dataclasses import replace
+    from datetime import date
+
+    from .measure import MeasureError, load_roll_file, measure_folder, parse_sheet_size
+    from .measure import to_markdown as measure_markdown
+
+    if args.out and len(args.folders) > 1:
+        print(
+            "error: --out takes one folder; leave it out to write one report per roll.",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        config = load_config(args.config)
+        rolls = [(folder, load_roll_file(folder)) for folder in args.folders]
+        if args.width_in is not None:
+            rolls = [(f, replace(r, width_in=args.width_in)) for f, r in rolls]
+        if args.size:
+            sheet = parse_sheet_size(args.size)
+            rolls = [(f, replace(r, sheet=sheet)) for f, r in rolls]
+    except (ConfigError, MeasureError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    from .calibration import CalibrationError, find_sheet, image_size
+    from .yolo_detector import ModelError, YoloDetector
+
+    version = _model_version(config)
+    if version is None:
+        return 2
+    try:
+        detector = YoloDetector(config.model, config.mapper.confidence_floor)
+    except ModelError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    def calibrate_photo(path: Path, sheet: tuple[float, float]) -> tuple[float, float]:
+        found = find_sheet(path, sheet)
+        return found.width_in, found.px_per_in
+
+    today = date.today().isoformat()
+    status = 0
+    for folder, roll_file in rolls:
+        try:
+            result = measure_folder(
+                folder,
+                roll_file,
+                detector,
+                config.mapper,
+                size_of=image_size,
+                calibrate_photo=calibrate_photo,
+            )
+        except (MeasureError, CalibrationError) as error:
+            print(f"error: {folder}: {error}", file=sys.stderr)
+            status = 2
+            continue
+        report = measure_markdown(
+            result.roll,
+            result.checks,
+            result.calibrations,
+            date=today,
+            model_version=version,
+            settings_line=settings_line(config),
+            notes=result.notes,
+        )
+        out = args.out or CV_DIR / "reports" / f"{today}-{result.roll.code}-measure.md"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(report, encoding="utf-8")
+        found = sum(len(s.defects) for s in result.roll.shots)
+        print(
+            f"Roll {result.roll.code}: {len(result.roll.shots)} shots, {found} defects; "
+            f"{result.roll.share_box:.1%} by box, {result.roll.share_outline:.1%} by outline. "
+            f"Report: {out}"
+        )
+    return status
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m cpoint_cv",
@@ -292,6 +412,43 @@ def build_parser() -> argparse.ArgumentParser:
     )
     export.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
     export.set_defaults(handler=_export_onnx)
+
+    calibrate = commands.add_parser(
+        "calibrate",
+        help="Find a sheet of known size in a photo and print the width the phone sees.",
+    )
+    calibrate.add_argument("paths", nargs="+", type=Path, help="Photos with the sheet in them")
+    calibrate.add_argument(
+        "--size",
+        default="a4",
+        help="The sheet: a4 (8.27x11.69, the default), letter (8.5x11) or WxH in inches",
+    )
+    calibrate.add_argument(
+        "--save-overlay", type=Path, metavar="DIR", help="Save each photo with the sheet outlined"
+    )
+    calibrate.set_defaults(handler=_calibrate)
+
+    measure = commands.add_parser(
+        "measure",
+        help="Measure the defects on a roll's shots in inches and write a report. Posts nothing.",
+    )
+    measure.add_argument(
+        "folders", nargs="+", type=Path, help="One folder per roll, each with its roll.toml"
+    )
+    measure.add_argument(
+        "--width-in", type=float, metavar="W", help="The width the phone sees, from calibrate"
+    )
+    measure.add_argument(
+        "--size", help="The calibration sheet's size (a4, letter or WxH); overrides roll.toml"
+    )
+    measure.add_argument(
+        "--out",
+        type=Path,
+        metavar="FILE",
+        help="Where to write the report (default: cv/reports/<date>-<roll>-measure.md)",
+    )
+    measure.add_argument("--config", type=Path, help="Config file (default: cv/config.toml)")
+    measure.set_defaults(handler=_measure)
 
     return parser
 

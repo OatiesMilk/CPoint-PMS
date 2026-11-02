@@ -1,11 +1,13 @@
 # Phase 30B plan: can the camera measure a cut? (was 30A; reordered 26 Oct)
 
-> Part A here is 30B and Part B is 30C. The measuring decision is D-105 (D-104 is now rolls from
-> Inventory, built in 30A).
+> Part A here is 30B and Part B is 30C. The measuring decision is D-106 (D-104 is now rolls from
+> Inventory, built in 30A; D-105 is the Monday-to-Friday schedule). **Decided 2026-11-02 (D-106):
+> by the box** (length = the box diagonal, area = each shot's union of boxes); the check is
+> `cv/reports/2026-11-02-LETTER-TEST-measure.md`.
 
 Brief: `docs/prompts/factory-visit-changes.md` → Phase 30, Part A (C-9, C-10, C-24, C-35, C-37;
 A-18, A-20). Status: **draft, waiting for Dylan's go** (26 Oct 2026). Decisions: D-103 (the roll's
-area is entered by the FM, roll by roll) and D-105 (how defects are measured, after the check).
+area is entered by the FM, roll by roll) and D-106 (how defects are measured, after the check).
 
 Part A changes only the `cv/` toolkit and `docs/STATION_SETUP.md`, plus the small read-only
 photo export in section 3. The app's behaviour doesn't change. Part B (the app) is a separate
@@ -80,7 +82,7 @@ the layering `demo-reset` uses).
 
 **The report answers**: box or outline, which is closer to the ruler; whether the centre and the
 edges agree; whether the 3-inch line holds; the share on the A4 leather; the formula I recommend.
-Dylan picks; D-105 records it before Part B.
+Dylan picks; D-106 records it before Part B.
 
 **Tests**: `cv/tests/test_measure.py` (about 15: scale, shoelace, diagonal and span, overlapping
 boxes once, strict 10%, 2.99 vs 3.00 in, missing or zero area refused, `roll.toml` and
@@ -93,7 +95,7 @@ Checks: ruff, mypy (strict), pytest, and `npm run check`.
 - `cv/README.md` (the commands), `cv/MODEL_CARD.md` (outlines used for measuring; stretch marks
   still not a class, C-22).
 - The brief's Part B updated with section 6. Wrap-up: STATUS, SESSION_LOG, ROADMAP, DECISIONS
-  (D-103 now, D-105 after the check); the vault's Daily note and phase summary.
+  (D-103 now, D-106 after the check); the vault's Daily note and phase summary.
 - No Codex QA handoff: there's no app screen to test. Dylan's station test is the test.
 
 ## 5. Done when (Part A)
@@ -101,7 +103,7 @@ Checks: ruff, mypy (strict), pytest, and `npm run check`.
 - `calibrate` and `measure` work on Dylan's photos and write the report with the answers above;
   ruff, mypy, pytest and `npm run check` pass.
 - `docs/STATION_SETUP.md` has "Calibrate your phone".
-- D-103 is recorded; Dylan picks the formula and D-105 records it. Then Part B in a new session.
+- D-103 is recorded; Dylan picks the formula and D-106 records it. Then Part B in a new session.
 
 ## 6. Decided today for Part B (not built in 30A)
 

@@ -28,7 +28,8 @@
     "cv:simulate": "tsx scripts/cv-simulate.ts",
     "demo:seed": "tsx --conditions=react-server scripts/demo-seed.ts",
     "demo:reset": "tsx --conditions=react-server scripts/demo-reset.ts",
-    "cv:parity": "tsx scripts/cv-parity.ts"
+    "cv:parity": "tsx scripts/cv-parity.ts",
+    "cv:roll-photos": "tsx --conditions=react-server scripts/cv-roll-photos.ts"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",

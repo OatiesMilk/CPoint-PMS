@@ -39,6 +39,45 @@ Put the word on every bin as well as the colour: some people can't tell red from
 3. **Sign in.** A constructor lands straight on **Capture**, their only page. Allow the camera when
    the phone asks. If there are several cameras, pick the back one under **Camera**.
 4. **Put the phone on the stand** at the fixed spot, the Capture button within reach.
+5. **Calibrate the phone** (below), once, so defects can be measured in inches.
+
+## Calibrate your phone
+
+Do this once per phone, and again whenever the phone's height, zoom or position on the stand
+changes. It only gives the scale; nothing in the app changes.
+
+1. Lay a sheet of known size flat in the middle of the table, all of it in the frame with a gap at
+   every edge: a plain **A4** paper (8.27 × 11.69 in) or a **letter**-size sheet (8.5 × 11 in). A
+   white paper or a dark leather piece both work, as long as it stands out from the table.
+2. Take one photo of it from the stand, at the usual height (about 19 to 20 in above the table).
+3. On the PC with the model toolkit (`cv/README.md`, Measure defects):
+
+   ```bash
+   python -m cpoint_cv calibrate sheet.jpg               # A4
+   python -m cpoint_cv calibrate sheet.jpg --size letter # letter size
+   ```
+
+   It prints the pixels per inch and **the width the phone sees** in inches, for example "the
+   phone sees 18.47 in across a 3024 px wide frame". Add `--save-overlay out/` to see the sheet it
+   found outlined. "No sheet … was found" means the sheet touched the frame's edge, wasn't flat, or
+   didn't stand out: move it to the middle and take the photo again.
+
+4. Keep that width with the phone (write it on the stand). `measure` uses it as `width_in`.
+
+## Measuring defects (Phase 30B)
+
+A check, not part of the app yet: can the camera measure a defect in inches? Photograph a piece of
+known area with marks or cuts of known length, then:
+
+```bash
+npm run cv:roll-photos -- LR-MLT-001 cv/out/LR-MLT-001   # copies a roll's shots and its area
+python -m cpoint_cv measure cv/out/LR-MLT-001 --width-in 18.47
+```
+
+The report in `cv/reports/` gives each defect's length by box and by outline beside the ruler, the
+roll's defect share of its entered area, and whether the 3-inch line holds. The first check
+(2 Nov 2026, a letter-size piece with pen lines) is
+`cv/reports/2026-11-02-LETTER-TEST-measure.md`.
 
 ## Each roll
 

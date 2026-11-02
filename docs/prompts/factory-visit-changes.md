@@ -451,7 +451,7 @@ notes or "Dylan, 23 Oct 2026" as the source.
 | 28    | Each role sees only its modules                                                                          | the master spec's roles table; D-023, D-079 (Admin reads), D-033 (QI report)                       |
 | 28    | Demo-only sign-in and reset on the login page, behind a flag                                             | D-056 (reset in production builds); the guard rule for those two endpoints                         |
 | 29    | Inventory by stock count, reminders on Wednesdays and Fridays; use worked out from counts                | D-023 (normal path); Phase 24 of `production-progression.md`; D-033 cover                          |
-| 30A   | How a roll and its defects are measured (from the check's report)                                        | —                                                                                                  |
+| 30A   | How a roll and its defects are measured (from the check's report; D-106, by the box)                     | —                                                                                                  |
 | 30B   | Cuts from 3 inches are Not accepted; a roll over 10% is marked Return to supplier and the FM decides     | D-072 (claim sheet content)                                                                        |
 | 31    | The master spec describes the current system; history lives in DECISIONS                                 | —                                                                                                  |
 
@@ -1060,6 +1060,9 @@ the report; the reminder on a reminder day and gone after a count (mocked clock)
 
 > Since D-103 the roll's area is entered, so 30B only checks that defects are measured in inches,
 > on an A4 piece of leather; see `docs/prompts/plans/phase-30b-plan.md`.
+> **Decided 2026-11-02 (D-106):** defects are measured by the box (length = the box diagonal, area
+> = each shot's union of boxes over the entered area), from a letter-size test piece
+> (`cv/reports/2026-11-02-LETTER-TEST-measure.md`). 30C watches slanted cuts, whose box is large.
 
 **Goal:** answer C-10 and C-33 with numbers before building C-9.
 
