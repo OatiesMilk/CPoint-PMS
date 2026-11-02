@@ -288,11 +288,11 @@ export async function seedDemoWeek(
   };
   const finishedRolls: { id: string; finishedAt: Date }[] = [];
 
-  // ── rolls: two a working day (Mon–Sat), each picked, captured shot by shot and finished at
+  // ── rolls: two a working day (Mon–Fri, D-105), each picked, captured shot by shot and finished at
   //    Capture by a demo constructor (Phase 26, 30A) ──
   const workingDays: string[] = [];
   for (let d = firstDay; d <= today; d = addDays(d, 1)) {
-    if (new Date(`${d}T00:00:00Z`).getUTCDay() !== 0) workingDays.push(d);
+    if (isoWeekday(d) <= 5) workingDays.push(d);
   }
   // The days attendance is taken for, and the one the Quality Inspector is away (D-088).
   const attendanceDays = workingDays.filter((d) => d < today).slice(-ABSENT.length);

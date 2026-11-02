@@ -13,6 +13,10 @@ import { Select } from "@/components/ui/select";
 import { formatAttendanceDay } from "@/lib/attendance-rules";
 import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import {
+  DEFAULT_SCHEDULE,
+  FACTORY_CLOSES,
+  FACTORY_DAYS,
+  FACTORY_OPENS,
   INTERVAL_MINUTES,
   WEEKDAYS,
   batchTimes,
@@ -32,8 +36,9 @@ const FIELD_IDS: Record<string, string> = {
 };
 
 /**
- * When batches end (D-083, D-097): the shift, how often (every 1 to 4 hours of working time, or
- * once at the end of the day, C-2) and the working days. A change applies from tomorrow, so today's
+ * When batches end (D-097, D-105): the shift, how often (every 1 to 4 hours of working time, or
+ * once at the end of the day, C-2) and the working days, inside the factory's hours (Monday to
+ * Friday, 08:00 to 17:00). A change applies from tomorrow, so today's
  * batches stay put. The preview uses tomorrow's lunch, which the System Admin sets (C-3).
  */
 export function ScheduleForm({
@@ -50,12 +55,17 @@ export function ScheduleForm({
   tomorrow: string;
   lunch: BreakRule | null;
 }) {
-  const [shiftStart, setShiftStart] = useState(current?.shiftStart ?? "08:00");
-  const [shiftEnd, setShiftEnd] = useState(current?.shiftEnd ?? "17:00");
+  const [shiftStart, setShiftStart] = useState(current?.shiftStart ?? FACTORY_OPENS);
+  const [shiftEnd, setShiftEnd] = useState(current?.shiftEnd ?? FACTORY_CLOSES);
   const [interval, setIntervalMinutes] = useState(
     current ? (current.intervalMinutes === null ? "end" : String(current.intervalMinutes)) : "240",
   );
-  const [days, setDays] = useState<number[]>(current?.workingDays ?? [1, 2, 3, 4, 5, 6]);
+  // Only Monday to Friday can be ticked (D-105), so a weekend day left in an old schedule is dropped.
+  const [days, setDays] = useState<number[]>(
+    (current?.workingDays ?? [...DEFAULT_SCHEDULE.workingDays]).filter((d) =>
+      (FACTORY_DAYS as readonly number[]).includes(d),
+    ),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -104,6 +114,9 @@ export function ScheduleForm({
   }
 
   const describedBy = (key: string) => (errors[key] ? `${FIELD_IDS[key]}-error` : undefined);
+  // The shift times also point at the factory-hours hint.
+  const timeDescribedBy = (key: string) =>
+    [describedBy(key), "factory-hours"].filter(Boolean).join(" ");
 
   return (
     <form
@@ -123,15 +136,20 @@ export function ScheduleForm({
         }))}
         outcome="saved"
       />
+      <p id="factory-hours" className="text-sm text-muted-foreground">
+        The factory works Monday to Friday, {FACTORY_OPENS} to {FACTORY_CLOSES}.
+      </p>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="shift-start">Shift start</Label>
           <Input
             id="shift-start"
             type="time"
+            min={FACTORY_OPENS}
+            max={FACTORY_CLOSES}
             value={shiftStart}
             aria-invalid={!!errors.shiftStart}
-            aria-describedby={describedBy("shiftStart")}
+            aria-describedby={timeDescribedBy("shiftStart")}
             onChange={(e) => setShiftStart(e.target.value)}
           />
           <FieldError id="shift-start-error" message={errors.shiftStart} />
@@ -141,9 +159,11 @@ export function ScheduleForm({
           <Input
             id="shift-end"
             type="time"
+            min={FACTORY_OPENS}
+            max={FACTORY_CLOSES}
             value={shiftEnd}
             aria-invalid={!!errors.shiftEnd}
-            aria-describedby={describedBy("shiftEnd")}
+            aria-describedby={timeDescribedBy("shiftEnd")}
             onChange={(e) => setShiftEnd(e.target.value)}
           />
           <FieldError id="shift-end-error" message={errors.shiftEnd} />

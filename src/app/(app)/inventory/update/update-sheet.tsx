@@ -29,7 +29,7 @@ import {
   planStockLine,
   type StockLineField,
 } from "@/lib/inventory-rules";
-import { describeReminderDays, WEEKDAY_LABELS } from "@/lib/stock-rules";
+import { describeReminderDays, REMINDER_DAY_CHOICES, WEEKDAY_LABELS } from "@/lib/stock-rules";
 import { usePagedRows } from "@/lib/use-paged-rows";
 import { stockLineSchema } from "@/server/validators/inventory.validator";
 import type { stockSheet } from "@/server/services/stock-update.service";
@@ -429,11 +429,13 @@ export function UpdateSheet({ sheet, initialQuery }: { sheet: Sheet; initialQuer
   );
 }
 
-/** The reminder days (C-32): ticks for Monday to Sunday, saved on their own. */
+/** The reminder days (C-32): ticks for Monday to Friday (D-105), saved on their own. */
 function ReminderDays({ days }: { days: number[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [chosen, setChosen] = useState<number[]>(days);
+  const choices: readonly number[] = REMINDER_DAY_CHOICES;
+  // A weekend day left from before D-105 can't be ticked, so it is dropped here.
+  const [chosen, setChosen] = useState<number[]>(days.filter((d) => choices.includes(d)));
   const [error, setError] = useState<string | null>(null);
   const changed = [...chosen].sort().join(",") !== [...days].sort().join(",");
 
@@ -460,7 +462,7 @@ function ReminderDays({ days }: { days: number[] }) {
       <fieldset className="mt-3" aria-describedby={error ? "reminder-error" : undefined}>
         <legend className="sr-only">Remind me on</legend>
         <div className="flex flex-wrap gap-x-5 gap-y-2">
-          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+          {REMINDER_DAY_CHOICES.map((d) => (
             <label key={d} className="inline-flex cursor-pointer items-center gap-2">
               <input
                 type="checkbox"

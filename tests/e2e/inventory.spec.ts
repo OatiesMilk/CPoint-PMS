@@ -142,7 +142,7 @@ test("a sheet saved on stock that changed since it loaded is refused (STALE)", a
   expect(old.status()).toBe(405);
 });
 
-test("reminder days need at least one day", async ({ browser }) => {
+test("reminder days need at least one day, Monday to Friday only", async ({ browser }) => {
   const api = await managerApi(browser);
   const res = await api.get("/api/v1/inventory/settings");
   expect(res.status()).toBe(200);
@@ -151,6 +151,10 @@ test("reminder days need at least one day", async ({ browser }) => {
   expect(reminderDays.length).toBeGreaterThan(0);
   const none = await api.put("/api/v1/inventory/settings", { data: { reminderDays: [] } });
   expect(none.status()).toBe(422);
+  // Saturday is refused, named (D-105).
+  const saturday = await api.put("/api/v1/inventory/settings", { data: { reminderDays: [6] } });
+  expect(saturday.status()).toBe(422);
+  expect(JSON.stringify(await saturday.json())).toContain("Reminder days are Monday to Friday.");
   // Saving the same days back changes nothing for the other tests.
   const same = await api.put("/api/v1/inventory/settings", { data: { reminderDays } });
   expect(same.status()).toBe(200);

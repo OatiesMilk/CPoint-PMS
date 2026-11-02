@@ -27,22 +27,27 @@ export const RECENT_DAYS = 14;
 /** "3 of the last 5 working days were below quota" (the attention item). */
 export const ATTENTION_DAYS = 5;
 
+/** The working days the Floor Manager can pick, Monday to Friday (D-105). */
 export const WEEKDAYS = [
   { iso: 1, short: "Mon", label: "Monday" },
   { iso: 2, short: "Tue", label: "Tuesday" },
   { iso: 3, short: "Wed", label: "Wednesday" },
   { iso: 4, short: "Thu", label: "Thursday" },
   { iso: 5, short: "Fri", label: "Friday" },
-  { iso: 6, short: "Sat", label: "Saturday" },
-  { iso: 7, short: "Sun", label: "Sunday" },
 ] as const;
 
-/** The default the bootstrap creates (D-083): 08:00 to 17:00, every 4 hours, Mon–Sat. */
+/** The factory works Monday to Friday, 08:00 to 17:00 (D-105); a shift stays inside this window. */
+export const FACTORY_OPENS = "08:00";
+export const FACTORY_CLOSES = "17:00";
+/** The working days a schedule may pick: Monday to Friday (D-105, replaces D-083's Mon–Sat). */
+export const FACTORY_DAYS = [1, 2, 3, 4, 5] as const;
+
+/** The default the bootstrap creates (D-105): 08:00 to 17:00, every 4 hours, Monday to Friday. */
 export const DEFAULT_SCHEDULE = {
-  shiftStart: "08:00",
-  shiftEnd: "17:00",
+  shiftStart: FACTORY_OPENS,
+  shiftEnd: FACTORY_CLOSES,
   intervalMinutes: 240,
-  workingDays: [1, 2, 3, 4, 5, 6],
+  workingDays: [1, 2, 3, 4, 5],
 } as const;
 
 /** ASSUMPTION (A-4, Dylan 2026-10-24): the default lunch is 11:00 to 12:00, the visit's example. */

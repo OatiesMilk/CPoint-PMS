@@ -46,7 +46,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.attendanceDay.count(),
     db.productionCheckIn.count(),
     db.dailyQuota.count(),
-    // The bootstrap default (no author) is kept; schedules people saved go.
+    // Schedules people saved (every schedule goes; the default comes back, D-105).
     db.productionSchedule.count({ where: { createdById: { not: null } } }),
     // Lunch breaks the System Admin saved; the default comes back from the start (Phase 27).
     db.lunchBreak.count({ where: { createdById: { not: null } } }),
@@ -90,11 +90,12 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   // Attendance (D-077): the marks, then the days, before any account goes.
   await db.attendanceMark.deleteMany();
   await db.attendanceDay.deleteMany();
-  // Batches (Phases 23, 27): finished batches, quotas and the schedules people saved (the
-  // bootstrap default stays), and every lunch break; the service puts the default lunch back.
+  // Batches (Phases 23, 27): finished batches, quotas, every schedule and every lunch break; the
+  // service puts the default schedule (Monday to Friday, D-105) and the default lunch back, so an
+  // older default with Saturday doesn't leave the demo week a missed Saturday.
   await db.productionCheckIn.deleteMany();
   await db.dailyQuota.deleteMany();
-  await db.productionSchedule.deleteMany({ where: { createdById: { not: null } } });
+  await db.productionSchedule.deleteMany();
   await db.lunchBreak.deleteMany();
   // History, then accounts and tokens nobody needs (their sessions go with them).
   await db.auditLog.deleteMany();

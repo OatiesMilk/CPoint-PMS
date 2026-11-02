@@ -256,7 +256,7 @@ stock changes on the **Update stock** sheet: one save posts, per item, an `IN` (
 | `GET /api/v1/inventory/updates`        | `inventory:read`   | the 15 latest saves: `{ id, createdAt, by, items, note }` (items changed, not entries)  |
 | `POST /api/v1/inventory/updates`       | `inventory:manage` | `StockUpdate` → `201 { id, items }`                                                     |
 | `GET /api/v1/inventory/settings`       | `inventory:read`   | `{ reminderDays }` (ISO weekdays, 1 = Monday)                                           |
-| `PUT /api/v1/inventory/settings`       | `inventory:manage` | `{ "reminderDays": [3, 5] }` (at least one day: "Pick at least one reminder day.")      |
+| `PUT /api/v1/inventory/settings`       | `inventory:manage` | `{ "reminderDays": [3, 5] }` (at least one day; 1 to 5 only, D-105)                     |
 
 Gone since Phase 29: `POST /api/v1/inventory/{id}/movements` answers `405`, and
 `POST /api/v1/inventory/movements/{id}/undo` is removed.
@@ -358,13 +358,19 @@ batch's end.
 | `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                               |
 | `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes?, usedRollIds? }`            |
 | `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason, usedRollIds? }` |
-| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }`           |
+| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }` (D-105)   |
 | `PUT /api/v1/production/quotas`           | `production:plan`    | `{ pairs, suggestedPairs? }`                                       |
 
 `production:read` is the Floor Manager, the Quality Inspector and the System Admin;
 `production:checkin` the Quality Inspector, and the Floor Manager **only on a day attendance shows no
 Quality Inspector present** (D-088; otherwise `403` "A Quality Inspector is present today, so they
 finish the batches." or "Take today's attendance first. …"); `production:plan` the Floor Manager.
+
+The schedule sits inside the factory's hours (D-105): `workingDays` 1 to 5 (Monday to Friday,
+else `422` "Working days are Monday to Friday."), `shiftStart` from `08:00` ("Shift start must be
+08:00 or later."), `shiftEnd` up to `17:00` ("Shift end must be 17:00 or earlier.") and after the
+start; `intervalMinutes` 60, 120, 180, 240 or `null` (once at the end of the day). It applies from
+tomorrow.
 
 - **today** → `{ day, dayLabel, schedule, lunch, workingDay, rows: [{ number, slotAt, startTime,
 time, lunch, times, label, state, pausedForLunch, canFinishNow, finishOpensAt, lateBy, checkIn }],

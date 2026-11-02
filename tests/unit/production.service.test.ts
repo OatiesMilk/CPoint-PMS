@@ -8,7 +8,7 @@ const SCHEDULE = {
   shiftStart: "08:00",
   shiftEnd: "17:00",
   intervalMinutes: 240,
-  workingDays: [1, 2, 3, 4, 5, 6],
+  workingDays: [1, 2, 3, 4, 5],
   effectiveFrom: "2000-01-01",
   createdAt: new Date("2026-01-01T00:00:00Z"),
   createdById: null,
@@ -418,7 +418,7 @@ describe("saveSchedule, saveQuota and saveLunchBreak (D-083, D-085, D-097, D-099
 
   it("applies a schedule change from tomorrow, and accepts once at the end of the day", async () => {
     const r = await svc.saveSchedule(
-      { shiftStart: "07:00", shiftEnd: "16:00", intervalMinutes: null, workingDays: [6, 1, 1] },
+      { shiftStart: "09:00", shiftEnd: "16:00", intervalMinutes: null, workingDays: [5, 1, 1] },
       FM,
       now,
     );
@@ -426,7 +426,7 @@ describe("saveSchedule, saveQuota and saveLunchBreak (D-083, D-085, D-097, D-099
     expect(model.insertSchedule).toHaveBeenCalledWith(
       expect.objectContaining({
         intervalMinutes: null,
-        workingDays: [1, 6],
+        workingDays: [1, 5],
         effectiveFrom: "2026-10-22",
       }),
       "tx",
@@ -578,7 +578,8 @@ describe("productionDays before any batch", () => {
     expect((await svc.productionDays("2026-10-12", "2026-10-19")).days).toEqual([]);
     model.firstCheckInDay.mockResolvedValueOnce("2026-10-16");
     const r = await svc.productionDays("2026-10-12", "2026-10-19", at("2026-10-20T04:00:00Z"));
-    expect(r.days.map((d) => d.day)).toEqual(["2026-10-16", "2026-10-17", "2026-10-19"]);
+    // Saturday 17 and Sunday 18 Oct aren't working days (D-105).
+    expect(r.days.map((d) => d.day)).toEqual(["2026-10-16", "2026-10-19"]);
   });
 });
 
@@ -599,7 +600,7 @@ describe("productionToday (D-008, C-28)", () => {
 });
 
 describe("ensureDefaultSchedule (Dylan 2B)", () => {
-  it("creates 08:00 to 17:00 every 4 hours, Monday to Saturday, only once", async () => {
+  it("creates 08:00 to 17:00 every 4 hours, Monday to Friday, only once (D-105)", async () => {
     model.countSchedules.mockResolvedValueOnce(0);
     expect(await svc.ensureDefaultSchedule("tx" as never)).toBe(true);
     expect(model.insertSchedule).toHaveBeenCalledWith(
@@ -607,7 +608,7 @@ describe("ensureDefaultSchedule (Dylan 2B)", () => {
         shiftStart: "08:00",
         shiftEnd: "17:00",
         intervalMinutes: 240,
-        workingDays: [1, 2, 3, 4, 5, 6],
+        workingDays: [1, 2, 3, 4, 5],
         createdById: null,
       }),
       "tx",

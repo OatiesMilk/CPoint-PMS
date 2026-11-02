@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  FACTORY_CLOSES,
+  FACTORY_OPENS,
   INTERVAL_MINUTES,
   isTime,
   MAX_PAIRS_PER_CHECK_IN,
@@ -126,7 +128,14 @@ const timeField = (label: string, example: string) =>
 export const INTERVAL_MESSAGE =
   "Choose how often: every 1, 2, 3 or 4 hours, or once at the end of the day.";
 
-/** PUT /api/v1/production/schedule (D-083, D-097). Applies from tomorrow. */
+export const WORKING_DAYS_MESSAGE = "Working days are Monday to Friday.";
+export const SHIFT_START_WINDOW_MESSAGE = `Shift start must be ${FACTORY_OPENS} or later.`;
+export const SHIFT_END_WINDOW_MESSAGE = `Shift end must be ${FACTORY_CLOSES} or earlier.`;
+
+/**
+ * PUT /api/v1/production/schedule (D-097, D-105). Applies from tomorrow. The shift sits inside the
+ * factory's hours (Monday to Friday, 08:00 to 17:00); a shorter shift inside them is fine.
+ */
 export const scheduleSchema = z
   .object({
     shiftStart: timeField("shift start", "08:00"),
@@ -143,10 +152,21 @@ export const scheduleSchema = z
         ),
     ),
     workingDays: z
-      .array(z.coerce.number().int().min(1).max(7), { error: "Pick at least one working day." })
+      .array(
+        z.coerce
+          .number({ error: WORKING_DAYS_MESSAGE })
+          .int(WORKING_DAYS_MESSAGE)
+          .min(1, WORKING_DAYS_MESSAGE)
+          .max(5, WORKING_DAYS_MESSAGE),
+        { error: "Pick at least one working day." },
+      )
       .min(1, "Pick at least one working day."),
   })
   .superRefine((v, ctx) => {
+    if (isTime(v.shiftStart) && minutesOf(v.shiftStart) < minutesOf(FACTORY_OPENS))
+      ctx.addIssue({ code: "custom", path: ["shiftStart"], message: SHIFT_START_WINDOW_MESSAGE });
+    if (isTime(v.shiftEnd) && minutesOf(v.shiftEnd) > minutesOf(FACTORY_CLOSES))
+      ctx.addIssue({ code: "custom", path: ["shiftEnd"], message: SHIFT_END_WINDOW_MESSAGE });
     if (
       isTime(v.shiftStart) &&
       isTime(v.shiftEnd) &&

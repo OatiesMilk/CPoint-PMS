@@ -491,6 +491,10 @@ was never built. Each phase gets its own criteria here when its plan is approved
 - [x] Phase 30B: the measuring test: does the camera measure a cut in inches? A letter-size piece
       of leather with pen lines (`cv/` only; plan `docs/prompts/plans/phase-30b-plan.md`); measured
       by the box, D-106 (QA passed, run 4; merged #30)
+- [x] Follow-up (D-105, 2026-11-02): production works Monday to Friday, 08:00 to 17:00; the
+      schedule and reminder days refuse weekends and hours outside it; migration `weekdays_only`.
+      `npm run check` passed (615); Codex run 1 FAIL (S8 query, `demo:reset` kept Mon–Sat; fixed),
+      run 2 **PASS** (e2e 88/0/2); commit on `feature/weekdays-only-schedule` next
 - [ ] Phase 30C: cuts from 3 inches Not accepted; a roll over 10% defects (of its entered area)
       marked Return to supplier, the FM decides
 - [ ] Phase 31: the documentation and the paper's figures match the system

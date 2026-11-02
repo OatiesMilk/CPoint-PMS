@@ -146,7 +146,7 @@ export function describeBatches(rule: ScheduleRule, breaks: readonly BreakRule[]
   return sample.map((b) => `Batch ${b.number} ${batchTimes(b)}`).join("; ");
 }
 
-/** "08:00 to 17:00, every 4 hours, Mon to Sat". */
+/** "08:00 to 17:00, every 4 hours, Mon to Fri". */
 export function describeSchedule(rule: ScheduleRule): string {
   return `${rule.shiftStart} to ${rule.shiftEnd}, ${describeInterval(rule.intervalMinutes)}, ${describeDays(rule.workingDays)}`;
 }
@@ -162,7 +162,7 @@ export function describeLunch(lunch: LunchRule | null): string {
 export const DEFAULT_SCHEDULE_FROM = "2000-01-01";
 
 /**
- * The bootstrap default (D-083): 08:00 to 17:00, every 4 hours, Monday to Saturday. Only when no
+ * The bootstrap default (D-105): 08:00 to 17:00, every 4 hours, Monday to Friday. Only when no
  * schedule exists; the Floor Manager changes it under Batches → Plan.
  */
 export async function ensureDefaultSchedule(db: Tx) {
@@ -561,7 +561,7 @@ export async function productionPlan(now: Date = new Date()) {
 
 export type ProductionPlan = Awaited<ReturnType<typeof productionPlan>>;
 
-/** A new schedule (D-083): always from tomorrow, so today's batches stay as they were. */
+/** A new schedule (D-083, D-105): always from tomorrow, so today's batches stay as they were. */
 export async function saveSchedule(input: ScheduleInput, actor: Actor, now: Date = new Date()) {
   const effectiveFrom = addDays(manilaToday(now), 1);
   const workingDays = [...new Set(input.workingDays)].sort((a, b) => a - b);

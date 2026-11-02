@@ -130,10 +130,19 @@ export const stockUpdateSchema = z.object({
 export type StockUpdateBody = z.output<typeof stockUpdateSchema>;
 export type StockLineBody = StockUpdateBody["lines"][number];
 
-/** The reminder days, as ISO weekdays (1 Monday … 7 Sunday). */
+export const REMINDER_DAYS_MESSAGE = "Reminder days are Monday to Friday.";
+
+/** The reminder days, as ISO weekdays, Monday (1) to Friday (5) only (D-105). */
 export const inventorySettingsSchema = z.object({
   reminderDays: z
-    .array(z.coerce.number().int().min(1).max(7), { error: "Pick at least one reminder day." })
+    .array(
+      z.coerce
+        .number({ error: REMINDER_DAYS_MESSAGE })
+        .int(REMINDER_DAYS_MESSAGE)
+        .min(1, REMINDER_DAYS_MESSAGE)
+        .max(5, REMINDER_DAYS_MESSAGE),
+      { error: "Pick at least one reminder day." },
+    )
     .min(1, "Pick at least one reminder day.")
     .transform((days) => [...new Set(days)].sort((a, b) => a - b)),
 });
