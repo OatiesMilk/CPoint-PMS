@@ -96,6 +96,46 @@ export async function supplierQuality(range: Range, db: Db = defaultDb()): Promi
   }));
 }
 
+export type SupplierShareRow = {
+  id: string | null;
+  measured: number;
+  /** Σ(share × area) and Σ(area) over the measured rolls, for an area-weighted share. */
+  weightedShare: number;
+  measuredArea: number;
+  marked: number;
+  returned: number;
+};
+
+/**
+ * Per supplier, the rolls finished in the range (Phase 30C): how many were measured, their
+ * area-weighted defect share, how many were marked Return to supplier and how many went back.
+ */
+export async function supplierRollShares(
+  range: Range,
+  db: Db = defaultDb(),
+): Promise<SupplierShareRow[]> {
+  const rows = await db.$queryRaw<Record<string, bigint | number | string | null>[]>`
+    SELECT b."supplierId" AS id,
+      count(*) FILTER (WHERE b."defectSharePct" IS NOT NULL) AS measured,
+      coalesce(sum(b."defectSharePct" * b."areaSqFt") FILTER (WHERE b."defectSharePct" IS NOT NULL), 0)::float8 AS "weightedShare",
+      coalesce(sum(b."areaSqFt") FILTER (WHERE b."defectSharePct" IS NOT NULL), 0)::float8 AS "measuredArea",
+      count(*) FILTER (WHERE b."markedForReturn") AS marked,
+      count(*) FILTER (WHERE b.status = 'RETURNED') AS returned
+    FROM batches b
+    WHERE b."finishedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
+      AND b."finishedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+      AND b.status <> 'CANCELLED'
+    GROUP BY 1`;
+  return rows.map((r) => ({
+    id: r.id === null ? null : String(r.id),
+    measured: n(r.measured as bigint),
+    weightedShare: Number(r.weightedShare ?? 0),
+    measuredArea: Number(r.measuredArea ?? 0),
+    marked: n(r.marked as bigint),
+    returned: n(r.returned as bigint),
+  }));
+}
+
 /**
  * Each scan's strongest detection, for scans with a final verdict in `verdicts`, as
  * (supplier or roll, defect label) counts. One count per section, never per detection, so "Hole 4"
@@ -206,6 +246,7 @@ export function findClaimRoll(rollId: string, db: Db = defaultDb()) {
             select: {
               confidence: true,
               rawClassKey: true,
+              lengthIn: true,
               defectType: { select: { label: true } },
             },
           },

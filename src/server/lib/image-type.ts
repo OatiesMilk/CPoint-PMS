@@ -25,3 +25,23 @@ export const MIME_BY_EXT: Record<string, ImageType["mime"]> = {
   png: "image/png",
   webp: "image/webp",
 };
+
+/**
+ * The photo's size in pixels as shown, EXIF quarter turns applied (Phase 30C: boxes are fractions
+ * of this). Null when it can't be read, so a scan is still stored, only not measured.
+ */
+export async function imageSize(
+  bytes: Uint8Array,
+): Promise<{ width: number; height: number } | null> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const meta = await sharp(bytes).metadata();
+    if (!meta.width || !meta.height) return null;
+    const turned = (meta.orientation ?? 1) >= 5;
+    return turned
+      ? { width: meta.height, height: meta.width }
+      : { width: meta.width, height: meta.height };
+  } catch {
+    return null;
+  }
+}

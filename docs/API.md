@@ -72,31 +72,34 @@ Manager adds each roll to its leather item in Inventory with its own area; a Sho
 camera access picks it at Capture, captures it shot by shot and finishes it; the Quality Inspector
 ticks it **Fully used** at Finish batch, and only then does it leave stock. Several rolls may be
 scanned at once. Nothing is deleted: a removed roll keeps its shots, which the reports leave out.
-Every write is audited (`roll.add`, `roll.start`, `roll.finish`, `roll.cancel`, `roll.remove`; a
+Every write is audited (`roll.add`, `roll.start`, `roll.finish`, `roll.cancel`, `roll.remove`,
+`roll.return`, `roll.keep`; a
 tick is in `production.checkin` or `production.checkin.correct`). No response names a person
 (D-008).
 
-| Status (`status`) | Reads         | How it gets there                                 | Stock |
-| ----------------- | ------------- | ------------------------------------------------- | ----- |
-| `IN_STOCK`        | Not scanned   | the FM adds it (`POST /inventory/{id}/rolls`)     | +1    |
-| `OPEN`            | Being scanned | picked at Capture (`POST /rolls/{id}/start`)      |       |
-| `FINISHED`        | Scanned       | `POST /rolls/{id}/finish`, at least one shot      |       |
-| `USED`            | Fully used    | ticked at Finish batch (`usedRollIds`)            | −1    |
-| `CANCELLED`       | Removed       | the FM's `POST /rolls/{id}/remove`, with a reason | −1    |
+| Status (`status`) | Reads                | How it gets there                                       | Stock |
+| ----------------- | -------------------- | ------------------------------------------------------- | ----- |
+| `IN_STOCK`        | Not scanned          | the FM adds it (`POST /inventory/{id}/rolls`)           | +1    |
+| `OPEN`            | Being scanned        | picked at Capture (`POST /rolls/{id}/start`)            |       |
+| `FINISHED`        | Scanned              | `POST /rolls/{id}/finish`, at least one shot            |       |
+| `USED`            | Fully used           | ticked at Finish batch (`usedRollIds`)                  | −1    |
+| `RETURNED`        | Returned to supplier | the FM's `POST /rolls/{id}/return-decision` (Phase 30C) | −1    |
+| `CANCELLED`       | Removed              | the FM's `POST /rolls/{id}/remove`, with a reason       | −1    |
 
-| Method & path                       | Who                                   | Body / query                                            | Returns                                                                                                     |
-| ----------------------------------- | ------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/inventory/{id}/rolls` | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagCode? }] }`       | `201 { data: { added: [{ id, code, areaSqFt, tagCode }], quantityOnHand } }`, codes `LR-<supplier>-001`     |
-| `GET /api/v1/rolls`                 | `roll:read` (Floor Manager)           | `status`, `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
-| `GET /api/v1/rolls/{id}`            | `roll:read`                           | —                                                       | the roll with its item, area, shots and their detections                                                    |
-| `POST /api/v1/rolls`                | —                                     | —                                                       | `405`: rolls are added in Inventory and picked at Capture                                                   |
-| `GET /api/v1/rolls/ready`           | a Shoe Constructor with camera access | —                                                       | `{ data: ReadyRoll[] }`, rolls not scanned yet, oldest first                                                |
-| `POST /api/v1/rolls/{id}/start`     | a Shoe Constructor with camera access | `{}`                                                    | `{ data: OpenRoll }`, status `OPEN`; `409` named when it isn't `IN_STOCK` any more                          |
-| `GET /api/v1/rolls/open`            | a Shoe Constructor with camera access | —                                                       | `{ data: OpenRoll[] }`, every roll being scanned (the Capture page's Roll dropdown)                         |
-| `POST /api/v1/rolls/{id}/finish`    | a Shoe Constructor with camera access | `{}`                                                    | `{ data: { id, code, status: "FINISHED", shots } }`                                                         |
-| `POST /api/v1/rolls/{id}/cancel`    | a Shoe Constructor with camera access | `{}`                                                    | put back: an empty roll from Inventory returns to `IN_STOCK`; one from before Phase 30A is `CANCELLED`      |
-| `POST /api/v1/rolls/{id}/remove`    | `roll:manage` (Floor Manager)         | `{ reason }` (1 to 200 characters)                      | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
-| `GET /api/v1/rolls/current`         | a device token (`scans:create`)       | —                                                       | the roll being scanned the longest, or `404 NO_OPEN_ROLL`                                                   |
+| Method & path                             | Who                                   | Body / query                                                                                               | Returns                                                                                                     |
+| ----------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/inventory/{id}/rolls`       | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagCode? }] }`                                                          | `201 { data: { added: [{ id, code, areaSqFt, tagCode }], quantityOnHand } }`, codes `LR-<supplier>-001`     |
+| `GET /api/v1/rolls`                       | `roll:read` (Floor Manager)           | `status`, `toReturn=1` (marked, no decision yet, Phase 30C), `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
+| `GET /api/v1/rolls/{id}`                  | `roll:read`                           | —                                                                                                          | the roll with its item, area, shots and their detections                                                    |
+| `POST /api/v1/rolls`                      | —                                     | —                                                                                                          | `405`: rolls are added in Inventory and picked at Capture                                                   |
+| `GET /api/v1/rolls/ready`                 | a Shoe Constructor with camera access | —                                                                                                          | `{ data: ReadyRoll[] }`, rolls not scanned yet, oldest first                                                |
+| `POST /api/v1/rolls/{id}/start`           | a Shoe Constructor with camera access | `{}`                                                                                                       | `{ data: OpenRoll }`, status `OPEN`; `409` named when it isn't `IN_STOCK` any more                          |
+| `GET /api/v1/rolls/open`                  | a Shoe Constructor with camera access | —                                                                                                          | `{ data: OpenRoll[] }`, every roll being scanned (the Capture page's Roll dropdown)                         |
+| `POST /api/v1/rolls/{id}/finish`          | a Shoe Constructor with camera access | `{}`                                                                                                       | `{ data: { id, code, status: "FINISHED", shots, sharePct, limitPct, marked, notMeasured } }` (Phase 30C)    |
+| `POST /api/v1/rolls/{id}/return-decision` | `roll:manage` (Floor Manager)         | `{ decision: "RETURNED", returnedOn, note? }` or `{ decision: "KEPT", note }`                              | `{ data: { id, code, decision } }` (Phase 30C, C-36)                                                        |
+| `POST /api/v1/rolls/{id}/cancel`          | a Shoe Constructor with camera access | `{}`                                                                                                       | put back: an empty roll from Inventory returns to `IN_STOCK`; one from before Phase 30A is `CANCELLED`      |
+| `POST /api/v1/rolls/{id}/remove`          | `roll:manage` (Floor Manager)         | `{ reason }` (1 to 200 characters)                                                                         | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
+| `GET /api/v1/rolls/current`               | a device token (`scans:create`)       | —                                                                                                          | the roll being scanned the longest, or `404 NO_OPEN_ROLL`                                                   |
 
 **`ReadyRoll`**: `{ id, code, tagCode, supplier, item, areaSqFt }`. **`OpenRoll`**: the same plus
 `{ shots, startedAt, mine, fromInventory }`; `mine` only says whether the person asking picked it,
@@ -108,13 +111,23 @@ to start the dropdown on their own roll. `/current` leaves it out.
   its area in square feet, like 24.5."), at `rolls.<i>.areaSqFt`. `tagCode` is the number on the
   supplier's tag, up to 40. Up to 50 rolls a save. Each roll is an `IN` +1 with its `rollId`.
 - **Finish** needs at least one shot (`409` "A roll needs at least one shot to finish. Put it back
-  instead."). **Cancel** at Capture only for a roll with no shots.
+  instead."). Since Phase 30C (D-106, D-110) it saves the roll's **defect share**: the sum of its
+  shots' defect areas (each shot's union of boxes, overlaps once) over its entered area, plus the
+  flat shares (a cut from 3 in counts 1%). More than `returnSharePct` (Settings, default 10,
+  strict) sets `markedForReturn` (`marked: true`). `sharePct` is null and `notMeasured` says why
+  (`no-area`, `no-shots`, `unscaled`: a shot came from a phone that wasn't calibrated) when it
+  can't be worked out (A-28); such a roll isn't marked.
+- **Return decision** (Phase 30C, C-36): only a `FINISHED` roll from Inventory with no decision.
+  `RETURNED` (`returnedOn` a date, not after today; `note` up to 200) moves it to `RETURNED` and
+  takes it out of stock (`OUT` −1, "Roll LR-… returned to supplier: …"). `KEPT` (a reason, 1 to 200) only for a marked roll; it stays `FINISHED` and can then be ticked. A decision is final
+  (A-27): a second one, Keep on an unmarked roll, or a roll not scanned is `409` named. **Cancel** at Capture only for a roll with no shots.
 - **Remove:** any roll from Inventory that isn't fully used (`OUT` −1 unless it already left
   stock); a roll from before Phase 30A only while it is open. A fully used roll is `409` ("LR-… is
   already marked fully used.").
 - **Fully used** is sent with the batch: `POST /api/v1/production/check-ins` and
   `PATCH /api/v1/production/check-ins/{id}` take an optional `usedRollIds` (uuids, no repeats).
-  Only a `FINISHED` roll from Inventory can be ticked (`OUT` −1, "Fully used in Batch 2
+  Only a `FINISHED` roll from Inventory can be ticked, and a roll marked Return to supplier only
+  after the FM's Keep (`OUT` −1, "Fully used in Batch 2
   (10:00–13:00)"); a correction may untick a roll ticked in that batch (`IN` +1). Anything else is
   `409` with the roll's code ("LR-MT-004 isn’t scanned yet. Scan and finish it at Capture before
   it’s used."). `GET /api/v1/production/today` lists `rollsToTick` for whoever may finish batches,
@@ -146,6 +159,7 @@ camera station app was retired in Phase 20 (D-069). The simulator is the token c
 | `capturedAt`   | no       | ISO 8601 with offset; defaults to the time received                                                                                                                                                                                                                |
 | `rollId`       | no       | The roll the scan belongs to. Omitted: the roll open the longest (see "Which roll")                                                                                                                                                                                |
 | `captureId`    | no       | A UUID the camera makes for each capture. Send the same one on every retry: a repeat returns the first scan instead of making a second one (D-051). `cpoint_cv` always sends it                                                                                    |
+| `widthIn`      | no       | The phone's calibration (Phase 30C, A-18): the inches the photo covers across its width, 4 to 120. Without it nothing is measured                                                                                                                                  |
 
 **Decision (D-093):** every section is `PASS` or `REJECT`, final at once. A detection of an
 _active_ defect type at or above `foundAtOrAbove` (Settings, default 0.5) gives its type's outcome:
@@ -155,7 +169,14 @@ defect type is dropped: not stored and no effect on the verdict (D-108). Class k
 under Admin → Settings (D-052, `cv/README.md`). Add new ones there when the model is retrained.
 A rejected section is reported for salvage; nothing else is created.
 
-**`201`** `{ "data": { "scanId", "rollId", "rollCode", "sequence", "verdict", "duplicate": false, "defects": [{ "label", "confidence", "unknown", "effect": "USABLE" | "NOT_ACCEPTED" | null }] } }`.
+**Measuring (Phase 30C, D-106, D-110):** with `widthIn` and the photo's size (read from the image,
+EXIF turns applied) each detection gets `lengthIn` (its box diagonal) and `areaSqIn`, and the scan
+`defectAreaSqIn` (the union of its found defects counted by area) and `flatSharePct` (the flat
+shares of its found defects counted that way). A type with `notAcceptedFromIn` is `NOT_ACCEPTED`
+at or above that length and `USABLE` below; unmeasured (no `widthIn`) it is `NOT_ACCEPTED`. The
+snapshot keeps `lengthLimits`, `flatShares` and `widthIn`.
+
+**`201`** `{ "data": { "scanId", "rollId", "rollCode", "sequence", "verdict", "duplicate": false, "defects": [{ "label", "confidence", "effect": "USABLE" | "NOT_ACCEPTED" | null, "lengthIn": number | null }] } }`.
 
 **`200`** the same body with `"duplicate": true` (and `defects: []`) when this device already sent
 the `captureId`: nothing new is stored or audited, even if the roll has since been finished.
@@ -182,6 +203,7 @@ longer capture. The app runs the model itself (ONNX Runtime, D-064) and then dec
 | `rollId`     | yes      | The roll chosen in the Roll dropdown. It must still be open                                                  |
 | `source`     | no       | `WEBCAM` (default) or `PHONE` (the page sends `PHONE` from a phone or tablet)                                |
 | `capturedAt` | no       | ISO 8601 with offset: when Capture was pressed                                                               |
+| `widthIn`    | no       | This phone's calibration for this frame size (Phase 30C), as for `POST /api/v1/scans`                        |
 
 There is no `detections` or `modelVersion` field: the server produces both.
 
@@ -299,13 +321,13 @@ duplicate email is `422` on `email`.
 
 **Settings**
 
-| Method & path                      | Body                                                                                                                                                 |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET / PUT /api/v1/settings/cv`    | `{ foundPercent, earlyModelNotice? }`, e.g. `50` (1 to 100, one decimal). `rejectPercent` or `reworkPercent` is refused with a named message (D-093) |
-| `GET / POST /api/v1/defect-types`  | `{ key, label, outcome, description?, sortOrder? }` (key fixed; `outcome` `USABLE` or `NOT_ACCEPTED`, required, D-093)                               |
-| `GET / POST /api/v1/suppliers`     | `{ name, code?, contactPerson?, phone?, notes? }` (`code`: 2 to 6 capital letters or digits, unique; from the initials when left out, D-104)         |
-| `PUT /api/v1/settings/lunch-break` | `{ startTime, endTime }` (`HH:mm`, inside tomorrow's shift, end after start) or `{ none: true }`; applies from tomorrow (D-097)                      |
-| `PATCH /api/v1/<list>/{id}`        | the same fields, or `{ isActive }`. There are no deletes.                                                                                            |
+| Method & path                      | Body                                                                                                                                                                                                                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET / PUT /api/v1/settings/cv`    | `{ foundPercent, earlyModelNotice?, returnPercent? }`, e.g. `50` (1 to 100, one decimal); `returnPercent` the supplier limit (1 to 100, one decimal, default 10, Phase 30C). `rejectPercent` or `reworkPercent` is refused with a named message (D-093)                       |
+| `GET / POST /api/v1/defect-types`  | `{ key, label, outcome, description?, sortOrder?, notAcceptedFromIn?, flatSharePct? }` (key fixed; `outcome` `USABLE` or `NOT_ACCEPTED`, required, D-093; `notAcceptedFromIn` 0.1 to 100 in and `flatSharePct` 0.1 to 100, blank or `null` clears, left out keeps, Phase 30C) |
+| `GET / POST /api/v1/suppliers`     | `{ name, code?, contactPerson?, phone?, notes? }` (`code`: 2 to 6 capital letters or digits, unique; from the initials when left out, D-104)                                                                                                                                  |
+| `PUT /api/v1/settings/lunch-break` | `{ startTime, endTime }` (`HH:mm`, inside tomorrow's shift, end after start) or `{ none: true }`; applies from tomorrow (D-097)                                                                                                                                               |
+| `PATCH /api/v1/<list>/{id}`        | the same fields, or `{ isActive }`. There are no deletes.                                                                                                                                                                                                                     |
 
 A new found-at value or outcome applies to new scans only; each scan keeps its `thresholdsSnapshot`.
 Shoe types and `/api/v1/shoe-types/**` were removed in Phase 27 (D-099, `404`).
@@ -418,7 +440,7 @@ default is the last 14 days, at most 92, and never past today.
 | `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and added, days of cover, status                                                                                                                                                                 |
 | `GET /api/v1/reports/materials`          | `report:production` | `?year=&month=&week=&q=` (D-109): `{ today, selected, previous, weeks[], days, q, itemCount, rows[], leather[], pace, years[], reminderDays, daysToNextReminder }`. Weeks are days 1–7, 8–14 … of the month; no or an invalid week gives today's |
 | `GET /api/v1/reports/materials-used.csv` | `report:production` | same query; one row per item and week (the 8 weeks ending with the selected one): week, from, to, item code, item, category, supplier, unit, used, pairs finished, used per 100 pairs                                                            |
-| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072)                                                                                                                                            |
+| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072); Defect area %, Rolls measured, Rolls marked Return to supplier, Rolls returned (rolls finished in the range, Phase 30C)                   |
 | `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, tag number, supplier, sections, rejected, main defects (D-072)                                                                                                                                        |
 
 - **Verdicts** are Pass and Reject (D-093); the final verdict is the camera's.

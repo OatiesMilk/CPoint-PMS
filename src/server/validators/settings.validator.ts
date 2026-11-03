@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  FLAT_SHARE_MESSAGE,
+  LENGTH_LIMIT_MESSAGE,
+  RETURN_LIMIT_MESSAGE,
+  validateReturnLimit,
+} from "@/lib/admin-rules";
 import { SUPPLIER_CODE_MESSAGE, SUPPLIER_CODE_PATTERN } from "@/lib/roll-rules";
 import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
 
@@ -10,6 +16,30 @@ const sortOrder = z.preprocess(
     .min(0, "The sort order can't be below 0. Enter 0 or more.")
     .max(999, "The sort order can't be above 999. Enter 999 or less."),
 );
+
+/** Left out: unchanged. A blank box: null (cleared). Otherwise a number within the bounds, two decimals. */
+function optionalNumber(min: number, max: number, message: string) {
+  return z.preprocess(
+    (v) => {
+      // Left out: unchanged (undefined). Blank or null: cleared (null).
+      if (v === undefined) return undefined;
+      if (v === null || (typeof v === "string" && v.trim() === "")) return null;
+      return typeof v === "number" ? v : Number(v);
+    },
+    z
+      .number({ error: message })
+      .refine(
+        (n) =>
+          Number.isFinite(n) &&
+          n >= min &&
+          n <= max &&
+          Math.abs(n * 100 - Math.round(n * 100)) < 1e-6,
+        message,
+      )
+      .nullable()
+      .optional(),
+  );
+}
 
 const FOUND_AT = "Enter the found-at value as a percentage from 1 to 100, like 50.";
 
@@ -25,6 +55,14 @@ export const thresholdsSchema = z
       .refine((n) => Number.isFinite(n) && n >= 1 && n <= 100, FOUND_AT)
       .refine((n) => Math.abs(n * 10 - Math.round(n * 10)) < 1e-6, FOUND_AT),
     earlyModelNotice: z.boolean({ error: OUT_OF_DATE }).optional(),
+    /** The supplier limit (Phase 30C, C-9); left out keeps the one saved. */
+    returnPercent: z.preprocess(
+      (v) => (v === "" || v === null ? undefined : v),
+      z.coerce
+        .number({ error: RETURN_LIMIT_MESSAGE })
+        .refine((n) => validateReturnLimit(n).length === 0, RETURN_LIMIT_MESSAGE)
+        .optional(),
+    ),
     rejectPercent: z.unknown().optional(),
     reworkPercent: z.unknown().optional(),
   })
@@ -38,14 +76,22 @@ export const thresholdsSchema = z
             "The two confidence thresholds were removed: a section is Pass or Reject from each defect type's outcome. Send foundPercent only, like 50.",
         });
   })
-  .transform(({ foundPercent, earlyModelNotice }) => ({ foundPercent, earlyModelNotice }));
+  .transform(({ foundPercent, earlyModelNotice, returnPercent }) => ({
+    foundPercent,
+    earlyModelNotice,
+    returnPercent,
+  }));
 
 /** The early-model notice on the Camera page (D-055). */
 export const modelNoticeSchema = z.object({
   earlyModelNotice: z.boolean({ error: OUT_OF_DATE }),
 });
 
-export type ThresholdsInput = z.output<typeof thresholdsSchema>;
+export type ThresholdsInput = {
+  foundPercent: number;
+  earlyModelNotice?: boolean;
+  returnPercent?: number;
+};
 export type ModelNoticeInput = z.output<typeof modelNoticeSchema>;
 
 const defectTypeCreateFields = z.object({
@@ -72,6 +118,10 @@ const defectTypeCreateFields = z.object({
       })
       .optional(),
   ),
+  /** Not accepted from this length in inches, Usable below (Phase 30C, C-37); blank: none. */
+  notAcceptedFromIn: optionalNumber(0.1, 100, LENGTH_LIMIT_MESSAGE),
+  /** Counts as this flat share of the roll instead of its box area (D-110); blank: box area. */
+  flatSharePct: optionalNumber(0.1, 100, FLAT_SHARE_MESSAGE),
   sortOrder,
 });
 /** "Choose whether a found Crease is Usable or Not accepted." with the type's own label. */

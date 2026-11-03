@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   src: string;
   alt: string;
-  detections: (OverlayDetection & { inactive: boolean })[];
+  detections: (OverlayDetection & { inactive: boolean; lengthIn?: number | null })[];
   rule: RuleSettings;
 };
 
@@ -46,6 +46,7 @@ export function ScanViewer({ src, alt, detections, rule }: Props) {
               <TableHead>When found</TableHead>
               <TableHead>Position (x, y)</TableHead>
               <TableHead>Size</TableHead>
+              <TableHead numeric>Length</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -64,6 +65,9 @@ export function ScanViewer({ src, alt, detections, rule }: Props) {
                 </TableCell>
                 <TableCell className="text-muted-foreground tabular-nums">
                   {Math.round(d.box.width * 100)}% × {Math.round(d.box.height * 100)}%
+                </TableCell>
+                <TableCell numeric className="tabular-nums">
+                  {d.lengthIn != null ? `${d.lengthIn.toFixed(1)} in` : "—"}
                 </TableCell>
               </TableRow>
             ))}

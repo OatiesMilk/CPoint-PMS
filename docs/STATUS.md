@@ -3,48 +3,45 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-02 (D-107 run 1 FAIL on axe only, fixed; D-108 built; Codex next)
-**Branch:** `main` at 2e63908 has Phase 30B (#30, #31) and D-105 Monday to Friday (#32).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`), from the team's QA notes and Dylan:**
+**Last updated:** 2026-11-03 (Phase 30C run 3 PASS after allowed reruns; setup window fixed; Dylan's phone check next)
+**Branch:** `main` at 6966fcd has Phase 30B (#30, #31), D-105 (#32) and D-107 to D-109 (#33).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30C, cuts from 3 inches and the return to the
+supplier (D-110). Plan `docs/prompts/plans/phase-30c-plan.md`, handoff
+`qa/handoffs/2026-11-03-phase-30c-cuts-and-returns.md`, prompt `qa/CODEX_PROMPT_PHASE_30C.md`.
 
-- D-107: a schedule or lunch break equal to tomorrow's is not saved again. Codex run 1 FAIL
-  (`qa/reports/2026-11-02-no-repeat-saves-run1.md`): S1 to S10, A1, A2 passed, e2e 88/0/2; axe
-  found a repeated "Pagination" landmark on Plan batches and the Demo mode band outside a landmark.
-  Fixed (named pagers, the band is a labelled region).
-- D-108: no unknown defect classes (dropped at ingest; migration `no_unknown_classes` deletes past
-  ones and turns scans rejected only by them into Pass); Materials reads "Week 1: Nov. 2".
-  `npm run check` passed (622); `cv/` ruff, mypy, pytest 102 passed. Handoff
-  `qa/handoffs/2026-11-02-no-unknown-classes.md`, prompt `qa/CODEX_PROMPT_NO_UNKNOWN_CLASSES.md`
-  (also rechecks D-107's axe). `.github/workflows/ci.yml` needs a hand edit (protected).
-- The rest of the team's notes is Phase 30D after 30C: `docs/prompts/plans/groupmates-feedback-plan.md`.
-  **Also uncommitted (laptop, 2 Nov):** D-107 (no repeat schedule or lunch saves), D-108 (no unknown
-  defect classes, migration `no_unknown_classes`) and D-109 (Reports → Materials by week of the
-  month: Year, Month, Week and Find material). D-108 run 1 (`qa/reports/2026-11-02-no-unknown-classes-run1.md`):
-  14 of 15, e2e 88 passed, 0 failed, 2 skipped; S3's 405 for the removed `defect-types/unknown` was a
-  wrong expectation (the `[id]` route only has PATCH), so no app fault. D-109: `npm run check` passed
-  (635 unit tests in the cloud copy). Codex run 1 FAIL (`qa/reports/2026-11-02-materials-weeks-run1.md`), on `next dev`:
-  11 of 12 (S11 a wrong expectation), e2e 78 passed, 4 failed, 2 skipped; F3 a test race in
-  `batches.spec.ts` (fixed), F2, F4, F5 dev-server contention. Run 2: full suite 88 passed, 0 failed, 2 skipped (two workers); `batches.spec.ts` lost a fill
-  before hydration (fixed). Run 3 on port 3001: one cold-start sign-in timeout, then 6/0; on 3000
-  6/0 twice. **QA done; Dylan commits D-107 to D-109 on `feature/team-qa-fixes`.** Codex now
-  checks in its in-app browser at the `npm run dev` port; the Docker app stays stopped until deploy.
-  **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
-  included; Codex only tests and reports; every agent reads the Obsidian vault
-  (`C:\dev\capstone-obsidian`) first and records each change there.
-  **Current phase:** Phase 30B, the measuring check (D-106). `python -m cpoint_cv calibrate`
-  (an A4 or letter sheet, white paper or a dark leather piece, gives px/in), `measure` (box and
-  outline lengths and areas, the ruler, the 3-inch line, the share of the entered area, strict 10%)
-  and `npm run cv:roll-photos` (a roll's shots, `shots.csv`, `roll.toml` with its code and area).
-  Test piece: letter size (8.5 × 11 in, 0.649 sq ft), phone 19 to 20 in above, three pen lines:
-  2.5 in not found, 3.5 in → 3.58 in by box, 5.5 in → 5.80 in; 19.4% of the piece by box against
-  1.0% by outline. **Dylan chose the box (D-106).** Codex: run 1 stopped after C2; run 2 FAIL
-  (mypy on OpenCV 5, the export crashed on a missing photo, an old local `cv/config.toml`, a test
-  roll only on the PC), fixed; run 3 FAIL only on C5's outline spans (GPU vs the PC's CPU, every box
-  number matched), C5 now checks the box; run 4 **PASS** (`qa/reports/2026-11-02-phase-30b-run4.md`;
-  C7 NOT POSSIBLE, no roll without an area). Checks: ruff, mypy, pytest 102, `npm run check` 614.
-  **Next:** Dylan commits the follow-up and opens the PR. **Then:** 30C (the 3-inch cut by the box
-  diagonal and the 10% return, D-106), 30D the team's QA notes, 31 the docs. Monday to Friday only (D-105) is its own thread.
-  **Overall:** 32 phases built (0 to 29, 30A, 30B); 2 planned (30C, 31)
+- **Current phase:** 30C. A cut is Not accepted from 3 in (box diagonal) and Usable below; each cut
+  from 3 in adds a flat 1% to its roll; holes, scratches and creases count by box area. Phones are
+  calibrated on Capture (tap a sheet's corners). Finish roll saves the defect share; over 10% the
+  roll is marked Return to supplier and the Floor Manager returns it or keeps it.
+- Migration `20261103103243_measure_and_return` is applied to the laptop's `cpoint_pms`.
+- Checks: `npm run check` passed (670 unit tests). Demo week checked on a scratch database (3 marked
+  rolls: returned, kept, waiting; ledger 0). E2E not run (Codex): `tests/e2e/returns.spec.ts` new.
+- **Codex run 1 FAIL** (`qa/reports/2026-11-03-phase-30c-run1.md`): 11 of 14 passed (S4 and S11
+  not possible: no camera, no batch due), S7 failed: Esc on Keep flashed the Send back dialog (F1,
+  fixed). E2E 87 passed, 5 failed, 2 skipped: two test faults (the Thresholds toast text, the roll's
+  area shown twice; fixed) and three 30 s timeouts under the full run (rerun alone in run 2).
+- **Plain words (Dylan):** every 30C screen rewritten short and plain ("This roll has too many
+  defects", "Send back to supplier…", "Set up this phone first."); list in
+  `docs/prompts/plans/phase-30c-plain-words.md`. `npm run check` passed again (670).
+- **Codex run 2 FAIL** (`qa/reports/2026-11-03-phase-30c-run2.md`): R2 (Esc), R3, R4, R5, R7
+  passed; `returns.spec.ts:128` still expected the old badge text (fixed). Full e2e 91 passed, 2
+  failed (that test, and a smoke timeout that passed 10/10 alone).
+- **Codex run 3 PASS** (`qa/reports/2026-11-03-phase-30c-run3.md`, "pass with issues"): returns
+  5/5; full suite 88 passed, 4 timed out at 30 s under `next dev` load, and admin 6/6, inventory
+  8/8, smoke 10/10 when rerun alone.
+- **Phone check (Dylan, iPhone through the tunnel):** a real Capture shot was saved whole (1080 ×
+  1920, matching the preview). The Set up this phone window showed only the top of a tall photo, so
+  the corners couldn't be tapped; it now fits the whole photo on screen (`calibration.tsx`).
+  `npm run check` passed (670). Dylan rechecks it on the phone.
+- `.env` `DEV_ORIGINS` now also has the tunnel host, so Dylan can sign in through the quick tunnel
+  on his phone (restart `npm run dev` after a change).
+- `.github/workflows/ci.yml`: the Docker job checks every scanned demo roll has a share (edited
+  here; include it in the commit).
+- **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
+  included; Codex only tests and reports; every agent reads the Obsidian vault first.
+- **Next:** Dylan sets up the phone on Capture, then commits 30C (git commands in the thread). **Then:** 30D the team's QA notes (needs 30C's Returned to
+  supplier), 31 the docs.
+- **Overall:** 33 phases built (0 to 29, 30A, 30B, 30C); 2 planned (30D, 31).
 
 ## Phase progress
 
@@ -90,11 +87,34 @@
       Fully used at Finish batch (QA passed, run 4; merged #28, #29)
 - [x] 30B. The measuring check: a cut in inches, on a letter-size piece of leather (`cv/` only);
       measured by the box, D-106 (QA passed, run 4; merged #30, follow-up PR next)
-- [ ] 30C. Cuts from 3 inches Not accepted; a roll over 10% defects marked Return to supplier
+- [x] 30C. Cuts from 3 inches Not accepted; a roll over 10% defects marked Return to supplier
+      (D-110; QA passed, run 3; commit next)
+- [ ] 30D. The team's QA notes on Reports → Materials
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
 
+- **Cuts from 3 inches and the return to the supplier (Phase 30C, D-106, D-110; uncommitted):**
+  - **Settings → Thresholds:** "Mark a roll Return to supplier when defects cover more than __%"
+    (default 10, strict). **Settings → Defect types:** "Not accepted from __ in long" and "Counts as
+    a flat share of the roll (%)"; cut 3 in and 1%, the rest empty (box area). A "Counts toward the
+    roll" column.
+  - **Capture:** "Calibrate this phone": tap an A4 or letter sheet's four corners (or type the
+    toolkit's number); kept per browser, camera and frame size. Each shot sends `widthIn`; Last
+    scan shows each defect's length. Without it every cut counts as Not accepted.
+  - **Ingest:** each detection's length (box diagonal) and area, each shot's union area and flat
+    shares; the snapshot keeps the limits and the scale.
+  - **Finish roll:** the share (union areas over the entered area, plus 1% per cut from 3 in) is
+    saved with the limit; over it the roll is marked and the constructor reads "12.4% of this roll
+    has defects (limit 10%). Set it aside for the Floor Manager." A shot from an uncalibrated phone
+    makes the roll Not measured.
+  - **Reports → Rolls:** Defect % column, a "N rolls are marked Return to supplier" band and a To
+    return filter; the roll's page shows its findings and **Returned to supplier…** (status
+    Returned to supplier, OUT −1) or **Keep…** (reason). A marked roll can't be ticked Fully used
+    until kept. Inventory shows Defect %; the claim sheet carries the findings and lengths;
+    Supplier quality adds Defect area, Marked and Returned (and `suppliers.csv`).
+  - Demo week: calibrated shots; three rolls with a long cut on every shot go over 10% (returned,
+    kept, waiting). `demo:reset` sets cut 3 in and 1%.
 - **Rolls from Inventory (Phase 30A, D-103, D-104):**
   - A leather roll is added by the FM on its leather item (**Add rolls**: the day they arrived,
     then one row per roll with its **Area** in sq ft, 0.1 to 200, two decimals, and the supplier's
@@ -541,16 +561,13 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. Codex run for D-108 and the D-107 recheck (`qa/CODEX_PROMPT_NO_UNKNOWN_CLASSES.md`, laptop);
-   on a PASS, Dylan applies the `ci.yml` edit, commits D-107 and D-108 on one new branch and opens
-   the PR (D-032).
-2. Phase 30C in a new session: the 3-inch cut by the box diagonal and the 10% return (D-106).
-   Watch slanted cuts: their box is mostly clean leather. Optional first: a few real knife cuts on
-   scrap leather through `measure` (the pen lines aren't what the model learned).
-3. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
-4. Dylan: book time at the station for Phase 30A (two or three real rolls, two phones, a ruler and
-   an A4 sheet). The open device checks (F3, P18 S3, P18 S18) fit best there. Revoke the
-   "Simulator" token first (it was pasted in chat).
+1. Dylan: set up the phone on Capture through the tunnel (the fixed setup window), then commit 30C
+   on a new branch from main (git commands in the 30C thread) and open the PR (D-032).
+2. Dylan, at the station: calibrate the real phone on Capture and capture a few real knife cuts on
+   scrap leather (2.5, 3 and 4 in) to check the 3-inch line on real cuts.
+3. Phase 30D (the team's QA notes): leather Used split into Fully used, Returned to supplier and
+   Removed, now that Returned exists.
+4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
 5. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
    `docker image prune -a -f` frees about 8.4 GB.
 
@@ -566,6 +583,17 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-11-03, Phase 30C plan, D-110): a cut is Not accepted from 3 in by its box
+  diagonal; each cut from 3 in counts a flat 1% of its roll "for now", shorter cuts nothing; holes
+  and scratches by box area; phones calibrated once on Capture by tapping a sheet's corners. Tell
+  CPoint how the 10% is worked out.
+- ASSUMPTION (A-27, D-110): the Floor Manager's Returned or Keep is final; a mistake goes through
+  Remove. Keep needs a reason, Returned a day and an optional note.
+- ASSUMPTION (A-28, D-110): a roll with any shot from an uncalibrated phone is Not measured and isn't
+  marked; the Floor Manager can still return it.
+- ASSUMPTION (A-29, D-110): a returned roll leaves stock (OUT −1, "returned to supplier") like a
+  fully used one and is reported apart from it.
+- ASSUMPTION (A-30, D-110): creases count by box area, like scratches.
 - Decided (Dylan, 2026-10-26, Phase 30A plan): each roll's area is entered by the FM, never added
   up from the shots (D-103, changes C-33); rolls come from Inventory, picked at Capture, ticked
   Fully used at Finish batch by whoever finishes it; a roll can't be ticked before it's scanned;

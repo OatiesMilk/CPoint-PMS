@@ -28,6 +28,7 @@ import {
   TableViewLink,
 } from "@/components/ui/table";
 import { RemoveRoll } from "@/components/features/rolls/remove-roll";
+import { DefectShare } from "@/components/features/rolls/defect-share";
 import { RollStatusBadge } from "@/components/features/rolls/roll-status-badge";
 import { ROLL_STATUS_LABELS, RollStatus } from "@/lib/domain";
 import { formatCalendarDate, formatManilaDateTime } from "@/lib/format";
@@ -190,7 +191,7 @@ export default async function InventoryItemPage({
                       <TableHead numeric>Shots</TableHead>
                       <TableHead numeric>Rejected (for salvage)</TableHead>
                       <TableHead>Defects found</TableHead>
-                      <TableHead>Defect %</TableHead>
+                      <TableHead numeric>Defect %</TableHead>
                       {(canReadRolls || canRemoveRolls) && <TableActionsHead />}
                     </TableRow>
                   </TableHeader>
@@ -230,7 +231,9 @@ export default async function InventoryItemPage({
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">To be implemented</TableCell>
+                        <TableCell numeric>
+                          <DefectShare roll={r} />
+                        </TableCell>
                         {(canReadRolls || canRemoveRolls) && (
                           <TableCell>
                             <div className="flex items-center justify-end gap-2">

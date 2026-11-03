@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, LoaderCircle, Maximize2, RefreshCw, Send } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Camera, CameraOff, LoaderCircle, Maximize2, RefreshCw, Ruler, Send } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import {
   type CameraProblem,
 } from "@/lib/capture-rules";
 import { defaultRollId } from "@/lib/roll-rules";
+import { CalibrateDialog, saveCalibration, savedCalibration, type Frame } from "./calibration";
 import { FloorView, type FloorBand } from "./floor-view";
 import { LastScanSummary, type ScanSummary } from "./last-scan";
 import { RollBar, rollLine, type OpenRollView } from "./roll-bar";
@@ -35,6 +36,8 @@ type Pending = {
   capturedAt: string;
   rollId: string;
   rollCode: string;
+  /** The phone's calibration for this frame size, or null (Phase 30C). */
+  widthIn: number | null;
 };
 
 /** The last result, as the capture returned it (a constructor can't open Scans, D-075). */
@@ -162,6 +165,17 @@ export function CaptureClient({
   const [last, setLast] = useState<Last | null>(null);
   const [floor, setFloor] = useState(false);
   const fullscreenRef = useRef(false);
+  // Phase 30C: the frame size the camera gives, and this phone's calibration for it (A-18).
+  const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null);
+  const [calibrationVersion, setCalibrationVersion] = useState(0);
+  const [calibrateFrame, setCalibrateFrame] = useState<Frame | null>(null);
+  const calibration = useMemo(
+    () =>
+      frameSize && calibrationVersion >= 0
+        ? savedCalibration(deviceId, frameSize.width, frameSize.height)
+        : null,
+    [frameSize, deviceId, calibrationVersion],
+  );
 
   useEffect(() => {
     // Read after mount: localStorage isn't there on the server.
@@ -334,6 +348,7 @@ export function CaptureClient({
         form.set("capturedAt", pending.capturedAt);
         form.set("rollId", pending.rollId);
         form.set("source", phone ? "PHONE" : "WEBCAM");
+        if (pending.widthIn !== null) form.set("widthIn", String(pending.widthIn));
         try {
           const res = await fetch("/api/v1/scans/capture", { method: "POST", body: form });
           status = res.status;
@@ -428,11 +443,38 @@ export function CaptureClient({
         capturedAt,
         rollId: roll.id,
         rollCode: roll.code,
+        widthIn: savedCalibration(deviceId, canvas.width, canvas.height)?.widthIn ?? null,
       });
     } finally {
       busyRef.current = false;
     }
-  }, [roll, canCapture, deliver, floor]);
+  }, [roll, canCapture, deliver, floor, deviceId]);
+
+  /** Freezes the live picture for tapping the sheet's corners (Phase 30C). */
+  const openCalibrate = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY),
+    );
+    if (!blob) return;
+    setCalibrateFrame({
+      url: URL.createObjectURL(blob),
+      width: canvas.width,
+      height: canvas.height,
+    });
+  }, []);
+
+  const closeCalibrate = useCallback(() => {
+    setCalibrateFrame((f) => {
+      if (f) URL.revokeObjectURL(f.url);
+      return null;
+    });
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -573,6 +615,14 @@ export function CaptureClient({
             autoPlay
             aria-label="Live camera picture"
             className={live ? "block aspect-video w-full object-contain" : "hidden"}
+            onLoadedMetadata={(e) => {
+              const v = e.currentTarget;
+              if (v.videoWidth) setFrameSize({ width: v.videoWidth, height: v.videoHeight });
+            }}
+            onResize={(e) => {
+              const v = e.currentTarget;
+              if (v.videoWidth) setFrameSize({ width: v.videoWidth, height: v.videoHeight });
+            }}
           />
           {frozen && (
             // eslint-disable-next-line @next/next/no-img-element -- a local object URL, not an asset
@@ -614,6 +664,47 @@ export function CaptureClient({
             </div>
           )}
         </div>
+
+        {live &&
+          (calibration ? (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              <span>
+                <Ruler aria-hidden className="mr-1 inline size-4 align-text-bottom" />
+                This phone is set up to measure cuts.
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => void openCalibrate()}>
+                Set up again
+              </Button>
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-md bg-caution-soft p-3 text-sm sm:flex-row sm:items-center">
+              <p className="flex-1">
+                <span className="font-medium">Set up this phone first.</span> It needs one photo of
+                a paper sheet so it can measure cuts.
+              </p>
+              <Button variant="secondary" onClick={() => void openCalibrate()}>
+                <Ruler aria-hidden />
+                Set up this phone
+              </Button>
+            </div>
+          ))}
+
+        <CalibrateDialog
+          open={calibrateFrame !== null}
+          frame={calibrateFrame}
+          onClose={closeCalibrate}
+          onSave={(widthIn) => {
+            if (calibrateFrame)
+              saveCalibration(deviceId, {
+                widthIn: Math.round(widthIn * 100) / 100,
+                frameWidth: calibrateFrame.width,
+                frameHeight: calibrateFrame.height,
+                savedAt: new Date().toISOString(),
+              });
+            setCalibrationVersion((v) => v + 1);
+            closeCalibrate();
+          }}
+        />
 
         {send.kind === "failed" && (
           <Alert tone="danger">

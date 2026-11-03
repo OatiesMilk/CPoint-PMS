@@ -12,7 +12,7 @@ import { ArrowLeft, Info } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { VerdictBadge } from "@/components/features/verdict-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { outcomeGroups, readSnapshot } from "@/lib/decision-engine";
+import { outcomeFor, outcomeGroups, readSnapshot } from "@/lib/decision-engine";
 import { formatManilaDateTime, formatPercent } from "@/lib/format";
 import { requirePermission } from "@/server/policies/guard";
 import { getScanDetail } from "@/server/services/scan-query.service";
@@ -66,7 +66,14 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
               id: d.id,
               label: d.defectType?.label ?? d.rawClassKey,
               confidence: d.confidence,
-              outcome: rule.outcomes[d.rawClassKey] ?? null,
+              // A type with a length limit is Usable below it and Not accepted from it (C-37).
+              outcome:
+                outcomeFor(
+                  rule.outcomes[d.rawClassKey],
+                  rule.lengthLimits?.[d.rawClassKey],
+                  d.lengthIn,
+                ) ?? null,
+              lengthIn: d.lengthIn,
               inactive: d.defectType ? !d.defectType.isActive : false,
               box: { x: d.x, y: d.y, width: d.width, height: d.height },
             }))}
@@ -104,8 +111,18 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                       </span>
                     </>
                   )}
+                  {Object.entries(rule.lengthLimits ?? {}).map(([key, limit]) => (
+                    <span key={key}>
+                      {key}: Not accepted from {limit} in
+                    </span>
+                  ))}
                   <span className="text-muted-foreground tabular-nums">
                     Found at {formatPercent(rule.foundAtOrAbove)} or more
+                  </span>
+                  <span className="text-muted-foreground">
+                    {rule.widthIn
+                      ? `Phone calibrated: ${rule.widthIn} in across`
+                      : "Phone not calibrated: nothing measured"}
                   </span>
                 </dd>
               </dl>

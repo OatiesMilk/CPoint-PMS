@@ -16,6 +16,12 @@ const rolls = {
   moveRoll: vi.fn(async (..._args: unknown[]) => true),
   nextRollCodeNumber: vi.fn(async () => 7),
   rollCodeTaken: vi.fn(async () => false),
+  countRollsToReturn: vi.fn(async () => 0),
+  listRollShotMeasures: vi.fn(
+    async (): Promise<{ defectAreaSqIn: number | null; flatSharePct: number | null }[]> => [],
+  ),
+  saveRollMeasure: vi.fn(async () => ({})),
+  keepRoll: vi.fn(async () => true),
 };
 const refs = {
   findSupplier: vi.fn(async (): Promise<unknown> => ({
@@ -45,7 +51,7 @@ vi.mock("@/server/models/roll.model", () => rolls);
 vi.mock("@/server/models/reference-data.model", () => refs);
 vi.mock("@/server/models/inventory.model", () => inventory);
 vi.mock("@/server/models/cv-settings.model", () => ({
-  getCvSettings: vi.fn(async () => ({ foundAtOrAbove: 0.5 })),
+  getCvSettings: vi.fn(async () => ({ foundAtOrAbove: 0.5, returnSharePct: 10 })),
 }));
 vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn("tx"),
@@ -69,6 +75,8 @@ const state = (over: object = {}) => ({
   startedAt: new Date("2026-10-26T01:00:00Z"),
   startedById: "sc1",
   usedCheckInId: null,
+  markedForReturn: false,
+  returnDecision: null,
   supplier: { name: "Marikina Leather Trading" },
   item: { name: "Brown suede" },
   _count: { scans: 4 },
@@ -226,6 +234,10 @@ describe("picking and finishing at Capture", () => {
       code: "LR-MLT-007",
       status: "FINISHED",
       shots: 4,
+      sharePct: null,
+      limitPct: 10,
+      marked: false,
+      notMeasured: "no-shots",
     });
     expect(rolls.moveRoll).toHaveBeenCalledWith(
       "r1",
@@ -552,5 +564,145 @@ describe("Reports → Rolls and a leather item's rolls (D-008)", () => {
     expect((await svc.getRollDetail("r1"))?.canRemove).toBe(false);
     rolls.findRollDetail.mockResolvedValue(detail("FINISHED", null));
     expect((await svc.getRollDetail("r1"))?.canRemove).toBe(false);
+  });
+});
+
+describe("the defect share and the supplier limit (Phase 30C, D-110)", () => {
+  it("works out the share at Finish roll and marks a roll over the limit", async () => {
+    // 24.5 sq ft = 3,528 sq in: 300 sq in is 8.5%, plus eight cuts from 3 in at 1% each.
+    rolls.listRollShotMeasures.mockResolvedValue([
+      { defectAreaSqIn: 200, flatSharePct: 5 },
+      { defectAreaSqIn: 100, flatSharePct: 3 },
+    ]);
+    await expect(svc.finishRoll("r1", SC, now)).resolves.toMatchObject({
+      sharePct: 16.5,
+      limitPct: 10,
+      marked: true,
+      notMeasured: null,
+    });
+    expect(rolls.saveRollMeasure).toHaveBeenCalledWith(
+      "r1",
+      { defectAreaSqIn: 300, defectSharePct: 16.5, returnLimitPct: 10, markedForReturn: true },
+      "tx",
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "roll.finish",
+        after: expect.objectContaining({ defectSharePct: 16.5, markedForReturn: true }),
+      }),
+    );
+  });
+
+  it("leaves a roll with a shot from an uncalibrated phone not measured and unmarked (A-28)", async () => {
+    rolls.listRollShotMeasures.mockResolvedValue([
+      { defectAreaSqIn: 900, flatSharePct: 0 },
+      { defectAreaSqIn: null, flatSharePct: null },
+    ]);
+    await expect(svc.finishRoll("r1", SC, now)).resolves.toMatchObject({
+      sharePct: null,
+      marked: false,
+      notMeasured: "unscaled",
+    });
+    expect(rolls.saveRollMeasure).toHaveBeenCalledWith(
+      "r1",
+      { defectAreaSqIn: null, defectSharePct: null, returnLimitPct: 10, markedForReturn: false },
+      "tx",
+    );
+  });
+
+  it("returns a scanned roll to the supplier: it leaves stock (−1) with the note", async () => {
+    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED", markedForReturn: true }));
+    await expect(
+      svc.decideReturn(
+        "r1",
+        { decision: "RETURNED", returnedOn: "2026-10-26", note: "Driver took it" },
+        FM,
+        now,
+      ),
+    ).resolves.toEqual({ id: "r1", code: "LR-MLT-007", decision: "RETURNED" });
+    expect(rolls.moveRoll).toHaveBeenCalledWith(
+      "r1",
+      "FINISHED",
+      expect.objectContaining({
+        status: "RETURNED",
+        returnDecision: "RETURNED",
+        returnNote: "Driver took it",
+      }),
+      "tx",
+      { returnDecision: null },
+    );
+    expect(postMovement).toHaveBeenCalledWith(
+      "tx",
+      expect.anything(),
+      {
+        type: "OUT",
+        delta: -1,
+        reason: "Roll LR-MLT-007 returned to supplier: Driver took it",
+        rollId: "r1",
+      },
+      FM,
+      now,
+    );
+  });
+
+  it("keeps a marked roll with a reason; nothing leaves stock", async () => {
+    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED", markedForReturn: true }));
+    await svc.decideReturn("r1", { decision: "KEPT", note: "Cuts at the edge" }, FM, now);
+    expect(rolls.keepRoll).toHaveBeenCalledWith(
+      "r1",
+      { returnNote: "Cuts at the edge", returnDecidedAt: now, returnDecidedById: "fm1" },
+      "tx",
+    );
+    expect(postMovement).not.toHaveBeenCalled();
+  });
+
+  it("refuses Keep on an unmarked roll, any decision before the scan, a second decision and a future day", async () => {
+    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED" }));
+    await expect(
+      svc.decideReturn("r1", { decision: "KEPT", note: "x" }, FM, now),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringMatching(/doesn’t have too many defects/),
+    });
+    rolls.findRollState.mockResolvedValue(state({ status: "OPEN" }));
+    await expect(
+      svc.decideReturn("r1", { decision: "RETURNED", returnedOn: "2026-10-26" }, FM, now),
+    ).rejects.toMatchObject({ status: 409 });
+    rolls.findRollState.mockResolvedValue(
+      state({ status: "FINISHED", markedForReturn: true, returnDecision: "KEPT" }),
+    );
+    await expect(
+      svc.decideReturn("r1", { decision: "RETURNED", returnedOn: "2026-10-26" }, FM, now),
+    ).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/already kept/) });
+    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED" }));
+    await expect(
+      svc.decideReturn("r1", { decision: "RETURNED", returnedOn: "2026-10-27" }, FM, now),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it("won't tick a marked roll Fully used until the Floor Manager keeps it", async () => {
+    rolls.findRollsState.mockResolvedValue([
+      state({ id: "a", code: "LR-MLT-001", status: "FINISHED", markedForReturn: true }),
+    ]);
+    await expect(
+      svc.markRollsUsed("tx" as never, ["a"], { checkInId: "c1", label: "Batch 1" }, QI, now),
+    ).rejects.toMatchObject({
+      status: 409,
+      message:
+        "LR-MLT-001 has too many defects. The Floor Manager must keep it before it can be ticked.",
+    });
+    rolls.findRollsState.mockResolvedValue([
+      state({
+        id: "a",
+        code: "LR-MLT-001",
+        status: "FINISHED",
+        markedForReturn: true,
+        returnDecision: "KEPT",
+      }),
+    ]);
+    await expect(
+      svc.markRollsUsed("tx" as never, ["a"], { checkInId: "c1", label: "Batch 1" }, QI, now),
+    ).resolves.toEqual(["LR-MLT-001"]);
   });
 });

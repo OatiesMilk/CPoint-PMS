@@ -15,7 +15,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { formatManilaWeekdayDate, manilaToday } from "@/lib/format";
-import { formatArea, openSinceLine } from "@/lib/roll-rules";
+import { finishedLine, formatArea, openSinceLine, type FinishData } from "@/lib/roll-rules";
 
 /** An open roll as GET /api/v1/rolls/open sends it. */
 export type OpenRollView = {
@@ -93,13 +93,13 @@ export function RollBar({
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
-      const body = (await res.json().catch(() => ({}))) as ApiError;
+      const body = (await res.json().catch(() => ({}))) as ApiError & { data?: FinishData };
       setDialog(null);
       if (res.ok) {
         onClosed(
           chosen.id,
           kind === "finish"
-            ? `${chosen.code} is finished with ${shotsText(chosen.shots)}.`
+            ? finishedLine(chosen, body.data)
             : chosen.fromInventory
               ? `${chosen.code} is back with the rolls waiting to be scanned.`
               : `${chosen.code} is cancelled.`,

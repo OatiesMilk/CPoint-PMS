@@ -45,6 +45,7 @@ export async function captureScan(
       modelVersion: seen.modelVersion,
       source: fields.source,
       capturedAt: fields.capturedAt,
+      widthIn: fields.widthIn ?? null,
     },
     origin,
     now,

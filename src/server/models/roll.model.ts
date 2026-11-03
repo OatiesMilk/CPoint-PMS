@@ -5,6 +5,8 @@ import { type Db, defaultDb } from "./db";
 
 export type RollListFilters = {
   status?: RollStatus;
+  /** Marked Return to supplier with no decision yet (Reports → Rolls → To return, Phase 30C). */
+  toReturn?: boolean;
   supplierId?: string;
   /** Rolls added on or after this instant (the "days" filter). */
   since?: Date;
@@ -26,6 +28,12 @@ const listSelect = {
   finishedAt: true,
   cancelledAt: true,
   usedAt: true,
+  defectAreaSqIn: true,
+  defectSharePct: true,
+  returnLimitPct: true,
+  markedForReturn: true,
+  returnDecision: true,
+  returnedOn: true,
   supplier: { select: { id: true, name: true } },
   item: { select: { id: true, sku: true, name: true } },
   _count: { select: { scans: true } },
@@ -36,7 +44,8 @@ export type RollListRow = Prisma.RollGetPayload<{ select: typeof listSelect }>;
 function listWhere(filters: RollListFilters): Prisma.RollWhereInput {
   const q = filters.q?.trim();
   return {
-    status: filters.status,
+    status: filters.toReturn ? "FINISHED" : filters.status,
+    ...(filters.toReturn ? { markedForReturn: true, returnDecision: null } : {}),
     supplierId: filters.supplierId,
     itemId: filters.itemId,
     ...(filters.since ? { createdAt: { gte: filters.since } } : {}),
@@ -106,6 +115,8 @@ const detailSelect = {
   ...listSelect,
   tagCode: true,
   cancelledReason: true,
+  returnNote: true,
+  returnDecidedAt: true,
   usedCheckIn: { select: { id: true, day: true, slotAt: true } },
   scans: {
     orderBy: { sequence: "asc" },
@@ -115,11 +126,21 @@ const detailSelect = {
       finalVerdict: true,
       capturedAt: true,
       imagePath: true,
+      widthIn: true,
+      defectAreaSqIn: true,
+      flatSharePct: true,
+      thresholdsSnapshot: true,
       detections: {
         orderBy: { confidence: "desc" },
         select: {
           rawClassKey: true,
           confidence: true,
+          x: true,
+          y: true,
+          width: true,
+          height: true,
+          lengthIn: true,
+          areaSqIn: true,
           defectType: { select: { label: true, outcome: true } },
         },
       },
@@ -172,6 +193,8 @@ const openSelect = {
   startedAt: true,
   startedById: true,
   usedCheckInId: true,
+  markedForReturn: true,
+  returnDecision: true,
   supplier: { select: { name: true } },
   item: { select: { name: true } },
   _count: { select: { scans: true } },
@@ -198,7 +221,8 @@ export function listRollsToTick(checkInId?: string, db: Db = defaultDb()): Promi
     where: {
       itemId: { not: null },
       OR: [
-        { status: "FINISHED" },
+        // A roll marked Return to supplier waits for the Floor Manager's Keep (Phase 30C).
+        { status: "FINISHED", OR: [{ markedForReturn: false }, { returnDecision: "KEPT" }] },
         ...(checkInId ? [{ status: "USED" as const, usedCheckInId: checkInId }] : []),
       ],
     },
@@ -252,6 +276,14 @@ type RollMove =
       cancelledReason: string | null;
     }
   | { status: "USED"; usedAt: Date; usedById: string; usedCheckInId: string }
+  | {
+      status: "RETURNED";
+      returnDecision: "RETURNED";
+      returnedOn: Date;
+      returnNote: string | null;
+      returnDecidedAt: Date;
+      returnDecidedById: string;
+    }
   | { status: "FINISHED"; usedAt: null; usedById: null; usedCheckInId: null };
 
 /**
@@ -263,7 +295,7 @@ export async function moveRoll(
   from: RollStatus,
   data: RollMove,
   db: Db = defaultDb(),
-  extra: { usedCheckInId?: string } = {},
+  extra: { usedCheckInId?: string; returnDecision?: null } = {},
 ): Promise<boolean> {
   const { count } = await db.roll.updateMany({ where: { id, status: from, ...extra }, data });
   return count === 1;
@@ -284,6 +316,48 @@ export async function nextRollCodeNumber(prefix: string, db: Db = defaultDb()): 
 /** Whether a code is taken already (a roll from before could hold an LR- code as its tag only). */
 export async function rollCodeTaken(code: string, db: Db = defaultDb()): Promise<boolean> {
   return (await db.roll.count({ where: { code } })) > 0;
+}
+
+/** A roll's shots' measures, for its share at Finish roll (Phase 30C). */
+export function listRollShotMeasures(rollId: string, db: Db = defaultDb()) {
+  return db.scan.findMany({
+    where: { rollId },
+    select: { defectAreaSqIn: true, flatSharePct: true },
+  });
+}
+
+/** Saves a finished roll's share and whether it is marked (Phase 30C, D-110). */
+export function saveRollMeasure(
+  id: string,
+  data: {
+    defectAreaSqIn: number | null;
+    defectSharePct: number | null;
+    returnLimitPct: number;
+    markedForReturn: boolean;
+  },
+  db: Db = defaultDb(),
+) {
+  return db.roll.update({ where: { id }, data });
+}
+
+/** Keep (the Floor Manager, C-36): only a scanned roll with no decision yet. False if it moved. */
+export async function keepRoll(
+  id: string,
+  data: { returnNote: string; returnDecidedAt: Date; returnDecidedById: string },
+  db: Db = defaultDb(),
+): Promise<boolean> {
+  const { count } = await db.roll.updateMany({
+    where: { id, status: "FINISHED", returnDecision: null },
+    data: { ...data, returnDecision: "KEPT" },
+  });
+  return count === 1;
+}
+
+/** Rolls marked Return to supplier that wait for the Floor Manager (Phase 30C). */
+export function countRollsToReturn(db: Db = defaultDb()) {
+  return db.roll.count({
+    where: { status: "FINISHED", markedForReturn: true, returnDecision: null },
+  });
 }
 
 /** Rolls open now (being captured), for the reports and the Camera page. */

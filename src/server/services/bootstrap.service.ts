@@ -34,6 +34,9 @@ export const REFERENCE_DATA = {
       description: "Slit or cut through the leather surface.",
       sortOrder: 2,
       outcome: "NOT_ACCEPTED" as const,
+      // Phase 30C: Not accepted from 3 in (C-37), and one that long counts 1% of its roll (D-110).
+      notAcceptedFromIn: 3,
+      flatSharePct: 1,
     },
     {
       key: "hole",

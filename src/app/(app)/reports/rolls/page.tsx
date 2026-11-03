@@ -9,6 +9,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
+import { DefectShare } from "@/components/features/rolls/defect-share";
 import { RollStatusBadge } from "@/components/features/rolls/roll-status-badge";
 import { PageHeader } from "@/components/features/page-header";
 import { TablePager } from "@/components/features/table-pager";
@@ -26,7 +27,11 @@ import {
 import { formatManilaDateTime } from "@/lib/format";
 import { formatArea } from "@/lib/roll-rules";
 import { requirePermission } from "@/server/policies/guard";
-import { listRollsForReport, supplierOptions } from "@/server/services/roll.service";
+import {
+  listRollsForReport,
+  rollsToReturnCount,
+  supplierOptions,
+} from "@/server/services/roll.service";
 import { rollListQuerySchema } from "@/server/validators/roll.validator";
 import { ReportTabs } from "../_components/report-tabs";
 import { RollFilters } from "./roll-filters";
@@ -37,10 +42,13 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
   await requirePermission("roll:read");
   await connection();
   const query = rollListQuerySchema.parse(await searchParams);
-  const filtered = Boolean(query.status || query.supplierId || query.days || query.q);
-  const [{ rows, total, page, pageCount }, suppliers] = await Promise.all([
+  const filtered = Boolean(
+    query.status || query.toReturn || query.supplierId || query.days || query.q,
+  );
+  const [{ rows, total, page, pageCount }, suppliers, toReturn] = await Promise.all([
     listRollsForReport(query),
     supplierOptions(),
+    rollsToReturnCount(),
   ]);
 
   const pageHref = (p: number) => {
@@ -55,9 +63,27 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
     <>
       <PageHeader
         title="Reports"
-        description="Every leather roll: added in Inventory, scanned at Capture, its shots and what passed. Never per person."
+        description="Every leather roll: when it was scanned, what passed and how much of it has defects. Never per person."
       />
       <ReportTabs current="rolls" />
+
+      {toReturn > 0 && !query.toReturn && (
+        <div
+          role="status"
+          className="flex flex-col gap-3 rounded-md bg-caution-soft p-4 sm:flex-row sm:items-center"
+        >
+          <p className="flex-1">
+            <span className="font-medium">
+              {toReturn === 1
+                ? "1 roll has too many defects and is waiting for your decision."
+                : `${toReturn} rolls have too many defects and are waiting for your decision.`}
+            </span>
+          </p>
+          <Button asChild variant="secondary">
+            <Link href="/reports/rolls?toReturn=1">{toReturn === 1 ? "Show it" : "Show them"}</Link>
+          </Button>
+        </div>
+      )}
 
       {(total > 0 || filtered) && <RollFilters suppliers={suppliers} />}
 
@@ -91,6 +117,7 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                 <TableHead numeric>Shots</TableHead>
                 <TableHead numeric>Passed</TableHead>
                 <TableHead numeric>Rejected (for salvage)</TableHead>
+                <TableHead numeric>Defect %</TableHead>
                 <TableHead>Status</TableHead>
                 <TableActionsHead />
               </TableRow>
@@ -125,6 +152,9 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                   <TableCell numeric>{r._count.scans}</TableCell>
                   <TableCell numeric>{r.passed}</TableCell>
                   <TableCell numeric>{r.rejected}</TableCell>
+                  <TableCell numeric>
+                    <DefectShare roll={r} />
+                  </TableCell>
                   <TableCell>
                     <RollStatusBadge status={r.status} />
                   </TableCell>

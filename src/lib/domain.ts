@@ -37,5 +37,6 @@ export const ROLL_STATUS_LABELS: Record<RollStatus, string> = {
   OPEN: "Being scanned",
   FINISHED: "Scanned",
   USED: "Fully used",
+  RETURNED: "Returned to supplier",
   CANCELLED: "Removed",
 };
