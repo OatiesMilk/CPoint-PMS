@@ -2063,26 +2063,6 @@ relying on Return to supplier). The outline stays available in `measure`'s repor
 already stores each detection's box (`detections` x, y, width, height), so Phase 30C can work out
 a roll's Defect % from it once each phone's scale is known (its plan settles how).
 
-### D-106 · 2026-11-02 · Accepted — Defects are measured by the box (Phase 30B)
-
-**Context:** Phase 30B checked whether the camera measures a cut in inches (C-10, C-37) before 30C
-builds the 3-inch line and the 10% rule (C-9, C-35). Test piece: letter size, 8.5 × 11 in
-(0.649 sq ft), phone 19 to 20 in above, calibrated from the piece itself (about 164 px/in), three
-pen lines measured with a ruler (`cv/reports/2026-11-02-LETTER-TEST-measure.md`).
-**Evidence:** 2.5 in: not found by the model. 3.5 in: box diagonal 3.58, outline span 3.61.
-5.5 in: box diagonal 5.80, outline span 5.86. Both measures put each line on the right side of
-3 in. Area: the slanted 5.5 in line's box is 15.33 sq in (19.4% of the piece) against 0.54 sq in
-by outline (1.0%). The outline also shifts by about 0.1 in between CPU and GPU; the box doesn't.
-**Decision (Dylan):** measure by the **box**. A defect's length is its box diagonal in inches
-(the 3-inch line reads it); a shot's defect area is the union of its boxes, overlaps counted once
-(C-35); a roll's share is the sum over its shots ÷ its entered area (D-103), and more than 10% is
-strict (C-9). Claude recommended the outline; the `measure` report keeps it for comparison.
-**Consequences:** a slanted cut's box is mostly clean leather and can put a roll over 10% alone;
-30C must watch for it (and could revisit with real rolls). Pen lines aren't what the model learned
-from, so real knife cuts would be a stronger check. D-105 is the Monday to Friday schedule (its own
-thread). **Where:** `cv/cpoint_cv/{measure,calibration,cli}.py`,
-`src/server/services/roll-photos.service.ts`, `scripts/cv-roll-photos.ts`.
-
 ### D-107 · 2026-11-02 · Accepted — A repeat schedule or lunch save is skipped
 
 **Context:** the team's QA notes (2 Nov) showed six identical schedules saved on 27 Oct and asked
@@ -2143,3 +2123,32 @@ and D-102's Monday weeks on this report; Phase 30D's week picker (the groupmates
 (`page.tsx`, `material-filters.tsx`), `src/server/controllers/report.controller.ts`,
 `docs/API.md`; tests `tests/unit/{month-weeks,materials.service,stock-rules}.test.ts`,
 `tests/e2e/inventory.spec.ts`.
+
+### D-110 · 2026-11-03 · Accepted — The 3-inch line, a cut counts a flat 1%, and the Floor Manager decides returns (Phase 30C)
+
+**Context:** Phase 30C builds C-9, C-35 to C-37 and C-39 on D-106's box. D-106's known cost was
+that a slanted cut's box is mostly clean leather and can push a roll over 10% alone.
+**Decision (Dylan, 2026-11-03):** a cut is **Not accepted from 3 in** (its box diagonal) and Usable
+below (C-37); a shot that can't be measured counts a cut as Not accepted. **Each cut 3 in or longer
+adds exactly 1% to its roll's defect share, whatever its box size; a shorter cut adds nothing**
+("for now"). Holes, scratches and creases count by box area as in D-106 (creases: ASSUMPTION A-30).
+Both are data: per defect type "Not accepted from __ in long" and "Counts as a flat share of the
+roll (%)" (cut 3 and 1, the rest empty), and Settings → Thresholds "Mark a roll Return to supplier
+when defects cover more than __%" (default 10, strict, C-9). **Calibration** is once per phone on
+Capture: tap an A4 or letter sheet's four corners (the toolkit's formula), or type the toolkit's
+number; kept per browser, camera and frame size, and redone only when the phone's height or zoom
+changes or another phone goes on the stand. At **Finish roll** the share (the shots' union areas
+over the entered area, plus the flat shares) is saved with the limit; over it the roll is **marked
+Return to supplier** and the constructor is told to set it aside. The **Floor Manager decides**
+(C-36): Returned to supplier (a day, an optional note; status `RETURNED`, OUT −1) or Keep (a
+reason; it can then be ticked Fully used); any scanned roll may be returned. Built in one session.
+**Assumptions (STATUS):** A-27 a decision is final (a mistake goes through Remove); A-28 a roll
+with any shot from an uncalibrated phone is Not measured and not marked; A-29 a returned roll leaves
+stock like a fully used one and is reported apart; A-30 creases count by box area.
+**Amends:** D-106 (a cut counts a flat share, not its box area), D-072 (the claim sheet carries the
+findings), D-104 (a marked roll can't be ticked until kept).
+**Where:** `src/lib/{measure,roll-findings,decision-engine,roll-rules}.ts`,
+`src/server/services/{scan-ingest,roll,settings,ops-report,demo-seed,demo-reset}.service.ts`,
+`src/app/(app)/camera/capture/calibration.tsx`, `src/app/(app)/reports/rolls/`,
+`src/components/features/rolls/{return-decision,roll-findings,defect-share}.tsx`, migration
+`20261103103243_measure_and_return`. Plan: `docs/prompts/plans/phase-30c-plan.md`.

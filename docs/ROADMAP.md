@@ -501,7 +501,7 @@ was never built. Each phase gets its own criteria here when its plan is approved
       `no_unknown_classes`); Materials reads "Week 1: Nov. 2"; `npm run check` passed (622); Codex
       run 1 next
 - [ ] Phase 30C: cuts from 3 inches Not accepted; a roll over 10% defects (of its entered area)
-      marked Return to supplier, the FM decides
+      marked Return to supplier, the FM decides (built 2026-11-03, D-110; Codex run 1 next)
 - [ ] Phase 30D: the team's QA notes on Reports → Materials (week picker by date, no Last 8
       weeks or Per 100 pairs, on hand per week, pairs change and pairs per roll, leather Used split
       into Fully used, Returned to supplier and Removed); plan
@@ -662,3 +662,40 @@ implemented"). Decisions: D-103, D-104.
 - [x] Rolls fully used shows only code, area and item (Dylan's phone screenshot)
 - [x] Codex QA run 9: **PASS** (the trimmed roll lines at 1440 and 390 px, axe 0, `batches` 6/0)
 - [ ] Follow-up commit, PR open, CI green
+
+## Phase 30C — Cuts from 3 inches, and the return to the supplier
+
+Brief: `docs/prompts/factory-visit-changes.md`, Phase 30 Part B. Plan:
+`docs/prompts/plans/phase-30c-plan.md` (approved 2026-11-03: calibrate on Capture by tapping the
+sheet's corners, a cut from 3 in counts a flat 1%, one session). Decisions: D-106, D-110.
+
+- [x] Migration `measure_and_return`: length limit and flat share per defect type, the supplier
+      limit, each scan's size, calibration and defect area, each detection's length and area, each
+      roll's share, limit, mark and the FM's decision; `RETURNED`; cut set to 3 in and 1%
+- [x] Settings: "Mark a roll Return to supplier when defects cover more than __%" and, per type,
+      "Not accepted from __ in long" and "Counts as a flat share of the roll (%)"
+- [x] Capture: Calibrate this phone (tap the sheet's corners, or type the toolkit's number), kept
+      per camera and frame size; each shot sends `widthIn`; Last scan shows each defect's length
+- [x] Ingest and engine: box length and area, the shot's union, the 3-inch line (unmeasured counts
+      Not accepted); the snapshot keeps the limits and the scale
+- [x] Finish roll saves the share; over the limit it is marked and the constructor is told to set
+      it aside; Not measured with a shot from an uncalibrated phone
+- [x] Reports → Rolls: Defect %, the To return band and filter, the roll's findings, Returned to
+      supplier or Keep; Finish batch leaves out marked rolls until kept
+- [x] Inventory Defect %, the claim sheet's findings and lengths, the section page's lengths,
+      Supplier quality's Defect area, Marked and Returned with the CSV
+- [x] Demo week and `demo:reset`: calibrated demo shots, three rolls over 10% (returned, kept,
+      waiting); checked on a scratch database; CI's Docker job checks every scanned demo roll has a
+      share
+- [x] `npm run check` passes (670 unit tests); e2e `returns.spec.ts` written and `inventory`
+      updated, not run (Codex)
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_30C.md` (FAIL: Esc on Keep, two e2e test
+      faults, three load timeouts; fixed)
+- [x] Plain words on every 30C screen (Dylan, 3 Nov); `npm run check` passed (670)
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_30C_RUN2.md` (FAIL: one stale badge text in
+      `returns.spec.ts`; fixed)
+- [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_30C_RUN3.md`: **PASS** (returns 5/5; four
+      load timeouts in the full run passed alone)
+- [x] Set up this phone fits the whole photo (Dylan's iPhone showed only its top)
+- [x] Phase 30C marked done in the progress list (D-110)
+- [ ] Committed, PR open, CI green

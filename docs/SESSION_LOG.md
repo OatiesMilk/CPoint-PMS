@@ -5,6 +5,44 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-03 · Phase 30C run 3 PASS; the setup window on a phone
+
+- Run 3 PASS after allowed reruns (four `next dev` load timeouts passed alone).
+- Dylan tried Capture on his iPhone through the tunnel: a real shot was saved whole (1080 × 1920),
+  but Set up this phone showed only the top of the tall photo. It now fits the photo on screen.
+  `npm run check` passed (670). Dylan asked whether landscape is better: yes (wider shots, fewer
+  per roll); a sideways hint is offered, not built.
+
+## 2026-11-03 · Phase 30C run 2 read
+
+- Run 2 FAIL on a test fault only (`returns.spec.ts:128` expected the old badge); fixed. A smoke
+  timeout under the full run passed alone. Added the quick tunnel host to `DEV_ORIGINS` so Dylan can
+  sign in on his phone. Next: Codex run 3.
+
+## 2026-11-03 · Phase 30C run 1 fixes and plain words
+
+- Codex run 1 FAIL: S7 (Esc on Keep flashed the other dialog: the content read the cleared state
+  while fading out; the dialog now keeps its kind), the Thresholds toast text and the roll's area
+  shown twice (both fixed), three 30 s timeouts under the full run (no 30C code; rerun alone).
+- Dylan asked for plain words on every new screen (the users aren't technical): rewrote the roll
+  page, Reports → Rolls, the dialogs, Capture's Set up this phone and Settings; tests follow.
+- Checks: `npm run check` passed (670). Next: Codex run 2 (`qa/CODEX_PROMPT_PHASE_30C_RUN2.md`).
+
+## 2026-11-03 · Phase 30C: cuts from 3 inches and the return to the supplier (D-110)
+
+- Plan approved by Dylan with three answers: calibrate on Capture by tapping the sheet's corners;
+  each cut 3 in or longer counts a flat 1% of the roll, shorter cuts nothing, holes and scratches by
+  box area; one session.
+- Built: migration `measure_and_return` (applied to the laptop's `cpoint_pms`), measuring at
+  ingest, the 3-inch line, Calibrate this phone, the share at Finish roll and the mark, the FM's
+  Returned to supplier or Keep, To return on Reports → Rolls, Defect % in Inventory, the claim
+  sheet's findings, Supplier quality's columns, the demo week's three marked rolls, CI's Docker check.
+- Found by the new tests: the box union returned NaN (−∞ − −∞); fixed.
+- Demo week checked on a scratch database (10 rolls, 3 marked: returned, kept, waiting; ledger 0).
+- DECISIONS had D-106 twice; the shorter copy is gone.
+- Checks: `npm run check` passed (670 unit tests). E2E not run (Codex): `returns.spec.ts` new.
+- Next: Codex run 1 (`qa/CODEX_PROMPT_PHASE_30C.md`).
+
 ## 2026-11-02 · D-109 Materials by week of the month
 
 - Built Year, Month, Week and Find material on Reports → Materials: weeks are days 1–7, 8–14 …

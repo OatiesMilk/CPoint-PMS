@@ -1,8 +1,9 @@
 /*
  * Intent brief (ui-craft §1)
  * Who:   the Floor Manager raising a quality claim with a leather supplier.
- * What:  one page per roll to print or save as PDF: the roll, its supplier, the counts, and every
- *        rejected section with its photo and defects (Phase 20, D-072).
+ * What:  one page per roll to print or save as PDF: the roll, its supplier, the counts, its defect
+ *        share against the supplier limit (Phase 30C), and every rejected section with its photo and
+ *        defects (Phase 20, D-072).
  * Worst: a claim that names a worker, or a sheet missing the photos the supplier asks for. Per
  *        roll only (D-008); every rejected section is listed with its photo, in section order.
  */
@@ -12,11 +13,14 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
+import { RollFindings } from "@/components/features/rolls/roll-findings";
 import { Button } from "@/components/ui/button";
 import { formatDayLabel, formatManilaDateTime, formatPercent } from "@/lib/format";
+import { rollFindings } from "@/lib/roll-findings";
 import { formatArea } from "@/lib/roll-rules";
 import { requirePermission } from "@/server/policies/guard";
 import { claimSheet } from "@/server/services/ops-report.service";
+import { getRollDetail } from "@/server/services/roll.service";
 import { isRollId } from "@/server/validators/roll.validator";
 import { PrintButton } from "./print-button";
 
@@ -26,9 +30,12 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
   await requirePermission("report:production");
   await connection();
   const { rollId } = await params;
-  const sheet = isRollId(rollId) ? await claimSheet(rollId) : null;
-  if (!sheet) notFound();
+  const [sheet, roll] = isRollId(rollId)
+    ? await Promise.all([claimSheet(rollId), getRollDetail(rollId)])
+    : [null, null];
+  if (!sheet || !roll) notFound();
   const t = sheet.totals;
+  const findings = rollFindings(roll.scans);
 
   return (
     <>
@@ -88,6 +95,15 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
         </div>
       </dl>
 
+      {roll.item && (
+        <RollFindings
+          roll={roll}
+          byType={findings.byType}
+          largest={findings.largest}
+          linkShots={false}
+        />
+      )}
+
       {sheet.rejected.length === 0 ? (
         <p className="rounded-md border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
           This roll has no rejected sections, so there is nothing to claim.
@@ -123,7 +139,12 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
               </p>
               <p className="text-sm">
                 {s.defects.length > 0
-                  ? s.defects.map((d) => `${d.label} ${formatPercent(d.confidence)}`).join(", ")
+                  ? s.defects
+                      .map(
+                        (d) =>
+                          `${d.label}${d.lengthIn !== null ? ` ${d.lengthIn.toFixed(1)} in` : ""} ${formatPercent(d.confidence)}`,
+                      )
+                      .join(", ")
                   : "No defect marked by the camera"}
               </p>
             </li>
@@ -132,8 +153,8 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
       )}
 
       <p className="text-sm text-muted-foreground">
-        Per roll only, never per person. Percentages are the camera model’s confidence that the
-        defect is there.
+        Per roll only, never per person. Percentages beside a defect are the camera model’s
+        confidence that it is there; lengths are its box diagonal.
       </p>
     </>
   );

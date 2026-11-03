@@ -116,6 +116,8 @@ export function upsertDefectTypeState(
     sortOrder: number;
     isActive: boolean;
     outcome: DefectOutcome;
+    notAcceptedFromIn?: number | null;
+    flatSharePct?: number | null;
   },
   db: Db,
 ) {
@@ -123,7 +125,12 @@ export function upsertDefectTypeState(
   return db.defectType.upsert({
     where: { key },
     create: data,
-    update: { isActive: rest.isActive, outcome: rest.outcome },
+    update: {
+      isActive: rest.isActive,
+      outcome: rest.outcome,
+      notAcceptedFromIn: rest.notAcceptedFromIn ?? null,
+      flatSharePct: rest.flatSharePct ?? null,
+    },
   });
 }
 

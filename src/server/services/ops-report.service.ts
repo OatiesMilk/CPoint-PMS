@@ -17,6 +17,7 @@ import {
   stockPosition,
   supplierDefects,
   supplierQuality,
+  supplierRollShares,
 } from "@/server/models/ops-report.model";
 import { productionReport, recentProductionDays } from "./production.service";
 import { qualityReport, rollFlow } from "./report.service";
@@ -47,6 +48,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     supplierRows,
     supplierDefectRows,
     rejectedRolls,
+    supplierShareRows,
   ] = await Promise.all([
     productionReport(range, now),
     productionReport(prev, now),
@@ -60,6 +62,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
     supplierQuality(range),
     supplierDefects(range),
     rollsWithMostRejects(range, ROLLS_SHOWN),
+    supplierRollShares(range),
   ]);
 
   // Stock: level, and how long it lasts at the pace used in this period.
@@ -115,6 +118,8 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
       const rejectShare = share(r.reject, decided);
       // Rows come most common first, so the first one for this supplier is its top defect.
       const top = supplierDefectRows.find((d) => d.groupId === r.id);
+      // Phase 30C: rolls finished in the range, measured against the supplier limit.
+      const shares = supplierShareRows.find((s) => s.id === r.id);
       return {
         id: r.id,
         supplier: r.name,
@@ -127,6 +132,12 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
         rejectShare,
         topDefect: top?.label ?? null,
         high: supplierIsHigh({ sections: r.scanned, rejectShare }, lineRejectShare),
+        /** Area-weighted defect share of its measured rolls, in percent; null when none. */
+        defectSharePct:
+          shares && shares.measuredArea > 0 ? shares.weightedShare / shares.measuredArea : null,
+        rollsMeasured: shares?.measured ?? 0,
+        rollsMarked: shares?.marked ?? 0,
+        rollsReturned: shares?.returned ?? 0,
       };
     })
     .sort((a, b) => (b.rejectShare ?? -1) - (a.rejectShare ?? -1) || b.sections - a.sections);
@@ -238,6 +249,13 @@ export async function suppliersCsv(range: ReportRange) {
     { header: "Reject %", value: (s) => pct(s.rejectShare) },
     { header: "Top defect", value: (s) => s.topDefect ?? "" },
     { header: "High", value: (s) => (s.high ? "yes" : "") },
+    {
+      header: "Defect area %",
+      value: (s) => (s.defectSharePct === null ? "" : s.defectSharePct.toFixed(1)),
+    },
+    { header: "Rolls measured", value: (s) => s.rollsMeasured },
+    { header: "Rolls marked Return to supplier", value: (s) => s.rollsMarked },
+    { header: "Rolls returned", value: (s) => s.rollsReturned },
   ]);
 }
 
@@ -308,6 +326,7 @@ export async function claimSheet(rollId: string) {
       defects: scan.detections.map((d) => ({
         label: d.defectType?.label ?? d.rawClassKey,
         confidence: d.confidence,
+        lengthIn: d.lengthIn,
       })),
     })),
   };

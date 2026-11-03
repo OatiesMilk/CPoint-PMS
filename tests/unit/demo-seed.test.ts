@@ -20,7 +20,18 @@ const svc = {
   }),
   finishRoll: vi.fn(async (rollId: string, actor: { id: string }, now: Date) => {
     calls.push({ fn: "finishRoll", rollId, now, by: actor.id });
+    // Phase 30C: a roll with a long cut on every shot goes over the limit.
+    const cuts = calls.filter(
+      (c) => c.fn === "scan" && c.rollId === rollId && c.classKeys?.includes("cut"),
+    ).length;
+    const shots = calls.filter((c) => c.fn === "scan" && c.rollId === rollId).length;
+    return { marked: shots > 0 && cuts === shots };
   }),
+  decideReturn: vi.fn(
+    async (rollId: string, values: { decision: string }, actor: { id: string }, now: Date) => {
+      calls.push({ fn: `decide:${values.decision}`, rollId, now, by: actor.id });
+    },
+  ),
   removeRoll: vi.fn(async (rollId: string, _reason: string, actor: { id: string }, now: Date) => {
     calls.push({ fn: "removeRoll", rollId, now, by: actor.id });
   }),

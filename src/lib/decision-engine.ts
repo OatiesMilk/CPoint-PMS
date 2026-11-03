@@ -1,4 +1,5 @@
 import type { Verdict } from "./domain";
+import { reaches } from "./measure";
 
 /**
  * The CV decision rule, pure and client-safe (Phase 25, D-093). A section is Pass or Reject:
@@ -14,8 +15,29 @@ import type { Verdict } from "./domain";
 
 export type DefectOutcome = "USABLE" | "NOT_ACCEPTED";
 export type RuleSettings = { foundAtOrAbove: number };
-export type DetectionInput = { classKey: string; confidence: number };
-export type DefectTypeInfo = { id: string; isActive: boolean; outcome: DefectOutcome };
+/** lengthIn is the box diagonal in inches, null when the shot has no scale (Phase 30C). */
+export type DetectionInput = { classKey: string; confidence: number; lengthIn?: number | null };
+export type DefectTypeInfo = {
+  id: string;
+  isActive: boolean;
+  outcome: DefectOutcome;
+  /** Not accepted from this length, Usable below (C-37); null: `outcome` applies. */
+  notAcceptedFromIn?: number | null;
+};
+
+/**
+ * A type's outcome for one detection. With a length limit (Phase 30C, C-37): Not accepted at or
+ * above it, Usable below; unmeasured (no calibration) counts as Not accepted, the safe side.
+ */
+export function outcomeFor(
+  outcome: DefectOutcome | null | undefined,
+  notAcceptedFromIn: number | null | undefined,
+  lengthIn: number | null | undefined,
+): DefectOutcome | null | undefined {
+  if (notAcceptedFromIn == null) return outcome;
+  if (lengthIn == null) return "NOT_ACCEPTED";
+  return reaches(lengthIn, notAcceptedFromIn) ? "NOT_ACCEPTED" : "USABLE";
+}
 
 export type Decision = {
   verdict: Verdict;
@@ -66,7 +88,8 @@ export function decide(
     if (!type.isActive) ignored.add(d.classKey);
     else {
       if (max === null || d.confidence > max) max = d.confidence;
-      if (detectionOutcome(d.confidence, type.outcome, rule) === "NOT_ACCEPTED") rejected = true;
+      const outcome = outcomeFor(type.outcome, type.notAcceptedFromIn, d.lengthIn);
+      if (detectionOutcome(d.confidence, outcome, rule) === "NOT_ACCEPTED") rejected = true;
     }
   }
 
@@ -78,6 +101,11 @@ export function decide(
 export type DecisionSnapshot = {
   foundAtOrAbove: number;
   outcomes: Record<string, DefectOutcome>;
+  /** Phase 30C: each type's "Not accepted from" length in inches, and its flat share. */
+  lengthLimits?: Record<string, number>;
+  flatShares?: Record<string, number>;
+  /** The inches across the photo from the phone's calibration; null when it had none. */
+  widthIn?: number | null;
   /**
    * Set on scans decided before Phase 25, which used Fixable and the two confidence thresholds
    * (D-011, D-053). Their verdicts were converted (Fixable → Pass, Needs review → Reject).
@@ -91,11 +119,17 @@ export function readSnapshot(json: unknown): DecisionSnapshot {
     foundAtOrAbove?: unknown;
     outcomes?: Record<string, DefectOutcome>;
     rejectAtOrAbove?: unknown;
+    lengthLimits?: Record<string, number>;
+    flatShares?: Record<string, number>;
+    widthIn?: unknown;
   };
   return {
     foundAtOrAbove:
       typeof s.foundAtOrAbove === "number" ? s.foundAtOrAbove : DEFAULT_FOUND_AT_OR_ABOVE,
     outcomes: s.outcomes ?? {},
+    lengthLimits: s.lengthLimits ?? {},
+    flatShares: s.flatShares ?? {},
+    widthIn: typeof s.widthIn === "number" ? s.widthIn : null,
     earlierRule: s.outcomes === undefined || s.rejectAtOrAbove !== undefined,
   };
 }

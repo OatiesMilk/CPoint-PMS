@@ -75,6 +75,7 @@ describe("captureScan", () => {
         modelVersion: "yolo-v1-1d729fb0",
         source: "WEBCAM",
         capturedAt: undefined,
+        widthIn: null,
       },
       { kind: "website", userId: "user-sc" },
       expect.any(Date),

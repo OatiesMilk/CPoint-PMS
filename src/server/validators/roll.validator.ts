@@ -73,6 +73,12 @@ export const removeRollSchema = z.object({
 /** Reports → Rolls filters (URL search params). Unknown or invalid values are dropped. */
 export const rollListQuerySchema = z.object({
   status: z.enum(RollStatus).optional().catch(undefined),
+  /** Marked Return to supplier with no decision yet (Phase 30C). */
+  toReturn: z
+    .enum(["1", "true"])
+    .optional()
+    .transform((v) => (v ? true : undefined))
+    .catch(undefined),
   supplierId: z.uuid().optional().catch(undefined),
   days: z.coerce
     .number()
@@ -84,7 +90,9 @@ export const rollListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(10_000).optional().catch(undefined),
 });
 
-export type RollListQuery = z.infer<typeof rollListQuerySchema>;
+export type RollListQuery = Omit<z.infer<typeof rollListQuerySchema>, "toReturn"> & {
+  toReturn?: boolean;
+};
 
 /** Inventory → a leather item's rolls (URL search params). */
 export const itemRollsQuerySchema = z.object({
@@ -107,3 +115,41 @@ export const usedRollIdsSchema = z.preprocess(
     .max(50, "Tick at most 50 rolls at a time.")
     .optional(),
 );
+
+/**
+ * POST /api/v1/rolls/{id}/return-decision (Phase 30C, C-36): Returned to supplier on a day (not
+ * after today, checked by the service with Manila's date) with an optional note, or Keep with a
+ * reason.
+ */
+export const returnDecisionSchema = z
+  .object({
+    decision: z.enum(["RETURNED", "KEPT"], { error: ROLL_MESSAGES.decision }),
+    returnedOn: z.preprocess(blankToUndefined, z.string().trim().optional()),
+    note: z.preprocess(
+      blankToUndefined,
+      z
+        .string({ error: ROLL_MESSAGES.keepReason })
+        .trim()
+        .max(CANCEL_REASON_MAX, ROLL_MESSAGES.noteTooLong)
+        .optional(),
+    ),
+  })
+  .superRefine((v, ctx) => {
+    if (v.decision === "RETURNED") {
+      const ok =
+        !!v.returnedOn &&
+        DATE.test(v.returnedOn) &&
+        !Number.isNaN(new Date(`${v.returnedOn}T00:00:00Z`).getTime());
+      if (!ok)
+        ctx.addIssue({ code: "custom", path: ["returnedOn"], message: ROLL_MESSAGES.returnedOn });
+    } else if (!v.note)
+      ctx.addIssue({ code: "custom", path: ["note"], message: ROLL_MESSAGES.keepReason });
+  })
+  .transform((v) =>
+    v.decision === "RETURNED"
+      ? { decision: "RETURNED" as const, returnedOn: v.returnedOn!, note: v.note }
+      : { decision: "KEPT" as const, note: v.note! },
+  );
+
+export type ReturnDecisionValues =
+  { decision: "RETURNED"; returnedOn: string; note?: string } | { decision: "KEPT"; note: string };

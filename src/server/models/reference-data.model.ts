@@ -10,6 +10,8 @@ export function ensureDefectType(
     description: string;
     sortOrder: number;
     outcome: "USABLE" | "NOT_ACCEPTED";
+    notAcceptedFromIn?: number;
+    flatSharePct?: number;
   },
   db: Db = defaultDb(),
 ) {
@@ -51,7 +53,15 @@ export function findSupplier(id: string, db: Db = defaultDb()) {
 
 export function listDefectTypes(db: Db = defaultDb()) {
   return db.defectType.findMany({
-    select: { id: true, key: true, label: true, isActive: true, outcome: true },
+    select: {
+      id: true,
+      key: true,
+      label: true,
+      isActive: true,
+      outcome: true,
+      notAcceptedFromIn: true,
+      flatSharePct: true,
+    },
     orderBy: { sortOrder: "asc" },
   });
 }
@@ -124,7 +134,12 @@ export function updateReference(
 }
 
 export function updateThresholds(
-  data: { foundAtOrAbove: number; earlyModelNotice: boolean; updatedById: string },
+  data: {
+    foundAtOrAbove: number;
+    earlyModelNotice: boolean;
+    returnSharePct: number;
+    updatedById: string;
+  },
   db: Db = defaultDb(),
 ) {
   return db.cvSettings.update({ where: { id: 1 }, data });

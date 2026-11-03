@@ -31,12 +31,14 @@ export async function getThresholds() {
   return {
     foundAtOrAbove: s.foundAtOrAbove,
     earlyModelNotice: s.earlyModelNotice,
+    returnSharePct: s.returnSharePct,
     updatedAt: s.updatedAt,
   };
 }
 
 /**
- * Saves "A defect counts as found at" (and the early-model notice when the API sends it). Scans
+ * Saves "A defect counts as found at" and the supplier limit (Phase 30C; and the early-model
+ * notice when the API sends it). Scans
  * already taken keep the rule in their snapshot, so their verdicts stay explainable; only new
  * scans use this.
  */
@@ -51,6 +53,7 @@ export async function saveThresholds(input: ThresholdsInput, actor: Actor) {
   const next = {
     foundAtOrAbove,
     earlyModelNotice: input.earlyModelNotice ?? before.earlyModelNotice,
+    returnSharePct: input.returnPercent ?? before.returnSharePct,
   };
   await runInTransaction(async (tx) => {
     await updateThresholds({ ...next, updatedById: actor.id }, tx);
@@ -59,7 +62,11 @@ export async function saveThresholds(input: ThresholdsInput, actor: Actor) {
       action: "settings.thresholds",
       entity: "CvSettings",
       entityId: "1",
-      before: { foundAtOrAbove: before.foundAtOrAbove, earlyModelNotice: before.earlyModelNotice },
+      before: {
+        foundAtOrAbove: before.foundAtOrAbove,
+        earlyModelNotice: before.earlyModelNotice,
+        returnSharePct: before.returnSharePct,
+      },
       after: next,
     });
   });

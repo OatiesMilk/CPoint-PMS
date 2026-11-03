@@ -12,6 +12,8 @@ export type ScanSummary = {
     label: string;
     confidence: number;
     effect: DefectOutcome | null;
+    /** Its box diagonal in inches; null when the phone isn't calibrated (Phase 30C). */
+    lengthIn?: number | null;
   }[];
 };
 
@@ -48,6 +50,12 @@ export function LastScanSummary({ summary, repeat }: { summary: ScanSummary; rep
             <li key={`${d.label}-${i}`} className="flex justify-between gap-3">
               <span>
                 {d.label}
+                {d.lengthIn != null && (
+                  <span className="text-muted-foreground tabular-nums">
+                    {" "}
+                    · {d.lengthIn.toFixed(1)} in
+                  </span>
+                )}
                 <span className="text-muted-foreground"> · {effectText(d)}</span>
               </span>
               <span className="text-muted-foreground tabular-nums">{percent(d.confidence)}</span>

@@ -69,6 +69,24 @@ export function validateFoundAt(foundAtOrAbove: number) {
   return ok ? [] : [{ path: ["foundAtOrAbove"] as const, message: FOUND_AT_MESSAGE }];
 }
 
+export const RETURN_LIMIT_MESSAGE =
+  "Enter a percentage from 1 to 100, like 10 (one decimal at most).";
+
+/** "Mark a roll Return to supplier when defects cover more than __%" (Phase 30C, C-9). */
+export function validateReturnLimit(pct: number) {
+  const ok =
+    Number.isFinite(pct) &&
+    pct >= 1 &&
+    pct <= 100 &&
+    Math.abs(pct * 10 - Math.round(pct * 10)) < 1e-6;
+  return ok ? [] : [{ path: ["returnPercent"] as const, message: RETURN_LIMIT_MESSAGE }];
+}
+
+export const LENGTH_LIMIT_MESSAGE =
+  "Enter the length in inches from 0.1 to 100, like 3, or leave it blank for no length limit.";
+export const FLAT_SHARE_MESSAGE =
+  "Enter the flat share as a percentage from 0.1 to 100, like 1, or leave it blank to count the defect's box area.";
+
 // ───────────── audit diff ─────────────
 
 export type DiffRow = { key: string; before: unknown; after: unknown };

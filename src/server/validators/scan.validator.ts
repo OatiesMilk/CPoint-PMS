@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ScanSource } from "@/lib/domain";
+import { WIDTH_IN_MAX, WIDTH_IN_MIN } from "@/lib/measure";
 import { OUT_OF_DATE } from "./shared";
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -36,6 +37,17 @@ export const detectionSchema = z
   });
 
 export type DetectionValues = z.infer<typeof detectionSchema>;
+
+const WIDTH_IN = `widthIn must be the inches the phone sees across the photo, from ${WIDTH_IN_MIN} to ${WIDTH_IN_MAX}, or left out when it isn't calibrated.`;
+
+/** The phone's calibration (Phase 30C, A-18): inches across the photo's width, sent as text. */
+const widthIn = z.preprocess(
+  (v) => (v === undefined || v === null || v === "" ? undefined : v),
+  z.coerce
+    .number({ error: WIDTH_IN })
+    .refine((n) => Number.isFinite(n) && n >= WIDTH_IN_MIN && n <= WIDTH_IN_MAX, WIDTH_IN)
+    .optional(),
+);
 
 /** The non-file fields of POST /api/v1/scans (multipart/form-data). */
 export const ingestFieldsSchema = z.object({
@@ -76,6 +88,7 @@ export const ingestFieldsSchema = z.object({
   source: z
     .enum(ScanSource, { error: `source must be one of: ${Object.values(ScanSource).join(", ")}.` })
     .default("WEBCAM"),
+  widthIn,
   capturedAt: z.iso
     .datetime({
       offset: true,
@@ -100,7 +113,7 @@ export const isScanId = (value: string) => z.uuid().safeParse(value).success;
  * The page always makes a captureId, so a retry never makes a second scan (D-051).
  */
 export const captureFieldsSchema = ingestFieldsSchema
-  .pick({ rollId: true, capturedAt: true })
+  .pick({ rollId: true, capturedAt: true, widthIn: true })
   .extend({
     captureId: z.uuid("captureId must be the UUID this page made for the capture."),
     source: z

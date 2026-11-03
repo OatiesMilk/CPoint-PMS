@@ -211,8 +211,9 @@ export function SupplierQualityCard({
           <div>
             <CardTitle>Supplier quality</CardTitle>
             <CardDescription>
-              Shots captured in this range, grouped by the supplier of each roll. Use it as evidence
-              when raising a claim.
+              Shots captured in this range, grouped by the supplier of each roll. Defect area,
+              Marked (Return to supplier) and Returned count the rolls finished in this range. Use
+              it as evidence when raising a claim.
               {lineRejectShare !== null &&
                 ` Across all suppliers, ${formatPercent(lineRejectShare)} were rejected.`}
             </CardDescription>
@@ -242,6 +243,9 @@ export function SupplierQualityCard({
                 <TableHead numeric>Pass</TableHead>
                 <TableHead numeric>Reject</TableHead>
                 <TableHead>Top defect</TableHead>
+                <TableHead numeric>Defect area</TableHead>
+                <TableHead numeric>Marked</TableHead>
+                <TableHead numeric>Returned</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -266,6 +270,15 @@ export function SupplierQualityCard({
                   <TableCell numeric>{formatPercent(s.passShare)}</TableCell>
                   <TableCell numeric>{formatPercent(s.rejectShare)}</TableCell>
                   <TableCell>{s.topDefect ?? "None"}</TableCell>
+                  <TableCell numeric>
+                    {s.defectSharePct === null ? (
+                      <span className="text-muted-foreground">Not measured</span>
+                    ) : (
+                      `${s.defectSharePct.toLocaleString("en-PH", { maximumFractionDigits: 1 })}%`
+                    )}
+                  </TableCell>
+                  <TableCell numeric>{s.rollsMarked}</TableCell>
+                  <TableCell numeric>{s.rollsReturned}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

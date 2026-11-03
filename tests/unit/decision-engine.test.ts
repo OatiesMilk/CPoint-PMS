@@ -110,6 +110,9 @@ describe("readSnapshot", () => {
     ).toEqual({
       foundAtOrAbove: 0.6,
       outcomes: { cut: "NOT_ACCEPTED", crease: "USABLE" },
+      lengthLimits: {},
+      flatShares: {},
+      widthIn: null,
       earlierRule: false,
     });
   });
@@ -121,7 +124,14 @@ describe("readSnapshot", () => {
       foundAtOrAbove: 0.5,
       actions: { cut: "REJECT" },
     });
-    expect(s).toEqual({ foundAtOrAbove: 0.5, outcomes: {}, earlierRule: true });
+    expect(s).toEqual({
+      foundAtOrAbove: 0.5,
+      outcomes: {},
+      lengthLimits: {},
+      flatShares: {},
+      widthIn: null,
+      earlierRule: true,
+    });
   });
 
   it("uses 0.5 when an old snapshot has no found-at value", () => {

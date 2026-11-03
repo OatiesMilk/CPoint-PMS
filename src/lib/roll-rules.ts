@@ -32,6 +32,12 @@ export const ROLL_MESSAGES = {
   tooMany: `Add at most ${ADD_ROLLS_MAX} rolls at a time.`,
   receivedOn: "Enter the day the rolls arrived, like 2026-10-26.",
   receivedInFuture: "The day the rolls arrived can’t be after today.",
+  // Phase 30C: the Floor Manager’s decision (C-36).
+  decision: "Choose Send back or Keep.",
+  returnedOn: "Enter the day the roll was sent back, like 2026-11-03.",
+  returnedInFuture: "The day the roll was sent back can’t be after today.",
+  keepReason: "Write why you’re keeping it, for example: the cuts are at the edge.",
+  noteTooLong: `The note can be up to ${CANCEL_REASON_MAX} characters.`,
 } as const;
 
 // ───────────── codes ─────────────
@@ -124,6 +130,9 @@ type RollState = {
   status: RollStatus;
   /** The roll belongs to a leather item (added in Inventory, Phase 30A). */
   fromInventory?: boolean;
+  /** Over the supplier limit at Finish roll, and the Floor Manager's decision (Phase 30C). */
+  markedForReturn?: boolean;
+  returnDecision?: "RETURNED" | "KEPT" | null;
 };
 
 const where = (status: RollStatus, code = "This roll"): string =>
@@ -132,6 +141,7 @@ const where = (status: RollStatus, code = "This roll"): string =>
     OPEN: `${code} is being scanned at Capture.`,
     FINISHED: `${code} is already scanned.`,
     USED: `${code} is already marked fully used.`,
+    RETURNED: `${code} was returned to the supplier.`,
     CANCELLED: `${code} was removed.`,
   })[status];
 
@@ -167,7 +177,7 @@ export function planPutBack(roll: RollState & { shots: number }): Plan {
  */
 export function planRemove(roll: RollState): Plan {
   if (roll.fromInventory) {
-    if (roll.status === "USED" || roll.status === "CANCELLED")
+    if (roll.status === "USED" || roll.status === "CANCELLED" || roll.status === "RETURNED")
       return refuse(where(roll.status, roll.code));
     return { ok: true };
   }
@@ -184,10 +194,35 @@ export function planUse(roll: RollState): Plan {
   const code = roll.code ?? "This roll";
   if (!roll.fromInventory)
     return refuse(`${code} is from before rolls came from Inventory, so it can’t be ticked.`);
+  if (roll.status === "FINISHED" && roll.markedForReturn && roll.returnDecision !== "KEPT")
+    return refuse(
+      `${code} has too many defects. The Floor Manager must keep it before it can be ticked.`,
+    );
   if (roll.status === "FINISHED") return { ok: true };
   if (roll.status === "IN_STOCK" || roll.status === "OPEN")
     return refuse(`${code} isn’t scanned yet. Scan and finish it at Capture before it’s used.`);
   return refuse(where(roll.status, code));
+}
+
+/**
+ * The Floor Manager's decision on a scanned roll (Phase 30C, C-36): Returned to supplier, or Keep
+ * for one marked Return to supplier. A roll under the limit may be returned too. A decision is
+ * final (A-27); a mistake goes through Remove.
+ */
+export function planDecide(roll: RollState, decision: "RETURNED" | "KEPT"): Plan {
+  const code = roll.code ?? "This roll";
+  if (!roll.fromInventory)
+    return refuse(
+      `${code} is from before rolls came from Inventory, so it can’t be returned here.`,
+    );
+  if (roll.returnDecision === "KEPT")
+    return refuse(`${code} was already kept. Use Remove if it has to go after all.`);
+  if (roll.status === "IN_STOCK" || roll.status === "OPEN")
+    return refuse(`${code} isn’t scanned yet. Finish it at Capture first, or use Remove.`);
+  if (roll.status !== "FINISHED") return refuse(where(roll.status, code));
+  if (decision === "KEPT" && !roll.markedForReturn)
+    return refuse(`${code} doesn’t have too many defects, so there is nothing to keep.`);
+  return { ok: true };
 }
 
 /** Untick in a same-day correction: only a roll ticked in that same batch. */
@@ -255,4 +290,54 @@ export function oldestOpenRoll<T extends { startedAt: Date | string }>(open: T[]
  */
 export function openSinceLine(startedDay: string, today: string, label: string): string | null {
   return startedDay < today ? `Open since ${label}. Finish it or keep capturing.` : null;
+}
+
+// ───────────── Finish roll (Phase 30C) ─────────────
+
+/** What POST …/finish answers about the roll's defect share (Phase 30C). */
+export type FinishData = {
+  sharePct: number | null;
+  limitPct: number;
+  marked: boolean;
+  notMeasured: "no-area" | "no-shots" | "unscaled" | null;
+};
+
+/**
+ * The line after Finish roll: over the limit, set it aside for the Floor Manager (C-20);
+ * otherwise its share, or why it couldn't be measured.
+ */
+export function finishedLine(roll: { code: string; shots: number }, data?: FinishData): string {
+  const done = `${roll.code} is finished with ${roll.shots} ${roll.shots === 1 ? "shot" : "shots"}.`;
+  if (!data) return done;
+  const pct = (n: number) => `${n.toLocaleString("en-PH", { maximumFractionDigits: 1 })}%`;
+  if (data.marked && data.sharePct !== null)
+    return `Put ${roll.code} aside. It has too many defects (${pct(data.sharePct)}). The Floor Manager will decide what to do.`;
+  if (data.sharePct !== null) return `${done} ${pct(data.sharePct)} of it has defects.`;
+  if (data.notMeasured === "unscaled")
+    return `${done} Set up this phone next time so the roll can be checked for defects.`;
+  if (data.notMeasured === "no-area")
+    return `${done} It has no size in Inventory, so it couldn’t be checked for defects.`;
+  return done;
+}
+
+/** A roll's Defect % as the lists show it (Phase 30C): "12.4%", "Not measured", or "—". */
+export function defectShareText(roll: {
+  status: RollStatus;
+  defectSharePct: number | null;
+  finishedAt?: Date | string | null;
+}): string {
+  if (roll.defectSharePct !== null)
+    return `${roll.defectSharePct.toLocaleString("en-PH", { maximumFractionDigits: 1 })}%`;
+  if (roll.status === "IN_STOCK" || roll.status === "OPEN") return "—";
+  return roll.finishedAt ? "Not measured" : "—";
+}
+
+/** Where a marked roll stands (Phase 30C): waiting for the Floor Manager, or kept. */
+export function returnMark(roll: {
+  markedForReturn: boolean;
+  returnDecision: "RETURNED" | "KEPT" | null;
+}): "to-return" | "kept" | null {
+  if (roll.returnDecision === "KEPT") return "kept";
+  if (roll.markedForReturn && roll.returnDecision === null) return "to-return";
+  return null;
 }

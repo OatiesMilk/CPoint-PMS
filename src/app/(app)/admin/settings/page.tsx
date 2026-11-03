@@ -47,6 +47,21 @@ const HISTORY_ROWS = 15;
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 
 /** What a found defect of the type means for its section (D-093). */
+/** "Usable under 3 in, Not accepted from 3 in" for a type with a length limit (Phase 30C). */
+function whenFound(r: Record<string, unknown>): string {
+  const limit = r.notAcceptedFromIn;
+  if (typeof limit === "number") return `OK under ${limit} in, rejected from ${limit} in`;
+  return OUTCOME_LABEL[str(r.outcome)] ?? str(r.outcome);
+}
+
+/** How a found one adds to its roll's defect share (D-106, D-110). */
+function countsToward(r: Record<string, unknown>): string {
+  const flat = r.flatSharePct;
+  if (typeof flat !== "number") return "Its size";
+  const limit = r.notAcceptedFromIn;
+  return typeof limit === "number" ? `${flat}% each, from ${limit} in` : `${flat}% each`;
+}
+
 const OUTCOME_LABEL: Record<string, string> = {
   USABLE: "Usable (Pass)",
   NOT_ACCEPTED: "Not accepted (Reject)",
@@ -102,7 +117,7 @@ async function ThresholdsTab() {
         defects leave it Pass. Each type’s outcome is set under Defect types. Last changed{" "}
         {formatManilaDateTime(t.updatedAt)}.
       </p>
-      <ThresholdsForm found={t.foundAtOrAbove} />
+      <ThresholdsForm found={t.foundAtOrAbove} returnLimit={t.returnSharePct} />
       <ModelNoticeForm initial={t.earlyModelNotice} />
     </div>
   );
@@ -114,6 +129,7 @@ async function DefectsTab({ add }: { add?: string }) {
     { key: "label", label: "Label" },
     { key: "key", label: "Class key", mono: true },
     { key: "outcome", label: "When found" },
+    { key: "counts", label: "Counts toward the roll" },
     { key: "description", label: "Description" },
     { key: "sortOrder", label: "Order", numeric: true },
   ];
@@ -135,7 +151,23 @@ async function DefectsTab({ add }: { add?: string }) {
         { value: "USABLE", label: OUTCOME_LABEL.USABLE },
         { value: "NOT_ACCEPTED", label: OUTCOME_LABEL.NOT_ACCEPTED },
       ],
-      hint: "Usable leaves the section Pass. Not accepted rejects it, and it is reported for salvage.",
+      hint: "Usable leaves the section Pass. Not accepted rejects it, and it is reported for salvage. A type with a length limit uses the limit instead.",
+    },
+    {
+      name: "notAcceptedFromIn",
+      label: "Rejected from (inches long)",
+      type: "number",
+      optional: true,
+      placeholder: "e.g. 3",
+      hint: "Shorter than this is OK. This long or longer is rejected. Leave blank for no limit.",
+    },
+    {
+      name: "flatSharePct",
+      label: "Each one adds this to the roll’s total (%)",
+      type: "number",
+      optional: true,
+      placeholder: "e.g. 1",
+      hint: "Leave blank to use the defect’s size instead.",
     },
     { name: "description", label: "Description", type: "textarea", optional: true },
     {
@@ -167,12 +199,15 @@ async function DefectsTab({ add }: { add?: string }) {
             key: str(r.key),
             label: str(r.label),
             outcome: str(r.outcome),
+            notAcceptedFromIn: str(r.notAcceptedFromIn),
+            flatSharePct: str(r.flatSharePct),
             description: str(r.description),
             sortOrder: str(r.sortOrder),
           },
           cells: {
             label: str(r.label),
-            outcome: OUTCOME_LABEL[str(r.outcome)] ?? str(r.outcome),
+            outcome: whenFound(r),
+            counts: countsToward(r),
             key: str(r.key),
             description: str(r.description),
             sortOrder: str(r.sortOrder),

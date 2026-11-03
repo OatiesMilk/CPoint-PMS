@@ -142,7 +142,7 @@ describe("ingestScan", () => {
       sequence: 4,
       verdict: "PASS",
       duplicate: false,
-      defects: [{ label: "Cut", confidence: 0.3, effect: null }],
+      defects: [{ label: "Cut", confidence: 0.3, effect: null, lengthIn: null }],
     });
     expect(rollService.resolveCaptureRoll).toHaveBeenCalledWith(undefined, "device");
     expect(rollModel.lockOpenRoll).toHaveBeenCalledWith("0001", "tx");
@@ -181,7 +181,9 @@ describe("ingestScan", () => {
   it("drops a class with no defect type: not stored, no effect on the verdict (D-108)", async () => {
     const result = await ingest([det("scratch", 0.99), det("crease", 0.8)]);
     expect(result).toMatchObject({ verdict: "PASS" });
-    expect(result.defects).toEqual([{ label: "Crease", confidence: 0.8, effect: "USABLE" }]);
+    expect(result.defects).toEqual([
+      { label: "Crease", confidence: 0.8, effect: "USABLE", lengthIn: null },
+    ]);
     const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
     expect(data).toMatchObject({ aiVerdict: "PASS", finalVerdict: "PASS" });
     expect(detections).toHaveLength(1);
@@ -191,8 +193,8 @@ describe("ingestScan", () => {
   it("says what each found defect did, for the Capture page (Phase 26)", async () => {
     const result = await ingest([det("hole", 0.7), det("crease", 0.6), det("stain", 0.9)]);
     expect(result.defects).toEqual([
-      { label: "Hole", confidence: 0.7, effect: "NOT_ACCEPTED" },
-      { label: "Crease", confidence: 0.6, effect: "USABLE" },
+      { label: "Hole", confidence: 0.7, effect: "NOT_ACCEPTED", lengthIn: null },
+      { label: "Crease", confidence: 0.6, effect: "USABLE", lengthIn: null },
     ]);
   });
 
@@ -360,5 +362,63 @@ describe("ingestScan from the website's Capture page (Phase 18)", () => {
   it("refuses a station's captureId sent from the website", async () => {
     scans.findScanByCaptureId.mockResolvedValueOnce({ ...earlier, deviceTokenId: "tok1" });
     await expect(ingest()).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("measuring at ingest (Phase 30C)", () => {
+  it("stores each defect's length and area and the shot's union from the phone's calibration", async () => {
+    const sharp = (await import("sharp")).default;
+    // 2000 × 1000 px at 20 in across, so 10 in high: a 0.2 × 0.2 box is 4 × 2 in.
+    const photo = await sharp({
+      create: { width: 2000, height: 1000, channels: 3, background: "#7a4a26" },
+    })
+      .jpeg()
+      .toBuffer();
+    const result = await ingestScan(
+      {
+        image: { bytes: new Uint8Array(photo), type: { mime: "image/jpeg", ext: "jpg" } },
+        detections: [
+          det("hole", 0.9),
+          { ...det("crease", 0.8), box: { x: 0.2, y: 0.1, width: 0.2, height: 0.2 } },
+        ],
+        source: "PHONE",
+        widthIn: 20,
+      },
+      { id: "tok1" },
+      now,
+      memoryStorage(),
+    );
+    expect(result.defects[0].lengthIn).toBeCloseTo(Math.hypot(4, 2), 6);
+    const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
+    expect(data).toMatchObject({
+      imageWidth: 2000,
+      imageHeight: 1000,
+      widthIn: 20,
+      flatSharePct: 0,
+    });
+    // Two 8 sq in boxes that overlap by 4 sq in: 12 sq in, the overlap counted once (C-35).
+    expect(data.defectAreaSqIn).toBeCloseTo(12, 6);
+    expect(detections[0].areaSqIn).toBeCloseTo(8, 6);
+    expect(data.thresholdsSnapshot).toMatchObject({
+      widthIn: 20,
+      lengthLimits: {},
+      flatShares: {},
+    });
+  });
+
+  it("measures nothing from a phone that isn't calibrated", async () => {
+    await ingestScan(
+      {
+        image: { bytes: JPEG, type: { mime: "image/jpeg", ext: "jpg" } },
+        detections: [det("hole", 0.9)],
+        source: "SIMULATOR",
+      },
+      { id: "tok1" },
+      now,
+      memoryStorage(),
+    );
+    const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
+    expect(data).toMatchObject({ widthIn: null, defectAreaSqIn: null, flatSharePct: null });
+    expect(detections[0]).toMatchObject({ lengthIn: null, areaSqIn: null });
   });
 });

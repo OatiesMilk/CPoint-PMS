@@ -154,6 +154,10 @@ jobs:
           q "select count(*) from batches where \"itemId\" is null or \"areaSqFt\" is null or code not like 'LR-%'" | grep -qx 0
           test "$(q "select count(*) from batches where status='IN_STOCK'")" -ge 1
           test "$(q "select count(*) from batches where status='USED' and \"usedCheckInId\" is not null")" -ge 1
+          # Phase 30C (D-106, D-110): the demo phones are calibrated, so every scanned roll has a
+          # defect share, and every detection on it a length.
+          q "select count(*) from batches where \"finishedAt\" is not null and \"defectSharePct\" is null" | grep -qx 0
+          q "select count(*) from detections where \"lengthIn\" is null" | grep -qx 0
           # Every item's on-hand quantity equals the sum of its ledger.
           q "select count(*) from inventory_items i where i.\"quantityOnHand\" <> (select coalesce(sum(m.\"quantityDelta\"),0) from inventory_movements m where m.\"itemId\"=i.id)" | grep -qx 0
       - name: A restart doesn't seed again

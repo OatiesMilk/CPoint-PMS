@@ -13,6 +13,7 @@ const ops = {
   rollsWithMostRejects: vi.fn(),
   findClaimRoll: vi.fn(),
   countRollVerdicts: vi.fn(),
+  supplierRollShares: vi.fn(async (): Promise<unknown[]> => []),
 };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/report.model", () => report);

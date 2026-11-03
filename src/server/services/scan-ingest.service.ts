@@ -2,12 +2,15 @@ import { randomUUID } from "node:crypto";
 import {
   decide,
   detectionOutcome,
+  isFound,
+  outcomeFor,
   type DecisionSnapshot,
   type DefectOutcome,
 } from "@/lib/decision-engine";
 import type { ScanSource } from "@/lib/domain";
+import { measureShot, scaleOf } from "@/lib/measure";
 import { AppError, Errors } from "@/server/lib/errors";
-import type { ImageType } from "@/server/lib/image-type";
+import { imageSize, type ImageType } from "@/server/lib/image-type";
 import { logger } from "@/server/lib/logger";
 import { getStorage, type StorageService } from "@/server/lib/storage";
 import { lockOpenRoll } from "@/server/models/roll.model";
@@ -32,6 +35,8 @@ export type IngestInput = {
   modelVersion?: string;
   source: ScanSource;
   capturedAt?: Date;
+  /** Inches across the photo's width, from the phone's calibration (Phase 30C, A-18). */
+  widthIn?: number | null;
 };
 
 export type IngestResult = {
@@ -53,6 +58,8 @@ export type ScanDefect = {
   label: string;
   confidence: number;
   effect: DefectOutcome | null;
+  /** Its box diagonal in inches; null when the phone isn't calibrated (Phase 30C). */
+  lengthIn: number | null;
 };
 
 /**
@@ -124,22 +131,62 @@ export async function ingestScan(
   const byKey = new Map(defectTypes.map((t) => [t.key, t]));
   // A class with no defect type is dropped here: not stored, no effect on the verdict (D-108).
   const detections = input.detections.filter((d) => byKey.has(d.classKey));
-  const decision = decide(detections, byKey, rule);
-  // The outcomes in force, kept with the found-at value so the verdict stays explainable.
+
+  // Phase 30C: each defect's length and area from the phone's calibration, and what the shot's
+  // found defects add to its roll (D-106, D-110). Without a calibration nothing is measured.
+  const size = await imageSize(input.image.bytes);
+  const widthIn = input.widthIn ?? null;
+  const scale = scaleOf(widthIn, size?.width, size?.height);
+  const liveType = (key: string) => {
+    const type = byKey.get(key);
+    return type?.isActive ? type : undefined;
+  };
+  const shot = measureShot(
+    detections.map((d) => {
+      const type = liveType(d.classKey);
+      return {
+        box: d.box,
+        found: isFound(d.confidence, rule),
+        rule: type
+          ? {
+              notAcceptedFromIn: type.notAcceptedFromIn ?? null,
+              flatSharePct: type.flatSharePct ?? null,
+            }
+          : null,
+      };
+    }),
+    scale,
+  );
+  const measured = detections.map((d, i) => ({ ...d, lengthIn: shot.sizes[i].lengthIn }));
+  const decision = decide(measured, byKey, rule);
+  // The rule in force, kept with the found-at value so the verdict stays explainable.
+  const active = defectTypes.filter((t) => t.isActive);
+  const pick = (value: (t: (typeof active)[number]) => number | null | undefined) =>
+    Object.fromEntries(
+      active.flatMap((t) => {
+        const v = value(t);
+        return v == null ? [] : [[t.key, v]];
+      }),
+    ) as Record<string, number>;
   const snapshot: Omit<DecisionSnapshot, "earlierRule"> = {
     ...rule,
-    outcomes: Object.fromEntries(
-      defectTypes.filter((t) => t.isActive).map((t) => [t.key, t.outcome]),
-    ),
+    outcomes: Object.fromEntries(active.map((t) => [t.key, t.outcome])),
+    lengthLimits: pick((t) => t.notAcceptedFromIn),
+    flatShares: pick((t) => t.flatSharePct),
+    widthIn: scale ? widthIn : null,
   };
 
-  const defects: ScanDefect[] = detections.map((d) => {
-    const type = byKey.get(d.classKey);
-    const active = type?.isActive ? type : undefined;
+  const defects: ScanDefect[] = measured.map((d) => {
+    const type = liveType(d.classKey);
     return {
-      label: type?.label ?? d.classKey,
+      label: byKey.get(d.classKey)?.label ?? d.classKey,
       confidence: d.confidence,
-      effect: detectionOutcome(d.confidence, active?.outcome, rule),
+      effect: detectionOutcome(
+        d.confidence,
+        outcomeFor(type?.outcome, type?.notAcceptedFromIn, d.lengthIn),
+        rule,
+      ),
+      lengthIn: d.lengthIn,
     };
   });
 
@@ -169,8 +216,13 @@ export async function ingestScan(
           finalVerdict: decision.verdict,
           capturedAt: input.capturedAt ?? now,
           createdAt: now,
+          imageWidth: size?.width ?? null,
+          imageHeight: size?.height ?? null,
+          widthIn: scale ? widthIn : null,
+          defectAreaSqIn: shot.defectAreaSqIn,
+          flatSharePct: shot.flatSharePct,
         },
-        detections.map((d) => {
+        detections.map((d, i) => {
           const type = byKey.get(d.classKey);
           return {
             defectTypeId: type?.id ?? null,
@@ -180,6 +232,8 @@ export async function ingestScan(
             y: d.box.y,
             width: d.box.width,
             height: d.box.height,
+            lengthIn: shot.sizes[i].lengthIn,
+            areaSqIn: shot.sizes[i].areaSqIn,
           };
         }),
         tx,

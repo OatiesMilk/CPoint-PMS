@@ -22,8 +22,10 @@ import {
   rollClosedMessage,
   rollCodePrefix,
   ROLL_MESSAGES,
+  planDecide,
   type Plan,
 } from "@/lib/roll-rules";
+import { rollShare } from "@/lib/measure";
 import { AppError, Errors } from "@/server/lib/errors";
 import { getCvSettings } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
@@ -32,12 +34,15 @@ import { findSupplier, listActiveSuppliers } from "@/server/models/reference-dat
 import {
   countDefectsForRolls,
   countOpenRolls,
+  countRollsToReturn,
   countVerdictsForRolls,
   findRollDetail,
   findRollsState,
   findRollState,
   insertRoll,
+  keepRoll,
   listOpenRolls,
+  listRollShotMeasures,
   listReadyRolls,
   listRolls,
   listRollsToTick,
@@ -45,11 +50,16 @@ import {
   moveRoll,
   nextRollCodeNumber,
   rollCodeTaken,
+  saveRollMeasure,
   type OpenRollRow,
   type RollDetailRow,
   type RollListRow,
 } from "@/server/models/roll.model";
-import type { AddRollsValues, RollListQuery } from "@/server/validators/roll.validator";
+import type {
+  AddRollsValues,
+  ReturnDecisionValues,
+  RollListQuery,
+} from "@/server/validators/roll.validator";
 import { recordAudit } from "./audit.service";
 import { postMovement } from "./inventory.service";
 
@@ -57,6 +67,7 @@ type Actor = { id: string };
 type Tx = Prisma.TransactionClient;
 
 const area = (v: Prisma.Decimal | null) => (v === null ? null : Number(v));
+const dayOf = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
 /** Active suppliers, for filters and the item form. */
 export function supplierOptions() {
@@ -65,7 +76,9 @@ export function supplierOptions() {
 
 // ───────────── Reports → Rolls, and a leather item's rolls ─────────────
 
-export type RollListItem = Omit<RollListRow, "areaSqFt"> & {
+export type RollListItem = Omit<RollListRow, "areaSqFt" | "returnedOn"> & {
+  /** The day it went back to the supplier, YYYY-MM-DD (Phase 30C). */
+  returnedOn: string | null;
   areaSqFt: number | null;
   passed: number;
   rejected: number;
@@ -78,6 +91,7 @@ async function withVerdicts(rows: RollListRow[]): Promise<RollListItem[]> {
   return rows.map((r) => ({
     ...r,
     areaSqFt: area(r.areaSqFt),
+    returnedOn: dayOf(r.returnedOn),
     passed: count(r.id, "PASS"),
     rejected: count(r.id, "REJECT"),
   }));
@@ -94,7 +108,13 @@ export async function listRollsForReport(
       )
     : undefined;
   const { rows, total } = await listRolls(
-    { status: query.status, supplierId: query.supplierId, since, q: query.q },
+    {
+      status: query.status,
+      toReturn: query.toReturn,
+      supplierId: query.supplierId,
+      since,
+      q: query.q,
+    },
     { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE },
   );
   return {
@@ -113,8 +133,8 @@ export type ItemRoll = RollListItem & {
 
 /**
  * Inventory → a leather item's rolls (Phase 30A): scanned or not, area, shots, rejected sections
- * and the defects found. Defect % comes in Phase 30C. A defect counts from "A defect counts as
- * found at" as it is set now.
+ * and the defects found, and its Defect % once finished (Phase 30C). A defect counts from "A
+ * defect counts as found at" as it is set now.
  */
 export async function listItemRolls(
   itemId: string,
@@ -145,8 +165,12 @@ export async function listItemRolls(
   };
 }
 
-export type RollDetail = Omit<RollDetailRow, "areaSqFt"> & {
+export type RollDetail = Omit<RollDetailRow, "areaSqFt" | "returnedOn"> & {
   areaSqFt: number | null;
+  returnedOn: string | null;
+  /** The Floor Manager may return it to the supplier, or keep a marked one (Phase 30C). */
+  canReturn: boolean;
+  canKeep: boolean;
   passed: number;
   rejected: number;
   /** What the Floor Manager may do here: remove the roll, with a reason. */
@@ -157,12 +181,21 @@ export async function getRollDetail(id: string): Promise<RollDetail | null> {
   const roll = await findRollDetail(id);
   if (!roll) return null;
   const passed = roll.scans.filter((s) => s.finalVerdict === "PASS").length;
+  const state = {
+    status: roll.status,
+    fromInventory: !!roll.item,
+    markedForReturn: roll.markedForReturn,
+    returnDecision: roll.returnDecision,
+  };
   return {
     ...roll,
     areaSqFt: area(roll.areaSqFt),
+    returnedOn: dayOf(roll.returnedOn),
     passed,
     rejected: roll.scans.length - passed,
-    canRemove: planRemove({ status: roll.status, fromInventory: !!roll.item }).ok,
+    canRemove: planRemove(state).ok,
+    canReturn: planDecide(state, "RETURNED").ok,
+    canKeep: planDecide(state, "KEPT").ok,
   };
 }
 
@@ -230,6 +263,8 @@ const stateOf = (r: OpenRollRow) => ({
   status: r.status,
   fromInventory: r.itemId !== null,
   shots: r._count.scans,
+  markedForReturn: r.markedForReturn,
+  returnDecision: r.returnDecision,
 });
 
 /**
@@ -335,10 +370,33 @@ export async function startRoll(id: string, actor: Actor, now: Date = new Date()
   });
 }
 
-/** Finish a roll at Capture once all of it is scanned. It needs at least one shot. */
-export async function finishRoll(id: string, actor: Actor, now: Date = new Date()) {
+export type FinishResult = {
+  id: string;
+  code: string;
+  status: "FINISHED";
+  shots: number;
+  /** Its defect share (Phase 30C, D-110); null when it couldn't be measured. */
+  sharePct: number | null;
+  limitPct: number;
+  marked: boolean;
+  /** Why it wasn't measured: no area, or shots from a phone that wasn't calibrated (A-28). */
+  notMeasured: "no-area" | "no-shots" | "unscaled" | null;
+};
+
+/**
+ * Finish a roll at Capture once all of it is scanned. It needs at least one shot. Its defect share
+ * is worked out and saved (Phase 30C): its shots' defect area over its entered area, plus the flat
+ * shares; more than the supplier limit marks it Return to supplier for the Floor Manager (C-9).
+ */
+export async function finishRoll(
+  id: string,
+  actor: Actor,
+  now: Date = new Date(),
+): Promise<FinishResult> {
   const roll = await loadRoll(id);
   refuse(planFinish(stateOf(roll)));
+  const settings = await getCvSettings();
+  const limitPct = settings?.returnSharePct ?? 10;
   return runInTransaction(async (tx) => {
     const done = await moveRoll(
       id,
@@ -347,15 +405,107 @@ export async function finishRoll(id: string, actor: Actor, now: Date = new Date(
       tx,
     );
     if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
+    const share = rollShare(area(roll.areaSqFt), await listRollShotMeasures(id, tx), limitPct);
+    const measure = share.measured
+      ? {
+          defectAreaSqIn: Math.round(share.defectAreaSqIn * 100) / 100,
+          defectSharePct: Math.round(share.sharePct * 100) / 100,
+          returnLimitPct: limitPct,
+          markedForReturn: share.over,
+        }
+      : {
+          defectAreaSqIn: null,
+          defectSharePct: null,
+          returnLimitPct: limitPct,
+          markedForReturn: false,
+        };
+    await saveRollMeasure(id, measure, tx);
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "roll.finish",
       entity: "Roll",
       entityId: id,
       before: { status: "OPEN" },
-      after: { status: "FINISHED", code: roll.code, shots: roll._count.scans },
+      after: {
+        status: "FINISHED",
+        code: roll.code,
+        shots: roll._count.scans,
+        defectSharePct: measure.defectSharePct,
+        returnLimitPct: limitPct,
+        markedForReturn: measure.markedForReturn,
+        ...(share.measured ? {} : { notMeasured: share.reason }),
+      },
     });
-    return { id, code: roll.code, status: "FINISHED" as const, shots: roll._count.scans };
+    return {
+      id,
+      code: roll.code,
+      status: "FINISHED" as const,
+      shots: roll._count.scans,
+      sharePct: measure.defectSharePct,
+      limitPct,
+      marked: measure.markedForReturn,
+      notMeasured: share.measured ? null : share.reason,
+    };
+  });
+}
+
+/**
+ * The Floor Manager's decision on a scanned roll (Phase 30C, C-36): Returned to supplier on a day
+ * (it leaves stock, −1), or Keep a roll marked Return to supplier, with a reason (it can then be
+ * ticked Fully used). A roll under the limit may be returned too. A decision is final (A-27).
+ */
+export async function decideReturn(
+  id: string,
+  values: ReturnDecisionValues,
+  actor: Actor,
+  now: Date = new Date(),
+) {
+  const roll = await loadRoll(id);
+  refuse(planDecide(stateOf(roll), values.decision));
+  if (values.decision === "RETURNED" && values.returnedOn > manilaToday(now))
+    throw Errors.validation([{ path: ["returnedOn"], message: ROLL_MESSAGES.returnedInFuture }]);
+  return runInTransaction(async (tx) => {
+    if (values.decision === "KEPT") {
+      const done = await keepRoll(
+        id,
+        { returnNote: values.note, returnDecidedAt: now, returnDecidedById: actor.id },
+        tx,
+      );
+      if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
+    } else {
+      const done = await moveRoll(
+        id,
+        "FINISHED",
+        {
+          status: "RETURNED",
+          returnDecision: "RETURNED",
+          returnedOn: new Date(`${values.returnedOn}T00:00:00Z`),
+          returnNote: values.note ?? null,
+          returnDecidedAt: now,
+          returnDecidedById: actor.id,
+        },
+        tx,
+        { returnDecision: null },
+      );
+      if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
+      const why = values.note ? `: ${values.note}` : "";
+      await takeFromStock(tx, roll, `Roll ${roll.code} returned to supplier${why}`, actor, now);
+    }
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: values.decision === "KEPT" ? "roll.keep" : "roll.return",
+      entity: "Roll",
+      entityId: id,
+      before: { status: roll.status, markedForReturn: roll.markedForReturn },
+      after: {
+        code: roll.code,
+        decision: values.decision,
+        status: values.decision === "KEPT" ? roll.status : "RETURNED",
+        ...(values.decision === "RETURNED" ? { returnedOn: values.returnedOn } : {}),
+        note: values.note ?? null,
+      },
+    });
+    return { id, code: roll.code, decision: values.decision };
   });
 }
 
@@ -583,6 +733,11 @@ async function openWithTimes() {
 export async function deviceTargetRoll(): Promise<OpenRoll | null> {
   const oldest = oldestOpenRoll(await openWithTimes());
   return oldest ? toOpenRoll(oldest) : null;
+}
+
+/** Rolls marked Return to supplier with no decision yet (Phase 30C): Reports → Rolls, FM home. */
+export function rollsToReturnCount(): Promise<number> {
+  return countRollsToReturn();
 }
 
 /** Rolls open now, being captured (the FM home's Rolls today, Phase 28). */

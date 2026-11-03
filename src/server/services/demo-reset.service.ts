@@ -46,14 +46,19 @@ export const MODEL_DEFECT_TYPES: {
   sortOrder: number;
   isActive: boolean;
   outcome: DefectOutcome;
+  /** Phase 30C: Not accepted from this length (C-37) and its flat share (D-110); null: none. */
+  notAcceptedFromIn: number | null;
+  flatSharePct: number | null;
 }[] = [
   {
     key: "cut",
     label: "Cut",
-    description: "Slit or cut through the leather surface.",
+    description: "Slit or cut through the leather surface. Not accepted from 3 in (C-37).",
     sortOrder: 1,
     isActive: true,
     outcome: "NOT_ACCEPTED",
+    notAcceptedFromIn: 3,
+    flatSharePct: 1,
   },
   {
     key: "hole",
@@ -62,6 +67,8 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 2,
     isActive: true,
     outcome: "NOT_ACCEPTED",
+    notAcceptedFromIn: null,
+    flatSharePct: null,
   },
   {
     key: "crease",
@@ -70,6 +77,8 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 3,
     isActive: true,
     outcome: "USABLE",
+    notAcceptedFromIn: null,
+    flatSharePct: null,
   },
   {
     key: "scratch",
@@ -78,6 +87,8 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 4,
     isActive: true,
     outcome: "USABLE",
+    notAcceptedFromIn: null,
+    flatSharePct: null,
   },
   {
     key: "abrasion",
@@ -86,6 +97,8 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 5,
     isActive: false,
     outcome: "NOT_ACCEPTED",
+    notAcceptedFromIn: null,
+    flatSharePct: null,
   },
   {
     key: "dirt",
@@ -94,6 +107,8 @@ export const MODEL_DEFECT_TYPES: {
     sortOrder: 6,
     isActive: false,
     outcome: "NOT_ACCEPTED",
+    notAcceptedFromIn: null,
+    flatSharePct: null,
   },
 ];
 
@@ -170,6 +185,8 @@ export async function resetDemoData(
             key: d.key,
             isActive: d.isActive,
             outcome: d.outcome,
+            notAcceptedFromIn: d.notAcceptedFromIn,
+            flatSharePct: d.flatSharePct,
           })),
         },
       });

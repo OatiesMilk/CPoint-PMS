@@ -43,8 +43,18 @@ Put the word on every bin as well as the colour: some people can't tell red from
 
 ## Calibrate your phone
 
-Do this once per phone, and again whenever the phone's height, zoom or position on the stand
-changes. It only gives the scale; nothing in the app changes.
+Do this once per phone, and again whenever the phone's height or zoom changes or another phone
+goes on the stand. Sliding the stand around the table doesn't matter.
+
+**On Capture (Phase 30C, the usual way):** lay an A4 or letter sheet flat on the table, all of it
+in the picture, with the phone where it stays. Press **Calibrate this phone**, choose the sheet,
+and tap its four corners on the photo. Capture shows "This phone sees 22.4 in across the table."
+and keeps it in this browser for this camera and frame size; if the camera comes up at another
+size, Capture asks again. Until a phone is calibrated every cut counts as Not accepted and a
+roll's defect share can't be worked out.
+
+**With the toolkit (the other way):** the steps below give the same number; type it on Capture
+under "Type the width from the calibrate tool instead".
 
 1. Lay a sheet of known size flat in the middle of the table, all of it in the frame with a gap at
    every edge: a plain **A4** paper (8.27 × 11.69 in) or a **letter**-size sheet (8.5 × 11 in). A
@@ -66,7 +76,9 @@ changes. It only gives the scale; nothing in the app changes.
 
 ## Measuring defects (Phase 30B)
 
-A check, not part of the app yet: can the camera measure a defect in inches? Photograph a piece of
+Since Phase 30C the app measures every shot from a calibrated phone itself (a cut from 3 in is
+Not accepted; a roll over 10% defects is marked Return to supplier). The toolkit check below stays
+for comparing figures: can the camera measure a defect in inches? Photograph a piece of
 known area with marks or cuts of known length, then:
 
 ```bash
@@ -94,7 +106,9 @@ area; its code is on the list, like `LR-MLT-001` (write it on the roll's label).
    Reject, with each defect marked Usable or Not accepted. Put that part in the bin of its colour.
 4. Move the roll on, edge to edge, and capture again until all of it is in.
 5. **Finish roll.** The app asks "Is all of LR-MLT-001 scanned?" with the number of shots. A
-   finished roll can't take more shots.
+   finished roll can't take more shots. The app then says how much of the roll has defects. If it
+   says "12.4% of this roll has defects (limit 10%). Set it aside for the Floor Manager.", put the
+   roll aside: the Floor Manager returns it to the supplier or keeps it (Phase 30C).
 
 Picked the wrong roll? While it has no shots, **Put roll back** at Capture: it waits on the list
 again. A roll with shots is removed only by the Floor Manager, with a reason. Nothing is deleted.
@@ -102,7 +116,9 @@ again. A roll with shots is removed only by the Floor Manager, with a reason. No
 When a scanned roll is all used up, someone on the line tells the Quality Inspector, who ticks it
 **Fully used** when finishing the batch. Only then does it leave the leather stock.
 
-The Floor Manager reads every roll, its shots and its rejects in **Reports → Rolls**.
+The Floor Manager reads every roll, its shots, its rejects and its defect share in **Reports →
+Rolls**, where **To return** lists the rolls set aside. A marked roll can't be ticked Fully used
+until the Floor Manager keeps it.
 
 ## Floor view (a station PC)
 

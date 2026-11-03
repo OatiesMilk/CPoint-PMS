@@ -14,7 +14,7 @@ import { findInventoryItem, findInventoryItemBySku } from "@/server/models/inven
 import { listActiveSuppliers, listDefectTypes } from "@/server/models/reference-data.model";
 import { findUserByEmail } from "@/server/models/user.model";
 import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
-import { addRolls, finishRoll, removeRoll, startRoll } from "./roll.service";
+import { addRolls, decideReturn, finishRoll, removeRoll, startRoll } from "./roll.service";
 import { ensureSupplierWithCode } from "./supplier-code.service";
 import { setCameraOperator } from "./camera.service";
 import { saveCheckIn, saveQuota } from "./production.service";
@@ -51,6 +51,17 @@ export const PREPARATION_HOURS: [number, number] = [2, 3];
 
 /** Shots per demo roll (D-090). Real rolls vary: a constructor finishes when all of it is in. */
 export const SECTIONS_PER_ROLL = 10;
+/**
+ * The demo phones' calibration (Phase 30C, A-18): the inches a demo photo covers across. Every demo
+ * shot is measured with it, so each finished roll has a Defect %.
+ */
+export const DEMO_WIDTH_IN = 24;
+/**
+ * The rolls (by their place in the week) whose leather is badly cut: a long cut on every shot, so
+ * they go over the 10% limit and are marked Return to supplier. The Floor Manager returns the
+ * first, keeps the second and leaves the third for the demo (Phase 30C, C-36).
+ */
+export const DEMO_CUT_ROLLS = [2, 4, 8];
 
 /**
  * The demo constructors who capture (Phase 26): Noel Manalo and three of the twelve, given camera
@@ -284,6 +295,9 @@ export async function seedDemoWeek(
     return i === -1 ? null : list.splice(i, 1)[0];
   };
   const finishedRolls: { id: string; finishedAt: Date }[] = [];
+  /** Finished rolls marked Return to supplier, in the order they were finished (Phase 30C). */
+  const markedRolls: { id: string; code: string; finishedAt: Date }[] = [];
+  const hasCut = classes.some((c) => c.key === "cut");
 
   // ── rolls: two a working day (Mon–Fri, D-105), each picked, captured shot by shot and finished at
   //    Capture by a demo constructor (Phase 26, 30A) ──
@@ -336,6 +350,16 @@ export async function seedDemoWeek(
         let detections: Detection[] = scenario(random, classes);
         // Worse leather: a clean section gets a second chance to show a defect.
         if (worseLeather && detections.length === 0) detections = scenario(random, classes);
+        // A badly cut roll: a long cut (about 4 to 6 in by its box) on every shot (Phase 30C).
+        if (hasCut && DEMO_CUT_ROLLS.includes(index))
+          detections = [
+            ...detections,
+            {
+              classKey: "cut",
+              confidence: Math.round(between(0.9, 0.99) * 1000) / 1000,
+              box: { x: 0.3, y: 0.3, width: 0.16, height: 0.12 },
+            },
+          ];
         const image = await renderLeatherImage(detections, {
           width: options.imageSize ?? 480,
           height: Math.round((options.imageSize ?? 480) * 0.75),
@@ -349,6 +373,7 @@ export async function seedDemoWeek(
             modelVersion: DEMO_MODEL_VERSION,
             capturedAt: ts,
             rollId: roll.id,
+            widthIn: DEMO_WIDTH_IN,
           },
           { kind: "website", userId: capturer.id },
           ts,
@@ -360,8 +385,9 @@ export async function seedDemoWeek(
       // All of it is in: Finish roll at Capture. What the line used (thread, cement, nails) goes
       // on the next stock update. The newest roll stays open, so Capture opens on a roll.
       if (past(t) && !newest && captured > 0) {
-        await finishRoll(roll.id, capturer, t);
-        finishedRolls.push({ id: roll.id, finishedAt: t });
+        const finished = await finishRoll(roll.id, capturer, t);
+        if (finished.marked) markedRolls.push({ id: roll.id, code: roll.code, finishedAt: t });
+        else finishedRolls.push({ id: roll.id, finishedAt: t });
         await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE));
         await stock("AD-001", "OUT", 0.5, "Soling", plus(t, 20 * MINUTE));
         await stock("NL-001", "OUT", 1, "Soling", plus(t, 25 * MINUTE));
@@ -377,6 +403,40 @@ export async function seedDemoWeek(
   const damaged = past(removeAt) ? (shelfRolls.get("LR-002") ?? []).pop() : undefined;
   if (damaged)
     await removeRoll(damaged.id, "Water damage in storage; the supplier was told.", fm, removeAt);
+
+  // ── rolls marked Return to supplier (Phase 30C, C-36): the Floor Manager returns the first the
+  //    next morning and keeps the second an hour after it is finished (it can then be ticked Fully
+  //    used); the last stays To return for the demo. ──
+  let returnedRolls = 0;
+  for (const [i, marked] of markedRolls.entries()) {
+    if (i === markedRolls.length - 1 && markedRolls.length > 1) break;
+    if (i === 0) {
+      const at9 = at(addDays(manilaToday(marked.finishedAt), 1), 9);
+      if (!past(at9)) continue;
+      await decideReturn(
+        marked.id,
+        {
+          decision: "RETURNED",
+          returnedOn: manilaToday(at9),
+          note: "Long cuts across the roll; the supplier's driver took it back.",
+        },
+        fm,
+        at9,
+      );
+      returnedRolls += 1;
+    } else {
+      const later = plus(marked.finishedAt, HOUR);
+      if (!past(later)) continue;
+      await decideReturn(
+        marked.id,
+        { decision: "KEPT", note: "The cuts are near one edge; the cutters can work around them." },
+        fm,
+        later,
+      );
+      finishedRolls.push({ id: marked.id, finishedAt: marked.finishedAt });
+    }
+  }
+  logger.info({ marked: markedRolls.length, returned: returnedRolls }, "Demo week: returns");
 
   // ── two more deliveries: thread and tacks on the second working day, tacks on the fourth (with
   //    the leather rolls added above). They reach the ledger on the next stock update. ──

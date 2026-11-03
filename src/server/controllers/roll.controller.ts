@@ -12,12 +12,14 @@ import {
   readyRollsForCapture,
   removeRoll,
   startRoll,
+  decideReturn,
 } from "@/server/services/roll.service";
 import { isInventoryId } from "@/server/validators/inventory.validator";
 import {
   addRollsSchema,
   isRollId,
   removeRollSchema,
+  returnDecisionSchema,
   rollListQuerySchema,
 } from "@/server/validators/roll.validator";
 import { AppError } from "@/server/lib/errors";
@@ -100,6 +102,17 @@ export const rollController = {
     const id = await rollIdFrom(ctx);
     const { reason } = removeRollSchema.parse(await readJsonBody(request));
     return json({ data: await removeRoll(id, reason, user) });
+  }),
+
+  /**
+   * POST /api/v1/rolls/{id}/return-decision { decision: RETURNED, returnedOn, note? } or
+   * { decision: KEPT, note }: the Floor Manager decides on a scanned roll (Phase 30C, C-36).
+   */
+  returnDecision: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("roll:manage");
+    const id = await rollIdFrom(ctx);
+    const values = returnDecisionSchema.parse(await readJsonBody(request));
+    return json({ data: await decideReturn(id, values, user) });
   }),
 
   /** GET /api/v1/rolls/current: for a device token (the simulator), where its next scan goes. */
