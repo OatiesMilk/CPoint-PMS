@@ -565,6 +565,17 @@ export type ProductionPlan = Awaited<ReturnType<typeof productionPlan>>;
 export async function saveSchedule(input: ScheduleInput, actor: Actor, now: Date = new Date()) {
   const effectiveFrom = addDays(manilaToday(now), 1);
   const workingDays = [...new Set(input.workingDays)].sort((a, b) => a - b);
+  // A schedule equal to the one in force tomorrow is skipped, so the history keeps one row per
+  // change (team QA, 2026-11-02). The newest save already wins; this only stops repeat rows.
+  const before = scheduleRule(inForceOn(await listSchedules(), effectiveFrom));
+  if (
+    before &&
+    before.shiftStart === input.shiftStart &&
+    before.shiftEnd === input.shiftEnd &&
+    before.intervalMinutes === input.intervalMinutes &&
+    sameDays(before.workingDays, workingDays)
+  )
+    return { saved: false, effectiveFrom };
   return runInTransaction(async (tx) => {
     const row = await insertSchedule(
       {
@@ -585,8 +596,13 @@ export async function saveSchedule(input: ScheduleInput, actor: Actor, now: Date
       entityId: row.id,
       after: { ...input, workingDays, effectiveFrom },
     });
-    return { id: row.id, effectiveFrom };
+    return { saved: true, id: row.id, effectiveFrom };
   });
+}
+
+function sameDays(a: readonly number[], b: readonly number[]) {
+  const sorted = [...new Set(a)].sort((x, y) => x - y);
+  return sorted.length === b.length && sorted.every((d, i) => d === b[i]);
 }
 
 /**
@@ -663,6 +679,13 @@ export async function saveLunchBreak(input: LunchBreakInput, actor: Actor, now: 
     const problem = lunchProblem({ startTime: input.startTime, endTime: input.endTime }, shift);
     if (problem) throw Errors.validation([{ path: [problem.field], message: problem.message }]);
   }
+  // A lunch equal to the one in force tomorrow is skipped (team QA, 2026-11-02), like the schedule.
+  const before = lunchOn(await listLunchBreaks(), effectiveFrom);
+  if (
+    (before?.startTime ?? null) === input.startTime &&
+    (before?.endTime ?? null) === input.endTime
+  )
+    return { saved: false, effectiveFrom };
   return runInTransaction(async (tx) => {
     const row = await insertLunchBreak(
       { ...input, effectiveFrom, createdById: actor.id, createdAt: now },
@@ -675,7 +698,7 @@ export async function saveLunchBreak(input: LunchBreakInput, actor: Actor, now: 
       entityId: row.id,
       after: { ...input, effectiveFrom },
     });
-    return { id: row.id, effectiveFrom };
+    return { saved: true, id: row.id, effectiveFrom };
   });
 }
 

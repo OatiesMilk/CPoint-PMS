@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/table";
 import { formatPercent } from "@/lib/format";
 import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
-import { cn } from "@/lib/utils";
 import type { InventoryCategory } from "@/lib/domain";
 import type { OperationsReport } from "@/server/services/ops-report.service";
 
@@ -83,9 +82,7 @@ export function ForSalvageCard({
             <TableBody>
               {salvage.byDefect.slice(0, SALVAGE_ROWS).map((d) => (
                 <TableRow key={d.key}>
-                  <TableCell className={cn(!d.known && "text-muted-foreground")}>
-                    {d.known ? d.label : `${d.label} (unknown)`}
-                  </TableCell>
+                  <TableCell>{d.label}</TableCell>
                   <TableCell numeric>{d.sections}</TableCell>
                 </TableRow>
               ))}

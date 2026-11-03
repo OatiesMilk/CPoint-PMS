@@ -142,7 +142,7 @@ describe("ingestScan", () => {
       sequence: 4,
       verdict: "PASS",
       duplicate: false,
-      defects: [{ label: "Cut", confidence: 0.3, unknown: false, effect: null }],
+      defects: [{ label: "Cut", confidence: 0.3, effect: null }],
     });
     expect(rollService.resolveCaptureRoll).toHaveBeenCalledWith(undefined, "device");
     expect(rollModel.lockOpenRoll).toHaveBeenCalledWith("0001", "tx");
@@ -160,8 +160,8 @@ describe("ingestScan", () => {
     expect(detections[0]).toMatchObject({
       defectTypeId: "t-cut",
       rawClassKey: "cut",
-      isUnknownClass: false,
     });
+    expect(detections[0]).not.toHaveProperty("isUnknownClass");
     expect(storage.files.size).toBe(1);
   });
 
@@ -178,25 +178,21 @@ describe("ingestScan", () => {
       expect(data).not.toHaveProperty(gone);
   });
 
-  it("rejects an unknown class and flags it (A-12)", async () => {
-    const result = await ingest([det("scratch", 0.99)]);
-    expect(result).toMatchObject({ verdict: "REJECT" });
-    expect(result).not.toHaveProperty("status");
+  it("drops a class with no defect type: not stored, no effect on the verdict (D-108)", async () => {
+    const result = await ingest([det("scratch", 0.99), det("crease", 0.8)]);
+    expect(result).toMatchObject({ verdict: "PASS" });
+    expect(result.defects).toEqual([{ label: "Crease", confidence: 0.8, effect: "USABLE" }]);
     const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
-    expect(data).toMatchObject({ aiVerdict: "REJECT", finalVerdict: "REJECT" });
-    expect(detections[0]).toMatchObject({
-      defectTypeId: null,
-      rawClassKey: "scratch",
-      isUnknownClass: true,
-    });
+    expect(data).toMatchObject({ aiVerdict: "PASS", finalVerdict: "PASS" });
+    expect(detections).toHaveLength(1);
+    expect(detections[0]).toMatchObject({ defectTypeId: "t-crease", rawClassKey: "crease" });
   });
 
   it("says what each found defect did, for the Capture page (Phase 26)", async () => {
     const result = await ingest([det("hole", 0.7), det("crease", 0.6), det("stain", 0.9)]);
     expect(result.defects).toEqual([
-      { label: "Hole", confidence: 0.7, unknown: false, effect: "NOT_ACCEPTED" },
-      { label: "Crease", confidence: 0.6, unknown: false, effect: "USABLE" },
-      { label: "stain", confidence: 0.9, unknown: true, effect: "NOT_ACCEPTED" },
+      { label: "Hole", confidence: 0.7, effect: "NOT_ACCEPTED" },
+      { label: "Crease", confidence: 0.6, effect: "USABLE" },
     ]);
   });
 

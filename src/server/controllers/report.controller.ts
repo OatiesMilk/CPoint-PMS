@@ -29,17 +29,31 @@ function csv(body: string, name: string, range: { from: string; to: string }): R
   });
 }
 
+/** `?year=&month=&week=&q=` for the Materials report (D-109); bad values fall back in the service. */
+function materialsOptions(request: Request) {
+  const p = new URL(request.url).searchParams;
+  return {
+    year: p.get("year") ?? undefined,
+    month: p.get("month") ?? undefined,
+    week: p.get("week") ?? undefined,
+    q: p.get("q") ?? undefined,
+  };
+}
+
 export const reportController = {
-  /** GET /api/v1/reports/materials: what each material was used for, the last 8 weeks (Phase 29) */
-  materials: handle(async () => {
+  /**
+   * GET /api/v1/reports/materials?year=&month=&week=&q=: what each material was used for in the
+   * picked week of a month and the 7 before it (Phase 29, D-109)
+   */
+  materials: handle(async (request: Request) => {
     await requireApiPermission("report:production");
-    return json({ data: await materialsReport() });
+    return json({ data: await materialsReport(materialsOptions(request)) });
   }),
 
-  /** GET /api/v1/reports/materials-used.csv: one row per item and week */
-  materialsCsv: handle(async () => {
+  /** GET /api/v1/reports/materials-used.csv?year=&month=&week=&q=: one row per item and week */
+  materialsCsv: handle(async (request: Request) => {
     await requireApiPermission("report:production");
-    const { body, from, to } = await materialsCsv();
+    const { body, from, to } = await materialsCsv(materialsOptions(request));
     return csv(body, "materials-used", { from, to });
   }),
 

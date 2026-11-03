@@ -11,7 +11,7 @@ import {
 } from "./cv-helpers";
 
 test.describe("camera ingestion API", () => {
-  test("gives Pass or Reject at once and rejects unknown classes (D-093)", async ({
+  test("gives Pass or Reject at once and drops a class with no defect type (D-093, D-108)", async ({
     browser,
     request,
   }) => {
@@ -23,7 +23,7 @@ test.describe("camera ingestion API", () => {
       { dets: [{ classKey: "hole", confidence: 0.3 }], verdict: "PASS" }, // below found-at
       { dets: [{ classKey: "abrasion", confidence: 0.9 }], verdict: "PASS" }, // Usable
       { dets: [], verdict: "PASS" },
-      { dets: [{ classKey: "sim-unknown", confidence: 0.8 }], verdict: "REJECT" },
+      { dets: [{ classKey: "e2e-no-type", confidence: 0.8 }], verdict: "PASS" },
     ];
     for (const [i, c] of cases.entries()) {
       const res = await postScan(request, token, roll.id, c.dets);
@@ -40,16 +40,16 @@ test.describe("camera ingestion API", () => {
           [roll.id],
         )
       ).rows.map((r) => r.v),
-      unknown: (
+      noType: (
         await db.query(
-          `SELECT count(*)::int n FROM detections d JOIN scans s ON s.id = d."scanId" WHERE s."batchId" = $1 AND d."isUnknownClass"`,
+          `SELECT count(*)::int n FROM detections d JOIN scans s ON s.id = d."scanId" WHERE s."batchId" = $1 AND d."rawClassKey" = 'e2e-no-type'`,
           [roll.id],
         )
       ).rows[0].n,
     }));
     expect(stored).toEqual({
-      final: ["REJECT", "PASS", "PASS", "PASS", "REJECT"],
-      unknown: 1,
+      final: ["REJECT", "PASS", "PASS", "PASS", "PASS"],
+      noType: 0,
     });
   });
 

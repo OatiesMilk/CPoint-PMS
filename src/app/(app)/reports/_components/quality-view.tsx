@@ -91,8 +91,7 @@ export function QualityView({ quality }: { quality: QualityReport }) {
               <CardDescription>
                 Biggest first, with each type’s share and the cumulative share (Pareto): the top few
                 types usually cause most of the defects. Rejected counts the sections whose main
-                defect it was that were rejected, for salvage. Unknown classes are listed by the key
-                the camera sent.
+                defect it was that were rejected, for salvage.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -112,9 +111,7 @@ export function QualityView({ quality }: { quality: QualityReport }) {
                   <TableBody>
                     {defects.slice(0, DEFECT_ROWS).map((d) => (
                       <TableRow key={d.key}>
-                        <TableCell className="font-medium">
-                          {d.known ? d.label : `${d.label} (unknown)`}
-                        </TableCell>
+                        <TableCell className="font-medium">{d.label}</TableCell>
                         <TableCell numeric>{d.scans}</TableCell>
                         <TableCell numeric>{d.reject}</TableCell>
                         <TableCell numeric>{formatPercent(d.share)}</TableCell>

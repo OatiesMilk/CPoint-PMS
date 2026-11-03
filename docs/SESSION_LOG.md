@@ -5,6 +5,15 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-02 · D-109 Materials by week of the month
+
+- Built Year, Month, Week and Find material on Reports → Materials: weeks are days 1–7, 8–14 …
+  from the 1st, the last one short; default today's week; a month or year change keeps the week
+  number or takes the month's last started week; the CSV follows. Pace stays the last 28 days.
+- Checks: `npm run check` passed (cloud copy, 635 unit tests). E2E not run (Codex).
+- D-108 run 1 read: only S3 failed, a handoff error (405 from the `[id]` PATCH-only route).
+- Next: Codex D-109 run 1; then Dylan commits D-107 to D-109 on one branch.
+
 ## YYYY-MM-DD — Phase N: <short title>
 **Who:** <teammate driving the session>
 **Summary:** 1–3 sentences.
@@ -13,6 +22,39 @@ Template:
 **Decisions:** D-0xx (if any)
 **Follow-ups:** bullets
 ```
+
+## 2026-11-02 — D-107 run 1 fixes; no unknown defect classes (D-108)
+
+**Who:** Dylan (Claude on the laptop)
+**Summary:** Codex run 1 for D-107 FAIL on axe only (a repeated Pagination landmark on Plan
+batches, the Demo mode band outside a landmark); fixed. Dylan asked to remove unknown defect
+classes and every affected record, and for "Week 1: Nov. 2" on Materials (D-108).
+**Changed:** the decision engine and scan ingest drop classes with no defect type; Settings,
+Admin home, scan, capture, camera and report pages lose every unknown part; the unknown API route
+deleted; simulator and demo week; `cv/` preview; migration `no_unknown_classes` (tried on a scratch
+PostgreSQL, seven cases); `weekOfMonthLabel`; pager labels and the demo band; unit and e2e tests;
+`docs/API.md`, `README.md`, `cv/README.md`, `cv/MODEL_CARD.md`; handoff
+`qa/handoffs/2026-11-02-no-unknown-classes.md`, prompt `qa/CODEX_PROMPT_NO_UNKNOWN_CLASSES.md`.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (622) · build ✅ · cv ruff ✅ mypy ✅ pytest ✅ (102) · e2e
+Codex next
+**Decisions:** D-108
+**Follow-ups:** the `ci.yml` hand edit; Codex run; one PR for D-107 and D-108.
+
+## 2026-11-02 — Team QA notes: plan, and no repeat schedule saves (D-107)
+
+**Who:** Dylan (Claude on the laptop)
+**Summary:** The team's QA notes (PDF) checked against `main` 2e63908 and planned
+(`docs/prompts/plans/groupmates-feedback-plan.md`): the Materials points and the leather Used split
+become Phase 30D after 30C. Dylan chose the schedule fix first: a schedule or lunch break equal to
+tomorrow's is no longer saved again.
+**Changed:** `production.service.ts` (`saveSchedule`, `saveLunchBreak` return `saved`), the batches
+and settings actions, `plan-forms.tsx`, `lunch-break-form.tsx`, `docs/API.md`; unit tests (+2) and
+`tests/e2e/batches.spec.ts`; handoff `qa/handoffs/2026-11-02-no-repeat-schedule-saves.md`, prompt
+`qa/CODEX_PROMPT_NO_REPEAT_SAVES.md`.
+**Gates:** lint ✅ · typecheck ✅ · test ✅ (617) · build ✅ (run on a clean copy of the same commit)
+· e2e Codex next
+**Decisions:** D-107
+**Follow-ups:** Codex run 1; then 30C, 30D; check the 0 pairs in the team's screenshot.
 
 ## 2026-11-02 — D-105 Codex run 1 and fix
 

@@ -123,24 +123,6 @@ export function updateReference(
   return delegate(kind, db).update({ where: { id }, data });
 }
 
-export type UnknownClassRow = { rawClassKey: string; detections: number; lastSeen: Date };
-
-/**
- * Class keys the camera sent that aren't defect types (yet): how often, and when last seen.
- * Keys added as defect types since then drop out of the list.
- */
-export async function listUnknownClassKeys(db: Db = defaultDb()): Promise<UnknownClassRow[]> {
-  const rows = await db.$queryRaw<{ rawClassKey: string; detections: bigint; lastSeen: Date }[]>`
-    SELECT d."rawClassKey", count(*) AS detections, max(s."capturedAt") AS "lastSeen"
-    FROM detections d JOIN scans s ON s.id = d."scanId"
-    WHERE d."isUnknownClass"
-      AND NOT EXISTS (SELECT 1 FROM defect_types t WHERE t.key = d."rawClassKey")
-    GROUP BY d."rawClassKey"
-    ORDER BY max(s."capturedAt") DESC
-    LIMIT 50`;
-  return rows.map((r) => ({ ...r, detections: Number(r.detections) }));
-}
-
 export function updateThresholds(
   data: { foundAtOrAbove: number; earlyModelNotice: boolean; updatedById: string },
   db: Db = defaultDb(),

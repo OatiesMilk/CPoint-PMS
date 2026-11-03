@@ -208,11 +208,9 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
                             {d.defectType?.label ?? d.rawClassKey} {percent(d.confidence)}
                             <span className="text-muted-foreground">
                               {" · "}
-                              {d.isUnknownClass || !d.defectType
-                                ? "Unknown class"
-                                : d.defectType.outcome
-                                  ? OUTCOME_LABELS[d.defectType.outcome]
-                                  : "Not counted"}
+                              {d.defectType?.outcome
+                                ? OUTCOME_LABELS[d.defectType.outcome]
+                                : "Not counted"}
                             </span>
                           </li>
                         ))}

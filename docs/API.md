@@ -149,9 +149,8 @@ camera station app was retired in Phase 20 (D-069). The simulator is the token c
 
 **Decision (D-093):** every section is `PASS` or `REJECT`, final at once. A detection of an
 _active_ defect type at or above `foundAtOrAbove` (Settings, default 0.5) gives its type's outcome:
-`USABLE` or `NOT_ACCEPTED`. Any `NOT_ACCEPTED` → `REJECT`, otherwise `PASS`. Any `classKey` the
-system doesn't know → `REJECT` (A-12), and the class is stored and listed under Settings → Unknown
-classes. Class keys are matched exactly. A new database gets `crease` and `scratch` Usable and
+`USABLE` or `NOT_ACCEPTED`. Any `NOT_ACCEPTED` → `REJECT`, otherwise `PASS`. A `classKey` with no
+defect type is dropped: not stored and no effect on the verdict (D-108). Class keys are matched exactly. A new database gets `crease` and `scratch` Usable and
 `cut`, `hole`, `abrasion` and `dirt` Not accepted; for yolo-v1 turn `abrasion` and `dirt` off
 under Admin → Settings (D-052, `cv/README.md`). Add new ones there when the model is retrained.
 A rejected section is reported for salvage; nothing else is created.
@@ -303,7 +302,6 @@ duplicate email is `422` on `email`.
 | Method & path                      | Body                                                                                                                                                 |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET / PUT /api/v1/settings/cv`    | `{ foundPercent, earlyModelNotice? }`, e.g. `50` (1 to 100, one decimal). `rejectPercent` or `reworkPercent` is refused with a named message (D-093) |
-| `GET /api/v1/defect-types/unknown` | class keys the camera sent that no defect type covers: `{ rawClassKey, detections, lastSeen }`                                                       |
 | `GET / POST /api/v1/defect-types`  | `{ key, label, outcome, description?, sortOrder? }` (key fixed; `outcome` `USABLE` or `NOT_ACCEPTED`, required, D-093)                               |
 | `GET / POST /api/v1/suppliers`     | `{ name, code?, contactPerson?, phone?, notes? }` (`code`: 2 to 6 capital letters or digits, unique; from the initials when left out, D-104)         |
 | `PUT /api/v1/settings/lunch-break` | `{ startTime, endTime }` (`HH:mm`, inside tomorrow's shift, end after start) or `{ none: true }`; applies from tomorrow (D-097)                      |
@@ -370,7 +368,8 @@ The schedule sits inside the factory's hours (D-105): `workingDays` 1 to 5 (Mond
 else `422` "Working days are Monday to Friday."), `shiftStart` from `08:00` ("Shift start must be
 08:00 or later."), `shiftEnd` up to `17:00` ("Shift end must be 17:00 or earlier.") and after the
 start; `intervalMinutes` 60, 120, 180, 240 or `null` (once at the end of the day). It applies from
-tomorrow.
+tomorrow. The schedule, the quota and the lunch break answer `{ saved, effectiveFrom }`: a value
+equal to the one already in force that day is not saved again (`saved: false`, no row, no audit).
 
 - **today** → `{ day, dayLabel, schedule, lunch, workingDay, rows: [{ number, slotAt, startTime,
 time, lunch, times, label, state, pausedForLunch, canFinishNow, finishOpensAt, lateBy, checkIn }],
@@ -407,20 +406,20 @@ Aggregates per Manila day, defect type, supplier or roll, never per person (D-02
 `?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
 default is the last 14 days, at most 92, and never past today.
 
-| Method & path                            | Permission          | Returns                                                                                                                   |
-| ---------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals: { scanned, pass, reject }, days[], defects[] }`                                                         |
-| `GET /api/v1/reports/production`         | `report:production` | `{ days[], totals: { finished, failed, passed, failedShare, share, daysBelow, daysWithQuota } }` (Phase 27)               |
-| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: Scanned, Pass, Reject (for salvage)                                                                      |
-| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection): Scans, Pass, Reject (for salvage)                                 |
-| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day: pairs finished, failed, % failed, passed, quota, % of quota (passed), batches, constructors, shortfall   |
-| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], stock, suppliers[], rejectedRolls[], lineRejectShare, forSalvage, checkpoint }` |
-| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, sections scanned, Pass, Reject (for salvage)                                 |
-| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and added, days of cover, status                                          |
-| `GET /api/v1/reports/materials`          | `report:production` | `{ today, weeks[], rows[], leather[], pace, reminderDays, daysToNextReminder }` (Phase 29, D-102)                         |
-| `GET /api/v1/reports/materials-used.csv` | `report:production` | one row per item and week (8 weeks): week, item, category, supplier, unit, used, pairs finished, used per 100 pairs       |
-| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072)                     |
-| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, tag number, supplier, sections, rejected, main defects (D-072)                 |
+| Method & path                            | Permission          | Returns                                                                                                                                                                                                                                          |
+| ---------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals: { scanned, pass, reject }, days[], defects[] }`                                                                                                                                                                                |
+| `GET /api/v1/reports/production`         | `report:production` | `{ days[], totals: { finished, failed, passed, failedShare, share, daysBelow, daysWithQuota } }` (Phase 27)                                                                                                                                      |
+| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: Scanned, Pass, Reject (for salvage)                                                                                                                                                                                             |
+| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection): Scans, Pass, Reject (for salvage)                                                                                                                                                        |
+| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day: pairs finished, failed, % failed, passed, quota, % of quota (passed), batches, constructors, shortfall                                                                                                                          |
+| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], stock, suppliers[], rejectedRolls[], lineRejectShare, forSalvage, checkpoint }`                                                                                                                        |
+| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, sections scanned, Pass, Reject (for salvage)                                                                                                                                                        |
+| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and added, days of cover, status                                                                                                                                                                 |
+| `GET /api/v1/reports/materials`          | `report:production` | `?year=&month=&week=&q=` (D-109): `{ today, selected, previous, weeks[], days, q, itemCount, rows[], leather[], pace, years[], reminderDays, daysToNextReminder }`. Weeks are days 1–7, 8–14 … of the month; no or an invalid week gives today's |
+| `GET /api/v1/reports/materials-used.csv` | `report:production` | same query; one row per item and week (the 8 weeks ending with the selected one): week, from, to, item code, item, category, supplier, unit, used, pairs finished, used per 100 pairs                                                            |
+| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072)                                                                                                                                            |
+| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, tag number, supplier, sections, rejected, main defects (D-072)                                                                                                                                        |
 
 - **Verdicts** are Pass and Reject (D-093); the final verdict is the camera's.
 - **For salvage** (`forSalvage`): `{ total, byDefect: [{ key, label, known, sections }] }`, the

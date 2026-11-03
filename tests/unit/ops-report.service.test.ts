@@ -64,8 +64,8 @@ beforeEach(() => {
     },
   ]);
   report.defectBreakdown.mockResolvedValue([
-    { key: "cut", label: "Cut", known: true, scans: 6, pass: 3, reject: 3 },
-    { key: "hole", label: "Hole", known: true, scans: 2, pass: 1, reject: 1 },
+    { key: "cut", label: "Cut", scans: 6, pass: 3, reject: 3 },
+    { key: "hole", label: "Hole", scans: 2, pass: 1, reject: 1 },
   ]);
   report.dailyProduction.mockResolvedValue([{ day: "2026-10-06", started: 3, completed: 2 }]);
   production.productionReport.mockImplementation(async (r: { from: string }) =>
@@ -328,8 +328,8 @@ describe("operationsReport", () => {
     expect(forSalvage).toEqual({
       total: 20,
       byDefect: [
-        { key: "cut", label: "Cut", known: true, sections: 3 },
-        { key: "hole", label: "Hole", known: true, sections: 1 },
+        { key: "cut", label: "Cut", sections: 3 },
+        { key: "hole", label: "Hole", sections: 1 },
       ],
     });
   });

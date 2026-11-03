@@ -153,7 +153,7 @@ test("QI lands on Batches; the FM opens a rejected section from its roll", async
 }) => {
   const roll = await createRoll(await captureApi(browser));
   const { token } = await createDeviceToken();
-  await postScan(request, token, roll.id, [{ classKey: "smoke-unknown", confidence: 0.9 }]);
+  await postScan(request, token, roll.id, [{ classKey: "cut", confidence: 0.9 }]);
   await postScan(request, token, roll.id, [{ classKey: "abrasion", confidence: 0.7 }]);
 
   // The QI's one page is Batches (Phase 28, D-100).
@@ -171,13 +171,13 @@ test("QI lands on Batches; the FM opens a rejected section from its roll", async
   await expectAccessible(fm);
   await fm.getByTestId("shot-row").filter({ hasText: "Reject" }).getByRole("link").first().click();
   await expect(fm).toHaveURL(/\/scans\/[0-9a-f-]{36}$/);
-  await expect(fm.getByText(/so this section is rejected/)).toBeVisible();
+  await expect(fm.getByText(/A rejected section is reported for salvage\./)).toBeVisible();
   await expect(fm.getByRole("link", { name: `Roll ${roll.code}` })).toBeVisible();
   await expectAccessible(fm);
   await fmContext.close();
 });
 
-test("System Admin journey: thresholds, unknown classes and the audit trail", async ({ page }) => {
+test("System Admin journey: thresholds, defect types and the audit trail", async ({ page }) => {
   await signInAs(page, ACCOUNTS.admin);
   await page.goto("/admin/settings");
   await expect(page.getByText("What the camera will decide")).toBeVisible();

@@ -7,7 +7,6 @@ import {
   findReferenceByField,
   insertReference,
   listReference,
-  listUnknownClassKeys,
   updateReference,
   updateModelNotice,
   updateThresholds,
@@ -229,10 +228,4 @@ export async function setReferenceActive(
     });
     return after;
   });
-}
-
-/** Class keys the camera sent that no defect type covers yet (for the YOLO retraining). */
-export async function unknownClasses() {
-  const rows = await listUnknownClassKeys();
-  return rows.map((r) => ({ ...r, lastSeen: r.lastSeen.toISOString() }));
 }

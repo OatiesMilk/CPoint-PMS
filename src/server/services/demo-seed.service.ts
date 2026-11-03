@@ -3,9 +3,7 @@ import { DEFAULT_LUNCH, DEFAULT_SCHEDULE, batchesFor, isoWeekday } from "@/lib/p
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
   renderLeatherImage,
-  randomBox,
   scenario,
-  UNKNOWN_CLASS,
   type Detection,
   type Random,
 } from "@/server/lib/leather-scan";
@@ -28,8 +26,7 @@ import { ingestScan } from "./scan-ingest.service";
  * The demo week (D-026, D-090): replays a small, believable past week of production through the
  * real services, each with its own `now`, so rolls, scans, the stock ledger, attendance,
  * check-ins and audit rows all agree. Every section is Pass or Reject and nobody changes it
- * (D-093); the newest roll's last section always shows an unknown class (the random mix adds a few
- * more), rejected and listed in Settings (A-12). Rolls are started, captured and finished on the
+ * (D-093). Every detection is a defect type the database knows (D-108). Rolls are started, captured and finished on the
  * Capture page by demo constructors the System Admin allowed (Phase 26, D-095). Opt-in
  * (SEED_DEMO_WEEK or `npm run demo:seed`), and only on a database with no rolls. The same seed
  * gives the same week.
@@ -312,7 +309,7 @@ export async function seedDemoWeek(
   for (const day of workingDays) {
     for (const startHour of SLOTS) {
       index += 1;
-      // The newest roll to reach the camera; its last section shows an unknown class (A-12).
+      // The newest roll to reach the camera stays open.
       const newest = day === newestSlot?.day && startHour === newestSlot.startHour;
       const capturer = capturers[index % capturers.length];
       const created = at(day, startHour + between(0, 0.3));
@@ -339,8 +336,6 @@ export async function seedDemoWeek(
         let detections: Detection[] = scenario(random, classes);
         // Worse leather: a clean section gets a second chance to show a defect.
         if (worseLeather && detections.length === 0) detections = scenario(random, classes);
-        if (newest && i === captured - 1)
-          detections = [{ classKey: UNKNOWN_CLASS, confidence: 0.82, box: randomBox(random) }];
         const image = await renderLeatherImage(detections, {
           width: options.imageSize ?? 480,
           height: Math.round((options.imageSize ?? 480) * 0.75),

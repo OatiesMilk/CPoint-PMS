@@ -437,6 +437,40 @@ describe("saveSchedule, saveQuota and saveLunchBreak (D-083, D-085, D-097, D-099
     );
   });
 
+  it("skips a schedule equal to tomorrow's, so repeat saves add no rows (team QA)", async () => {
+    expect(
+      await svc.saveSchedule(
+        {
+          shiftStart: "08:00",
+          shiftEnd: "17:00",
+          intervalMinutes: 240,
+          workingDays: [5, 4, 3, 2, 1],
+        },
+        FM,
+        now,
+      ),
+    ).toEqual({ saved: false, effectiveFrom: "2026-10-22" });
+    expect(model.insertSchedule).not.toHaveBeenCalled();
+    expect(recordAudit).not.toHaveBeenCalled();
+    // A schedule saved earlier today for tomorrow is the one compared.
+    model.listSchedules.mockResolvedValueOnce([
+      SCHEDULE,
+      { ...SCHEDULE, id: "sch3", intervalMinutes: 120, effectiveFrom: "2026-10-22" },
+    ]);
+    const r = await svc.saveSchedule(
+      {
+        shiftStart: "08:00",
+        shiftEnd: "17:00",
+        intervalMinutes: 240,
+        workingDays: [1, 2, 3, 4, 5],
+      },
+      FM,
+      now,
+    );
+    expect(r).toMatchObject({ saved: true, effectiveFrom: "2026-10-22" });
+    expect(model.insertSchedule).toHaveBeenCalledTimes(1);
+  });
+
   it("applies a first quota from today and a change from tomorrow (Dylan 5A)", async () => {
     model.listQuotas.mockResolvedValueOnce([]);
     expect(await svc.saveQuota({ pairs: 128, suggestedPairs: 125 }, FM, now)).toEqual({
@@ -498,6 +532,27 @@ describe("saveSchedule, saveQuota and saveLunchBreak (D-083, D-085, D-097, D-099
       expect.objectContaining({ startTime: null, endTime: null }),
       "tx",
     );
+  });
+});
+
+describe("saveLunchBreak repeats (team QA, 2026-11-02)", () => {
+  const now = at("2026-10-21T02:00:00.000Z");
+
+  it("skips a lunch equal to tomorrow's, and a second No lunch break", async () => {
+    expect(await svc.saveLunchBreak({ startTime: "11:00", endTime: "12:00" }, FM, now)).toEqual({
+      saved: false,
+      effectiveFrom: "2026-10-22",
+    });
+    model.listLunchBreaks.mockResolvedValueOnce([
+      LUNCH,
+      { ...LUNCH, id: "l3", startTime: null, endTime: null, effectiveFrom: "2026-10-22" },
+    ]);
+    expect(await svc.saveLunchBreak({ startTime: null, endTime: null }, FM, now)).toEqual({
+      saved: false,
+      effectiveFrom: "2026-10-22",
+    });
+    expect(model.insertLunchBreak).not.toHaveBeenCalled();
+    expect(recordAudit).not.toHaveBeenCalled();
   });
 });
 

@@ -90,7 +90,6 @@ export default async function CameraPage() {
                   id: d.id,
                   label: d.defectType?.label ?? d.rawClassKey,
                   confidence: d.confidence,
-                  unknown: d.isUnknownClass,
                   outcome: snapshot.outcomes[d.rawClassKey] ?? null,
                   box: { x: d.x, y: d.y, width: d.width, height: d.height },
                 }))}

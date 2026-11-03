@@ -31,7 +31,7 @@ def v(*pairs: tuple[str, float]) -> str:
 
 
 def test_a_section_with_no_detections_passes() -> None:
-    assert preview_verdict([], CONFIG) == PreviewDecision("PASS", None, (), ())
+    assert preview_verdict([], CONFIG) == PreviewDecision("PASS", None, ())
 
 
 @pytest.mark.parametrize(("confidence", "verdict"), [(0.4999, "PASS"), (0.5, "REJECT")])
@@ -58,20 +58,18 @@ def test_several_types_report_the_highest_confidence() -> None:
 
 
 def test_an_inactive_not_accepted_type_is_ignored() -> None:
-    assert preview_verdict(dets(("dirt", 0.99)), CONFIG) == PreviewDecision(
-        "PASS", None, (), ("dirt",)
+    assert preview_verdict(dets(("dirt", 0.99)), CONFIG) == PreviewDecision("PASS", None, ("dirt",))
+
+
+def test_a_class_with_no_defect_type_is_ignored() -> None:
+    assert preview_verdict(dets(("stain", 0.99)), CONFIG) == PreviewDecision(
+        "PASS", None, ("stain",)
     )
 
 
-def test_an_unknown_class_alone_rejects() -> None:
-    assert preview_verdict(dets(("stain", 0.3)), CONFIG) == PreviewDecision(
-        "REJECT", None, ("stain",), ()
-    )
-
-
-def test_an_unknown_class_beside_a_usable_one_rejects() -> None:
+def test_a_class_with_no_defect_type_beside_a_usable_one_passes() -> None:
     d = preview_verdict(dets(("crease", 0.8), ("stain", 0.7), ("stain", 0.6)), CONFIG)
-    assert d == PreviewDecision("REJECT", 0.8, ("stain",), ())
+    assert d == PreviewDecision("PASS", 0.8, ("stain",))
 
 
 def test_an_edited_found_at_value_is_followed() -> None:
@@ -82,4 +80,4 @@ def test_an_edited_found_at_value_is_followed() -> None:
 def test_detection_outcome() -> None:
     assert detection_outcome(0.5, "USABLE", CONFIG) == "USABLE"
     assert detection_outcome(0.49, "NOT_ACCEPTED", CONFIG) is None
-    assert detection_outcome(0.1, None, CONFIG) == "NOT_ACCEPTED"
+    assert detection_outcome(0.9, None, CONFIG) is None

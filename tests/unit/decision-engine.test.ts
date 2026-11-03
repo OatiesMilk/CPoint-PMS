@@ -28,7 +28,6 @@ describe("decide: Pass or Reject (D-093)", () => {
     expect(decide([], types, rule)).toEqual({
       verdict: "PASS",
       maxConfidence: null,
-      unknownKeys: [],
       ignoredKeys: [],
     });
   });
@@ -71,36 +70,18 @@ describe("decide: Pass or Reject (D-093)", () => {
     expect(decide([{ classKey: "dirt", confidence: 0.99 }], types, rule)).toEqual({
       verdict: "PASS",
       maxConfidence: null,
-      unknownKeys: [],
       ignoredKeys: ["dirt"],
     });
   });
 
-  it("rejects an unknown class alone (A-12)", () => {
-    expect(decide([{ classKey: "stain", confidence: 0.3 }], types, rule)).toEqual({
-      verdict: "REJECT",
+  it("ignores a class with no defect type (D-108)", () => {
+    expect(decide([{ classKey: "stain", confidence: 0.99 }], types, rule)).toEqual({
+      verdict: "PASS",
       maxConfidence: null,
-      unknownKeys: ["stain"],
       ignoredKeys: [],
     });
-  });
-
-  it("rejects an unknown class beside a Usable one", () => {
-    const d = decide(
-      [
-        { classKey: "crease", confidence: 0.8 },
-        { classKey: "stain", confidence: 0.7 },
-        { classKey: "stain", confidence: 0.6 },
-      ],
-      types,
-      rule,
-    );
-    expect(d).toEqual({
-      verdict: "REJECT",
-      maxConfidence: 0.8,
-      unknownKeys: ["stain"],
-      ignoredKeys: [],
-    });
+    expect(verdictFor(["crease", 0.8], ["stain", 0.9])).toBe("PASS");
+    expect(verdictFor(["cut", 0.8], ["stain", 0.9])).toBe("REJECT");
   });
 
   it("follows an edited found-at value (it is data)", () => {
@@ -117,8 +98,8 @@ describe("detectionOutcome", () => {
     expect(detectionOutcome(0.49, "NOT_ACCEPTED", rule)).toBeNull();
   });
 
-  it("treats an unknown class as Not accepted at any confidence", () => {
-    expect(detectionOutcome(0.1, null, rule)).toBe("NOT_ACCEPTED");
+  it("gives nothing for a type with no outcome (turned off, D-108)", () => {
+    expect(detectionOutcome(0.9, null, rule)).toBeNull();
   });
 });
 

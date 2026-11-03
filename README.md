@@ -194,7 +194,7 @@ real use.
 
 ### 3. System Admin (2 min)
 
-0. **Overview** (`admin@cpoint.local`): system health, users, the camera, unknown classes and the
+0. **Overview** (`admin@cpoint.local`): system health, users, the camera and the
    lunch break. **Camera:** the model, the last capture and how many rolls are open.
 1. **Settings → Lunch break**: 11:00 to 12:00, applying from tomorrow, with
    its history. Lunch pauses the batch it falls in.
@@ -205,8 +205,9 @@ real use.
 
    ![Settings](docs/screenshots/admin-settings.png)
 
-3. **Settings → Defect types:** "scratch" is listed as an **unknown class** the camera has sent.
-   Adding it as a defect type is a data change, not a code change.
+3. **Settings → Defect types:** each class the model sends, Usable or Not accepted. A class with
+   no defect type is ignored (D-108), so a retrained model's new classes are added here: a data
+   change, not a code change.
 4. **Users:** add a person, who gets a one-time temporary password. **API tokens:** each camera
    machine has its own token, which can only send scans.
 5. **Audit log:** every change above, plus every sign-in, with before/after values.
@@ -214,7 +215,7 @@ real use.
 ### Talking points
 
 - **The decision rule (D-011):** the highest confidence among known defects decides. ≥ 90% →
-  Reject, 60–89% → Fixable, below 60% → Pass. An unknown class always goes to a person. The
+  Reject, 60–89% → Fixable, below 60% → Pass. A class with no defect type is ignored (D-108). The
   thresholds are data the admin can change.
 - **People stay in charge:** the camera's calls can be overridden with a reason, and the reports
   show how often that happens. Flagged scans are the Quality Inspector's to decide (D-028).
@@ -296,7 +297,6 @@ erDiagram
   }
   Detection {
     string rawClassKey "what the model sent"
-    bool isUnknownClass
     float confidence
     float x_y_width_height "box, 0-1"
   }

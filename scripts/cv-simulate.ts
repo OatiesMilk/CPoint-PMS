@@ -6,10 +6,10 @@
  *
  * Without --roll each scan goes to the roll open the longest, so start a roll at Capture first
  * (Phase 26). Needs CV_DEVICE_TOKEN (create one: `npm run cv:token`) and optionally CV_BASE_URL in .env.
- * Mix: about 82% Pass (clean, a faint mark, or a found Usable defect), 13% Reject (a found Not
- * accepted defect) and 5% an unknown class ("sim-unknown"), which is rejected and listed in
- * Settings → Unknown classes (A-12). Classes default to the yolo-v1 ones with the outcomes
- * `npm run demo:reset` sets; give your own as --classes crease:USABLE,cut:NOT_ACCEPTED,stain.
+ * Mix: about 82% Pass (clean, a faint mark, or a found Usable defect) and 18% Reject (a found Not
+ * accepted defect). Classes default to the yolo-v1 ones with the outcomes `npm run demo:reset`
+ * sets; give your own as --classes crease:USABLE,cut:NOT_ACCEPTED. A class with no defect type in
+ * Settings is dropped by the app (D-108).
  */
 import "dotenv/config";
 import {

@@ -56,12 +56,12 @@ export async function correctBatchAction(
 
 export async function saveScheduleAction(
   input: unknown,
-): Promise<ActionResult<{ effectiveFrom: string }>> {
+): Promise<ActionResult<{ saved: boolean; effectiveFrom: string }>> {
   const user = await requirePermission("production:plan");
   try {
     const result = await saveSchedule(scheduleSchema.parse(input), user);
     refresh();
-    return { ok: true, effectiveFrom: result.effectiveFrom };
+    return { ok: true, saved: result.saved, effectiveFrom: result.effectiveFrom };
   } catch (error) {
     return toActionError(error, "The schedule");
   }

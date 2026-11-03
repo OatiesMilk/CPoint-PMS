@@ -494,9 +494,18 @@ was never built. Each phase gets its own criteria here when its plan is approved
 - [x] Follow-up (D-105, 2026-11-02): production works Monday to Friday, 08:00 to 17:00; the
       schedule and reminder days refuse weekends and hours outside it; migration `weekdays_only`.
       `npm run check` passed (615); Codex run 1 FAIL (S8 query, `demo:reset` kept Mon–Sat; fixed),
-      run 2 **PASS** (e2e 88/0/2); commit on `feature/weekdays-only-schedule` next
+      run 2 **PASS** (e2e 88/0/2); merged #32
+- [ ] Follow-up (D-107, 2026-11-02, team QA): a schedule or lunch break equal to tomorrow's is not
+      saved again; Codex run 1 FAIL on axe only (fixed)
+- [ ] Follow-up (D-108, 2026-11-02, Dylan): no unknown defect classes (migration
+      `no_unknown_classes`); Materials reads "Week 1: Nov. 2"; `npm run check` passed (622); Codex
+      run 1 next
 - [ ] Phase 30C: cuts from 3 inches Not accepted; a roll over 10% defects (of its entered area)
       marked Return to supplier, the FM decides
+- [ ] Phase 30D: the team's QA notes on Reports → Materials (week picker by date, no Last 8
+      weeks or Per 100 pairs, on hand per week, pairs change and pairs per roll, leather Used split
+      into Fully used, Returned to supplier and Removed); plan
+      `docs/prompts/plans/groupmates-feedback-plan.md`
 - [ ] Phase 31: the documentation and the paper's figures match the system
 
 ## Phase 24 — Remove Material Requests and Procurement

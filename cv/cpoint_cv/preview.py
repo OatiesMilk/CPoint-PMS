@@ -36,21 +36,20 @@ class PreviewConfig:
 class PreviewDecision:
     verdict: str  # PASS | REJECT
     max_confidence: float | None
-    unknown_keys: tuple[str, ...]
+    # Inactive types and classes with no defect type: both ignored (D-108).
     ignored_keys: tuple[str, ...]
 
 
 def detection_outcome(confidence: float, outcome: str | None, config: PreviewConfig) -> str | None:
     """What one detection does (``detectionOutcome``): its type's outcome once found, nothing
-    (None) below found-at. A class with no outcome (unknown) is Not accepted."""
+    (None) below found-at, or for a class with no outcome."""
     if not outcome:
-        return "NOT_ACCEPTED"
+        return None
     return outcome if confidence >= config.found_at_or_above else None
 
 
 def preview_verdict(detections: Iterable[Detection], config: PreviewConfig) -> PreviewDecision:
-    unknown: dict[str, None] = {}  # ordered sets, like the JS Set in decide()
-    ignored: dict[str, None] = {}
+    ignored: dict[str, None] = {}  # an ordered set, like the JS Set in decide()
     best: float | None = None
     rejected = False
 
@@ -61,10 +60,9 @@ def preview_verdict(detections: Iterable[Detection], config: PreviewConfig) -> P
             outcome = config.outcomes.get(d.class_key)
             if detection_outcome(d.confidence, outcome, config) == "NOT_ACCEPTED":
                 rejected = True
-        elif d.class_key in config.inactive_keys:
-            ignored[d.class_key] = None
         else:
-            unknown[d.class_key] = None
+            # Inactive, or no defect type at all: the app drops it (D-108).
+            ignored[d.class_key] = None
 
-    verdict = "REJECT" if rejected or unknown else "PASS"
-    return PreviewDecision(verdict, best, tuple(unknown), tuple(ignored))
+    verdict = "REJECT" if rejected else "PASS"
+    return PreviewDecision(verdict, best, tuple(ignored))

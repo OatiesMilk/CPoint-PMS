@@ -75,7 +75,6 @@ export async function defectsCsv(range: ReportRange) {
   return toCsv(r.defects, [
     { header: "Defect type", value: (d) => d.label },
     { header: "Class key", value: (d) => d.key },
-    { header: "Known type", value: (d) => (d.known ? "yes" : "no") },
     { header: "Scans", value: (d) => d.scans },
     { header: "Pass", value: (d) => d.pass },
     { header: "Reject (for salvage)", value: (d) => d.reject },

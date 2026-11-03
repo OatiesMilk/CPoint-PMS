@@ -2082,3 +2082,64 @@ strict (C-9). Claude recommended the outline; the `measure` report keeps it for 
 from, so real knife cuts would be a stronger check. D-105 is the Monday to Friday schedule (its own
 thread). **Where:** `cv/cpoint_cv/{measure,calibration,cli}.py`,
 `src/server/services/roll-photos.service.ts`, `scripts/cv-roll-photos.ts`.
+
+### D-107 · 2026-11-02 · Accepted — A repeat schedule or lunch save is skipped
+
+**Context:** the team's QA notes (2 Nov) showed six identical schedules saved on 27 Oct and asked
+whether they override data. They don't: the newest save for a day wins (`inForceOn`), so batches
+and reports are unchanged; only the history was cluttered. The quota already skipped a repeat
+(D-099).
+**Decision (Dylan):** a schedule or lunch break equal to the one in force tomorrow is not saved:
+no row, no audit, and the toast "Nothing changed: this schedule (lunch break) already applies from
+<day>, so nothing was saved." Working days are compared as a set. The API answers
+`{ saved, effectiveFrom }`. The other notes become Phase 30D after 30C (it needs 30C's Return to
+supplier); Materials weeks are picked by date, not "Week 1 to 12".
+**Where:** `src/server/services/production.service.ts` (`saveSchedule`, `saveLunchBreak`), the two
+forms and actions, `docs/API.md`. Plan: `docs/prompts/plans/groupmates-feedback-plan.md`.
+
+### D-108 · 2026-11-02 · Accepted — No unknown defect classes; Materials weeks read "Week 1: Nov. 2"
+
+**Context:** an unknown class (a key the model sends with no defect type) rejected its section and
+was listed under Settings → Unknown classes (A-12, D-093). Dylan: "delete all unknown detection,
+there should no longer be an unknown."
+**Decision (Dylan):** a class with no defect type is **dropped at ingest**: not stored, no effect
+on the verdict (replaces A-12). Settings → Unknown classes, the Admin home card and banner,
+`GET /api/v1/defect-types/unknown`, the "unknown" boxes and labels, the "(unknown)" report rows,
+the `defects.csv` "Known type" column, the simulator's `sim-unknown` and the demo week's unknown
+section are gone; the `cv/` preview ignores such classes too. Migration `no_unknown_classes`: a scan
+rejected **only** by unknown classes becomes Pass (Dylan chose this on the card), an unknown
+detection whose key is a defect type now joins it, the rest are deleted, `isUnknownClass` is
+dropped; one SYSTEM audit row `scan.unknown_classes_removed` keeps the counts. Tried on a scratch
+PostgreSQL with seven cases (only unknown, plus a known reject, plus a Usable, a key now Not
+accepted, an old pre-Phase 25 snapshot, a key now Usable, a Pass): all as intended.
+**Known cost (told to Dylan):** a retrained model's new classes are ignored until the Admin adds
+them under Settings → Defect types; a defect the model reports under a new class would pass.
+Settings, `cv/README.md` and `cv/MODEL_CARD.md` say so.
+**Also (Dylan):** Reports → Materials reads "Week 1: Nov. 2" instead of "This week is the week of
+Nov 2.": the week's number within the month its Monday falls in (`weekOfMonthLabel`).
+**Where:** `src/lib/decision-engine.ts`, `src/server/services/scan-ingest.service.ts`,
+`prisma/migrations/20261103090000_no_unknown_classes/`, `src/lib/stock-rules.ts`.
+
+### D-109 · 2026-11-02 · Accepted — Materials by week of the month, with Year, Month and Find
+
+**Context:** Dylan asked for "Used per material" to be browsed by week, month and year and
+searched by material, after D-108's "Week 1: Nov. 2" (a Monday week numbered in its month).
+**Decision (Dylan):** a month's weeks run from the 1st: Week 1 is days 1 to 7, Week 2 days 8 to
+14, and so on; the last week ends on the month's last day and may be shorter (Week 5 · Feb 29 alone
+in a leap year). Labels read "Week 1 · Nov 1–7". Reports → Materials has **Year**, **Month**,
+**Week** and **Find material** (name or item code, any case, trimmed), all in the URL
+(`?year=&month=&week=&q=`); the default is the week today falls in. Changing the month or year
+keeps the week number when that month has it and it has started, otherwise the month's last week
+that has started; weeks and months that haven't started can't be picked, and an invalid URL value
+falls back to today's week. The columns are **Selected week** and **Previous week** (Week 1's
+previous week is the last, possibly short, week of the month before; the line under the filters
+says how many days each has when they differ). The 8-week trend and the Leather rolls table end at
+the selected week. **Per 100 pairs and Days left keep D-102's last 28 days up to today** whatever
+week is picked; "May run out" still looks at every material, not only the search's. The CSV
+follows the selection and search (columns Week, From, To, …). Replaces D-108's "Week 1: Nov. 2"
+and D-102's Monday weeks on this report; Phase 30D's week picker (the groupmates' plan) is this.
+**Where:** `src/lib/month-weeks.ts`, `src/server/services/materials.service.ts`,
+`src/server/models/materials.model.ts` (by Manila day), `src/app/(app)/reports/materials/`
+(`page.tsx`, `material-filters.tsx`), `src/server/controllers/report.controller.ts`,
+`docs/API.md`; tests `tests/unit/{month-weeks,materials.service,stock-rules}.test.ts`,
+`tests/e2e/inventory.spec.ts`.

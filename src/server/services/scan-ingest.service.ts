@@ -52,7 +52,6 @@ export type IngestResult = {
 export type ScanDefect = {
   label: string;
   confidence: number;
-  unknown: boolean;
   effect: DefectOutcome | null;
 };
 
@@ -123,7 +122,9 @@ export async function ingestScan(
     throw new Error("CV settings row is missing; the bootstrap should have created it.");
   const rule = { foundAtOrAbove: settings.foundAtOrAbove };
   const byKey = new Map(defectTypes.map((t) => [t.key, t]));
-  const decision = decide(input.detections, byKey, rule);
+  // A class with no defect type is dropped here: not stored, no effect on the verdict (D-108).
+  const detections = input.detections.filter((d) => byKey.has(d.classKey));
+  const decision = decide(detections, byKey, rule);
   // The outcomes in force, kept with the found-at value so the verdict stays explainable.
   const snapshot: Omit<DecisionSnapshot, "earlierRule"> = {
     ...rule,
@@ -132,14 +133,13 @@ export async function ingestScan(
     ),
   };
 
-  const defects: ScanDefect[] = input.detections.map((d) => {
+  const defects: ScanDefect[] = detections.map((d) => {
     const type = byKey.get(d.classKey);
     const active = type?.isActive ? type : undefined;
     return {
       label: type?.label ?? d.classKey,
       confidence: d.confidence,
-      unknown: !type,
-      effect: type && !active ? null : detectionOutcome(d.confidence, active?.outcome, rule),
+      effect: detectionOutcome(d.confidence, active?.outcome, rule),
     };
   });
 
@@ -170,12 +170,11 @@ export async function ingestScan(
           capturedAt: input.capturedAt ?? now,
           createdAt: now,
         },
-        input.detections.map((d) => {
+        detections.map((d) => {
           const type = byKey.get(d.classKey);
           return {
             defectTypeId: type?.id ?? null,
             rawClassKey: d.classKey,
-            isUnknownClass: !type,
             confidence: d.confidence,
             x: d.box.x,
             y: d.box.y,
@@ -198,8 +197,7 @@ export async function ingestScan(
           sequence,
           verdict: decision.verdict,
           maxConfidence: decision.maxConfidence,
-          detections: input.detections.length,
-          unknownKeys: decision.unknownKeys,
+          detections: detections.length,
           rollSelection: roll.selection,
           ...(origin.kind === "website" ? { origin: "website" } : {}),
         },

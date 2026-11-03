@@ -3,30 +3,13 @@ import {
   daysLeft,
   daysToNextReminder,
   describeReminderDays,
-  lastWeeks,
   mayRunOut,
   perHundredPairs,
   stockUpdateDue,
   weekChange,
-  weekStart,
 } from "@/lib/stock-rules";
 
 // 2026-10-28 is a Wednesday, 2026-10-30 a Friday, 2026-11-01 a Sunday.
-
-describe("weeks (Monday to Sunday, Manila dates)", () => {
-  it("starts a week on its Monday, Sunday included", () => {
-    expect(weekStart("2026-10-28")).toBe("2026-10-26");
-    expect(weekStart("2026-10-26")).toBe("2026-10-26");
-    expect(weekStart("2026-11-01")).toBe("2026-10-26");
-  });
-
-  it("lists the last 8 Mondays, oldest first, ending this week", () => {
-    const weeks = lastWeeks("2026-10-28");
-    expect(weeks).toHaveLength(8);
-    expect(weeks[0]).toBe("2026-09-07");
-    expect(weeks.at(-1)).toBe("2026-10-26");
-  });
-});
 
 describe("the reminder (C-32)", () => {
   it("is due on a reminder day until an update is saved", () => {

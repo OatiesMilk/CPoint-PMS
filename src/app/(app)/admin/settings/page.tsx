@@ -3,24 +3,19 @@
  * Who:   the System Admin, rarely, often after a model retrain or a new supplier.
  * What:  adjust what the camera decides (each defect type's outcome, "counts as found at") and
  *        the lists people pick from (suppliers), and the lunch break that pauses a batch (C-3).
- * Worst: a new defect class silently rejecting sections (A-12). Unknown classes are listed with
- *        counts and one click to add each as a defect type.
+ * Worst: a class the model sends that isn't set up here is ignored (D-108), so a new model's
+ *        classes must be added as defect types when the model changes.
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { CircleHelp, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatManilaDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { requirePermission } from "@/server/policies/guard";
-import {
-  getThresholds,
-  listReferenceRows,
-  unknownClasses,
-} from "@/server/services/settings.service";
+import { getThresholds, listReferenceRows } from "@/server/services/settings.service";
 import { TablePager } from "@/components/features/table-pager";
 import {
   Table,
@@ -114,7 +109,7 @@ async function ThresholdsTab() {
 }
 
 async function DefectsTab({ add }: { add?: string }) {
-  const [rows, unknown] = await Promise.all([listReferenceRows("defectType"), unknownClasses()]);
+  const rows = await listReferenceRows("defectType");
   const columns: Column[] = [
     { key: "label", label: "Label" },
     { key: "key", label: "Class key", mono: true },
@@ -153,43 +148,6 @@ async function DefectsTab({ add }: { add?: string }) {
   ];
   return (
     <div className="flex flex-col gap-6">
-      {unknown.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CircleHelp aria-hidden className="size-5 text-reject" />
-              Unknown classes seen
-            </CardTitle>
-            <CardDescription>
-              The camera sent these, but no defect type matches, so those sections are rejected
-              until you set the type up. Add one and choose its outcome; future sections follow it.
-              Past sections keep their verdict.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col divide-y" data-testid="unknown-classes">
-              {unknown.map((u) => (
-                <li key={u.rawClassKey} className="flex items-center justify-between gap-3 py-2">
-                  <span>
-                    <span className="font-mono font-medium">{u.rawClassKey}</span>
-                    <span className="ml-3 text-sm text-muted-foreground">
-                      {u.detections} detection{u.detections === 1 ? "" : "s"} · last{" "}
-                      {formatManilaDateTime(u.lastSeen)}
-                    </span>
-                  </span>
-                  <Button asChild size="sm" variant="secondary">
-                    <Link
-                      href={`/admin/settings?tab=defects&add=${encodeURIComponent(u.rawClassKey)}`}
-                    >
-                      Add as defect type
-                    </Link>
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
       <ReferenceManager
         key={add ?? "list"}
         kind="defectType"
@@ -224,7 +182,8 @@ async function DefectsTab({ add }: { add?: string }) {
       <p className="flex items-center gap-2 text-sm text-muted-foreground">
         <Info aria-hidden className="size-4" />
         An inactive defect type is ignored when the camera decides. Its past detections stay. A
-        defect counts as found from the value on the Thresholds tab.
+        defect counts as found from the value on the Thresholds tab. A class the camera model sends
+        that isn’t listed here is ignored, so add each new class when the model changes.
       </p>
     </div>
   );

@@ -66,15 +66,15 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
   await scanOn(request, token, roll.id, "cut", 0.3); // below found-at: PASS
   await scanOn(request, token, roll.id, "abrasion", 0.7); // Usable: PASS
   await scanOn(request, token, roll.id, "cut", 0.95); // Not accepted: REJECT
-  const unknown = await scanOn(request, token, roll.id, "e2e-report-class", 0.9);
-  expect(unknown.verdict).toBe("REJECT"); // an unknown class rejects (A-12)
+  const noType = await scanOn(request, token, roll.id, "e2e-report-class", 0.9);
+  expect(noType.verdict).toBe("PASS"); // a class with no defect type is dropped (D-108)
 
   const after = await report();
   const delta = (k: string) => after.totals[k] - before.totals[k];
   expect({ scanned: delta("scanned"), pass: delta("pass"), reject: delta("reject") }).toEqual({
     scanned: 4,
-    pass: 2,
-    reject: 2,
+    pass: 3,
+    reject: 1,
   });
   expect(after).not.toHaveProperty("matrix");
   const defects = (r: typeof after, key: string) =>
