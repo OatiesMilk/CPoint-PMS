@@ -11,7 +11,6 @@ export type ScanSummary = {
   defects: {
     label: string;
     confidence: number;
-    unknown: boolean;
     effect: DefectOutcome | null;
   }[];
 };
@@ -20,7 +19,6 @@ const percent = (v: number) => `${Math.round(v * 100)}%`;
 
 /** What each detection did to the shot, in words beside the colour (D-093). */
 function effectText(d: ScanSummary["defects"][number]): string {
-  if (d.unknown) return "Unknown class, rejected";
   return d.effect ? OUTCOME_LABELS[d.effect] : "Not counted";
 }
 
@@ -44,12 +42,6 @@ export function LastScanSummary({ summary, repeat }: { summary: ScanSummary; rep
           ? "Reject: this part of the roll is reported for salvage."
           : "Pass: this part of the roll can go on to cutting."}
       </p>
-      {summary.defects.some((d) => d.unknown) && (
-        <p className="text-sm">
-          The model found a class the app doesn’t know, so the shot is rejected. The System Admin
-          can set the type up in Settings.
-        </p>
-      )}
       {summary.defects.length > 0 ? (
         <ul className="flex flex-col gap-1 text-sm">
           {summary.defects.map((d, i) => (

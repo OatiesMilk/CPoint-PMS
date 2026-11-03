@@ -98,14 +98,14 @@ export async function setReferenceActiveAction(
 /** The lunch break (C-3): from tomorrow; the batches pause for it. */
 export async function saveLunchBreakAction(
   input: unknown,
-): Promise<ActionResult<{ effectiveFrom: string }>> {
+): Promise<ActionResult<{ saved: boolean; effectiveFrom: string }>> {
   const admin = await requirePermission("settings:manage");
   try {
     const result = await saveLunchBreak(lunchBreakSchema.parse(input), admin);
     refresh();
     revalidatePath("/batches");
     revalidatePath("/batches/plan");
-    return { ok: true, effectiveFrom: result.effectiveFrom };
+    return { ok: true, saved: result.saved, effectiveFrom: result.effectiveFrom };
   } catch (error) {
     return toResult(error);
   }

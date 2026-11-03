@@ -196,7 +196,7 @@ export async function operationsReport(range: ReportRange, now: Date = new Date(
       total: qt.reject,
       byDefect: quality.defects
         .filter((d) => d.reject > 0)
-        .map((d) => ({ key: d.key, label: d.label, known: d.known, sections: d.reject }))
+        .map((d) => ({ key: d.key, label: d.label, sections: d.reject }))
         .sort((a, b) => b.sections - a.sections || a.label.localeCompare(b.label)),
     },
     /** The checkpoint before cutting, kept as a short summary; the full view is Quality. */

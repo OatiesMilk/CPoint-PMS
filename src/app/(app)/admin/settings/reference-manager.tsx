@@ -60,7 +60,7 @@ type Props = {
   fields: Field[];
   rows: Row[];
   emptyText: string;
-  /** Opens "Add" pre-filled (e.g. from Unknown classes → Add as defect type). */
+  /** Opens "Add" pre-filled (from `?add=<class key>`). */
   initialCreate?: Record<string, string>;
 };
 

@@ -126,9 +126,8 @@ jobs:
           # How much of the week has passed depends on the weekday CI runs on.
           test "$(q "select count(*) from batches")" -ge 10
           test "$(q "select count(*) from scans")" -ge 40
-          # Pass or Reject only (D-093), and one section rejected for an unknown class (A-12).
-          q "select count(*) from scans where \"finalVerdict\" is distinct from \"aiVerdict\"" | grep -qx 0
-          test "$(q "select count(*) from detections where \"isUnknownClass\"")" -ge 1
+          # Pass or Reject only (D-093), and every detection has a defect type (D-108).
+          q "select count(*) from detections where \"defectTypeId\" is null" | grep -qx 0
           # Rolls at Capture (Phase 26): constructors with camera access capture on their phones,
           # the newest roll stays open and the Floor Manager cancelled one with a reason.
           test "$(q "select count(*) from users where \"canCapture\" and role='SHOE_CONSTRUCTOR'")" -ge 1

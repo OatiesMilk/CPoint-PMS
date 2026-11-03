@@ -71,7 +71,7 @@ export async function listRolls(
 
 /**
  * The defects found on a page of rolls (Inventory → the item, Phase 30A): per roll and class, the
- * detections the decision engine counted (a known type, or an unknown class), never per person.
+ * detections of each defect type the decision engine counted, never per person.
  */
 export async function countDefectsForRolls(
   rollIds: string[],
@@ -120,7 +120,6 @@ const detailSelect = {
         select: {
           rawClassKey: true,
           confidence: true,
-          isUnknownClass: true,
           defectType: { select: { label: true, outcome: true } },
         },
       },

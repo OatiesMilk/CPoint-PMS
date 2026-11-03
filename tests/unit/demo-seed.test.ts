@@ -37,12 +37,10 @@ const svc = {
         now,
         classKeys: input.detections.map((d) => d.classKey),
       });
-      // The unknown class is rejected, as the real decision engine does (A-12).
-      const unknown = input.detections.some((d) => d.classKey === "sim-unknown");
       return {
         scanId: `s${calls.length}`,
         rollId: input.rollId,
-        verdict: unknown ? "REJECT" : "PASS",
+        verdict: "PASS",
       };
     },
   ),
@@ -140,7 +138,6 @@ vi.mock("@/server/services/scan-ingest.service", () => ({ ingestScan: svc.ingest
 
 const { mulberry32, seedDemoWeek, preparationMs, PREPARATION_HOURS, DEMO_QUOTA } =
   await import("@/server/services/demo-seed.service");
-const { UNKNOWN_CLASS } = await import("@/server/lib/leather-scan");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -202,13 +199,17 @@ describe("seedDemoWeek", () => {
   it.each([
     ["Saturday afternoon", now],
     ["Monday before the first shift", new Date("2026-10-04T23:30:00.000Z")],
-  ])("ends on the newest roll's last section, an unknown class (%s)", async (_label, at) => {
-    await seedDemoWeek({ now: at, seed: 1 });
-    const scans = calls.filter((c) => c.fn === "scan");
-    // Ten sections a roll (D-082): small, but every roll has a full set.
-    expect(scans.length).toBeGreaterThanOrEqual(80);
-    expect(scans.at(-1)!.classKeys).toEqual([UNKNOWN_CLASS]);
-  });
+  ])(
+    "scans every roll fully, with no class outside the defect types (%s, D-108)",
+    async (_label, at) => {
+      await seedDemoWeek({ now: at, seed: 1 });
+      const scans = calls.filter((c) => c.fn === "scan");
+      // Ten sections a roll (D-082): small, but every roll has a full set.
+      expect(scans.length).toBeGreaterThanOrEqual(80);
+      for (const s of scans)
+        for (const k of s.classKeys ?? []) expect(["crease", "cut"]).toContain(k);
+    },
+  );
 
   it("captures every section on a constructor's phone with the real model, ten a roll (Phase 26)", async () => {
     await seedDemoWeek({ now, seed: 1 });
@@ -266,7 +267,7 @@ describe("seedDemoWeek", () => {
   it("draws defects from the active defect types only", async () => {
     await seedDemoWeek({ now, seed: 1 });
     const keys = new Set(calls.filter((c) => c.fn === "scan").flatMap((c) => c.classKeys ?? []));
-    expect([...keys].sort()).toEqual(["crease", "cut", UNKNOWN_CLASS].sort());
+    expect([...keys].sort()).toEqual(["crease", "cut"]);
   });
 
   it("seeds nothing when no defect type is active", async () => {

@@ -19,7 +19,7 @@ const SYSTEM = { type: "SYSTEM" } as const;
 export const REFERENCE_DATA = {
   // The model's four classes with CPoint's outcomes (DQ-7, A-13), and the two earlier placeholder
   // types, which the model never sends. Data: the Admin changes them in Settings, and a fine-tuned
-  // model's new classes arrive under Unknown classes.
+  // model's new classes must be added under Settings → Defect types, or the app ignores them (D-108).
   defectTypes: [
     {
       key: "crease",

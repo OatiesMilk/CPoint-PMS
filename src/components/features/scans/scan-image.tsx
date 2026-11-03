@@ -9,9 +9,8 @@ export type OverlayDetection = {
   id: string;
   label: string;
   confidence: number;
-  unknown: boolean;
-  /** The type's outcome when the scan was decided (D-093); null for an unknown class or a scan
-   * decided before Phase 25. */
+  /** The type's outcome when the scan was decided (D-093); null for a scan decided before
+   * Phase 25. */
   outcome?: DefectOutcome | null;
   box: { x: number; y: number; width: number; height: number };
 };
@@ -27,11 +26,10 @@ type Props = {
 };
 
 /**
- * Box tone follows what this detection does to the section: red for Not accepted (an unknown class
- * too, dashed), green for a found Usable defect, a grey dashed box below "counts as found at".
+ * Box tone follows what this detection does to the section: red for Not accepted, green for a
+ * found Usable defect, a grey dashed box below "counts as found at".
  */
 function tone(d: OverlayDetection, rule: RuleSettings) {
-  if (d.unknown) return "unknown";
   // A scan decided before Phase 25 has no outcomes in its snapshot: no tone to claim.
   if (!d.outcome) return "muted";
   const outcome = detectionOutcome(d.confidence, d.outcome, rule);
@@ -40,7 +38,6 @@ function tone(d: OverlayDetection, rule: RuleSettings) {
 
 const TONES = {
   reject: "border-reject [--chip:var(--reject)]",
-  unknown: "border-reject border-dashed [--chip:var(--reject)]",
   pass: "border-pass [--chip:var(--pass)]",
   muted: "border-muted-foreground/70 border-dashed [--chip:var(--muted-foreground)]",
 } as const;

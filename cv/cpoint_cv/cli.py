@@ -43,17 +43,17 @@ def settings_line(config: Config) -> str:
     return (
         f"Preview settings: found at {p.found_at_or_above:.2f}; Not accepted (Reject): "
         f"{keys('NOT_ACCEPTED')}; Usable (Pass): {keys('USABLE')}; inactive: {inactive}; "
-        "unknown classes: Reject. "
+        "other classes: ignored. "
         f"Confidence floor {config.mapper.confidence_floor:.2f}, imgsz {config.model.imgsz}, "
         f"device {config.model.device}."
     )
 
 
 NO_TYPES_WARNING = (
-    "warning: [preview] active_keys is empty, so the preview rejects every detection as an "
-    "unknown class. Copy the defect types and their outcomes from Admin > Settings into "
-    "[preview] and [preview.outcomes] (cv/config.example.toml has the demo's), or the preview "
-    "won't match the app."
+    "warning: [preview] active_keys is empty, so the preview ignores every detection, as the "
+    "app does for a class with no defect type. Copy the defect types and their outcomes from "
+    "Admin > Settings into [preview] and [preview.outcomes] (cv/config.example.toml has the "
+    "demo's), or the preview won't match the app."
 )
 
 
@@ -144,14 +144,12 @@ def _predict(args: argparse.Namespace) -> int:
                 if detections
                 else "nothing found"
             )
-            unknown = (
-                f", unknown to the app: {', '.join(preview.unknown_keys)}"
-                if (preview.unknown_keys)
-                else ""
+            ignored = (
+                f", ignored: {', '.join(preview.ignored_keys)}" if preview.ignored_keys else ""
             )
             print(
                 f"{image.name}  {output.inference_ms:.0f} ms  preview {preview.verdict} "
-                f"({top}{unknown})"
+                f"({top}{ignored})"
             )
             for d in detections:
                 b = d.box

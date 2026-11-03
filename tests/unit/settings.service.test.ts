@@ -9,7 +9,6 @@ const refs = {
     ...data,
   })),
   listReference: vi.fn(),
-  listUnknownClassKeys: vi.fn(),
   updateReference: vi.fn(async (_kind: string, id: string, data: Record<string, unknown>) => ({
     id,
     isActive: true,

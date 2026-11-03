@@ -3,36 +3,48 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-02 (Phase 30B QA run 4 passed; follow-up ready to commit)
-**Branch:** `main` has Phase 30B (#30, c8d6410), merged before QA. Its QA fixes and these
-wrap-up docs are **uncommitted** in `C:\dev\CPoint-PMS`; Dylan commits them on a new branch and
-opens a follow-up PR.
-**Also uncommitted (PC):** D-105, production works Monday to Friday, 08:00 to 17:00 (schedule and
-reminder days refused outside it, migration `weekdays_only` applied to the PC's dev database from
-3 Nov, demo week skips weekends). Codex run 1 FAIL (`qa/reports/2026-11-02-weekdays-only-run1.md`):
-13 of 14 passed, e2e 88 passed, 0 failed, 2 skipped; S8's weekend query was wrong (UTC not
-applied; corrected, 0 weekend rolls), and `demo:reset` kept the old Mon–Sat default, so Recent
-days showed a missed Saturday: it now puts back one Mon–Fri default. `npm run check` passed (615).
-Run 2 **PASS** (`qa/reports/2026-11-02-weekdays-only-run2.md`): R1 to R3, weekend counts 0, one
-Mon–Fri default after the reset, e2e 88 passed, 0 failed, 2 skipped. Next: Dylan commits on
-`feature/weekdays-only-schedule` and opens the PR.
-**Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
-included; Codex only tests and reports; every agent reads the Obsidian vault
-(`C:\dev\capstone-obsidian`) first and records each change there.
-**Current phase:** Phase 30B, the measuring check (D-106). `python -m cpoint_cv calibrate`
-(an A4 or letter sheet, white paper or a dark leather piece, gives px/in), `measure` (box and
-outline lengths and areas, the ruler, the 3-inch line, the share of the entered area, strict 10%)
-and `npm run cv:roll-photos` (a roll's shots, `shots.csv`, `roll.toml` with its code and area).
-Test piece: letter size (8.5 × 11 in, 0.649 sq ft), phone 19 to 20 in above, three pen lines:
-2.5 in not found, 3.5 in → 3.58 in by box, 5.5 in → 5.80 in; 19.4% of the piece by box against
-1.0% by outline. **Dylan chose the box (D-106).** Codex: run 1 stopped after C2; run 2 FAIL
-(mypy on OpenCV 5, the export crashed on a missing photo, an old local `cv/config.toml`, a test
-roll only on the PC), fixed; run 3 FAIL only on C5's outline spans (GPU vs the PC's CPU, every box
-number matched), C5 now checks the box; run 4 **PASS** (`qa/reports/2026-11-02-phase-30b-run4.md`;
-C7 NOT POSSIBLE, no roll without an area). Checks: ruff, mypy, pytest 102, `npm run check` 614.
-**Next:** Dylan commits the follow-up and opens the PR. **Then:** 30C (the 3-inch cut by the box
-diagonal and the 10% return, D-106), 31 the docs. Monday to Friday only (D-105) is its own thread.
-**Overall:** 32 phases built (0 to 29, 30A, 30B); 2 planned (30C, 31)
+**Last updated:** 2026-11-02 (D-107 run 1 FAIL on axe only, fixed; D-108 built; Codex next)
+**Branch:** `main` at 2e63908 has Phase 30B (#30, #31) and D-105 Monday to Friday (#32).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`), from the team's QA notes and Dylan:**
+
+- D-107: a schedule or lunch break equal to tomorrow's is not saved again. Codex run 1 FAIL
+  (`qa/reports/2026-11-02-no-repeat-saves-run1.md`): S1 to S10, A1, A2 passed, e2e 88/0/2; axe
+  found a repeated "Pagination" landmark on Plan batches and the Demo mode band outside a landmark.
+  Fixed (named pagers, the band is a labelled region).
+- D-108: no unknown defect classes (dropped at ingest; migration `no_unknown_classes` deletes past
+  ones and turns scans rejected only by them into Pass); Materials reads "Week 1: Nov. 2".
+  `npm run check` passed (622); `cv/` ruff, mypy, pytest 102 passed. Handoff
+  `qa/handoffs/2026-11-02-no-unknown-classes.md`, prompt `qa/CODEX_PROMPT_NO_UNKNOWN_CLASSES.md`
+  (also rechecks D-107's axe). `.github/workflows/ci.yml` needs a hand edit (protected).
+- The rest of the team's notes is Phase 30D after 30C: `docs/prompts/plans/groupmates-feedback-plan.md`.
+  **Also uncommitted (laptop, 2 Nov):** D-107 (no repeat schedule or lunch saves), D-108 (no unknown
+  defect classes, migration `no_unknown_classes`) and D-109 (Reports → Materials by week of the
+  month: Year, Month, Week and Find material). D-108 run 1 (`qa/reports/2026-11-02-no-unknown-classes-run1.md`):
+  14 of 15, e2e 88 passed, 0 failed, 2 skipped; S3's 405 for the removed `defect-types/unknown` was a
+  wrong expectation (the `[id]` route only has PATCH), so no app fault. D-109: `npm run check` passed
+  (635 unit tests in the cloud copy). Codex run 1 FAIL (`qa/reports/2026-11-02-materials-weeks-run1.md`), on `next dev`:
+  11 of 12 (S11 a wrong expectation), e2e 78 passed, 4 failed, 2 skipped; F3 a test race in
+  `batches.spec.ts` (fixed), F2, F4, F5 dev-server contention. Run 2: full suite 88 passed, 0 failed, 2 skipped (two workers); `batches.spec.ts` lost a fill
+  before hydration (fixed). Run 3 on port 3001: one cold-start sign-in timeout, then 6/0; on 3000
+  6/0 twice. **QA done; Dylan commits D-107 to D-109 on `feature/team-qa-fixes`.** Codex now
+  checks in its in-app browser at the `npm run dev` port; the Docker app stays stopped until deploy.
+  **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
+  included; Codex only tests and reports; every agent reads the Obsidian vault
+  (`C:\dev\capstone-obsidian`) first and records each change there.
+  **Current phase:** Phase 30B, the measuring check (D-106). `python -m cpoint_cv calibrate`
+  (an A4 or letter sheet, white paper or a dark leather piece, gives px/in), `measure` (box and
+  outline lengths and areas, the ruler, the 3-inch line, the share of the entered area, strict 10%)
+  and `npm run cv:roll-photos` (a roll's shots, `shots.csv`, `roll.toml` with its code and area).
+  Test piece: letter size (8.5 × 11 in, 0.649 sq ft), phone 19 to 20 in above, three pen lines:
+  2.5 in not found, 3.5 in → 3.58 in by box, 5.5 in → 5.80 in; 19.4% of the piece by box against
+  1.0% by outline. **Dylan chose the box (D-106).** Codex: run 1 stopped after C2; run 2 FAIL
+  (mypy on OpenCV 5, the export crashed on a missing photo, an old local `cv/config.toml`, a test
+  roll only on the PC), fixed; run 3 FAIL only on C5's outline spans (GPU vs the PC's CPU, every box
+  number matched), C5 now checks the box; run 4 **PASS** (`qa/reports/2026-11-02-phase-30b-run4.md`;
+  C7 NOT POSSIBLE, no roll without an area). Checks: ruff, mypy, pytest 102, `npm run check` 614.
+  **Next:** Dylan commits the follow-up and opens the PR. **Then:** 30C (the 3-inch cut by the box
+  diagonal and the 10% return, D-106), 30D the team's QA notes, 31 the docs. Monday to Friday only (D-105) is its own thread.
+  **Overall:** 32 phases built (0 to 29, 30A, 30B); 2 planned (30C, 31)
 
 ## Phase progress
 
@@ -529,8 +541,9 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. Dylan commits the Phase 30B follow-up (QA fixes, run 2 to 4 reports, the wrap-up docs) on a new
-   branch, pushes and opens the PR (D-032). CI runs on the PR and Claude fixes any failure.
+1. Codex run for D-108 and the D-107 recheck (`qa/CODEX_PROMPT_NO_UNKNOWN_CLASSES.md`, laptop);
+   on a PASS, Dylan applies the `ci.yml` edit, commits D-107 and D-108 on one new branch and opens
+   the PR (D-032).
 2. Phase 30C in a new session: the 3-inch cut by the box diagonal and the 10% return (D-106).
    Watch slanted cuts: their box is mostly clean leather. Optional first: a few real knife cuts on
    scrap leather through `measure` (the pen lines aren't what the model learned).
@@ -635,6 +648,13 @@ Later:
 - ASSUMPTION (D-084): Late starts 30 minutes after a check-in's time; a check-in can be entered
   until midnight and corrected the same day only.
 - Closed (D-095, C-33): the 10-pieces hint is gone; roll sizes vary and a section is a shot.
+- Decided (Dylan, 2026-11-02, D-107): a repeat schedule or lunch save is skipped; the team's other
+  notes become Phase 30D after 30C; weeks on Materials are picked by date ("Week of 26 Oct").
+- Decided (Dylan, 2026-11-02, D-108): no unknown defect classes; a class with no defect type is
+  ignored (replaces A-12); past scans rejected only by one became Pass; Materials weeks read
+  "Week 1: Nov. 2" (week of the month). Tell CPoint the Admin must add a new model's classes.
+- To check (team QA): their Materials screenshot showed Pairs finished 0 in every week, even with 8
+  rolls used. Taken on a groupmate's PC; check on that database before 30D.
 - Decided (Dylan, 2026-11-02, D-105): production works Monday to Friday, 08:00 to 17:00 (replaces
   D-083's Monday to Saturday); the FM may set a shorter shift inside that window; stock reminders
   Monday to Friday. Tell CPoint.

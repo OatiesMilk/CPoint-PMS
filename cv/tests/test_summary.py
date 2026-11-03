@@ -12,7 +12,7 @@ BOX = Box(0.1, 0.1, 0.1, 0.1)
 
 def result(name: str, verdict: str, *dets: tuple[str, float], ms: float = 10.0) -> ImageResult:
     return ImageResult(
-        name, [Detection(k, c, BOX) for k, c in dets], PreviewDecision(verdict, None, (), ()), ms
+        name, [Detection(k, c, BOX) for k, c in dets], PreviewDecision(verdict, None, ()), ms
     )
 
 

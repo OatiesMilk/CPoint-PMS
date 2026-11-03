@@ -333,16 +333,15 @@ model Scan {
 }
 
 model Detection {
-  id             String  @id @default(uuid(7)) @db.Uuid
-  scanId         String  @db.Uuid
-  defectTypeId   String? @db.Uuid // null when the class key is unknown
-  rawClassKey    String // exactly what the model sent
-  isUnknownClass Boolean @default(false)
-  confidence     Float
-  x              Float // bounding box, fractions 0–1 of the image
-  y              Float
-  width          Float
-  height         Float
+  id           String  @id @default(uuid(7)) @db.Uuid
+  scanId       String  @db.Uuid
+  defectTypeId String? @db.Uuid // always set since D-108; nullable for old rows
+  rawClassKey  String // exactly what the model sent
+  confidence   Float
+  x            Float // bounding box, fractions 0–1 of the image
+  y            Float
+  width        Float
+  height       Float
 
   scan       Scan        @relation(fields: [scanId], references: [id], onDelete: Cascade)
   defectType DefectType? @relation(fields: [defectTypeId], references: [id])

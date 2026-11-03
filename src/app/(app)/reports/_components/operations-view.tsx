@@ -193,10 +193,9 @@ export function OperationsView({
                 label="Top defects"
                 items={checkpoint.defects.map((d) => ({
                   id: d.key,
-                  label: d.known ? d.label : `${d.label} (unknown)`,
+                  label: d.label,
                   value: d.scans,
                   valueLabel: `${d.scans} · ${formatPercent(d.share)}`,
-                  muted: !d.known,
                 }))}
               />
             )}

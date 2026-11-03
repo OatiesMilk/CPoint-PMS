@@ -84,8 +84,8 @@ Admin, in **Admin → Settings → Defect types**:
 4. Set **When found**: `cut` and `hole` → **Not accepted (Reject)**, `crease` and `scratch` →
    **Usable (Pass)**. Keep **A defect counts as found at** at 50% under **Thresholds**.
 
-Until step 1, every `crease` or `scratch` is an unknown class, so its section is rejected and the
-class is listed under Settings → Unknown classes (A-12). Then copy the same lists,
+Until step 1, every `crease` or `scratch` is ignored: since D-108 the app drops a class with no
+defect type, so **add each new class when the model changes**. Then copy the same lists,
 `found_at_or_above` and `[preview.outcomes]` into `config.toml` (the example already has them) so
 `predict` and `evaluate` preview what the app will decide.
 

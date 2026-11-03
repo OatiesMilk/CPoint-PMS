@@ -24,20 +24,10 @@ export const REMINDER_DAY_CHOICES = [1, 2, 3, 4, 5] as const;
 /** Wednesday and Friday (C-32). */
 export const DEFAULT_REMINDER_DAYS = [3, 5];
 
-/** The weeks the Materials report shows, and the days the pace and "per 100 pairs" look back. */
+/** The weeks the Materials trend shows (D-109: ending with the picked week), and the days the pace
+ * and "per 100 pairs" look back. */
 export const TREND_WEEKS = 8;
 export const PACE_DAYS = 28;
-
-/** The Monday of the week a Manila calendar day falls in. */
-export function weekStart(day: string): string {
-  return addDays(day, 1 - isoWeekday(day));
-}
-
-/** The Mondays of the last `count` weeks, oldest first, ending with this week's. */
-export function lastWeeks(today: string, count: number = TREND_WEEKS): string[] {
-  const current = weekStart(today);
-  return Array.from({ length: count }, (_, i) => addDays(current, -7 * (count - 1 - i)));
-}
 
 /** A reminder day with no Update stock saved yet that day (C-32). */
 export function stockUpdateDue(

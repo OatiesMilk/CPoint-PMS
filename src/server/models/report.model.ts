@@ -63,7 +63,6 @@ export async function dailyProduction(range: Range, db: Db = defaultDb()) {
 export type DefectRow = {
   key: string;
   label: string;
-  known: boolean;
   scans: number;
   pass: number;
   /** Sections rejected (for salvage) whose main defect was this type. */
@@ -72,9 +71,8 @@ export type DefectRow = {
 
 /**
  * Scans per defect type, by the scan's top detection (the one that drove the decision), split by
- * final verdict. Unknown class keys are grouped under their raw key. A key that was unknown when
- * scanned but is a defect type now (e.g. `crease`, added for yolo-v1, D-052) joins that type, so
- * each key is one row.
+ * final verdict. Every detection has a defect type since D-108; a key with none (an old row)
+ * is grouped under its raw key.
  */
 export async function defectBreakdown(range: Range, db: Db = defaultDb()): Promise<DefectRow[]> {
   const rows = await db.$queryRaw<Record<string, bigint | string | boolean>[]>`
@@ -89,19 +87,17 @@ export async function defectBreakdown(range: Range, db: Db = defaultDb()): Promi
     )
     SELECT coalesce(t.key, top."rawClassKey") AS key,
       coalesce(t.label, top."rawClassKey") AS label,
-      (t.id IS NOT NULL) AS known,
       count(*) AS scans,
       count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
       count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
     FROM top JOIN scans s ON s.id = top."scanId"
     LEFT JOIN defect_types t ON t.id = top."defectTypeId"
       OR (top."defectTypeId" IS NULL AND t.key = top."rawClassKey")
-    GROUP BY 1, 2, 3
+    GROUP BY 1, 2
     ORDER BY count(*) DESC, 2`;
   return rows.map((r) => ({
     key: String(r.key),
     label: String(r.label),
-    known: Boolean(r.known),
     scans: n(r.scans as bigint),
     pass: n(r.pass as bigint),
     reject: n(r.reject as bigint),

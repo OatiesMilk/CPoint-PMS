@@ -21,13 +21,6 @@ export const MODEL_CLASSES: SceneClass[] = [
   { key: "hole", outcome: "NOT_ACCEPTED" },
   { key: "scratch", outcome: "USABLE" },
 ];
-/**
- * A class no defect type covers, so its sections are rejected and the key is listed in Settings →
- * Unknown classes (A-12). No camera model emits it: `scratch` was used before it became a real
- * class of yolo-v1 (D-052).
- */
-export const UNKNOWN_CLASS = "sim-unknown";
-
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
 export function randomBox(random: Random): Box {
@@ -44,8 +37,7 @@ export function randomBox(random: Random): Box {
 
 /**
  * One section's detections: ~30% clean, ~30% a mark below "counts as found at" (50%, so Pass),
- * ~22% a found Usable defect (Pass), ~13% a found Not accepted one (Reject), ~5% an unknown class
- * (Reject, A-12). A found section draws from the classes with that outcome, so the mix holds
+ * ~22% a found Usable defect (Pass), ~18% a found Not accepted one (Reject). A found section draws from the classes with that outcome, so the mix holds
  * whatever the types are set to; with none of an outcome it draws from all of them.
  */
 export function scenario(
@@ -73,8 +65,7 @@ export function scenario(
       det(pick(pool("USABLE")), 0.6, 0.89),
       ...(random() < 0.3 ? [det(pick(keys), 0.2, 0.45)] : []),
     ];
-  if (r < 0.95) return [det(pick(pool("NOT_ACCEPTED")), 0.9, 0.99)];
-  return [det(UNKNOWN_CLASS, 0.7, 0.95)];
+  return [det(pick(pool("NOT_ACCEPTED")), 0.9, 0.99)];
 }
 
 /** A JPEG of brown leather grain with a visible mark per detection. */

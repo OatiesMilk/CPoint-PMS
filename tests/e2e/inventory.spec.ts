@@ -180,26 +180,27 @@ test("Reports → Materials shows what an item used this week, and the CSV", asy
   await signInAs(page, ACCOUNTS.manager);
   await page.goto("/reports/materials");
   await expect(page.getByRole("heading", { name: "Used per material" })).toBeVisible();
-  // Page through until the item shows (earlier runs add items).
+  // The week shown is today's (D-109); find the item by its code, in any case, with spaces.
+  await expect(page.getByLabel("Week", { exact: true })).toHaveValue(/\d/);
+  await page.getByLabel("Find material").fill(`  ${item.sku.toLowerCase()} `);
+  await page.waitForURL(/q=/);
   const row = page.getByRole("row", { name: new RegExp(item.sku) });
-  // Wait for each page to arrive before looking (QA 30A F3: the count was read too early).
-  for (let i = 0; i < 20 && (await row.count()) === 0; i++) {
-    const next = page.getByRole("link", { name: /Next/ });
-    if ((await next.count()) === 0) break;
-    const before = page.url();
-    await next.first().click();
-    await page.waitForURL((url) => url.toString() !== before);
-    await expect(page.getByRole("heading", { name: "Used per material" })).toBeVisible();
-  }
-  // The correction is not use: 4 this week, 5 on hand.
+  await expect(row).toBeVisible();
+  // The correction is not use: 4 in the selected week, 5 on hand.
   await expect(row.getByRole("cell").nth(1)).toHaveText("4 boxes");
   await expect(row).toContainText("5 boxes");
 
   const csv = await api.get("/api/v1/reports/materials-used.csv");
   expect(csv.status()).toBe(200);
   const text = await csv.text();
-  expect(text).toContain("Week (Monday),Item code,Item,Category,Supplier,Unit,Used");
+  expect(text).toContain("Week,From,To,Item code,Item,Category,Supplier,Unit,Used");
   expect(text).toMatch(new RegExp(`${item.sku},[^\\n]*,4,`));
+
+  // A search that matches nothing says so, and Clear brings the rows back.
+  await page.getByLabel("Find material").fill("no-such-material-xyz");
+  await expect(page.getByText(/No material matches/)).toBeVisible();
+  await page.getByRole("button", { name: "Clear the search" }).click();
+  await expect(page.getByLabel("Find material")).toHaveValue("");
 });
 
 test("a low item shows on the Floor Manager home", async ({ browser, page }) => {

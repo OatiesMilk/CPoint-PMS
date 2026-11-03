@@ -65,9 +65,11 @@ export function LunchBreakForm({
       const result = await saveLunchBreakAction({ none, startTime, endTime });
       if (result.ok) {
         toast.success(
-          none
-            ? `No lunch break from ${formatAttendanceDay(result.effectiveFrom)}.`
-            : `Lunch ${startTime} to ${endTime} saved. It applies from ${formatAttendanceDay(result.effectiveFrom)}.`,
+          !result.saved
+            ? `Nothing changed: this lunch break already applies from ${formatAttendanceDay(result.effectiveFrom)}, so nothing was saved.`
+            : none
+              ? `No lunch break from ${formatAttendanceDay(result.effectiveFrom)}.`
+              : `Lunch ${startTime} to ${endTime} saved. It applies from ${formatAttendanceDay(result.effectiveFrom)}.`,
         );
         return;
       }

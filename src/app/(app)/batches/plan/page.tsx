@@ -147,6 +147,7 @@ export default async function ProductionPlanPage({ searchParams }: PageProps<"/b
               pageCount={pages(plan.scheduleHistory.length)}
               total={plan.scheduleHistory.length}
               noun={["schedule", "schedules"]}
+              label="Schedule history pages"
               href={(p) => href("sp", p)}
             />
           </CardContent>
@@ -192,6 +193,7 @@ export default async function ProductionPlanPage({ searchParams }: PageProps<"/b
                 pageCount={pages(plan.quotaHistory.length)}
                 total={plan.quotaHistory.length}
                 noun={["quota", "quotas"]}
+                label="Quota history pages"
                 href={(p) => href("qp", p)}
               />
             )}

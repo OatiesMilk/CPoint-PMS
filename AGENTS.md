@@ -25,7 +25,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   report and its artifacts) and its line in the vault's Daily note. Anything that fails goes in
   the report for Claude to fix.
 - Neither agent creates branches, commits, pushes or PRs. Dylan does.
-- For browser/e2e tests, keep Chromium headless. Do not open or leave visible Chrome or Chrome for Testing tabs/windows. Never launch chrome.exe directly for version checks on Windows; use Playwright or executable metadata instead.
+- **Browser checks run in Codex's in-app browser (Dylan, 2026-11-02)** so Dylan sees a live preview: open the app at the `npm run dev` URL (http://localhost:3000, or the port `npm run dev` printed) and walk the manual scenarios there. Don't start the Docker `app` container; only the `db` container runs.
+- **E2E runs against that same dev server:** `$env:E2E_BASE_URL="http://localhost:3000"` (the dev port) before `npm run test:e2e`, so Playwright doesn't start its own server. Playwright's own Chromium stays headless (it can't drive the in-app browser). Do not open or leave visible Chrome or Chrome for Testing tabs/windows. Never launch chrome.exe directly for version checks on Windows; use Playwright or executable metadata instead.
+- `next dev` compiles each page on first visit and closes idle connections after 5 s (no `--keepAliveTimeout`). If an e2e test fails on a timeout during a first compile or on `ECONNRESET`, rerun that spec alone once and report both results; never change a timeout.
 
 ## Vault first
 

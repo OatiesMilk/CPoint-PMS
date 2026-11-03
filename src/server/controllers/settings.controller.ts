@@ -7,7 +7,6 @@ import {
   listReferenceRows,
   saveThresholds,
   setReferenceActive,
-  unknownClasses,
   updateReferenceRow,
 } from "@/server/services/settings.service";
 import {
@@ -31,12 +30,6 @@ export const settingsController = {
     const admin = await requireApiPermission("settings:manage");
     const input = thresholdsSchema.parse(await readJsonBody(request));
     return json({ data: await saveThresholds(input, admin) });
-  }),
-
-  /** GET /api/v1/defect-types/unknown: class keys the camera sent that no type covers yet. */
-  unknownClasses: handle(async () => {
-    await requireApiPermission("settings:manage");
-    return json({ data: await unknownClasses() });
   }),
 };
 

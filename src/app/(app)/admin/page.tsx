@@ -2,7 +2,7 @@
  * Intent brief (ui-craft §1)
  * Who:   the System Admin, occasionally, to manage accounts and settings.
  * What:  confirm the system is healthy, then go to the admin task at hand. Administration only
- *        (Phase 28, D-100): health, users, the camera, unknown classes and the lunch break.
+ *        (Phase 28, D-100): health, users, the camera and the lunch break.
  * Worst: not noticing the database is down while the floor relies on the system.
  */
 import type { Metadata } from "next";
@@ -10,7 +10,6 @@ import { connection } from "next/server";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, CircleAlert } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
-import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ROLE_LABELS, type Role } from "@/lib/domain";
 import { formatDayLabel } from "@/lib/format";
@@ -18,7 +17,6 @@ import { requireRole } from "@/server/policies/guard";
 import { auditCountLastDay } from "@/server/services/audit-query.service";
 import { cameraStatus } from "@/server/services/camera.service";
 import { lunchBreakSettings } from "@/server/services/production.service";
-import { unknownClasses } from "@/server/services/settings.service";
 import { userSummary } from "@/server/services/user-admin.service";
 import { getHealth } from "@/server/services/health.service";
 
@@ -53,11 +51,10 @@ function CardLink({ href, children }: { href: string; children: React.ReactNode 
 export default async function AdminHome() {
   await requireRole("SYSTEM_ADMIN");
   await connection();
-  const [health, users, camera, unknown, lunch, auditDay] = await Promise.all([
+  const [health, users, camera, lunch, auditDay] = await Promise.all([
     getHealth(),
     userSummary(),
     cameraStatus(),
-    unknownClasses(),
     lunchBreakSettings(),
     auditCountLastDay(),
   ]);
@@ -66,26 +63,6 @@ export default async function AdminHome() {
   return (
     <>
       <PageHeader title="System overview" description="Health, accounts and settings." />
-      {unknown.length > 0 && (
-        <Alert tone="info" data-testid="unknown-classes-alert">
-          <p>
-            The camera sent {unknown.length} defect class{unknown.length === 1 ? "" : "es"} the
-            system doesn’t know (
-            {unknown
-              .slice(0, 3)
-              .map((u) => u.rawClassKey)
-              .join(", ")}
-            {unknown.length > 3 ? "…" : ""}). Those sections are rejected until you add the type and
-            choose whether it is Usable or Not accepted.
-          </p>
-          <Link
-            href="/admin/settings?tab=defects"
-            className="font-medium underline underline-offset-4"
-          >
-            Set up the defect types
-          </Link>
-        </Alert>
-      )}
       <Card>
         <CardHeader>
           <CardTitle>System health</CardTitle>
@@ -166,26 +143,6 @@ export default async function AdminHome() {
               </div>
             </dl>
             <CardLink href="/camera">Camera status</CardLink>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Unknown defect classes</CardTitle>
-            <CardDescription>Sent by the camera, not yet a defect type.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <p className="text-3xl font-semibold tabular-nums" data-testid="unknown-count">
-              {unknown.length}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {unknown.length === 0
-                ? "Every class the camera sends is known."
-                : `Sections with these are rejected until you set them up: ${unknown
-                    .slice(0, 3)
-                    .map((u) => u.rawClassKey)
-                    .join(", ")}${unknown.length > 3 ? "…" : ""}`}
-            </p>
-            <CardLink href="/admin/settings?tab=defects">Defect types</CardLink>
           </CardContent>
         </Card>
         <Card data-testid="lunch-break-card">

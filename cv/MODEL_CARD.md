@@ -122,5 +122,6 @@ crease and scratch on Rework, all five photos get the verdict a person would exp
 `reports/2026-10-19-yolo-v1.md`, a small check, not a measurement.
 
 Phase 25 (D-093) made every section Pass or Reject: crease and scratch are Usable (Pass), cut and
-hole Not accepted (Reject), and an unknown class rejects. The tables above are kept as they were
+hole Not accepted (Reject). Since D-108 a class with no defect type is ignored (dropped at
+ingest), so a retrained model's new classes must be added under Settings → Defect types. The tables above are kept as they were
 measured under the earlier rule; the preview and `evaluate` now give PASS or REJECT only.

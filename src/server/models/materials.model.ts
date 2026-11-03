@@ -1,10 +1,9 @@
 import { type Db, defaultDb } from "./db";
 
-// What was used, per item and week (Phase 29, D-102). Only Used entries (OUT) count: Added (IN)
-// and Corrections (ADJUST) never do. Weeks run Monday to Sunday by the Manila date. Aggregates per
-// item and week only; nothing here selects or groups by a person (D-008).
-
-const iso = (d: Date) => d.toISOString();
+// What was used, per item and Manila day (Phase 29, D-102; by day since D-109, so the service can
+// add the days up into a month's weeks). Only Used entries (OUT) count: Added (IN) and Corrections
+// (ADJUST) never do. Aggregates per item and day only; nothing here selects or groups by a person
+// (D-008).
 
 export type MaterialItemRow = {
   id: string;
@@ -55,18 +54,20 @@ export async function listMaterialItems(db: Db = defaultDb()): Promise<MaterialI
   }));
 }
 
-/** Used per item and Manila week (its Monday, YYYY-MM-DD), from `start` on. */
-export async function usedByWeek(start: Date, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<{ itemId: string; week: Date; used: string }[]>`
+/** Used per item and Manila day, for the days [fromDay, toDay] (D-109). */
+export async function usedByDay(fromDay: string, toDay: string, db: Db = defaultDb()) {
+  const rows = await db.$queryRaw<{ itemId: string; day: Date; used: string }[]>`
     SELECT "itemId",
-      date_trunc('week', ("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date AS week,
+      (("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date AS day,
       sum(-"quantityDelta")::text AS used
     FROM inventory_movements
-    WHERE type = 'OUT' AND "createdAt" >= (${iso(start)}::timestamptz AT TIME ZONE 'UTC')
-    GROUP BY "itemId", week`;
+    WHERE type = 'OUT'
+      AND (("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date
+        BETWEEN ${fromDay}::date AND ${toDay}::date
+    GROUP BY "itemId", day`;
   return rows.map((r) => ({
     itemId: r.itemId,
-    week: r.week.toISOString().slice(0, 10),
+    day: r.day.toISOString().slice(0, 10),
     used: Number(r.used),
   }));
 }
@@ -81,12 +82,12 @@ export async function usedBetween(start: Date, end: Date, db: Db = defaultDb()) 
   return new Map(rows.map((r) => [r.itemId, -Number(r._sum.quantityDelta ?? 0)]));
 }
 
-/** Pairs finished per Manila week (failed ones included: they count as made). */
-export async function pairsByWeek(fromDay: string, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<{ week: Date; pairs: bigint | null }[]>`
-    SELECT date_trunc('week', day)::date AS week, sum(pairs) AS pairs
-    FROM production_check_ins WHERE day >= ${fromDay}::date GROUP BY week`;
-  return new Map(rows.map((r) => [r.week.toISOString().slice(0, 10), Number(r.pairs ?? 0)]));
+/** Pairs finished per Manila day in [fromDay, toDay] (failed ones included: they count as made). */
+export async function pairsByDay(fromDay: string, toDay: string, db: Db = defaultDb()) {
+  const rows = await db.$queryRaw<{ day: Date; pairs: bigint | null }[]>`
+    SELECT day, sum(pairs) AS pairs FROM production_check_ins
+    WHERE day >= ${fromDay}::date AND day <= ${toDay}::date GROUP BY day`;
+  return rows.map((r) => ({ day: r.day.toISOString().slice(0, 10), value: Number(r.pairs ?? 0) }));
 }
 
 /** Pairs finished on the Manila days [fromDay, toDay]. */
@@ -97,13 +98,15 @@ export async function pairsBetween(fromDay: string, toDay: string, db: Db = defa
   return Number(rows[0]?.pairs ?? 0);
 }
 
-/** Rolls the camera checked (finished at Capture) per Manila week. */
-export async function rollsCheckedByWeek(start: Date, db: Db = defaultDb()) {
-  const rows = await db.$queryRaw<{ week: Date; rolls: bigint }[]>`
-    SELECT date_trunc('week', ("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date AS week,
+/** Rolls the camera checked (finished at Capture) per Manila day in [fromDay, toDay]. */
+export async function rollsCheckedByDay(fromDay: string, toDay: string, db: Db = defaultDb()) {
+  const rows = await db.$queryRaw<{ day: Date; rolls: bigint }[]>`
+    SELECT (("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date AS day,
       count(*) AS rolls
     FROM batches
-    WHERE status IN ('FINISHED', 'USED') AND "finishedAt" >= (${iso(start)}::timestamptz AT TIME ZONE 'UTC')
-    GROUP BY week`;
-  return new Map(rows.map((r) => [r.week.toISOString().slice(0, 10), Number(r.rolls)]));
+    WHERE status IN ('FINISHED', 'USED')
+      AND (("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date
+        BETWEEN ${fromDay}::date AND ${toDay}::date
+    GROUP BY day`;
+  return rows.map((r) => ({ day: r.day.toISOString().slice(0, 10), value: Number(r.rolls) }));
 }

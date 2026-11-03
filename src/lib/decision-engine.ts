@@ -6,8 +6,8 @@ import type { Verdict } from "./domain";
  *     outcome, Usable or Not accepted; below it, it counts for nothing (a YOLO confidence says how
  *     sure the model is that a defect is there, not how bad it is, so the type decides that);
  *   - any Not accepted → Reject, otherwise Pass;
- *   - any class key the system doesn't know → Reject (A-12), listed in Settings → Unknown classes;
- *   - inactive types are ignored.
+ *   - inactive types, and class keys with no defect type, are ignored (D-108: the ingest drops
+ *     the latter before anything is stored, so there are no unknown classes).
  * The found-at value, the outcomes and the defect types are data (CvSettings, DefectType).
  * Nobody changes the verdict afterwards (C-21).
  */
@@ -21,7 +21,6 @@ export type Decision = {
   verdict: Verdict;
   /** Highest confidence among active, known defect types; null when none counted. */
   maxConfidence: number | null;
-  unknownKeys: string[];
   /** Known but deactivated defect types, ignored by the rule. */
   ignoredKeys: string[];
 };
@@ -41,14 +40,14 @@ export function isFound(confidence: number, rule: RuleSettings): boolean {
 
 /**
  * What one detection does to its section: its type's outcome once found, nothing (null) below
- * found-at. An unknown class is Not accepted (A-12).
+ * found-at, or for a type with no outcome.
  */
 export function detectionOutcome(
   confidence: number,
   outcome: DefectOutcome | null | undefined,
   rule: RuleSettings,
 ): DefectOutcome | null {
-  if (!outcome) return "NOT_ACCEPTED";
+  if (!outcome) return null;
   return isFound(confidence, rule) ? outcome : null;
 }
 
@@ -57,23 +56,22 @@ export function decide(
   defectTypesByKey: ReadonlyMap<string, DefectTypeInfo>,
   rule: RuleSettings,
 ): Decision {
-  const unknown = new Set<string>();
   const ignored = new Set<string>();
   let max: number | null = null;
   let rejected = false;
 
   for (const d of detections) {
     const type = defectTypesByKey.get(d.classKey);
-    if (!type) unknown.add(d.classKey);
-    else if (!type.isActive) ignored.add(d.classKey);
+    if (!type) continue;
+    if (!type.isActive) ignored.add(d.classKey);
     else {
       if (max === null || d.confidence > max) max = d.confidence;
       if (detectionOutcome(d.confidence, type.outcome, rule) === "NOT_ACCEPTED") rejected = true;
     }
   }
 
-  const verdict: Verdict = rejected || unknown.size > 0 ? "REJECT" : "PASS";
-  return { verdict, maxConfidence: max, unknownKeys: [...unknown], ignoredKeys: [...ignored] };
+  const verdict: Verdict = rejected ? "REJECT" : "PASS";
+  return { verdict, maxConfidence: max, ignoredKeys: [...ignored] };
 }
 
 /** What a scan stores in `thresholdsSnapshot`: the rule in force when it was decided. */

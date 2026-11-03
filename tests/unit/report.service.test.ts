@@ -24,7 +24,7 @@ beforeEach(() => {
     },
   ]);
   model.defectBreakdown.mockResolvedValue([
-    { key: "cut", label: "Cut", known: true, scans: 3, pass: 1, reject: 2 },
+    { key: "cut", label: "Cut", scans: 3, pass: 1, reject: 2 },
   ]);
   model.dailyProduction.mockResolvedValue([{ day: "2026-10-01", started: 2, completed: 1 }]);
 });
@@ -87,6 +87,7 @@ describe("CSV", () => {
   it("defects CSV has Pass and Reject (for salvage) per type", async () => {
     const lines = (await svc.defectsCsv(range)).trim().split("\r\n");
     expect(lines[0]).toContain("Scans,Pass,Reject (for salvage)");
-    expect(lines[1]).toBe("Cut,cut,yes,3,1,2");
+    expect(lines[0]).not.toContain("Known type");
+    expect(lines[1]).toBe("Cut,cut,3,1,2");
   });
 });

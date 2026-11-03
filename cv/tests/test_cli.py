@@ -25,7 +25,7 @@ def test_no_warning_once_types_and_outcomes_are_set() -> None:
     assert preview_warnings(set_up) == []
     line = settings_line(set_up)
     assert "found at 0.50; Not accepted (Reject): cut; Usable (Pass): crease" in line
-    assert "unknown classes: Reject" in line
+    assert "other classes: ignored" in line
 
 
 def test_names_each_retired_setting() -> None:

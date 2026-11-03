@@ -159,8 +159,34 @@ test("the Floor Manager plans the batches, once at the end of the day, and the o
   await expect(schedule).not.toContainText("Batch 2");
   await expect(schedule).toContainText("Applies from tomorrow");
   await schedule.getByRole("button", { name: "Save schedule" }).click();
-  await expect(page.getByText(/Schedule saved\. It applies from/)).toBeVisible();
+  // A rerun on the same database may already have this schedule for tomorrow.
+  await expect(
+    page.getByText(
+      /Schedule saved\. It applies from|Nothing changed: this schedule already applies/,
+    ),
+  ).toBeVisible();
   await expect(page.getByTestId("schedule-history")).toContainText("once at the end of the day");
+  // Saving the same schedule again adds no row (team QA, 2026-11-02). Reload first so the count
+  // includes the save above: the history refreshes after its toast, slowly under `next dev`
+  // (D-109 run 1 F3 counted 8 before the table showed 9).
+  // The form opens on today's schedule, so enter tomorrow's once more.
+  await page.reload();
+  const historyRows = await page.getByTestId("schedule-history").getByRole("row").count();
+  // Under `next dev` a fill made before the page hydrates is lost (D-109 run 2), so repeat it
+  // until the form's own preview shows tomorrow's single batch.
+  await expect(async () => {
+    await schedule.getByLabel("Shift start").fill("08:00");
+    await schedule.getByLabel("Shift end").fill("17:00");
+    await schedule.getByLabel("How often").selectOption({ label: "Once at the end of the day" });
+    await expect(schedule).toContainText(/Tomorrow: Batch 1 08:00–17:00/, { timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
+  await schedule.getByRole("button", { name: "Save schedule" }).click();
+  await expect(
+    page.getByText(
+      /Nothing changed: this schedule already applies from .+, so nothing was saved\./,
+    ),
+  ).toBeVisible();
+  await expect(page.getByTestId("schedule-history").getByRole("row")).toHaveCount(historyRows);
 
   // Every 2 hours shows more batches in the preview.
   await schedule.getByLabel("How often").selectOption({ label: "Every 2 hours" });
@@ -212,8 +238,19 @@ test("the System Admin sets the lunch break, from tomorrow, with specific messag
   await form.getByLabel("Lunch starts").fill("11:30");
   await form.getByLabel("Lunch ends").fill("12:30");
   await form.getByRole("button", { name: "Save lunch break" }).click();
-  await expect(page.getByText(/Lunch 11:30 to 12:30 saved\. It applies from/)).toBeVisible();
+  await expect(
+    page.getByText(
+      /Lunch 11:30 to 12:30 saved\. It applies from|Nothing changed: this lunch break already applies/,
+    ),
+  ).toBeVisible();
   await expect(page.getByTestId("lunch-history")).toContainText("11:30 to 12:30");
+  // Saving the same lunch again adds nothing (team QA, 2026-11-02).
+  await form.getByRole("button", { name: "Save lunch break" }).click();
+  await expect(
+    page.getByText(
+      /Nothing changed: this lunch break already applies from .+, so nothing was saved\./,
+    ),
+  ).toBeVisible();
 
   // The Floor Manager can't set it.
   const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);

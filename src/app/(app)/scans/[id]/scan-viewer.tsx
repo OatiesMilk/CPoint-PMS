@@ -22,7 +22,6 @@ type Props = {
 
 /** What one detection did to the section, in words (colour is never alone). */
 function effect(d: OverlayDetection & { inactive: boolean }, rule: RuleSettings): string {
-  if (d.unknown) return "Unknown class: rejects the section";
   if (d.inactive) return "Type turned off: ignored";
   if (!d.outcome) return "Decided by the earlier rule";
   const outcome = detectionOutcome(d.confidence, d.outcome, rule);

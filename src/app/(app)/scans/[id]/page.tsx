@@ -11,7 +11,6 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Info } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { VerdictBadge } from "@/components/features/verdict-badge";
-import { Alert } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { outcomeGroups, readSnapshot } from "@/lib/decision-engine";
 import { formatManilaDateTime, formatPercent } from "@/lib/format";
@@ -39,9 +38,6 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
 
   const rule = readSnapshot(scan.thresholdsSnapshot);
   const groups = outcomeGroups(rule.outcomes);
-  const unknown = [
-    ...new Set(scan.detections.filter((d) => d.isUnknownClass).map((d) => d.rawClassKey)),
-  ];
 
   return (
     <>
@@ -60,20 +56,6 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
         actions={<VerdictBadge verdict={scan.finalVerdict} />}
       />
 
-      {unknown.length > 0 && (
-        <Alert tone="info">
-          <strong className="font-semibold">
-            Unknown defect class{unknown.length > 1 ? "es" : ""}:{" "}
-            {unknown.map((k) => `“${k}”`).join(", ")}.
-          </strong>
-          <span>
-            The model reported a class the system doesn’t know yet, so this section is rejected
-            (A-12). The System Admin adds it under Settings → Defect types and chooses whether it is
-            Usable or Not accepted; later sections follow that.
-          </span>
-        </Alert>
-      )}
-
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <ScanViewer
@@ -84,7 +66,6 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
               id: d.id,
               label: d.defectType?.label ?? d.rawClassKey,
               confidence: d.confidence,
-              unknown: d.isUnknownClass,
               outcome: rule.outcomes[d.rawClassKey] ?? null,
               inactive: d.defectType ? !d.defectType.isActive : false,
               box: { x: d.x, y: d.y, width: d.width, height: d.height },
@@ -121,7 +102,6 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                       <span>
                         Usable: {groups.usable.length ? groups.usable.join(", ") : "none"}
                       </span>
-                      <span>Unknown classes: Reject</span>
                     </>
                   )}
                   <span className="text-muted-foreground tabular-nums">

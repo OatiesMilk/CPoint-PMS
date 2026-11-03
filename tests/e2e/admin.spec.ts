@@ -174,7 +174,7 @@ test.describe("camera settings", () => {
     expect(detail.data.thresholdsSnapshot).not.toHaveProperty("rejectAtOrAbove");
   });
 
-  test("an unknown class can be added as a Usable defect type, and later sections pass", async ({
+  test("a class with no defect type is ignored until added; then it counts (D-108)", async ({
     browser,
     page,
     request,
@@ -183,32 +183,28 @@ test.describe("camera settings", () => {
     const roll = await createRoll(await captureApi(browser));
     const { token } = await createDeviceToken();
     const before = await postScan(request, token, roll.id, [{ classKey: key, confidence: 0.95 }]);
-    expect((await before.json()).data.verdict).toBe("REJECT"); // unknown classes reject (A-12)
+    expect((await before.json()).data.verdict).toBe("PASS"); // dropped: no defect type (D-108)
 
     await signInAs(page, ACCOUNTS.admin);
     await page.goto("/admin/settings?tab=defects");
-    const unknown = page
-      .getByTestId("unknown-classes")
-      .getByRole("listitem")
-      .filter({ hasText: key });
-    await expect(unknown).toContainText("1 detection");
-    await unknown.getByRole("link", { name: "Add as defect type" }).click();
+    await expect(page.getByText(/unknown/i)).toHaveCount(0);
+    await page.getByRole("button", { name: "Add defect type" }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByLabel("Class key")).toHaveValue(key);
+    await dialog.getByLabel("Class key").fill(key);
+    await dialog.getByLabel("Label").fill(key.replace("-", " "));
     // The outcome is required (D-093).
     await dialog.getByRole("button", { name: "Add defect type" }).click();
     await expect(dialog.getByText(/is Usable or Not accepted\./)).toBeVisible();
-    await dialog.getByLabel("When found").selectOption({ value: "USABLE" });
+    await dialog.getByLabel("When found").selectOption({ value: "NOT_ACCEPTED" });
     await dialog.getByRole("button", { name: "Add defect type" }).click();
     // Found, not browsed: other runs add defect types that can push this one past page 1 (D-047).
     await page.getByLabel("Find defect type").fill(key.replace("-", " "));
     await expect(
       page.getByRole("row", { name: new RegExp(key.replace("-", " "), "i") }),
     ).toBeVisible();
-    await expect(page.getByTestId("unknown-classes").getByText(key)).toHaveCount(0);
 
     const after = await postScan(request, token, roll.id, [{ classKey: key, confidence: 0.95 }]);
-    expect((await after.json()).data.verdict).toBe("PASS");
+    expect((await after.json()).data.verdict).toBe("REJECT");
 
     // Leave it inactive so it doesn't change other runs.
     const row = page.getByRole("row", { name: new RegExp(key.replace("-", " "), "i") });

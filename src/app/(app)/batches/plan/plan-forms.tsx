@@ -100,7 +100,9 @@ export function ScheduleForm({
       const result = await saveScheduleAction(values);
       if (result.ok) {
         toast.success(
-          `Schedule saved. It applies from ${formatAttendanceDay(result.effectiveFrom)}.`,
+          result.saved
+            ? `Schedule saved. It applies from ${formatAttendanceDay(result.effectiveFrom)}.`
+            : `Nothing changed: this schedule already applies from ${formatAttendanceDay(result.effectiveFrom)}, so nothing was saved.`,
         );
         return;
       }
