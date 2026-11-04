@@ -72,8 +72,9 @@ test.describe("Reports → Rolls (Floor Manager)", () => {
     // The roll's item and area (Phase 30A).
     await expect(page.getByRole("link", { name: /LR-E2E-/ })).toBeVisible();
     await expect(page.getByText("24.5 sq ft")).toBeVisible();
-    // A scanned roll not yet fully used can still be removed (damaged, lost).
-    await expect(page.getByRole("button", { name: "Remove roll…" })).toBeVisible();
+    // It's off stock (Phase 30E): a scanned roll can no longer be removed.
+    await expect(page.getByText("Scanned and taken off stock.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove roll…" })).toHaveCount(0);
 
     const axe = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])

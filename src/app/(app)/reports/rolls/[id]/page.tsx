@@ -12,7 +12,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft, FileText } from "lucide-react";
-import { ReturnDecision } from "@/components/features/rolls/return-decision";
 import { RollFindings } from "@/components/features/rolls/roll-findings";
 import { RollStatusBadge } from "@/components/features/rolls/roll-status-badge";
 import { ScanThumb } from "@/components/features/scans/scan-thumb";
@@ -30,7 +29,7 @@ import {
   TableViewLink,
 } from "@/components/ui/table";
 import { OUTCOME_LABELS, outcomeFor, readSnapshot } from "@/lib/decision-engine";
-import { formatCalendarDate, formatManilaDateTime, manilaToday } from "@/lib/format";
+import { formatCalendarDate, formatManilaDateTime } from "@/lib/format";
 import { formatPct, rollFindings } from "@/lib/roll-findings";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
@@ -38,7 +37,7 @@ import { getRollDetail } from "@/server/services/roll.service";
 import { isRollId } from "@/server/validators/roll.validator";
 import { RemoveRoll } from "@/components/features/rolls/remove-roll";
 import { formatArea } from "@/lib/roll-rules";
-import { decideReturnAction, removeRollAction } from "../actions";
+import { removeRollAction } from "../actions";
 
 export const metadata: Metadata = { title: "Roll" };
 
@@ -55,8 +54,7 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
   const fromInventory = !!roll.item;
   const canClaim = can(user.role, "report:production") && roll.scans.length > 0;
   const shots = roll.scans.length;
-  const canDecide = (roll.canReturn || roll.canKeep) && can(user.role, "roll:manage");
-  const toReturn = roll.markedForReturn && roll.returnDecision === null;
+  const tooMany = roll.markedForReturn && roll.returnDecision === null;
   const findings = rollFindings(roll.scans);
 
   const when = (d: Date | null, none: string) => (d ? formatManilaDateTime(d) : none);
@@ -84,7 +82,7 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
         ? when(roll.cancelledAt, "—")
         : when(roll.finishedAt, roll.status === "OPEN" ? "Still being scanned" : "Not yet"),
     ],
-    ...(fromInventory
+    ...(roll.usedAt
       ? ([
           [
             "Fully used",
@@ -139,18 +137,16 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
             Being scanned at Capture. It is finished there once all of it is scanned.
           </p>
         )}
-        {roll.status === "FINISHED" && fromInventory && !toReturn && (
-          <p className="text-sm text-muted-foreground">
-            Scanned. It leaves stock when the Quality Inspector ticks it Fully used at Finish batch.
-          </p>
+        {roll.status === "FINISHED" && fromInventory && (
+          <p className="text-sm text-muted-foreground">Scanned and taken off stock.</p>
         )}
-        {toReturn && (
+        {tooMany && (
           <p role="status" className="rounded-md bg-caution-soft p-3">
             <span className="font-medium">
               This roll has too many defects ({formatPct(roll.defectSharePct ?? 0)}, over{" "}
               {formatPct(roll.returnLimitPct ?? 10)}).
             </span>{" "}
-            Look at the photos below, then choose: send it back to the supplier, or keep it.
+            The photos are below. Use the claim sheet if you take it up with the supplier.
           </p>
         )}
         {roll.status === "RETURNED" && (
@@ -158,15 +154,6 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
             Sent back to the supplier
             {roll.returnedOn ? ` on ${formatCalendarDate(roll.returnedOn)}` : ""}.
           </Alert>
-        )}
-        {canDecide && (
-          <ReturnDecision
-            code={roll.code}
-            marked={toReturn}
-            canKeep={roll.canKeep}
-            today={manilaToday()}
-            action={decideReturnAction.bind(null, roll.id)}
-          />
         )}
         {roll.status === "CANCELLED" && (
           <Alert tone="info">

@@ -2152,3 +2152,61 @@ findings), D-104 (a marked roll can't be ticked until kept).
 `src/app/(app)/camera/capture/calibration.tsx`, `src/app/(app)/reports/rolls/`,
 `src/components/features/rolls/{return-decision,roll-findings,defect-share}.tsx`, migration
 `20261103103243_measure_and_return`. Plan: `docs/prompts/plans/phase-30c-plan.md`.
+
+### D-111 · 2026-11-03 · Accepted — The Quality Inspector no longer tracks rolls (Phase 30E)
+
+**Context:** Dylan, after talking with CPoint (3 Nov): the QI only counts the pairs made in each
+batch; nobody on the line knows which roll went into which batch.
+**Decision:** Finish batch and Correct ask only for the pairs finished, the pairs that failed
+inspection and the notes (or the reason). The **Rolls fully used** list, `usedRollIds` and
+`rollsToTick` are gone; an old client's `usedRollIds` is ignored. Batches ticked before still show
+"Fully used: LR-…" as history.
+**Replaces:** D-104's Fully used ticks at Finish batch. **Where:** `src/app/(app)/batches/`,
+`src/server/services/production.service.ts`, `src/server/validators/production.validator.ts`.
+
+### D-112 · 2026-11-03 · Accepted — A roll leaves stock at Finish roll; no Send back or Keep (Phase 30E)
+
+**Context:** Dylan (3 Nov): "no double check for Return to supplier"; whatever its result, a roll
+comes off the leather stock as soon as its scan is finished. Constructors only scan the rolls the
+day needs.
+**Decision (plan question 1, Claude's recommendation, ASSUMPTION A-31):** **Finish roll** takes the
+roll off its item's stock (`OUT` −1, "Roll LR-… scanned at Capture"), refused if the count already
+shows 0. Its Defect % is still worked out (D-106, D-110), and over the limit the roll reads **Too
+many defects** on Reports → Rolls, the roll's page, the claim sheet and Supplier quality, for the
+Floor Manager's information only. The Floor Manager's Send back and Keep, the To return band and
+filter and `POST …/return-decision` are gone; Phase 30C's decisions stay as history. Settings →
+Thresholds reads "A roll has too many defects when they cover more than __%". **Remove** works on a roll
+still in stock or being scanned (−1); a scanned roll is already off stock.
+**Replaces:** D-110's Floor Manager decision (A-27 and A-29 no longer apply to new rolls); D-104's
+Remove of a scanned roll. **Where:** `src/server/services/roll.service.ts`, `src/lib/roll-rules.ts`,
+`src/app/(app)/reports/rolls/`, `src/app/(app)/admin/settings/thresholds-form.tsx`.
+
+### D-113 · 2026-11-04 · Accepted — The constructor picks the leather, then the roll; each roll keeps its own area (Phase 30E)
+
+**Context:** Dylan (3 to 4 Nov): leather is told apart by what it is (one leather per supplier),
+the constructor picks it from a dropdown, the YOLO model can't tell colors (it only knows defects,
+and sees a roll after the first shot), and each leather roll has its own area, set by the Floor
+Manager. Asked how the system knows which roll is on the table, Dylan chose (a): the Floor Manager
+adds each roll with its area, and the constructor picks the leather, then the roll.
+**Decision:**
+
+- **Inventory stays as in Phase 30A (D-103, D-104):** the Floor Manager adds each roll to its
+  leather item with **Add rolls** (the day they arrived, each roll's area and the supplier's tag;
+  codes `LR-<supplier>-001`, +1 each). A leather item's count follows its rolls; its row on Update
+  stock stays read-only. No color field.
+- **Capture → Start a roll:** two dropdowns. **Leather** lists the leather items with rolls waiting
+  ("Brown suede (topsiders) · Marikina Leather Trading · 3 rolls"); **Roll on the table** then lists
+  that leather's rolls, oldest first ("LR-MLT-012 · 24.5 sq ft · tag 88-14"), to match the code on
+  the label; **Start scanning** (`POST /api/v1/rolls/{id}/start`). Nothing to type. Each message
+  names the field ("Choose the leather you're scanning.", "Choose the roll on the table. Its code is
+  on its label."). An empty roll picked by mistake is put back, as before.
+- **Migration** `rolls_leave_stock_at_capture` (data only): rolls scanned but not yet ticked leave
+  stock (−1, "Roll … scanned before rolls left stock at Capture"); rolls in stock stay pickable;
+  Fully used, Returned and Kept rolls stay as history; one SYSTEM audit row with the count.
+
+**Amends:** D-095 and D-104 (the pick is by leather, then roll; no Fully used ticks). D-103 stands.
+**Where:** `src/app/(app)/camera/capture/start-roll-form.tsx`, `src/lib/roll-rules.ts`,
+`prisma/migrations/20261104090000_rolls_leave_stock_at_capture/`. Plan:
+`docs/prompts/plans/phase-30e-plan.md`.
+**Consequences:** tell CPoint the FM adds each roll with its area, the constructor picks the
+leather and then the roll by its label, and the QI only counts pairs.

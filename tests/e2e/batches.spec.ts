@@ -2,14 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import pg from "pg";
 import { ACCOUNTS, signIn } from "./helpers";
-import {
-  addInventoryRoll,
-  captureApi,
-  createDeviceToken,
-  createRoll,
-  finishRoll,
-  postScan,
-} from "./cv-helpers";
+import { captureApi, createDeviceToken, createRoll, finishRoll, postScan } from "./cv-helpers";
 
 /**
  * Batches (Phase 27, D-097 to D-099): a batch is a check-in interval, finished by the Quality
@@ -266,13 +259,13 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
   browser,
 }) => {
   test.setTimeout(90_000);
-  // Phase 30A: a roll scanned at Capture (to tick Fully used) and one still in stock (never listed).
+  // Phase 30E (D-111): a roll scanned at Capture is already off stock; Finish batch never asks
+  // about rolls, and finishing the batch doesn't change the roll.
   const sc = await captureApi(browser);
   const scanned = await createRoll(sc);
   const { token } = await createDeviceToken();
   expect((await postScan(sc, token, scanned.id, [])).status()).toBe(201);
   await finishRoll(sc, scanned.id);
-  const unscanned = await addInventoryRoll();
   const rollState = () =>
     withDb(async (db) => {
       const { rows } = await db.query(
@@ -283,7 +276,7 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
       return rows[0] as { status: string; onHand: number };
     });
   const before = await rollState();
-  expect(before.status).toBe("FINISHED");
+  expect(before).toEqual({ status: "FINISHED", onHand: 0 });
 
   const page = await signedIn(browser, ACCOUNTS.inspector.email, ACCOUNTS.inspector.home, {
     width: 390,
@@ -335,19 +328,17 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
   await expect(finished).toHaveValue("12");
   await expect(failed).toHaveValue("2");
   await dialog.getByLabel("Notes (optional)").fill(note);
-  // Rolls fully used (Phase 30A): only scanned rolls are listed; tick ours.
-  await expect(dialog.getByRole("group", { name: /Rolls fully used/ })).toBeVisible();
-  await expect(dialog.getByRole("checkbox", { name: new RegExp(unscanned.code) })).toHaveCount(0);
-  await dialog.getByRole("checkbox", { name: new RegExp(scanned.code) }).check();
+  // No rolls on Finish batch (Phase 30E, D-111): the QI only counts pairs.
+  await expect(dialog.getByText("Rolls fully used")).toHaveCount(0);
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
   await dialog.getByRole("button", { name: `Finish batch ${number}` }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText(`Batch ${number} finished. 1 roll marked fully used.`)).toBeVisible();
+  await expect(page.getByText(`Batch ${number} finished.`, { exact: true })).toBeVisible();
   const card = page.getByTestId(`batch-${number}`);
   await expect(card).toContainText("12 pairs, 2 failed inspection");
   await expect(card).toContainText(`Note: ${note}`);
-  await expect(card).toContainText(`Fully used: ${scanned.code}`);
-  // Only now does the roll leave stock.
-  expect(await rollState()).toEqual({ status: "USED", onHand: before.onHand - 1 });
+  await expect(card).not.toContainText("Fully used");
+  expect(await rollState()).toEqual(before);
 
   // Phone layout (D-096): no sideways scroll, and the next batch's Finish button at the bottom.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
@@ -393,16 +384,12 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
     fix.getByText("Say why you're correcting this batch, at least 5 characters."),
   ).toBeVisible();
   await fix.getByLabel("Why are you correcting it?").fill("Counted one rack twice");
-  // The roll ticked in this batch shows ticked; untick it: it wasn't all used after all.
-  const tick = fix.getByRole("checkbox", { name: new RegExp(scanned.code) });
-  await expect(tick).toBeChecked();
-  await tick.uncheck();
+  await expect(fix.getByRole("checkbox")).toHaveCount(0);
   await fix.getByRole("button", { name: "Save correction" }).click();
   await expect(fix).toBeHidden();
   await expect(card).toContainText("11 pairs, 2 failed inspection");
   await expect(card).toContainText("Counted one rack twice");
-  await expect(card).not.toContainText(`Fully used: ${scanned.code}`);
-  expect(await rollState()).toEqual({ status: "FINISHED", onHand: before.onHand });
+  expect(await rollState()).toEqual(before);
 
   // The QI sees today only (Dylan 2026-10-24).
   await expect(page.getByText("Recent days")).toHaveCount(0);

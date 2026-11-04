@@ -9,7 +9,6 @@ import { Select } from "@/components/ui/select";
 import { ROLL_STATUS_LABELS, type RollStatus } from "@/lib/domain";
 
 const STATUSES = Object.keys(ROLL_STATUS_LABELS) as RollStatus[];
-const TO_RETURN = "to-return";
 const DAYS = [
   { value: "7", label: "Last 7 days" },
   { value: "30", label: "Last 30 days" },
@@ -78,22 +77,18 @@ export function RollFilters({ suppliers }: { suppliers: { id: string; name: stri
         <Label htmlFor="filter-status">Status</Label>
         <Select
           id="filter-status"
-          value={params.get("toReturn") ? TO_RETURN : (params.get("status") ?? "")}
+          value={params.get("status") ?? ""}
           onChange={(e) => {
-            // "To return" is its own filter (marked, no decision yet), not a status (Phase 30C).
             const next = new URLSearchParams(params);
             next.delete("page");
             next.delete("status");
-            next.delete("toReturn");
-            if (e.target.value === TO_RETURN) next.set("toReturn", "1");
-            else if (e.target.value) next.set("status", e.target.value);
+            if (e.target.value) next.set("status", e.target.value);
             startTransition(() =>
               router.replace(`${pathname}?${next.toString()}`, { scroll: false }),
             );
           }}
         >
           <option value="">All statuses</option>
-          <option value={TO_RETURN}>Waiting for your decision</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {ROLL_STATUS_LABELS[s]}

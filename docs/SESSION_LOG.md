@@ -5,6 +5,65 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-04 · Phase 30E-1 run 3 PASS
+
+- Run 3 PASS: the six specs that failed under the full run passed alone (41 passed, 1 skipped);
+  full suite 91/1/2 (one Materials load timeout in the smoke journey, 10/10 alone); ledger 0. Git
+  commands for 30E-1 given to Dylan. Next: 30E-2, the planning calendar, in a new session.
+
+## 2026-11-04 · Phase 30E-1 run 2 read
+
+- Run 2 FAIL (Dylan's own leathers, no reset): 12 manual scenarios passed, S5 and S6 not possible
+  (today's saved schedule leaves Wednesday out; no current roll over the limit); targeted specs
+  33/1/1, Inventory 8/8 alone; full suite 85/7/2, all timeouts or aborted loads under `next dev`.
+  No app fault found; run 3 reruns the six failing specs alone.
+
+## 2026-11-04 · Phase 30E-1 run 1 BLOCKED; demo:reset fix
+
+- Codex run 1 BLOCKED: `demo:reset` deleted the demo data and then stopped, because the demo
+  suppliers on the laptop were deactivated ("This supplier is no longer active."). Codex restored its
+  backup (ledger 0). Not a 30E change, but it blocked QA.
+- Fixed: the reset turns the kept suppliers back on in its transaction before seeding, and the audit
+  row says how many. Unit test added; tried on a copy of the run 1 backup (seeded, 5 turned on,
+  ledger 0). `npm run check` passed (651). Next: run 2.
+
+## 2026-11-04 · Phase 30E-1 reworked again: the leather, then the roll (D-113)
+
+- Dylan: each leather roll has its own area, set by the FM; chose (a): the FM adds each roll with
+  its area (as in 30A) and the constructor picks the leather, then the roll by its label.
+- The color field, the item's roll area and the constructor's typed area are gone again; the two
+  earlier migrations of this phase were replaced by one data-only migration
+  `rolls_leave_stock_at_capture`. D-113 rewritten; the old D-114 dropped (not committed).
+- Checks: `npm run check` passed (651); migration and demo week tried on a scratch database
+  (ledger 0). The laptop database needs a restore from this morning's backup (my restore was
+  blocked by the permission check); commands given to Dylan. Next: Codex run 1.
+
+## 2026-11-04 · Phase 30E-1 rework: leather picked by name, the FM sets the roll area (D-114)
+
+- Dylan (4 Nov): the FM sets the area, not the constructor; no color (the YOLO model can't tell
+  colors); the constructor picks the leather from a dropdown. Planning answers for 30E-2: a
+  calendar for any day with rolls to be used (one total, an estimate, more allowed, reports
+  compare), quota and check-in interval.
+- Built: migration `leather_roll_area` (drops `color`, adds `rollAreaSqFt`, applied to the laptop),
+  Start a roll by leather only, "Area of one roll" on the item, `GET /api/v1/rolls/leathers`,
+  demo roll areas, CI check, tests and docs. `npm run check` passed (648); demo week checked on a
+  scratch database (ledger 0). Next: Codex run 1.
+
+## 2026-11-04 · Phase 30E-1: leather by color; a roll leaves stock at Capture (D-111 to D-113)
+
+- Planned from `docs/prompts/rolls-by-color-and-same-day-plan.md` (plan
+  `docs/prompts/plans/phase-30e-plan.md`). Dylan answered question 2 (the constructor picks the
+  color and types the roll's area) and said go on the rest (A-31 to A-40 in STATUS). Two
+  sessions: this one rolls and color, 30E-2 the planning.
+- Built: migration `rolls_by_color` (item color; unscanned rolls closed, scanned rolls off stock),
+  Start a roll by color and area at Capture, Finish roll −1, Cancel for an empty roll, no roll
+  list on Finish batch, no Send back or Keep, Too many defects as information, leather on Update
+  stock (Added and Correction), the item's Color, the demo week's three colors, CI's demo checks,
+  API and station guide.
+- Checks: `npm run check` passed (650). Migration and demo week tried on a scratch database
+  (ledger 0); laptop DB backed up (`storage/backups/before-phase30e-2026-11-04.dump`), then
+  migrated. E2E specs updated, not run (Codex). Next: Codex run 1.
+
 ## 2026-11-03 · Phase 30C run 3 PASS; the setup window on a phone
 
 - Run 3 PASS after allowed reruns (four `next dev` load timeouts passed alone).

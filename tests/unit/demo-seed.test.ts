@@ -27,11 +27,6 @@ const svc = {
     const shots = calls.filter((c) => c.fn === "scan" && c.rollId === rollId).length;
     return { marked: shots > 0 && cuts === shots };
   }),
-  decideReturn: vi.fn(
-    async (rollId: string, values: { decision: string }, actor: { id: string }, now: Date) => {
-      calls.push({ fn: `decide:${values.decision}`, rollId, now, by: actor.id });
-    },
-  ),
   removeRoll: vi.fn(async (rollId: string, _reason: string, actor: { id: string }, now: Date) => {
     calls.push({ fn: "removeRoll", rollId, now, by: actor.id });
   }),
@@ -357,22 +352,10 @@ describe("seedDemoWeek", () => {
     expect(sheetItems.some((id) => id.startsWith("LR-"))).toBe(false);
   });
 
-  it("has the QI tick scanned rolls Fully used at Finish batch, each once, after its scan (Phase 30A)", async () => {
+  it("asks the QI for pairs only, never rolls (Phase 30E, D-111)", async () => {
     await seedDemoWeek({ now, seed: 1 });
-    const finishedAt = new Map(
-      calls.filter((c) => c.fn === "finishRoll").map((c) => [c.rollId!, c.now]),
-    );
-    const ticks = (
-      production.saveCheckIn.mock.calls as unknown as [{ usedRollIds?: string[] }, unknown, Date][]
-    ).flatMap(([input, , when]) => (input.usedRollIds ?? []).map((id) => ({ id, when })));
-    expect(ticks.length).toBeGreaterThan(3);
-    expect(new Set(ticks.map((t) => t.id)).size).toBe(ticks.length);
-    for (const t of ticks) {
-      expect(finishedAt.has(t.id)).toBe(true);
-      expect(finishedAt.get(t.id)!.getTime()).toBeLessThan(t.when.getTime());
-    }
-    // Some scanned rolls are left to tick, so Finish batch has something to show.
-    expect(finishedAt.size).toBeGreaterThan(ticks.length);
+    for (const [input] of production.saveCheckIn.mock.calls as unknown as [object][])
+      expect(input).not.toHaveProperty("usedRollIds");
   });
 
   it("finishes the batches as the QI, with one late and one missed, and three short days that line up with the absences", async () => {

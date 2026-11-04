@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultRollId,
-  diffUsedRolls,
   formatArea,
   formatRollCode,
   freeSupplierCode,
@@ -12,8 +11,6 @@ import {
   planPutBack,
   planRemove,
   planStart,
-  planUnuse,
-  planUse,
   rollClosedMessage,
   rollCodePrefix,
   SUPPLIER_CODE_PATTERN,
@@ -106,11 +103,15 @@ describe("a roll's moves (Phase 30A)", () => {
     expect(planPutBack({ status: "IN_STOCK", shots: 0 })).toMatchObject({ ok: false });
   });
 
-  it("lets the Floor Manager remove any roll from Inventory that isn't fully used", () => {
-    for (const status of ["IN_STOCK", "OPEN", "FINISHED"] as const)
+  it("lets the Floor Manager remove a roll from Inventory while it is in stock or being scanned (Phase 30E)", () => {
+    for (const status of ["IN_STOCK", "OPEN"] as const)
       expect(planRemove({ ...inv, status })).toEqual({ ok: true });
+    // A scanned roll is already off stock (D-112).
+    expect(planRemove({ ...inv, status: "FINISHED" })).toMatchObject({
+      reason: "LR-MLT-001 is already scanned.",
+    });
     expect(planRemove({ ...inv, status: "USED" })).toMatchObject({
-      reason: "LR-MLT-001 is already marked fully used.",
+      reason: "LR-MLT-001 was marked fully used.",
     });
     expect(planRemove({ ...inv, status: "CANCELLED" })).toMatchObject({ ok: false });
   });
@@ -118,45 +119,6 @@ describe("a roll's moves (Phase 30A)", () => {
   it("removes a roll from before Phase 30A only while it is open, as the old Cancel", () => {
     expect(planRemove({ status: "OPEN" })).toEqual({ ok: true });
     expect(planRemove({ status: "FINISHED" })).toMatchObject({ ok: false });
-  });
-});
-
-describe("Fully used ticks (Phase 30A)", () => {
-  const inv = { fromInventory: true, code: "LR-MT-004" };
-
-  it("ticks only a scanned roll from Inventory", () => {
-    expect(planUse({ ...inv, status: "FINISHED" })).toEqual({ ok: true });
-  });
-
-  it("never ticks a roll before the camera has checked it", () => {
-    for (const status of ["IN_STOCK", "OPEN"] as const)
-      expect(planUse({ ...inv, status })).toEqual({
-        ok: false,
-        reason: "LR-MT-004 isn’t scanned yet. Scan and finish it at Capture before it’s used.",
-      });
-  });
-
-  it("refuses a second tick, a removed roll and an old roll, by name", () => {
-    expect(planUse({ ...inv, status: "USED" })).toMatchObject({
-      reason: "LR-MT-004 is already marked fully used.",
-    });
-    expect(planUse({ ...inv, status: "CANCELLED" })).toMatchObject({ ok: false });
-    expect(planUse({ code: "R-2026-0003", status: "FINISHED" })).toMatchObject({
-      reason: expect.stringContaining("R-2026-0003 is from before rolls came from Inventory"),
-    });
-  });
-
-  it("unticks only a roll ticked in the same batch", () => {
-    expect(planUnuse({ ...inv, status: "USED", usedCheckInId: "c1" }, "c1")).toEqual({ ok: true });
-    expect(planUnuse({ ...inv, status: "USED", usedCheckInId: "c2" }, "c1")).toEqual({
-      ok: false,
-      reason: "LR-MT-004 wasn’t ticked in this batch.",
-    });
-  });
-
-  it("works out what a correction ticks and unticks", () => {
-    expect(diffUsedRolls(["a", "b"], ["b", "c"])).toEqual({ add: ["c"], remove: ["a"] });
-    expect(diffUsedRolls([], [])).toEqual({ add: [], remove: [] });
   });
 });
 

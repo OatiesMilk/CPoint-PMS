@@ -48,7 +48,7 @@ export async function supplierId(): Promise<string> {
  */
 export async function addInventoryRoll(
   options: { supplierId?: string; tagCode?: string; areaSqFt?: number } = {},
-): Promise<{ id: string; code: string; itemId: string }> {
+): Promise<{ id: string; code: string; itemId: string; item: string }> {
   const supplier = options.supplierId ?? (await supplierId());
   return withDb(async (db) => {
     await db.query("BEGIN");
@@ -113,7 +113,7 @@ export async function addInventoryRoll(
         [itemId],
       );
       await db.query("COMMIT");
-      return { id, code, itemId };
+      return { id, code, itemId, item: `E2E leather ${sku}` };
     } catch (error) {
       await db.query("ROLLBACK");
       throw error;
@@ -173,7 +173,7 @@ export async function captureApi(browser: Browser): Promise<APIRequestContext> {
 export async function createRoll(
   api: APIRequestContext,
   options: { supplierId?: string; tagCode?: string; areaSqFt?: number } = {},
-): Promise<{ id: string; code: string; itemId: string }> {
+): Promise<{ id: string; code: string; itemId: string; item: string }> {
   const roll = await addInventoryRoll(options);
   const res = await api.post(`/api/v1/rolls/${roll.id}/start`, { data: {} });
   expect(res.status()).toBe(200);

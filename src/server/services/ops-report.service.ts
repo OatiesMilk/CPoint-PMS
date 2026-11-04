@@ -254,8 +254,7 @@ export async function suppliersCsv(range: ReportRange) {
       value: (s) => (s.defectSharePct === null ? "" : s.defectSharePct.toFixed(1)),
     },
     { header: "Rolls measured", value: (s) => s.rollsMeasured },
-    { header: "Rolls marked Return to supplier", value: (s) => s.rollsMarked },
-    { header: "Rolls returned", value: (s) => s.rollsReturned },
+    { header: "Rolls with too many defects", value: (s) => s.rollsMarked },
   ]);
 }
 

@@ -5,8 +5,6 @@ import { type Db, defaultDb } from "./db";
 
 export type RollListFilters = {
   status?: RollStatus;
-  /** Marked Return to supplier with no decision yet (Reports → Rolls → To return, Phase 30C). */
-  toReturn?: boolean;
   supplierId?: string;
   /** Rolls added on or after this instant (the "days" filter). */
   since?: Date;
@@ -44,8 +42,7 @@ export type RollListRow = Prisma.RollGetPayload<{ select: typeof listSelect }>;
 function listWhere(filters: RollListFilters): Prisma.RollWhereInput {
   const q = filters.q?.trim();
   return {
-    status: filters.toReturn ? "FINISHED" : filters.status,
-    ...(filters.toReturn ? { markedForReturn: true, returnDecision: null } : {}),
+    status: filters.status,
     supplierId: filters.supplierId,
     itemId: filters.itemId,
     ...(filters.since ? { createdAt: { gte: filters.since } } : {}),
@@ -212,27 +209,7 @@ export function listReadyRolls(db: Db = defaultDb()): Promise<OpenRollRow[]> {
   });
 }
 
-/**
- * Scanned rolls from Inventory not yet fully used, the oldest scan first, for Finish batch's
- * Rolls fully used (Phase 30A); with `checkInId`, also the rolls ticked in that batch.
- */
-export function listRollsToTick(checkInId?: string, db: Db = defaultDb()): Promise<OpenRollRow[]> {
-  return db.roll.findMany({
-    where: {
-      itemId: { not: null },
-      OR: [
-        // A roll marked Return to supplier waits for the Floor Manager's Keep (Phase 30C).
-        { status: "FINISHED", OR: [{ markedForReturn: false }, { returnDecision: "KEPT" }] },
-        ...(checkInId ? [{ status: "USED" as const, usedCheckInId: checkInId }] : []),
-      ],
-    },
-    select: openSelect,
-    orderBy: [{ finishedAt: "asc" }, { code: "asc" }],
-    take: 200,
-  });
-}
-
-/** The rolls ticked Fully used in these batches, for Batches' rows. */
+/** The rolls ticked Fully used in these batches before Phase 30E, for Batches' rows (history). */
 export function listRollsUsedIn(checkInIds: string[], db: Db = defaultDb()) {
   if (checkInIds.length === 0) return Promise.resolve([]);
   return db.roll.findMany({
@@ -240,10 +217,6 @@ export function listRollsUsedIn(checkInIds: string[], db: Db = defaultDb()) {
     select: { id: true, code: true, usedCheckInId: true },
     orderBy: { code: "asc" },
   });
-}
-
-export function findRollsState(ids: string[], db: Db = defaultDb()): Promise<OpenRollRow[]> {
-  return db.roll.findMany({ where: { id: { in: ids } }, select: openSelect });
 }
 
 /** Every open roll, the newest first, for the Capture page's Roll dropdown. */
@@ -274,17 +247,7 @@ type RollMove =
       cancelledAt: Date;
       cancelledById: string;
       cancelledReason: string | null;
-    }
-  | { status: "USED"; usedAt: Date; usedById: string; usedCheckInId: string }
-  | {
-      status: "RETURNED";
-      returnDecision: "RETURNED";
-      returnedOn: Date;
-      returnNote: string | null;
-      returnDecidedAt: Date;
-      returnDecidedById: string;
-    }
-  | { status: "FINISHED"; usedAt: null; usedById: null; usedCheckInId: null };
+    };
 
 /**
  * Moves a roll only if it is still in the status the caller saw (optimistic concurrency, D-019).
@@ -295,9 +258,8 @@ export async function moveRoll(
   from: RollStatus,
   data: RollMove,
   db: Db = defaultDb(),
-  extra: { usedCheckInId?: string; returnDecision?: null } = {},
 ): Promise<boolean> {
-  const { count } = await db.roll.updateMany({ where: { id, status: from, ...extra }, data });
+  const { count } = await db.roll.updateMany({ where: { id, status: from }, data });
   return count === 1;
 }
 
@@ -338,26 +300,6 @@ export function saveRollMeasure(
   db: Db = defaultDb(),
 ) {
   return db.roll.update({ where: { id }, data });
-}
-
-/** Keep (the Floor Manager, C-36): only a scanned roll with no decision yet. False if it moved. */
-export async function keepRoll(
-  id: string,
-  data: { returnNote: string; returnDecidedAt: Date; returnDecidedById: string },
-  db: Db = defaultDb(),
-): Promise<boolean> {
-  const { count } = await db.roll.updateMany({
-    where: { id, status: "FINISHED", returnDecision: null },
-    data: { ...data, returnDecision: "KEPT" },
-  });
-  return count === 1;
-}
-
-/** Rolls marked Return to supplier that wait for the Floor Manager (Phase 30C). */
-export function countRollsToReturn(db: Db = defaultDb()) {
-  return db.roll.count({
-    where: { status: "FINISHED", markedForReturn: true, returnDecision: null },
-  });
 }
 
 /** Rolls open now (being captured), for the reports and the Camera page. */

@@ -1,45 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defectShareText, finishedLine, planDecide, returnMark } from "@/lib/roll-rules";
+import { defectShareText, finishedLine, returnMark } from "@/lib/roll-rules";
 import { captureFieldsSchema, ingestFieldsSchema } from "@/server/validators/scan.validator";
 import { defectTypeCreateSchema, thresholdsSchema } from "@/server/validators/settings.validator";
-import { returnDecisionSchema, rollListQuerySchema } from "@/server/validators/roll.validator";
+import { rollListQuerySchema } from "@/server/validators/roll.validator";
 
 const message = (r: { success: boolean; error?: { issues: { message: string }[] } }) =>
   r.error?.issues[0]?.message;
-
-describe("the Floor Manager's decision (Phase 30C, C-36)", () => {
-  it("takes Returned with a day and an optional note, and Keep with a reason", () => {
-    expect(
-      returnDecisionSchema.parse({ decision: "RETURNED", returnedOn: "2026-11-03", note: " " }),
-    ).toEqual({ decision: "RETURNED", returnedOn: "2026-11-03", note: undefined });
-    expect(returnDecisionSchema.parse({ decision: "KEPT", note: " Edge cuts " })).toEqual({
-      decision: "KEPT",
-      note: "Edge cuts",
-    });
-  });
-
-  it("names the field and the fix", () => {
-    expect(message(returnDecisionSchema.safeParse({ decision: "RETURNED" }))).toBe(
-      "Enter the day the roll was sent back, like 2026-11-03.",
-    );
-    expect(message(returnDecisionSchema.safeParse({ decision: "KEPT", note: "" }))).toMatch(
-      /^Write why you’re keeping it/,
-    );
-    expect(message(returnDecisionSchema.safeParse({ decision: "MAYBE" }))).toBe(
-      "Choose Send back or Keep.",
-    );
-  });
-
-  it("plans: only a scanned roll from Inventory, Keep only when marked, once", () => {
-    const base = { code: "LR-1", fromInventory: true, status: "FINISHED" as const };
-    expect(planDecide(base, "RETURNED").ok).toBe(true);
-    expect(planDecide(base, "KEPT").ok).toBe(false);
-    expect(planDecide({ ...base, markedForReturn: true }, "KEPT").ok).toBe(true);
-    expect(planDecide({ ...base, status: "USED" }, "RETURNED").ok).toBe(false);
-    expect(planDecide({ ...base, status: "RETURNED" }, "RETURNED").ok).toBe(false);
-    expect(planDecide({ ...base, fromInventory: false }, "RETURNED").ok).toBe(false);
-  });
-});
 
 describe("what the lists and Capture say (Phase 30C)", () => {
   it("shows the share, Not measured or a dash, and the mark", () => {
@@ -56,16 +22,21 @@ describe("what the lists and Capture say (Phase 30C)", () => {
     expect(returnMark({ markedForReturn: false, returnDecision: null })).toBeNull();
   });
 
-  it("tells the constructor to set a marked roll aside", () => {
-    const roll = { code: "LR-MLT-001", shots: 6 };
+  it("tells the constructor the roll is off stock, and when it has too many defects (Phase 30E)", () => {
+    const roll = { code: "LR-MLT-001", shots: 6, item: "Brown suede" };
     expect(
       finishedLine(roll, { sharePct: 12.4, limitPct: 10, marked: true, notMeasured: null }),
     ).toBe(
-      "Put LR-MLT-001 aside. It has too many defects (12.4%). The Floor Manager will decide what to do.",
+      "LR-MLT-001 is finished with 6 shots. It is taken off the Brown suede stock. 12.4% of it has defects, which is too many. The Floor Manager will see it.",
     );
     expect(
       finishedLine(roll, { sharePct: 3.2, limitPct: 10, marked: false, notMeasured: null }),
-    ).toBe("LR-MLT-001 is finished with 6 shots. 3.2% of it has defects.");
+    ).toBe(
+      "LR-MLT-001 is finished with 6 shots. It is taken off the Brown suede stock. 3.2% of it has defects.",
+    );
+    expect(finishedLine({ code: "R-2026-0001", shots: 1 })).toBe(
+      "R-2026-0001 is finished with 1 shot.",
+    );
     expect(
       finishedLine(roll, { sharePct: null, limitPct: 10, marked: false, notMeasured: "unscaled" }),
     ).toMatch(/Set up this phone next time/);
@@ -112,8 +83,7 @@ describe("the new settings and fields", () => {
     expect(message(ingestFieldsSchema.safeParse({ widthIn: "2" }))).toMatch(/^widthIn must be/);
   });
 
-  it("reads the To return filter", () => {
-    expect(rollListQuerySchema.parse({ toReturn: "1" }).toReturn).toBe(true);
-    expect(rollListQuerySchema.parse({ toReturn: "nope" }).toReturn).toBeUndefined();
+  it("has no To return filter any more (Phase 30E)", () => {
+    expect(rollListQuerySchema.parse({ toReturn: "1" })).not.toHaveProperty("toReturn");
   });
 });

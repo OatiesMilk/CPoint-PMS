@@ -56,9 +56,6 @@ const workforce = {
 };
 const recordAudit = vi.fn();
 const rolls = {
-  markRollsUsed: vi.fn(async (_tx: unknown, ids: string[]) => ids.map((id) => `LR-MLT-${id}`)),
-  unmarkRollsUsed: vi.fn(async (_tx: unknown, ids: string[]) => ids.map((id) => `LR-MLT-${id}`)),
-  rollsToTick: vi.fn(async (): Promise<unknown[]> => []),
   rollsUsedByCheckIn: vi.fn(async () => new Map<string, { id: string; code: string }[]>()),
 };
 
@@ -93,7 +90,7 @@ describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
       QI,
       at("2026-10-20T05:05:00.000Z"),
     );
-    expect(r).toEqual({ id: "ci1", number: 1, time: "13:00", usedRolls: [] });
+    expect(r).toEqual({ id: "ci1", number: 1, time: "13:00" });
     expect(model.insertCheckIn).toHaveBeenCalledWith(
       expect.objectContaining({
         day: "2026-10-20",
@@ -116,24 +113,17 @@ describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
     );
   });
 
-  it("ticks the rolls fully used in the same transaction and names them in the audit (Phase 30A)", async () => {
+  it("asks for no rolls: the QI only counts pairs (Phase 30E, D-111)", async () => {
     const r = await svc.saveCheckIn(
-      { slotAt: B1, pairs: "42", failedPairs: 0, usedRollIds: ["001", "002"] },
+      { slotAt: B1, pairs: "42", failedPairs: 0, usedRollIds: ["001"] } as never,
       QI,
       at("2026-10-20T05:05:00.000Z"),
     );
-    expect(rolls.markRollsUsed).toHaveBeenCalledWith(
-      "tx",
-      ["001", "002"],
-      { checkInId: "ci1", label: expect.stringMatching(/^Batch 1 /) },
-      QI,
-      at("2026-10-20T05:05:00.000Z"),
-    );
-    expect(r.usedRolls).toEqual(["LR-MLT-001", "LR-MLT-002"]);
+    expect(r).not.toHaveProperty("usedRolls");
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
       expect.objectContaining({
-        after: expect.objectContaining({ rollsFullyUsed: ["LR-MLT-001", "LR-MLT-002"] }),
+        after: expect.not.objectContaining({ rollsFullyUsed: expect.anything() }),
       }),
     );
   });
@@ -310,20 +300,6 @@ describe("correctCheckIn", () => {
     model.findCheckIn.mockResolvedValueOnce(saved);
     const r = await svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T06:00:00.000Z"));
     expect(r).toEqual({ id: "ci1", number: 1, time: "13:00" });
-    expect(rolls.markRollsUsed).toHaveBeenCalledWith(
-      "tx",
-      [],
-      expect.anything(),
-      QI,
-      expect.any(Date),
-    );
-    expect(rolls.unmarkRollsUsed).toHaveBeenCalledWith(
-      "tx",
-      [],
-      expect.anything(),
-      QI,
-      expect.any(Date),
-    );
     expect(model.correctCheckIn).toHaveBeenCalledWith(
       "ci1",
       saved.updatedAt,
@@ -341,48 +317,6 @@ describe("correctCheckIn", () => {
         action: "production.checkin.correct",
         before: { pairs: 42, failedPairs: 2 },
         after: { pairs: 40, failedPairs: 3, reason: "Counted a rack twice" },
-      }),
-    );
-  });
-
-  it("ticks and unticks rolls against what this batch ticked, with the reason (Phase 30A)", async () => {
-    model.findCheckIn.mockResolvedValueOnce(saved);
-    rolls.rollsUsedByCheckIn.mockResolvedValueOnce(
-      new Map([
-        [
-          "ci1",
-          [
-            { id: "a", code: "LR-MLT-00a" },
-            { id: "b", code: "LR-MLT-00b" },
-          ],
-        ],
-      ]),
-    );
-    await svc.correctCheckIn(
-      "ci1",
-      input({ usedRollIds: ["b", "c"] }),
-      QI,
-      at("2026-10-20T06:00:00.000Z"),
-    );
-    expect(rolls.unmarkRollsUsed).toHaveBeenCalledWith(
-      "tx",
-      ["a"],
-      expect.objectContaining({ checkInId: "ci1", reason: "Counted a rack twice" }),
-      QI,
-      expect.any(Date),
-    );
-    expect(rolls.markRollsUsed).toHaveBeenCalledWith(
-      "tx",
-      ["c"],
-      expect.objectContaining({ checkInId: "ci1" }),
-      QI,
-      expect.any(Date),
-    );
-    expect(recordAudit).toHaveBeenCalledWith(
-      "tx",
-      expect.objectContaining({
-        before: expect.objectContaining({ rollsFullyUsed: ["LR-MLT-00a", "LR-MLT-00b"] }),
-        after: expect.objectContaining({ rollsTicked: ["LR-MLT-c"], rollsUnticked: ["LR-MLT-a"] }),
       }),
     );
   });

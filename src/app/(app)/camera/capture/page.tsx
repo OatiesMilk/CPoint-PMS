@@ -2,7 +2,7 @@
  * Intent brief (ui-craft §1)
  * Who:   a Shoe Constructor the System Admin allows (C-23), with their own phone on a stand at a
  *        fixed position (C-24), or at a PC with Floor view; capturing one roll shot by shot.
- * What:  pick a roll from Inventory (Phase 30A), choose it, capture it edge to edge, see Pass or Reject for each shot,
+ * What:  pick the leather, then the roll (Phase 30E), choose it, capture it edge to edge, see Pass or Reject for each shot,
  *        finish it once all of it is in (Phase 26, D-095).
  * Worst: a shot sent to the wrong roll, a capture saved twice, or a verdict trusted when the model
  *        never ran. The chosen roll is repeated in large text; one press makes one scan; Capture is
@@ -47,7 +47,7 @@ export default async function CapturePage() {
     <>
       <PageHeader
         title="Capture"
-        description="Pick the roll on the table, then capture it shot by shot. The app checks each shot and gives the verdict."
+        description="Choose the leather, then the roll on the table, and capture it shot by shot. The app checks each shot and gives the verdict."
       />
       <CaptureClient
         initialRolls={rolls}

@@ -60,8 +60,8 @@ type ApiError = { error?: { code?: string; message?: string } };
 
 /**
  * Which roll the next shot goes to (Phase 26): the Roll dropdown (every open roll), the chosen roll
- * in large text, Scan another roll, Finish roll and, for an empty roll, Put roll back (Phase 30A;
- * a roll from before then is cancelled instead).
+ * in large text, Start another roll, Finish roll (it then leaves stock, Phase 30E) and, for an
+ * empty roll, Put roll back (Phase 30A; a roll from before then is cancelled instead).
  */
 export function RollBar({
   rolls,
@@ -144,7 +144,7 @@ export function RollBar({
         </div>
         <Button size="lg" variant="secondary" onClick={onStartAnother} disabled={disabled}>
           <Plus aria-hidden />
-          Scan another roll
+          Start another roll
         </Button>
       </div>
 
@@ -203,7 +203,8 @@ export function RollBar({
         <DialogContent>
           <DialogTitle>Is all of {chosen?.code} scanned?</DialogTitle>
           <DialogDescription>
-            {chosen ? shotsText(chosen.shots) : ""}. A finished roll can’t take more shots.
+            {chosen ? shotsText(chosen.shots) : ""}. A finished roll can’t take more shots, and it
+            comes off stock.
           </DialogDescription>
           <DialogFooter>
             <DialogClose asChild>

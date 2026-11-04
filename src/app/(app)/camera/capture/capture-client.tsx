@@ -562,7 +562,7 @@ export function CaptureClient({
             className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-1"
           >
             <h2 id="start-roll-title" className="text-xl font-semibold">
-              Scan a roll
+              Start a roll
             </h2>
             {rollNotice && (
               <p role="status" className="rounded-md bg-caution-soft p-3 text-sm">

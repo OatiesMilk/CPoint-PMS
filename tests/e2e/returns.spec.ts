@@ -12,9 +12,11 @@ import {
   withDb,
 } from "./cv-helpers";
 
-// Phase 30C (D-106, D-110, C-9, C-36, C-37): a cut from 3 in is Not accepted; a finished roll's
-// defects over 10% of its area mark it Return to supplier; the Floor Manager returns it or keeps it.
-// The sample photo is 64 × 48 px; at widthIn 20 it covers 20 × 15 in.
+// Phase 30C (D-106, D-110, C-9, C-37): a cut from 3 in is Not accepted; a finished roll's defects
+// over 10% of its area show Too many defects. Since Phase 30E (D-112) that is for the Floor
+// Manager's information only: the roll leaves stock at Finish roll whatever its Defect %, and
+// nobody sends it back or keeps it in the app. The sample photo is 64 × 48 px; at widthIn 20 it
+// covers 20 × 15 in.
 
 const WIDTH_IN = 20;
 /** A cut type of the tests' own: Not accepted from 3 in, 1% a roll each from 3 in. */
@@ -72,6 +74,7 @@ async function markedRoll(browser: Parameters<typeof captureApi>[0], request: AP
   const sc = await captureApi(browser);
   const roll = await createRoll(sc, { areaSqFt: 1 });
   const { token } = await createDeviceToken();
+  // A leather of its own with one roll on hand: Finish roll takes it to 0.
   await postMeasured(request, token, roll.id, [hole]);
   await postMeasured(request, token, roll.id, [hole]);
   const res = await sc.post(`/api/v1/rolls/${roll.id}/finish`, { data: {} });
@@ -112,119 +115,83 @@ test.describe("the 3-inch line (C-37)", () => {
   });
 });
 
-test.describe("Return to supplier (Floor Manager)", () => {
+test.describe("Too many defects (information only, Phase 30E)", () => {
   test.beforeEach(async ({ page }) => signInAs(page, ACCOUNTS.manager));
 
-  test("a marked roll waits in To return; Keep needs a reason and lets it be ticked", async ({
+  test("a roll over the limit leaves stock at Finish roll and shows Too many defects, with no decision", async ({
     browser,
     page,
     request,
   }) => {
     const roll = await markedRoll(browser, request);
+    const stored = await withDb(async (db) => {
+      const r = await db.query(
+        `SELECT b.status::text, b."markedForReturn", b."returnDecision"::text AS decision,
+           i."quantityOnHand"::float AS "onHand"
+         FROM batches b JOIN inventory_items i ON i.id = b."itemId" WHERE b.id = $1`,
+        [roll.id],
+      );
+      return r.rows[0];
+    });
+    expect(stored).toEqual({
+      status: "FINISHED",
+      markedForReturn: true,
+      decision: null,
+      onHand: 0,
+    });
 
-    await page.goto("/reports/rolls?toReturn=1");
+    // No To return band or filter any more.
+    await page.goto("/reports/rolls");
+    await expect(page.getByText(/waiting for your decision/)).toHaveCount(0);
+    await expect(
+      page.getByLabel("Status").locator("option", { hasText: "Waiting for your decision" }),
+    ).toHaveCount(0);
+    await page.goto(`/reports/rolls?q=${encodeURIComponent(roll.code)}`);
     const row = page.getByTestId("roll-row").filter({ hasText: roll.code });
     await expect(row).toContainText("16.7%");
     await expect(row).toContainText("Too many defects");
+    await expect(row).toContainText(roll.item);
 
     await row.getByRole("link", { name: roll.code, exact: true }).click();
     await expect(
       page.getByText(/This roll has too many defects \(16\.7%, over 10%\)\./),
     ).toBeVisible();
+    await expect(page.getByText("Scanned and taken off stock.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "How damaged is this roll?" })).toBeVisible();
-    await expect(page.getByText("16.7% of this roll has defects. The limit is 10%.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Largest defects" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send back to supplier…" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Keep and use…" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Remove/ })).toHaveCount(0);
 
     const axe = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();
     expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
 
-    await page.getByRole("button", { name: "Keep and use…" }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toContainText(`Keep ${roll.code}?`);
-    await dialog.getByRole("button", { name: "Keep roll" }).click();
-    await expect(dialog.getByText(/^Write why you’re keeping it/)).toBeVisible();
-    // Esc closes the dialog without saving, and never shows the Send back one (QA 30C F1).
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
-    await expect(page.getByText(/back to the supplier\?/)).toHaveCount(0);
-    await page.getByRole("button", { name: "Keep and use…" }).click();
-    await expect(dialog.getByText(/^Write why you’re keeping it/)).toHaveCount(0);
-    await dialog.getByLabel("Why are you keeping it?").fill("The holes are at one edge");
-    await dialog.getByRole("button", { name: "Keep roll" }).click();
-    await expect(dialog).toBeHidden();
-    await expect(page.getByText("Why it was kept: The holes are at one edge")).toBeVisible();
-
-    const stored = await withDb(async (db) => {
-      const r = await db.query(
-        `SELECT status::text, "markedForReturn", "returnDecision"::text AS decision FROM batches WHERE id = $1`,
-        [roll.id],
-      );
-      return r.rows[0];
-    });
-    expect(stored).toEqual({ status: "FINISHED", markedForReturn: true, decision: "KEPT" });
-  });
-
-  test("Returned to supplier takes it out of stock and the claim sheet carries the findings", async ({
-    browser,
-    page,
-    request,
-  }) => {
-    const roll = await markedRoll(browser, request);
-    const onHand = () =>
-      withDb(async (db) =>
-        Number(
-          (
-            await db.query(`SELECT "quantityOnHand" FROM inventory_items WHERE id = $1`, [
-              roll.itemId,
-            ])
-          ).rows[0].quantityOnHand,
-        ),
-      );
-    const before = await onHand();
-
-    await page.goto(`/reports/rolls/${roll.id}`);
-    await page.getByRole("button", { name: "Send back to supplier…" }).click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toContainText(`Send ${roll.code} back to the supplier?`);
-    await dialog.getByLabel("Note (optional)").fill("Claim no. 1042");
-    await dialog.getByRole("button", { name: "Send back", exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(page.getByText(/Sent back to the supplier on/)).toBeVisible();
-    expect(await onHand()).toBe(before - 1);
-
+    // The claim sheet still carries the findings.
     await page.getByRole("link", { name: "Claim sheet" }).click();
     await expect(page.getByRole("heading", { name: "How damaged is this roll?" })).toBeVisible();
     await expect(page.getByText(/16\.7% of this roll has defects/)).toBeVisible();
-    await expect(page.getByText("Note: Claim no. 1042")).toBeVisible();
+  });
+
+  test("the Floor Manager's old decision route is gone", async ({ browser }) => {
+    const sc = await captureApi(browser);
+    const roll = await createRoll(sc);
+    const res = await sc.post(`/api/v1/rolls/${roll.id}/return-decision`, {
+      data: { decision: "KEPT", note: "x" },
+    });
+    expect(res.status()).toBe(404);
   });
 });
 
-test("a marked roll is named on Reports → Rolls until the Floor Manager decides", async ({
-  browser,
+test("the System Admin sets the too-many-defects limit and each type's length limit", async ({
   page,
-  request,
 }) => {
-  // Left undecided on purpose, so a manual check finds a roll in To return afterwards.
-  const roll = await markedRoll(browser, request);
-  await signInAs(page, ACCOUNTS.manager);
-  await page.goto("/reports/rolls");
-  await expect(
-    page.getByText(/too many defects and (is|are) waiting for your decision\./),
-  ).toBeVisible();
-  await page.getByRole("link", { name: /^Show (it|them)$/ }).click();
-  await expect(page).toHaveURL(/toReturn=1/);
-  await expect(page.getByTestId("roll-row").filter({ hasText: roll.code })).toHaveCount(1);
-  // The Status filter shows the To return choice.
-  await expect(page.getByLabel("Status")).toHaveValue("to-return");
-});
-
-test("the System Admin sets the supplier limit and each type's length limit", async ({ page }) => {
   await signInAs(page, ACCOUNTS.admin);
   await page.goto("/admin/settings?tab=thresholds");
-  await expect(page.getByLabel("Send a roll back when defects cover more than")).toBeVisible();
-  await page.getByLabel("Send a roll back when defects cover more than").fill("0");
+  const limit = page.getByLabel("A roll has too many defects when they cover more than");
+  await expect(limit).toBeVisible();
+  await limit.fill("0");
   await page.getByRole("button", { name: "Save", exact: true }).first().click();
   await expect(page.getByText(/^Enter a percentage from 1 to 100/)).toBeVisible();
 

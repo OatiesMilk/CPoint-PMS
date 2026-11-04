@@ -8,20 +8,16 @@ const rolls = {
   findRollDetail: vi.fn(),
   listOpenRolls: vi.fn(async (): Promise<unknown[]> => []),
   listReadyRolls: vi.fn(async (): Promise<unknown[]> => []),
-  listRollsToTick: vi.fn(async (): Promise<unknown[]> => []),
   listRollsUsedIn: vi.fn(async (): Promise<unknown[]> => []),
   findRollState: vi.fn(),
-  findRollsState: vi.fn(async (): Promise<unknown[]> => []),
   insertRoll: vi.fn(),
   moveRoll: vi.fn(async (..._args: unknown[]) => true),
   nextRollCodeNumber: vi.fn(async () => 7),
   rollCodeTaken: vi.fn(async () => false),
-  countRollsToReturn: vi.fn(async () => 0),
   listRollShotMeasures: vi.fn(
     async (): Promise<{ defectAreaSqIn: number | null; flatSharePct: number | null }[]> => [],
   ),
   saveRollMeasure: vi.fn(async () => ({})),
-  keepRoll: vi.fn(async () => true),
 };
 const refs = {
   findSupplier: vi.fn(async (): Promise<unknown> => ({
@@ -63,7 +59,6 @@ const svc = await import("@/server/services/roll.service");
 
 const SC = { id: "sc1" };
 const FM = { id: "fm1" };
-const QI = { id: "qi1" };
 const now = new Date("2026-10-26T02:00:00.000Z"); // 10:00 Manila, 26 Oct
 const state = (over: object = {}) => ({
   id: "r1",
@@ -228,7 +223,7 @@ describe("picking and finishing at Capture", () => {
     await expect(svc.startRoll("r1", SC, now)).rejects.toMatchObject({ code: "STALE" });
   });
 
-  it("finishes an open roll with shots; nothing leaves stock yet", async () => {
+  it("finishes an open roll with shots and takes it off stock (−1, Phase 30E)", async () => {
     await expect(svc.finishRoll("r1", SC, now)).resolves.toEqual({
       id: "r1",
       code: "LR-MLT-007",
@@ -245,6 +240,18 @@ describe("picking and finishing at Capture", () => {
       { status: "FINISHED", finishedAt: now, finishedById: "sc1" },
       "tx",
     );
+    expect(postMovement).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({ id: "it1" }),
+      { type: "OUT", delta: -1, reason: "Roll LR-MLT-007 scanned at Capture", rollId: "r1" },
+      SC,
+      now,
+    );
+  });
+
+  it("finishes an old roll with no item without touching stock", async () => {
+    rolls.findRollState.mockResolvedValue(state({ code: "R-2026-0003", itemId: null }));
+    await svc.finishRoll("r1", SC, now);
     expect(postMovement).not.toHaveBeenCalled();
   });
 
@@ -300,11 +307,11 @@ describe("removeRoll (the Floor Manager)", () => {
     );
   });
 
-  it("refuses a roll already fully used", async () => {
-    rolls.findRollState.mockResolvedValue(state({ status: "USED" }));
+  it("refuses a roll already scanned: it is off stock (Phase 30E)", async () => {
+    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED" }));
     await expect(svc.removeRoll("r1", "x", FM, now)).rejects.toMatchObject({
       status: 409,
-      message: "LR-MLT-007 is already marked fully used.",
+      message: "LR-MLT-007 is already scanned.",
     });
   });
 
@@ -315,92 +322,7 @@ describe("removeRoll (the Floor Manager)", () => {
   });
 });
 
-describe("Fully used at Finish batch", () => {
-  const batch = { checkInId: "c1", label: "Batch 2 (10:00–13:00)" };
-
-  it("ticks scanned rolls: each leaves stock (−1) with the batch named", async () => {
-    rolls.findRollsState.mockResolvedValue([
-      state({ id: "a", code: "LR-MLT-001", status: "FINISHED" }),
-      state({ id: "b", code: "LR-MLT-002", status: "FINISHED" }),
-    ]);
-    await expect(svc.markRollsUsed("tx" as never, ["a", "b"], batch, QI, now)).resolves.toEqual([
-      "LR-MLT-001",
-      "LR-MLT-002",
-    ]);
-    expect(rolls.moveRoll).toHaveBeenCalledWith(
-      "a",
-      "FINISHED",
-      { status: "USED", usedAt: now, usedById: "qi1", usedCheckInId: "c1" },
-      "tx",
-    );
-    expect(postMovement).toHaveBeenCalledWith(
-      "tx",
-      expect.anything(),
-      { type: "OUT", delta: -1, reason: "Fully used in Batch 2 (10:00–13:00)", rollId: "b" },
-      QI,
-      now,
-    );
-  });
-
-  it("refuses the whole list, by code, when one roll isn't scanned yet", async () => {
-    rolls.findRollsState.mockResolvedValue([
-      state({ id: "a", code: "LR-MLT-001", status: "FINISHED" }),
-      state({ id: "b", code: "LR-MLT-002", status: "IN_STOCK" }),
-    ]);
-    await expect(
-      svc.markRollsUsed("tx" as never, ["a", "b"], batch, QI, now),
-    ).rejects.toMatchObject({
-      status: 409,
-      message: "LR-MLT-002 isn’t scanned yet. Scan and finish it at Capture before it’s used.",
-    });
-    expect(rolls.moveRoll).not.toHaveBeenCalled();
-    expect(postMovement).not.toHaveBeenCalled();
-  });
-
-  it("is STALE when a ticked roll is gone or changed meanwhile", async () => {
-    rolls.findRollsState.mockResolvedValue([]);
-    await expect(svc.markRollsUsed("tx" as never, ["a"], batch, QI, now)).rejects.toMatchObject({
-      code: "STALE",
-    });
-    rolls.findRollsState.mockResolvedValue([state({ id: "a", status: "FINISHED" })]);
-    rolls.moveRoll.mockResolvedValue(false);
-    await expect(svc.markRollsUsed("tx" as never, ["a"], batch, QI, now)).rejects.toMatchObject({
-      code: "STALE",
-    });
-  });
-
-  it("does nothing with no ticks", async () => {
-    await expect(svc.markRollsUsed("tx" as never, [], batch, QI, now)).resolves.toEqual([]);
-    expect(rolls.findRollsState).not.toHaveBeenCalled();
-  });
-
-  it("unticks in a correction: back to Scanned and +1, only for this batch's ticks", async () => {
-    rolls.findRollsState.mockResolvedValue([
-      state({ id: "a", code: "LR-MLT-001", status: "USED", usedCheckInId: "c1" }),
-    ]);
-    await svc.unmarkRollsUsed("tx" as never, ["a"], { ...batch, reason: "Wrong roll" }, QI, now);
-    expect(rolls.moveRoll).toHaveBeenCalledWith(
-      "a",
-      "USED",
-      { status: "FINISHED", usedAt: null, usedById: null, usedCheckInId: null },
-      "tx",
-      { usedCheckInId: "c1" },
-    );
-    expect(postMovement).toHaveBeenCalledWith(
-      "tx",
-      expect.anything(),
-      expect.objectContaining({ type: "IN", delta: 1, rollId: "a" }),
-      QI,
-      now,
-    );
-    rolls.findRollsState.mockResolvedValue([
-      state({ id: "a", code: "LR-MLT-001", status: "USED", usedCheckInId: "c9" }),
-    ]);
-    await expect(
-      svc.unmarkRollsUsed("tx" as never, ["a"], { ...batch, reason: "x" }, QI, now),
-    ).rejects.toMatchObject({ message: "LR-MLT-001 wasn’t ticked in this batch." });
-  });
-
+describe("rolls ticked before Phase 30E (history)", () => {
   it("groups each batch's ticked rolls for the Batches page", async () => {
     rolls.listRollsUsedIn.mockResolvedValue([
       { id: "a", code: "LR-MLT-001", usedCheckInId: "c1" },
@@ -543,25 +465,27 @@ describe("Reports → Rolls and a leather item's rolls (D-008)", () => {
     const result = await svc.listItemRolls("it1", { page: 1 });
     expect(rolls.listRolls.mock.calls[0][0]).toMatchObject({ itemId: "it1" });
     expect(rolls.countDefectsForRolls).toHaveBeenCalledWith(["r1"], 0.5);
-    expect(result.rows[0]).toMatchObject({ defectsFound: "Cut 2, Hole 1", canRemove: true });
+    expect(result.rows[0]).toMatchObject({ defectsFound: "Cut 2, Hole 1", canRemove: false });
   });
 
-  it("lets the Floor Manager remove a roll that isn't fully used from its page", async () => {
+  it("lets the Floor Manager remove a roll in stock or being scanned from its page", async () => {
     const detail = (status: string, item: object | null = { id: "it1" }) => ({
       ...state({ status }),
       item,
       areaSqFt: 24.5,
       scans: [{ finalVerdict: "PASS" }, { finalVerdict: "REJECT" }],
     });
-    rolls.findRollDetail.mockResolvedValue(detail("FINISHED"));
+    rolls.findRollDetail.mockResolvedValue(detail("IN_STOCK"));
     await expect(svc.getRollDetail("r1")).resolves.toMatchObject({
       passed: 1,
       rejected: 1,
       areaSqFt: 24.5,
       canRemove: true,
     });
-    rolls.findRollDetail.mockResolvedValue(detail("USED"));
-    expect((await svc.getRollDetail("r1"))?.canRemove).toBe(false);
+    for (const status of ["FINISHED", "USED"]) {
+      rolls.findRollDetail.mockResolvedValue(detail(status));
+      expect((await svc.getRollDetail("r1"))?.canRemove).toBe(false);
+    }
     rolls.findRollDetail.mockResolvedValue(detail("FINISHED", null));
     expect((await svc.getRollDetail("r1"))?.canRemove).toBe(false);
   });
@@ -609,100 +533,5 @@ describe("the defect share and the supplier limit (Phase 30C, D-110)", () => {
       { defectAreaSqIn: null, defectSharePct: null, returnLimitPct: 10, markedForReturn: false },
       "tx",
     );
-  });
-
-  it("returns a scanned roll to the supplier: it leaves stock (−1) with the note", async () => {
-    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED", markedForReturn: true }));
-    await expect(
-      svc.decideReturn(
-        "r1",
-        { decision: "RETURNED", returnedOn: "2026-10-26", note: "Driver took it" },
-        FM,
-        now,
-      ),
-    ).resolves.toEqual({ id: "r1", code: "LR-MLT-007", decision: "RETURNED" });
-    expect(rolls.moveRoll).toHaveBeenCalledWith(
-      "r1",
-      "FINISHED",
-      expect.objectContaining({
-        status: "RETURNED",
-        returnDecision: "RETURNED",
-        returnNote: "Driver took it",
-      }),
-      "tx",
-      { returnDecision: null },
-    );
-    expect(postMovement).toHaveBeenCalledWith(
-      "tx",
-      expect.anything(),
-      {
-        type: "OUT",
-        delta: -1,
-        reason: "Roll LR-MLT-007 returned to supplier: Driver took it",
-        rollId: "r1",
-      },
-      FM,
-      now,
-    );
-  });
-
-  it("keeps a marked roll with a reason; nothing leaves stock", async () => {
-    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED", markedForReturn: true }));
-    await svc.decideReturn("r1", { decision: "KEPT", note: "Cuts at the edge" }, FM, now);
-    expect(rolls.keepRoll).toHaveBeenCalledWith(
-      "r1",
-      { returnNote: "Cuts at the edge", returnDecidedAt: now, returnDecidedById: "fm1" },
-      "tx",
-    );
-    expect(postMovement).not.toHaveBeenCalled();
-  });
-
-  it("refuses Keep on an unmarked roll, any decision before the scan, a second decision and a future day", async () => {
-    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED" }));
-    await expect(
-      svc.decideReturn("r1", { decision: "KEPT", note: "x" }, FM, now),
-    ).rejects.toMatchObject({
-      status: 409,
-      message: expect.stringMatching(/doesn’t have too many defects/),
-    });
-    rolls.findRollState.mockResolvedValue(state({ status: "OPEN" }));
-    await expect(
-      svc.decideReturn("r1", { decision: "RETURNED", returnedOn: "2026-10-26" }, FM, now),
-    ).rejects.toMatchObject({ status: 409 });
-    rolls.findRollState.mockResolvedValue(
-      state({ status: "FINISHED", markedForReturn: true, returnDecision: "KEPT" }),
-    );
-    await expect(
-      svc.decideReturn("r1", { decision: "RETURNED", returnedOn: "2026-10-26" }, FM, now),
-    ).rejects.toMatchObject({ status: 409, message: expect.stringMatching(/already kept/) });
-    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED" }));
-    await expect(
-      svc.decideReturn("r1", { decision: "RETURNED", returnedOn: "2026-10-27" }, FM, now),
-    ).rejects.toMatchObject({ status: 422 });
-  });
-
-  it("won't tick a marked roll Fully used until the Floor Manager keeps it", async () => {
-    rolls.findRollsState.mockResolvedValue([
-      state({ id: "a", code: "LR-MLT-001", status: "FINISHED", markedForReturn: true }),
-    ]);
-    await expect(
-      svc.markRollsUsed("tx" as never, ["a"], { checkInId: "c1", label: "Batch 1" }, QI, now),
-    ).rejects.toMatchObject({
-      status: 409,
-      message:
-        "LR-MLT-001 has too many defects. The Floor Manager must keep it before it can be ticked.",
-    });
-    rolls.findRollsState.mockResolvedValue([
-      state({
-        id: "a",
-        code: "LR-MLT-001",
-        status: "FINISHED",
-        markedForReturn: true,
-        returnDecision: "KEPT",
-      }),
-    ]);
-    await expect(
-      svc.markRollsUsed("tx" as never, ["a"], { checkInId: "c1", label: "Batch 1" }, QI, now),
-    ).resolves.toEqual(["LR-MLT-001"]);
   });
 });

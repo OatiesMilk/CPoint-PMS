@@ -5,6 +5,7 @@ const model = {
   deleteResetTargets: vi.fn(),
   upsertDefectTypeState: vi.fn(),
   setDemoAccountNames: vi.fn(),
+  reactivateSuppliers: vi.fn(async () => 3),
 };
 const env = { NODE_ENV: "development", BOOTSTRAP_ADMIN_EMAIL: "Owner@CPoint.local" };
 const recordAudit = vi.fn();
@@ -76,6 +77,8 @@ describe("resetDemoData", () => {
     const result = await resetDemoData(keep);
     expect(runInTransaction).toHaveBeenCalledWith(expect.any(Function), { timeoutMs: 120_000 });
     expect(model.deleteResetTargets).toHaveBeenCalledWith(keep, "tx");
+    // Deactivated demo suppliers are turned back on, so the week can add its leather items.
+    expect(model.reactivateSuppliers).toHaveBeenCalledWith(keep.supplierNames, "tx");
     expect(model.upsertDefectTypeState).toHaveBeenCalledTimes(MODEL_DEFECT_TYPES.length);
     // The demo accounts get their names back (D-090).
     expect(model.setDemoAccountNames).toHaveBeenCalledWith(
@@ -92,6 +95,7 @@ describe("resetDemoData", () => {
         actor: { type: "SYSTEM" },
         action: "system.demo_reset",
         before: { users: 135, scans: 900 },
+        after: expect.objectContaining({ suppliersReactivated: 3 }),
       }),
     );
     // The lunch rows go and the default comes back in force from the start (Phase 27).
