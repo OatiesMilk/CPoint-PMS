@@ -135,7 +135,8 @@ const attendance = {
   ),
 };
 const production = {
-  saveQuota: vi.fn(async () => ({ saved: true, effectiveFrom: "2026-09-28" })),
+  saveDayPlan: vi.fn(async (day: string) => ({ saved: true, day })),
+  markNonWorking: vi.fn(async (day: string) => ({ saved: true, day })),
   saveCheckIn: vi.fn(async () => ({ id: "ci", number: 1, time: "13:00" })),
 };
 vi.mock("@/server/services/production.service", () => production);
@@ -360,12 +361,20 @@ describe("seedDemoWeek", () => {
 
   it("finishes the batches as the QI, with one late and one missed, and three short days that line up with the absences", async () => {
     const result = await seedDemoWeek({ now, seed: 1 });
-    expect(production.saveQuota).toHaveBeenCalledTimes(1);
-    expect(production.saveQuota).toHaveBeenCalledWith(
-      { pairs: DEMO_QUOTA, suggestedPairs: null },
-      expect.anything(),
-      expect.any(Date),
-    );
+    // The Floor Manager plans every working day that morning, with the one quota (D-114).
+    const plans = production.saveDayPlan.mock.calls as unknown as [
+      string,
+      { rollsPlanned: number; quota: number; intervalMinutes: number },
+      unknown,
+      Date,
+    ][];
+    expect(plans.length).toBeGreaterThan(0);
+    for (const [day, plan, , at] of plans) {
+      expect(plan).toMatchObject({ quota: DEMO_QUOTA, intervalMinutes: 240 });
+      expect(at.toISOString().slice(0, 10) <= day).toBe(true);
+    }
+    expect(plans.map(([, p]) => p.rollsPlanned).slice(0, 3)).toEqual([3, 1, 2]);
+    expect(production.markNonWorking).toHaveBeenCalledTimes(1);
     const calls = production.saveCheckIn.mock.calls as unknown as [
       { slotAt: string; pairs: number; failedPairs: number; notes?: string },
       { id: string },

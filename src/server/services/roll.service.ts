@@ -10,6 +10,8 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { RollStatus } from "@/lib/domain";
 import { manilaToday } from "@/lib/format";
+import { manilaDayOf } from "@/lib/production-rules";
+import { addDays, manilaDayStart } from "@/lib/report-rules";
 import { PAGE_SIZE } from "@/lib/pagination";
 import {
   formatRollCode,
@@ -33,6 +35,7 @@ import {
   countDefectsForRolls,
   countOpenRolls,
   countVerdictsForRolls,
+  listRollFinishTimes,
   findRollDetail,
   findRollState,
   insertRoll,
@@ -522,6 +525,20 @@ export async function rollsUsedByCheckIn(checkInIds: string[]) {
   for (const r of rows) {
     if (!r.usedCheckInId) continue;
     out.set(r.usedCheckInId, [...(out.get(r.usedCheckInId) ?? []), { id: r.id, code: r.code }]);
+  }
+  return out;
+}
+
+/**
+ * Rolls scanned per Manila day from `from` to `to` (Phase 30E-2, D-114): each roll counts on the
+ * day its Finish roll was pressed, whatever the leather. Days with none are left out.
+ */
+export async function rollsScannedByDay(from: string, to: string): Promise<Map<string, number>> {
+  const times = await listRollFinishTimes(manilaDayStart(from), manilaDayStart(addDays(to, 1)));
+  const out = new Map<string, number>();
+  for (const t of times) {
+    const day = manilaDayOf(t);
+    out.set(day, (out.get(day) ?? 0) + 1);
   }
   return out;
 }

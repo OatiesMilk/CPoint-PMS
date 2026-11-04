@@ -3,6 +3,7 @@ import { planStockLine, stockLevel } from "@/lib/inventory-rules";
 import { DEFAULT_REMINDER_DAYS, stockUpdateDue } from "@/lib/stock-rules";
 import { Errors } from "@/server/lib/errors";
 import { runInTransaction } from "@/server/models/db";
+import { findDayPlan } from "@/server/models/production.model";
 import {
   findItemsForUpdate,
   getInventorySettings,
@@ -71,8 +72,14 @@ export async function stockSheet(now = new Date()) {
 /** For the FM home and the bell: is today a reminder day with no update saved yet? */
 export async function stockUpdateReminder(now = new Date()) {
   const today = manilaToday(now);
-  const [days, savedToday] = await Promise.all([reminderDays(), stockUpdateSavedOn(today)]);
-  return { due: stockUpdateDue(today, days, savedToday), reminderDays: days };
+  const [days, savedToday, plan] = await Promise.all([
+    reminderDays(),
+    stockUpdateSavedOn(today),
+    findDayPlan(today),
+  ]);
+  // A day marked Non-working / Holiday has no reminder (D-114, A-41).
+  const nonWorking = plan?.kind === "NON_WORKING";
+  return { due: !nonWorking && stockUpdateDue(today, days, savedToday), reminderDays: days };
 }
 
 /** When each item was last on a saved sheet (the Inventory list's Last updated). */

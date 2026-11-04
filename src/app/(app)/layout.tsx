@@ -2,11 +2,13 @@ import { ROLE_LABELS } from "@/lib/domain";
 import { Sidebar } from "@/components/features/app-shell/sidebar";
 import { DemoBand } from "@/components/features/demo-band";
 import { demoToolsEnabled } from "@/server/services/demo-tools.service";
-import { BatchNoticeBanner } from "@/components/features/batches/batch-notices";
+import { BatchNoticeBanner, PlanNoticeBanner } from "@/components/features/batches/batch-notices";
+import { manilaToday } from "@/lib/format";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { requireUser } from "@/server/policies/guard";
 import { navigationFor } from "@/server/policies/navigation";
+import { planNoticeDue } from "@/server/services/production.service";
 import { stockUpdateReminder } from "@/server/services/stock-update.service";
 import { signOutAction } from "./actions";
 
@@ -19,6 +21,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const notices = user.role === "QUALITY_INSPECTOR" || user.role === "FLOOR_MANAGER";
   // The stock update reminder (Phase 29, C-32): the Floor Manager, on a reminder day, until saved.
   const stockDue = user.role === "FLOOR_MANAGER" ? (await stockUpdateReminder()).due : false;
+  // The start-of-day notice (A-37, D-114): the Floor Manager, on a weekday with no plan yet.
+  const planDue = user.role === "FLOOR_MANAGER" ? await planNoticeDue() : false;
 
   return (
     <QueryProvider>
@@ -32,10 +36,16 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             signOutAction={signOutAction}
             bell={notices}
             stockDue={stockDue}
+            planDue={planDue}
           />
         </div>
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-10 lg:py-8 print:p-0">
           <div className="flex flex-col gap-8">
+            {planDue && (
+              <div className="print:hidden">
+                <PlanNoticeBanner day={manilaToday()} />
+              </div>
+            )}
             {notices && (
               <div className="empty:hidden print:hidden">
                 <BatchNoticeBanner />

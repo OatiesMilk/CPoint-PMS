@@ -24,7 +24,7 @@ import {
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { RECENT_DAYS } from "@/lib/production-rules";
+import { RECENT_DAYS, rollsScannedLine } from "@/lib/production-rules";
 import { cn } from "@/lib/utils";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
@@ -62,7 +62,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
             <Button asChild variant="secondary">
               <Link href="/batches/plan">
                 <CalendarCog aria-hidden />
-                Plan batches and quota
+                Plan days
               </Link>
             </Button>
           )
@@ -75,18 +75,46 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
             Today, {today.dayLabel}
           </h2>
           <p className="text-muted-foreground">
-            {today.schedule
-              ? `${today.schedule}. Lunch: ${today.lunch}.`
-              : "No batch schedule is set. The Floor Manager sets one under Plan batches and quota."}
+            {today.plan && today.schedule
+              ? `Plan: ${today.plan}, ${today.schedule}. Lunch: ${today.lunch}.`
+              : today.nonWorking
+                ? "Today is marked Non-working / Holiday."
+                : today.planNeeded
+                  ? "Today has no plan yet."
+                  : "Saturdays and Sundays have no batches."}
           </p>
+          {today.plan && can(user.role, "production:plan") && (
+            <p className="text-sm" data-testid="rolls-today">
+              {rollsScannedLine(today.rollsScanned, today.rollsPlanned)} today.
+            </p>
+          )}
         </div>
         {/* The batch cards and the quota card start on the same line (xl), under one heading. */}
         <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
           <div className="flex flex-col gap-3 xl:col-span-2">
             {!today.workingDay ? (
-              <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
-                Today isn’t a working day on the schedule, so there are no batches.
-              </p>
+              <div
+                className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground"
+                data-testid="no-batches"
+              >
+                <p>
+                  {today.planNeeded
+                    ? can(user.role, "production:plan")
+                      ? "Today has no plan yet, so there are no batches. Plan today to start them."
+                      : "No batches yet today. The Floor Manager plans them first."
+                    : today.nonWorking
+                      ? "Today is marked Non-working / Holiday, so there are no batches."
+                      : "Today isn’t a working day, so there are no batches."}
+                </p>
+                {today.planNeeded && can(user.role, "production:plan") && (
+                  <Button asChild>
+                    <Link href={`/batches/plan?day=${today.day}`}>
+                      <CalendarCog aria-hidden />
+                      Plan today
+                    </Link>
+                  </Button>
+                )}
+              </div>
             ) : (
               <ul className="flex flex-col gap-3" data-testid="today-batches">
                 {today.rows.map((r) => {

@@ -1,60 +1,51 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Floor Manager (Ms Ivy), at the office desk, every few weeks or after a slow stretch.
- * What:  set how often a batch ends (every 1 to 4 hours, or once at the end of the day) and the
- *        pairs per day the line aims for, helped by a suggestion from recent days (D-083, D-099).
- *        The lunch break is the System Admin's (Settings → Lunch break, C-3).
- * Worst: a change that rewrites today's numbers, or a quota read as a target for one person.
- *        Changes apply from tomorrow (a first quota from today); the quota is for the whole line.
+ * Who:   the Floor Manager (Ms Ivy), at the office desk, every morning and ahead of time.
+ * What:  plan each working day on a month calendar (D-114): rolls to be used (an estimate), the
+ *        quota of passed pairs for the whole line, the check-in interval (every 4 hours or once at
+ *        the end of the day, D-115) and the shift; or mark a weekday Non-working / Holiday. Past
+ *        days show what was planned against the rolls scanned.
+ * Worst: a working day left unplanned (no batches, so nothing is counted), a plan changed after
+ *        its first batch was finished, or a quota read as a target for one person. Weekends and
+ *        past days can't be planned; today locks once a batch is finished (A-36).
  */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
-import { TablePager } from "@/components/features/table-pager";
-import { Alert } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { formatAttendanceDay } from "@/lib/attendance-rules";
-import { formatManilaDateTime } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { manilaToday } from "@/lib/format";
+import { isMonth, monthOf } from "@/lib/production-rules";
 import { requirePermission } from "@/server/policies/guard";
-import { productionPlan } from "@/server/services/production.service";
-import { QuotaForm, ScheduleForm } from "./plan-forms";
+import { planMonth } from "@/server/services/production.service";
+import { planDaySchema } from "@/server/validators/production.validator";
+import { PlanCalendar } from "./plan-calendar";
 
-export const metadata: Metadata = { title: "Plan batches and quota" };
+export const metadata: Metadata = { title: "Plan days" };
 
-const HISTORY_ROWS = 15;
+const MONTH_LABEL = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "UTC",
+  month: "long",
+  year: "numeric",
+});
+const monthLabel = (month: string) => MONTH_LABEL.format(new Date(`${month}-01T00:00:00Z`));
+const monthHref = (month: string) => `/batches/plan?month=${month}`;
 
-const pageOf = (raw: unknown, count: number) => {
-  const n = Number(raw);
-  const pages = Math.max(1, Math.ceil(count / HISTORY_ROWS));
-  return Number.isInteger(n) && n >= 1 ? Math.min(n, pages) : 1;
-};
-
-export default async function ProductionPlanPage({ searchParams }: PageProps<"/batches/plan">) {
+export default async function PlanDaysPage({ searchParams }: PageProps<"/batches/plan">) {
   await requirePermission("production:plan");
   await connection();
-  const params = (await searchParams) as { sp?: string; qp?: string };
-  const plan = await productionPlan();
-  const sp = pageOf(params.sp, plan.scheduleHistory.length);
-  const qp = pageOf(params.qp, plan.quotaHistory.length);
-  const href = (key: "sp" | "qp", page: number) => {
-    const next = new URLSearchParams();
-    const other = key === "sp" ? qp : sp;
-    if (other > 1) next.set(key === "sp" ? "qp" : "sp", String(other));
-    if (page > 1) next.set(key, String(page));
-    const qs = next.toString();
-    return qs ? `/batches/plan?${qs}` : "/batches/plan";
-  };
-  const pages = (count: number) => Math.max(1, Math.ceil(count / HISTORY_ROWS));
+  const params = (await searchParams) as { month?: string; day?: string };
+  const today = manilaToday();
+  // ?day= (the start-of-day notice links to today) opens that day's dialog in its month.
+  const asked = params.day === "today" ? today : params.day;
+  const day = asked && planDaySchema.safeParse(asked).success ? asked : null;
+  const month = day
+    ? monthOf(day)
+    : params.month && isMonth(params.month)
+      ? params.month
+      : monthOf(today);
+  const data = await planMonth(month);
 
   return (
     <>
@@ -68,138 +59,54 @@ export default async function ProductionPlanPage({ searchParams }: PageProps<"/b
         </Link>
       </div>
       <PageHeader
-        title="Plan batches and quota"
-        description="When each batch ends and the Quality Inspector counts the pairs finished, and how many pairs a day the whole line aims for."
+        title="Plan days"
+        description="Click a weekday to plan it: rolls to be used, the quota and when the Quality Inspector counts the pairs. A day without a plan has no batches."
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Batches</CardTitle>
-            <CardDescription>
-              {plan.schedule ? `Today: ${plan.schedule.description}.` : "No schedule yet."}
-              {plan.upcomingSchedule &&
-                ` From ${formatAttendanceDay(plan.upcomingSchedule.from)}: ${plan.upcomingSchedule.description}.`}{" "}
-              Lunch from tomorrow: {plan.tomorrowLunchText}, set by the System Admin.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {plan.lunchWarning && <Alert tone="info">{plan.lunchWarning}</Alert>}
-            <ScheduleForm
-              current={plan.schedule}
-              tomorrow={plan.tomorrow}
-              lunch={
-                plan.tomorrowLunch
-                  ? {
-                      startTime: plan.tomorrowLunch.startTime!,
-                      endTime: plan.tomorrowLunch.endTime!,
-                    }
-                  : null
-              }
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Daily quota</CardTitle>
-            <CardDescription>
-              Pairs per day for the whole line that pass inspection. Not a quota for any one person.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <QuotaForm quota={plan.quota} today={plan.today} />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Schedule history</CardTitle>
-            <CardDescription>Newest first.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table label="Schedule history" data-testid="schedule-history">
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>From</TableHead>
-                  <TableHead>Schedule</TableHead>
-                  <TableHead>Set by</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {plan.scheduleHistory.slice((sp - 1) * HISTORY_ROWS, sp * HISTORY_ROWS).map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="whitespace-nowrap">
-                      {formatAttendanceDay(s.effectiveFrom)}
-                    </TableCell>
-                    <TableCell className="whitespace-normal">{s.description}</TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
-                      {s.setBy}, {formatManilaDateTime(s.setAt)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <TablePager
-              page={sp}
-              pageCount={pages(plan.scheduleHistory.length)}
-              total={plan.scheduleHistory.length}
-              noun={["schedule", "schedules"]}
-              label="Schedule history pages"
-              href={(p) => href("sp", p)}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Quota history</CardTitle>
-            <CardDescription>Newest first, with what was suggested at the time.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {plan.quotaHistory.length === 0 ? (
-              <p className="text-muted-foreground">No quota has been set yet.</p>
+      <section aria-labelledby="plan-month" className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="plan-month" className="text-xl font-semibold">
+            {monthLabel(month)}
+          </h2>
+          <nav aria-label="Months" className="flex flex-wrap items-center gap-2">
+            {month !== monthOf(today) && (
+              <Button asChild variant="ghost" size="sm">
+                <Link href={monthHref(monthOf(today))}>This month</Link>
+              </Button>
+            )}
+            <Button asChild variant="secondary" size="sm">
+              <Link href={monthHref(data.prevMonth)}>
+                <ChevronLeft aria-hidden />
+                {monthLabel(data.prevMonth)}
+              </Link>
+            </Button>
+            {data.nextMonth ? (
+              <Button asChild variant="secondary" size="sm">
+                <Link href={monthHref(data.nextMonth)}>
+                  {monthLabel(data.nextMonth)}
+                  <ChevronRight aria-hidden />
+                </Link>
+              </Button>
             ) : (
-              <Table label="Quota history" data-testid="quota-history">
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>From</TableHead>
-                    <TableHead numeric>Pairs</TableHead>
-                    <TableHead numeric>Suggested</TableHead>
-                    <TableHead>Set by</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {plan.quotaHistory.slice((qp - 1) * HISTORY_ROWS, qp * HISTORY_ROWS).map((q) => (
-                    <TableRow key={q.id}>
-                      <TableCell className="whitespace-nowrap">
-                        {formatAttendanceDay(q.effectiveFrom)}
-                      </TableCell>
-                      <TableCell numeric>{q.pairs}</TableCell>
-                      <TableCell numeric>{q.suggestedPairs ?? "—"}</TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {q.setBy}, {formatManilaDateTime(q.setAt)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled
+                title="Days can be planned up to three months ahead."
+              >
+                Next month
+                <ChevronRight aria-hidden />
+              </Button>
             )}
-            {plan.quotaHistory.length > 0 && (
-              <TablePager
-                page={qp}
-                pageCount={pages(plan.quotaHistory.length)}
-                total={plan.quotaHistory.length}
-                noun={["quota", "quotas"]}
-                label="Quota history pages"
-                href={(p) => href("qp", p)}
-              />
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          </nav>
+        </div>
+        <PlanCalendar data={data} openDay={day} />
+        <p className="text-sm text-muted-foreground">
+          Saturdays, Sundays and past days can’t be planned. Today’s plan can change until its first
+          batch is finished. Rolls to be used is an estimate: Shoe Constructors may start more, and
+          past days show the rolls scanned. The lunch break is set by the System Admin.
+        </p>
+      </section>
     </>
   );
 }

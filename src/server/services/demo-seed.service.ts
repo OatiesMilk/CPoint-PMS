@@ -17,7 +17,7 @@ import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
 import { addRolls, finishRoll, removeRoll, startRoll } from "./roll.service";
 import { ensureSupplierWithCode } from "./supplier-code.service";
 import { setCameraOperator } from "./camera.service";
-import { saveCheckIn, saveQuota } from "./production.service";
+import { markNonWorking, saveCheckIn, saveDayPlan } from "./production.service";
 import { createItem } from "./inventory.service";
 import { saveStockUpdate } from "./stock-update.service";
 import { ingestScan } from "./scan-ingest.service";
@@ -523,8 +523,10 @@ export async function seedDemoWeek(
 
   /**
    * Batches through the real services (Phase 27, D-097 to D-099):
-   *  - the Floor Manager sets the one daily quota on the first morning of the week (a first quota
-   *    applies from that day, Dylan 5A);
+   *  - the Floor Manager plans each working day that morning on the calendar (D-114): two rolls,
+   *    the one quota, every 4 hours, 08:00 to 17:00; the first day plans three rolls and the second
+   *    one, so planned against scanned shows a day under and a day over; a weekday next week is
+   *    marked Non-working / Holiday;
    *  - the QI finishes every batch of the default schedule and lunch (08:00–13:00 with lunch
    *    11:00–12:00, and 13:00–17:00) a few minutes after its end, with a pair or two failing
    *    inspection in each; one finished 50 minutes late on a day that makes the quota, and one
@@ -536,7 +538,27 @@ export async function seedDemoWeek(
    * Today: batches finished more than 30 minutes ago are saved; a newer one is left Due.
    */
   async function seedProduction(): Promise<number> {
-    await saveQuota({ pairs: DEMO_QUOTA, suggestedPairs: null }, fm!, at(firstDay, 7));
+    for (const [i, day] of workingDays.entries()) {
+      const plannedAt = at(day, 7);
+      await saveDayPlan(
+        day,
+        {
+          rollsPlanned: i === 0 ? 3 : i === 1 ? 1 : SLOTS.length,
+          quota: DEMO_QUOTA,
+          suggestedQuota: null,
+          intervalMinutes: DEFAULT_SCHEDULE.intervalMinutes,
+          shiftStart: DEFAULT_SCHEDULE.shiftStart,
+          shiftEnd: DEFAULT_SCHEDULE.shiftEnd,
+          expectedUpdatedAt: null,
+        },
+        fm!,
+        plannedAt.getTime() < now.getTime() ? plannedAt : now,
+      );
+    }
+    // Next week's Wednesday: a holiday, marked ahead (no name, D-114).
+    let holiday = addDays(today, 7);
+    while (isoWeekday(holiday) !== 3) holiday = addDays(holiday, 1);
+    await markNonWorking(holiday, { expectedUpdatedAt: null }, fm!, now);
     const views = new Map<string, number>();
     for (const day of workingDays) {
       const view = await getAttendanceDay(day, fm!, at(day, 12));

@@ -106,6 +106,8 @@ export type DayRowView = {
   failedShare: number | null;
   quota: number | null;
   share: number | null;
+  rollsPlanned: number | null;
+  rollsScanned: number;
   attendanceTaken: boolean;
   constructorsPresent: number | null;
   constructorsOnRoster: number;
@@ -127,7 +129,7 @@ export function ProductionDaysTable({
   if (days.length === 0)
     return (
       <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
-        No working days with batches yet. Each day appears here once its batches are scheduled.
+        No working days with batches yet. Each day appears here once it is planned.
       </p>
     );
   return (
@@ -140,6 +142,8 @@ export function ProductionDaysTable({
           <TableHead numeric>Passed</TableHead>
           <TableHead numeric>Of quota</TableHead>
           <TableHead numeric>Batches</TableHead>
+          <TableHead numeric>Rolls planned</TableHead>
+          <TableHead numeric>Rolls scanned</TableHead>
           <TableHead numeric>Constructors present</TableHead>
           <TableHead numeric>Pairs per constructor</TableHead>
           <TableHead>Note</TableHead>
@@ -165,6 +169,10 @@ export function ProductionDaysTable({
               {d.finishedBatches} of {d.batches}
               {d.missed > 0 && <span className="text-reject"> · {d.missed} missed</span>}
             </TableCell>
+            <TableCell numeric>
+              {d.rollsPlanned ?? <span className="text-muted-foreground">—</span>}
+            </TableCell>
+            <TableCell numeric>{d.rollsScanned}</TableCell>
             <TableCell numeric className="whitespace-nowrap">
               {d.attendanceTaken ? (
                 `${d.constructorsPresent} of ${d.constructorsOnRoster}`

@@ -5,21 +5,27 @@ import { ACCOUNTS, signIn } from "./helpers";
 import { captureApi, createDeviceToken, createRoll, finishRoll, postScan } from "./cv-helpers";
 
 /**
- * Batches (Phase 27, D-097 to D-099): a batch is a check-in interval, finished by the Quality
- * Inspector with the pairs finished and the pairs that failed inspection.
+ * Batches (Phase 27, D-097 to D-099; Phase 30E-2, D-114): a batch is a check-in interval of a
+ * planned day, finished by the Quality Inspector with the pairs finished and the pairs that failed
+ * inspection.
  *
  * Finish batch opens 10 minutes before a batch's end, so the test can't rely on the default
- * 08:00–13:00 and 13:00–17:00. It adds its own schedule and "no lunch" for today straight in the
- * database (hourly from 00:00 to 23:59, every day), so a batch is always due after 01:00 Manila,
- * and removes them and everything the test saved afterwards. Run it after 01:00 Manila time. The
+ * 08:00–13:00 and 13:00–17:00. It puts its own plan for today and "no lunch" straight in the
+ * database (hourly from 00:00 to 23:59), so a batch is always due after 01:00 Manila, and puts
+ * today's own plan back afterwards. Run it after 01:00 Manila time. The
  * Floor Manager test changes today's attendance (QI present, then absent) and puts it back; don't
  * run it beside attendance.spec.ts.
  */
 test.describe.configure({ mode: "serial" });
 
-const STARTED = new Date();
-let scheduleId: string | null = null;
+// As a UTC string: the timestamp columns have no time zone, and node-pg would send a Date in the
+// machine's own zone (Manila on the laptop), so the clean-up below would miss this run's rows.
+const STARTED = new Date().toISOString();
 let lunchId: string | null = null;
+/** Today's plan before the suite replaced it, put back afterwards. */
+let savedToday: Record<string, unknown> | null = null;
+/** The weekday the Floor Manager test plans: the first one after today with nothing saved. */
+let planDay = "";
 
 const manilaDay = (offset = 0) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(
@@ -76,31 +82,50 @@ async function today(page: Page): Promise<{ rows: Row[]; canEnter: boolean }> {
 }
 
 test.beforeAll(async () => {
-  [scheduleId, lunchId] = await withDb(async (db) => {
-    const schedule = await db.query<{ id: string }>(
-      `INSERT INTO production_schedules (id, "shiftStart", "shiftEnd", "intervalMinutes", "workingDays", "effectiveFrom", "createdAt")
-       VALUES (gen_random_uuid(), '00:00', '23:59', 60, '{1,2,3,4,5,6,7}', $1::date, now())
-       RETURNING id`,
-      [manilaDay()],
+  lunchId = await withDb(async (db) => {
+    const today = manilaDay();
+    const before = await db.query(`SELECT * FROM day_plans WHERE day = $1::date`, [today]);
+    savedToday = before.rows[0] ?? null;
+    await db.query(`DELETE FROM day_plans WHERE day = $1::date`, [today]);
+    // An hourly plan for today (an old interval the form no longer offers, D-115).
+    await db.query(
+      `INSERT INTO day_plans (id, day, kind, "rollsPlanned", quota, "intervalMinutes", "shiftStart", "shiftEnd", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid(), $1::date, 'PLANNED', 3, 100, 60, '00:00', '23:59', now(), now())`,
+      [today],
     );
+    for (let i = 1; i < 40; i++) {
+      const day = manilaDay(i);
+      const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+      if (weekday === 0 || weekday === 6) continue;
+      const taken = await db.query(`SELECT 1 FROM day_plans WHERE day = $1::date`, [day]);
+      if (taken.rowCount === 0) {
+        planDay = day;
+        break;
+      }
+    }
     const lunch = await db.query<{ id: string }>(
       `INSERT INTO lunch_breaks (id, "startTime", "endTime", "effectiveFrom", "createdAt")
        VALUES (gen_random_uuid(), NULL, NULL, $1::date, now())
        RETURNING id`,
-      [manilaDay()],
+      [today],
     );
-    return [schedule.rows[0].id, lunch.rows[0].id];
+    return lunch.rows[0].id;
   });
 });
 
 test.afterAll(async () => {
   await withDb(async (db) => {
+    const today = manilaDay();
     await db.query(`DELETE FROM production_check_ins WHERE "enteredAt" >= $1`, [STARTED]);
-    await db.query(`DELETE FROM daily_quotas WHERE "createdAt" >= $1`, [STARTED]);
-    await db.query(
-      `DELETE FROM production_schedules WHERE id = $1 OR ("createdAt" >= $2 AND "createdById" IS NOT NULL)`,
-      [scheduleId, STARTED],
-    );
+    await db.query(`DELETE FROM day_plans WHERE day = $1::date`, [today]);
+    if (savedToday) {
+      const cols = Object.keys(savedToday);
+      await db.query(
+        `INSERT INTO day_plans (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")})`,
+        cols.map((c) => savedToday![c]),
+      );
+    }
+    if (planDay) await db.query(`DELETE FROM day_plans WHERE day = $1::date`, [planDay]);
     await db.query(
       `DELETE FROM lunch_breaks WHERE id = $1 OR ("createdAt" >= $2 AND "createdById" IS NOT NULL)`,
       [lunchId, STARTED],
@@ -108,102 +133,150 @@ test.afterAll(async () => {
   });
 });
 
-test("the Floor Manager plans the batches, once at the end of the day, and the one quota", async ({
+test("the Floor Manager plans a day on the calendar, marks a holiday and undoes it (D-114)", async ({
   browser,
 }) => {
   test.setTimeout(60_000);
+  expect(planDay).not.toBe("");
   const page = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
   await page.goto("/batches");
-  await page.getByRole("link", { name: "Plan batches and quota" }).click();
+  await page.getByRole("link", { name: "Plan days" }).click();
   await expect(page).toHaveURL("/batches/plan");
+  await expect(page.getByTestId("plan-calendar")).toBeVisible();
+  // Weekends and past days are not buttons; no working-days ticks (D-105, D-114).
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  const sat = (await page
+    .locator("[data-testid^='plan-day-']")
+    .evaluateAll((els) =>
+      els
+        .map((e) => e.getAttribute("data-testid")!.slice(9))
+        .find((d) => new Date(`${d}T00:00:00Z`).getUTCDay() === 6),
+    )) as string;
+  expect(await page.getByTestId(`plan-day-${sat}`).evaluate((e) => e.tagName)).toBe("DIV");
+  // Today has the suite's plan and finished batches may lock it later; it reads 3 rolls.
+  await expect(page.getByTestId(`plan-day-${manilaDay()}`)).toContainText("3 rolls");
 
-  // Schedule: the factory's hours (D-105), Monday to Friday only, and times inside 08:00 to 17:00.
-  const schedule = page.getByTestId("schedule-form");
-  await expect(schedule).toContainText("The factory works Monday to Friday, 08:00 to 17:00.");
-  await expect(schedule.getByLabel("Friday")).toBeVisible();
-  await expect(schedule.getByLabel("Saturday")).toHaveCount(0);
-  await expect(schedule.getByLabel("Sunday")).toHaveCount(0);
-  await schedule.getByLabel("Shift start").fill("07:00");
-  await schedule.getByLabel("Shift end").fill("18:00");
-  await schedule.getByRole("button", { name: "Save schedule" }).click();
-  await expect(schedule.getByText("Shift start must be 08:00 or later.")).toBeVisible();
-  await expect(schedule.getByText("Shift end must be 17:00 or earlier.")).toBeVisible();
-  await expect(schedule.getByLabel("Shift start")).toBeFocused();
-  const weekend = await page.request.put("/api/v1/production/schedule", {
-    data: { shiftStart: "08:00", shiftEnd: "17:00", intervalMinutes: 240, workingDays: [6] },
-  });
-  expect(weekend.status()).toBe(422);
-  expect(JSON.stringify(await weekend.json())).toContain("Working days are Monday to Friday.");
-
-  // A shift end before the start is caught under the field.
-  await schedule.getByLabel("Shift start").fill("17:00");
-  await schedule.getByLabel("Shift end").fill("08:00");
-  await schedule.getByRole("button", { name: "Save schedule" }).click();
-  await expect(schedule.getByText("Shift end must be after shift start.")).toBeVisible();
-  await expect(schedule.getByLabel("Shift end")).toBeFocused();
-
-  // Once at the end of the day: one batch for the whole shift (C-4).
-  await schedule.getByLabel("Shift start").fill("08:00");
-  await schedule.getByLabel("Shift end").fill("17:00");
-  await schedule.getByLabel("How often").selectOption({ label: "Once at the end of the day" });
-  await expect(schedule).toContainText(
-    /Tomorrow: Batch 1 08:00–17:00(, lunch \d\d:\d\d–\d\d:\d\d)?\./,
+  // The first free weekday after today: its dialog opens from ?day=.
+  await page.goto(`/batches/plan?day=${planDay}`);
+  const form = page.getByTestId("day-plan-form");
+  await expect(form).toBeVisible();
+  await form.getByLabel("Rolls to be used").fill("x");
+  await form.getByLabel("Quota (pairs that pass)").fill("0");
+  await form.getByLabel("Shift start").fill("07:00");
+  await form.getByLabel("Shift end").fill("18:00");
+  await form.getByRole("button", { name: "Save plan" }).click();
+  // Each message shows under its field and again in the summary, so read the field's own error.
+  await expect(form.locator("#plan-rolls-error")).toHaveText(
+    "Enter the rolls to be used as a whole number, like 5. Enter 0 if none.",
   );
-  await expect(schedule).not.toContainText("Batch 2");
-  await expect(schedule).toContainText("Applies from tomorrow");
-  await schedule.getByRole("button", { name: "Save schedule" }).click();
-  // A rerun on the same database may already have this schedule for tomorrow.
-  await expect(
-    page.getByText(
-      /Schedule saved\. It applies from|Nothing changed: this schedule already applies/,
-    ),
-  ).toBeVisible();
-  await expect(page.getByTestId("schedule-history")).toContainText("once at the end of the day");
-  // Saving the same schedule again adds no row (team QA, 2026-11-02). Reload first so the count
-  // includes the save above: the history refreshes after its toast, slowly under `next dev`
-  // (D-109 run 1 F3 counted 8 before the table showed 9).
-  // The form opens on today's schedule, so enter tomorrow's once more.
-  await page.reload();
-  const historyRows = await page.getByTestId("schedule-history").getByRole("row").count();
-  // Under `next dev` a fill made before the page hydrates is lost (D-109 run 2), so repeat it
-  // until the form's own preview shows tomorrow's single batch.
-  await expect(async () => {
-    await schedule.getByLabel("Shift start").fill("08:00");
-    await schedule.getByLabel("Shift end").fill("17:00");
-    await schedule.getByLabel("How often").selectOption({ label: "Once at the end of the day" });
-    await expect(schedule).toContainText(/Tomorrow: Batch 1 08:00–17:00/, { timeout: 2_000 });
-  }).toPass({ timeout: 20_000 });
-  await schedule.getByRole("button", { name: "Save schedule" }).click();
-  await expect(
-    page.getByText(
-      /Nothing changed: this schedule already applies from .+, so nothing was saved\./,
-    ),
-  ).toBeVisible();
-  await expect(page.getByTestId("schedule-history").getByRole("row")).toHaveCount(historyRows);
+  await expect(form.locator("#plan-quota-error")).toHaveText(
+    "Enter the daily quota as a whole number of pairs, at least 1.",
+  );
+  await expect(form.locator("#plan-shift-start-error")).toHaveText(
+    "Shift start must be 08:00 or later.",
+  );
+  await expect(form.locator("#plan-shift-end-error")).toHaveText(
+    "Shift end must be 17:00 or earlier.",
+  );
+  await expect(form.getByLabel("Rolls to be used")).toBeFocused();
 
-  // Every 2 hours shows more batches in the preview.
-  await schedule.getByLabel("How often").selectOption({ label: "Every 2 hours" });
-  await expect(schedule).toContainText("Batch 2");
+  // Only every 4 hours or once at the end of the day (D-115).
+  const interval = form.getByLabel("Check-in interval");
+  await expect(interval.locator("option")).toHaveText([
+    "Every 4 hours",
+    "Once at the end of the day",
+  ]);
+  await form.getByLabel("Rolls to be used").fill("4");
+  await form.getByLabel("Quota (pairs that pass)").fill("4321");
+  await form.getByLabel("Shift start").fill("08:00");
+  await form.getByLabel("Shift end").fill("17:00");
+  await interval.selectOption({ label: "Once at the end of the day" });
+  await expect(form).toContainText(/Batch 1 08:00–17:00/);
+  await expect(form).not.toContainText("Batch 2");
+  await expect(form.getByText(/Suggested: \d+ pairs|No quota suggestion yet/)).toBeVisible();
+  expect(await axe(page)).toEqual([]);
+  await form.getByRole("button", { name: "Save plan" }).click();
+  await expect(page.getByText(/Plan saved for /)).toBeVisible();
+  const cell = page.getByTestId(`plan-day-${planDay}`);
+  await expect(cell).toContainText("4 rolls");
+  await expect(cell).toContainText("4,321 pairs");
+  await expect(cell).toContainText("once a day");
 
-  // The one daily quota (D-099): a 0 is refused; a whole number is saved.
-  const quota = page.getByTestId("quota-form");
-  const pairs = quota.getByLabel("Pairs per day for the whole line");
-  await pairs.fill("0");
-  await quota.getByRole("button", { name: "Save quota" }).click();
+  // Non-working / Holiday, then undo: the day is a working day again with no plan.
+  await cell.click();
+  await page.getByRole("button", { name: "Mark Non-working / Holiday" }).click();
   await expect(
-    quota.getByText("Enter the daily quota as a whole number of pairs, at least 1."),
+    page.getByText(/is marked Non-working \/ Holiday\. It has no batches\./),
   ).toBeVisible();
-  await expect(pairs).toBeFocused();
-  await pairs.fill("4321");
-  await quota.getByRole("button", { name: "Save quota" }).click();
-  await expect(page.getByText(/Daily quota saved\.|Nothing changed/)).toBeVisible();
-  await expect(page.getByTestId("quota-history")).toContainText("4321");
-  // The suggestion box is there whether or not there is enough history for a number.
-  await expect(quota.getByText(/Suggested: \d+ pairs|No suggestion yet/)).toBeVisible();
+  await expect(cell).toContainText("Non-working / Holiday");
+  await cell.click();
+  await page.getByRole("button", { name: "Undo, make it a working day" }).click();
+  await expect(
+    page.getByText(/is a working day again\. Plan it so it has batches\./),
+  ).toBeVisible();
+  await expect(page.getByTestId("day-plan-form")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(cell).toContainText("Not planned");
+
+  // The API refuses a weekend and a past day; the old schedule and quota APIs are gone.
+  const weekend = await page.request.put(`/api/v1/production/plans/${sat}`, {
+    data: {
+      rollsPlanned: 1,
+      quota: 10,
+      intervalMinutes: 240,
+      shiftStart: "08:00",
+      shiftEnd: "17:00",
+    },
+  });
+  expect(weekend.status()).toBe(409);
+  expect((await weekend.json()).error.message).toBe(
+    "Saturdays and Sundays can't be planned. The factory works Monday to Friday.",
+  );
+  expect((await page.request.put("/api/v1/production/schedule", { data: {} })).status()).toBe(404);
+  expect((await page.request.put("/api/v1/production/quotas", { data: {} })).status()).toBe(404);
   // No shoe types anywhere on the plan (C-8).
   await expect(page.getByText(/shoe type/i)).toHaveCount(0);
+});
 
-  expect(await axe(page)).toEqual([]);
+test("a weekday with no plan has no batches and the Floor Manager is told to plan it (A-37)", async ({
+  browser,
+}) => {
+  test.setTimeout(60_000);
+  const today = manilaDay();
+  const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+  test.skip(weekday === 0 || weekday === 6, "The notice only shows on a weekday.");
+  const plan = await withDb(async (db) => {
+    const row = (await db.query(`SELECT * FROM day_plans WHERE day = $1::date`, [today])).rows[0];
+    await db.query(`DELETE FROM day_plans WHERE day = $1::date`, [today]);
+    return row;
+  });
+  try {
+    const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
+    await expect(fm.getByTestId("plan-notice")).toContainText("Today has no plan yet");
+    await expect(fm.getByTestId("plan-today-card")).toBeVisible();
+    await fm.goto("/batches");
+    await expect(fm.getByTestId("no-batches")).toContainText("Today has no plan yet");
+    // The bell sits in both the desktop sidebar and the phone bar; click the one on screen.
+    await fm.getByTestId("batch-bell").filter({ visible: true }).click();
+    await expect(fm.getByTestId("plan-today-notice")).toBeVisible();
+    await fm.keyboard.press("Escape");
+    expect(await axe(fm)).toEqual([]);
+
+    const qi = await signedIn(browser, ACCOUNTS.inspector.email, ACCOUNTS.inspector.home);
+    await expect(qi.getByTestId("no-batches")).toContainText(
+      "No batches yet today. The Floor Manager plans them first.",
+    );
+    await expect(qi.getByTestId("plan-notice")).toHaveCount(0);
+  } finally {
+    await withDb(async (db) => {
+      await db.query(`DELETE FROM day_plans WHERE day = $1::date`, [today]);
+      const cols = Object.keys(plan);
+      await db.query(
+        `INSERT INTO day_plans (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")})`,
+        cols.map((c) => plan[c]),
+      );
+    });
+  }
 });
 
 test("the System Admin sets the lunch break, from tomorrow, with specific messages (C-3)", async ({
@@ -220,7 +293,7 @@ test("the System Admin sets the lunch break, from tomorrow, with specific messag
   await form.getByRole("button", { name: "Save lunch break" }).click();
   await expect(form.getByText("Lunch must end after it starts.")).toBeVisible();
 
-  // Outside tomorrow's shift (the Floor Manager's 08:00 to 17:00 above).
+  // Outside the factory's hours (08:00 to 17:00; each day plans its own shift, D-114).
   await form.getByLabel("Lunch starts").fill("06:00");
   await form.getByLabel("Lunch ends").fill("07:00");
   await form.getByRole("button", { name: "Save lunch break" }).click();
@@ -501,8 +574,13 @@ test("the Admin is refused Batches (D-100) and sets only the lunch break", async
     await expect(page).toHaveURL("/forbidden");
   }
   expect((await page.request.get("/api/v1/production/today")).status()).toBe(403);
+  expect((await page.request.get("/api/v1/production/plans")).status()).toBe(403);
   expect(
-    (await page.request.put("/api/v1/production/quotas", { data: { pairs: 10 } })).status(),
+    (
+      await page.request.put(`/api/v1/production/plans/${manilaDay(1)}`, {
+        data: { rollsPlanned: 1, quota: 10 },
+      })
+    ).status(),
   ).toBe(403);
   await page.goto("/admin");
   await expect(page.getByTestId("lunch-break-card")).toContainText("Lunch break");

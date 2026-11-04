@@ -360,46 +360,67 @@ Constructors count as workers, and a day never saved is `taken: false` with null
 
 ## Batches (session, Phase 27; before it Production, Phase 23)
 
-A batch is one check-in interval of the working day (D-097 to D-099): the schedule and the one
-daily quota (Floor Manager), the lunch break (System Admin, under Settings above) and each batch's
-pairs finished and failed inspection (Quality Inspector). Everything is per batch or day for the
-whole line (D-008); the only name is who finished or corrected a batch. Days are Manila calendar
-days. The paths keep `production`; a finished batch is a `check-in` row whose `slotAt` is the
-batch's end.
+A batch is one check-in interval of a planned working day (D-097 to D-099, D-114): the day plans
+(Floor Manager), the lunch break (System Admin, under Settings above) and each batch's pairs
+finished and failed inspection (Quality Inspector). Everything is per batch or day for the whole
+line (D-008); the only names are who finished or corrected a batch and who last changed a day's
+plan. Days are Manila calendar days. The paths keep `production`; a finished batch is a `check-in`
+row whose `slotAt` is the batch's end.
 
-| Method & path                             | Permission           | Body / query                                                     |
-| ----------------------------------------- | -------------------- | ---------------------------------------------------------------- |
-| `GET /api/v1/production/today`            | `production:read`    | —                                                                |
-| `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                             |
-| `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes? }` (no rolls, D-111)      |
-| `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason }`             |
-| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }` (D-105) |
-| `PUT /api/v1/production/quotas`           | `production:plan`    | `{ pairs, suggestedPairs? }`                                     |
+| Method & path                                       | Permission           | Body / query                                                                                         |
+| --------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/production/today`                      | `production:read`    | —                                                                                                    |
+| `GET /api/v1/production/days?from=&to=`             | `production:read`    | default the last 14 days, at most 92                                                                 |
+| `POST /api/v1/production/check-ins`                 | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes? }` (no rolls, D-111)                                          |
+| `PATCH /api/v1/production/check-ins/{id}`           | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason }`                                                 |
+| `GET /api/v1/production/plans?month=`               | `production:plan`    | `month` `YYYY-MM`, default this month (D-114)                                                        |
+| `PUT /api/v1/production/plans/{day}`                | `production:plan`    | `{ rollsPlanned, quota, suggestedQuota?, intervalMinutes, shiftStart, shiftEnd, expectedUpdatedAt }` |
+| `PUT /api/v1/production/plans/{day}/non-working`    | `production:plan`    | `{ expectedUpdatedAt }` (body optional): mark Non-working / Holiday                                  |
+| `DELETE /api/v1/production/plans/{day}/non-working` | `production:plan`    | `{ expectedUpdatedAt }`: undo the mark                                                               |
 
 `production:read` is the Floor Manager, the Quality Inspector and the System Admin;
 `production:checkin` the Quality Inspector, and the Floor Manager **only on a day attendance shows no
 Quality Inspector present** (D-088; otherwise `403` "A Quality Inspector is present today, so they
 finish the batches." or "Take today's attendance first. …"); `production:plan` the Floor Manager.
+`PUT /api/v1/production/schedule` and `PUT /api/v1/production/quotas` are gone (`404`, Phase
+30E-2).
 
-The schedule sits inside the factory's hours (D-105): `workingDays` 1 to 5 (Monday to Friday,
-else `422` "Working days are Monday to Friday."), `shiftStart` from `08:00` ("Shift start must be
-08:00 or later."), `shiftEnd` up to `17:00` ("Shift end must be 17:00 or earlier.") and after the
-start; `intervalMinutes` 60, 120, 180, 240 or `null` (once at the end of the day). It applies from
-tomorrow. The schedule, the quota and the lunch break answer `{ saved, effectiveFrom }`: a value
-equal to the one already in force that day is not saved again (`saved: false`, no row, no audit).
+**Day plans (D-114, D-115).** A day has batches only when it has a plan; nothing is copied from
+another day. `{day}` is `YYYY-MM-DD`, a weekday from today to the end of the third month ahead
+(A-40); otherwise `409 CONFLICT` "Saturdays and Sundays can't be planned. The factory works Monday
+to Friday.", "Tue, 3 Nov has passed, so its plan can't change." or "Days can be planned up to Sun,
+28 Feb.". Today can change only until one of its batches is finished (`409` "A batch is already
+finished today, so today's plan can't change. …", A-36). `rollsPlanned` 0–200 (an estimate),
+`quota` 1–50,000 passed pairs, `intervalMinutes` `240` or `null` (or `"end"`) for once at the end
+of the day (`422` "Choose the check-in interval: every 4 hours, or once at the end of the day."),
+`shiftStart` from `08:00`, `shiftEnd` up to `17:00` and after the start (D-105).
+`expectedUpdatedAt` is the plan's `updatedAt` the form loaded, or `null` for a day with nothing
+saved; anything else is `409 STALE` "Rodel Pascual changed Thu, 5 Nov at …. Refresh to see it.".
+Each write answers `{ saved, day }`; a plan equal to the one saved, or a second mark, is skipped
+(`saved: false`, no audit). Undoing a mark on a day that isn't marked is `409`. A Non-working day
+has no batches, no start-of-day notice and no stock reminder. Days before Phase 30E-2 were converted
+from the old schedule and quota (no author, `rollsPlanned` null, and possibly an interval of 60 to
+180).
 
-- **today** → `{ day, dayLabel, schedule, lunch, workingDay, rows: [{ number, slotAt, startTime,
-time, lunch, times, label, state, pausedForLunch, canFinishNow, finishOpensAt, lateBy, checkIn }],
-progress: { finished, failed, passed, quota, share, pace }, next, late, missed, workforce,
-shortfall, canEnter, covering, enterNote }`. `state` is `UPCOMING`, `IN_PROGRESS`, `DUE`, `LATE`
-  (30 minutes past the end), `FINISHED` or `MISSED` (after midnight), worked out on each request.
-  `checkIn` carries `pairs`, `failedPairs`, `constructorsPresent` read at save,
-  `attendanceChanged`, notes, `enteredLate` and any correction. The browser's notices are worked
-  out from this.
+- **plans** → `{ month, today, weeks: [[day | null] × 7], days: [{ day, label, weekend, past,
+isToday, kind (PLANNED | NON_WORKING | null), plan: { rollsPlanned, quota, intervalMinutes,
+shiftStart, shiftEnd, short, batches } | null, updatedAt, changed: { by, at } | null, lunch,
+rollsScanned (today and past days), editable, lockedReason }], prevMonth, nextMonth, suggestion,
+factory }`.
+- **today** → `{ day, dayLabel, schedule, lunch, workingDay, plan, nonWorking, planNeeded,
+rollsPlanned, rollsScanned, rows: [{ number, slotAt, startTime, time, lunch, times, label, state,
+pausedForLunch, canFinishNow, finishOpensAt, lateBy, checkIn }], progress: { finished, failed,
+passed, quota, share, pace }, next, late, missed, workforce, shortfall, canEnter, covering,
+enterNote }`. `planNeeded` is a weekday with no plan and no mark (the Floor Manager's notice,
+  A-37). `state` is `UPCOMING`, `IN_PROGRESS`, `DUE`, `LATE` (30 minutes past the end),
+  `FINISHED` or `MISSED` (after midnight), worked out on each request. `checkIn` carries `pairs`,
+  `failedPairs`, `constructorsPresent` read at save, `attendanceChanged`, notes, `enteredLate` and
+  any correction. The browser's notices are worked out from this.
 - **days** → `{ days: [{ day, batches, finishedBatches, missed, full, finished, failed, passed,
-failedShare, quota, share, attendanceTaken, constructorsPresent, constructorsOnRoster,
-pairsPerConstructor, shortfall }] }`, from the first day a batch was ever finished. `share` is
-  passed ÷ quota (C-41); `pairsPerConstructor` is a line average.
+failedShare, quota, share, rollsPlanned, rollsScanned, attendanceTaken, constructorsPresent,
+constructorsOnRoster, pairsPerConstructor, shortfall }] }`, from the first day a batch was ever
+  finished. `share` is passed ÷ quota (C-41); `rollsScanned` counts the rolls whose Finish roll
+  was that day; `pairsPerConstructor` is a line average.
 - **check-ins (Finish batch):** `slotAt` must be the end of a batch on that day; Finish batch is
   open from 10 minutes before the end until midnight Manila. `pairs` 0–2,000; `failedPairs`
   0–2,000 (default 0) and never more than `pairs`. Returns `{ id, number, time }`. Errors: `422`
@@ -410,12 +431,8 @@ pairsPerConstructor, shortfall }] }`, from the first day a batch was ever finish
   finished Batch 1 at 13:04. Refresh to see it."
 - **corrections:** the same Manila day only, `reason` 5–300 characters; the audit row keeps both
   counts. `409 STALE` when it changed since it was loaded.
-- **schedule:** times `HH:mm`, shift end after start, `intervalMinutes` 60, 120, 180 or 240, or
-  `null` (or `"end"`) for once at the end of the day, at least one ISO weekday. Always applies
-  from tomorrow.
-- **quotas:** one `pairs` 1–50,000 for the whole line. The first quota applies from today, a change
-  from tomorrow; a value equal to the one already set for that day is skipped. Returns
-  `{ saved, effectiveFrom }`.
+- The lunch break (Settings) sits inside the factory's hours, 08:00 to 17:00, and applies from
+  tomorrow; a day planned with a shorter shift that leaves it out ignores it.
 
 ## Reports (session)
 
@@ -429,7 +446,7 @@ default is the last 14 days, at most 92, and never past today.
 | `GET /api/v1/reports/production`         | `report:production` | `{ days[], totals: { finished, failed, passed, failedShare, share, daysBelow, daysWithQuota } }` (Phase 27)                                                                                                                                      |
 | `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: Scanned, Pass, Reject (for salvage)                                                                                                                                                                                             |
 | `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection): Scans, Pass, Reject (for salvage)                                                                                                                                                        |
-| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day: pairs finished, failed, % failed, passed, quota, % of quota (passed), batches, constructors, shortfall                                                                                                                          |
+| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day: pairs finished, failed, % failed, passed, quota, % of quota (passed), batches, rolls planned and scanned, constructors, shortfall                                                                                               |
 | `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], stock, suppliers[], rejectedRolls[], lineRejectShare, forSalvage, checkpoint }`                                                                                                                        |
 | `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, sections scanned, Pass, Reject (for salvage)                                                                                                                                                        |
 | `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and added, days of cover, status                                                                                                                                                                 |

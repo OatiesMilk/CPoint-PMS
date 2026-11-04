@@ -41,8 +41,7 @@ const LABELS: Record<string, string> = {
   defectTypes: "defect types tests added",
   attendanceDays: "days of attendance (the demo week adds its own)",
   checkIns: "finished batches (the demo week adds its own)",
-  quotas: "daily quotas (the demo week sets its own)",
-  schedules: "batch schedules people saved (the default stays)",
+  dayPlans: "day plans and Non-working marks (the demo week plans its own days)",
   lunchBreaks: "lunch breaks the System Admin saved (the default 11:00 to 12:00 comes back)",
 };
 

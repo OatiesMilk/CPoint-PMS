@@ -10,8 +10,11 @@ import { addDays, manilaDayStart } from "./report-rules";
  * times are "HH:mm" in Manila (UTC+8, no DST).
  */
 
-/** Every 1, 2, 3 or 4 hours of working time; `null` is once at the end of the day (C-2). */
-export const INTERVAL_MINUTES = [60, 120, 180, 240] as const;
+/**
+ * The check-in interval a new day plan can have (D-115): every 4 hours of working time, or `null`,
+ * once at the end of the day (C-2). Days planned before Phase 30E-2 may hold 60 to 180.
+ */
+export const INTERVAL_MINUTES = [240] as const;
 /** ASSUMPTION (D-084): a batch not finished more than 30 minutes after its end reads Late. */
 export const LATE_AFTER_MINUTES = 30;
 /** The QI may finish a batch from 10 minutes before its end, when the first notice comes (C-28). */
@@ -27,7 +30,7 @@ export const RECENT_DAYS = 14;
 /** "3 of the last 5 working days were below quota" (the attention item). */
 export const ATTENTION_DAYS = 5;
 
-/** The working days the Floor Manager can pick, Monday to Friday (D-105). */
+/** Monday to Friday (D-105): the only days the calendar lets the Floor Manager plan (D-114). */
 export const WEEKDAYS = [
   { iso: 1, short: "Mon", label: "Monday" },
   { iso: 2, short: "Tue", label: "Tuesday" },
@@ -39,10 +42,10 @@ export const WEEKDAYS = [
 /** The factory works Monday to Friday, 08:00 to 17:00 (D-105); a shift stays inside this window. */
 export const FACTORY_OPENS = "08:00";
 export const FACTORY_CLOSES = "17:00";
-/** The working days a schedule may pick: Monday to Friday (D-105, replaces D-083's Mon–Sat). */
+/** The days that can be planned: Monday to Friday (D-105, D-114). */
 export const FACTORY_DAYS = [1, 2, 3, 4, 5] as const;
 
-/** The default the bootstrap creates (D-105): 08:00 to 17:00, every 4 hours, Monday to Friday. */
+/** What a new day plan starts from (D-105, D-114): 08:00 to 17:00, every 4 hours. */
 export const DEFAULT_SCHEDULE = {
   shiftStart: FACTORY_OPENS,
   shiftEnd: FACTORY_CLOSES,
@@ -58,7 +61,8 @@ export type ScheduleRule = {
   shiftEnd: string;
   /** Working minutes per batch; null = once at the end of the day. */
   intervalMinutes: number | null;
-  workingDays: readonly number[];
+  /** When given, a day outside these ISO weekdays has no batches. A day plan leaves it out. */
+  workingDays?: readonly number[];
 };
 
 /** A break that pauses a batch. Lunch is the only one (C-40); the rules take a list (A-4). */
@@ -178,7 +182,8 @@ export function batchesFor(
   breaks: readonly BreakRule[],
   day: string,
 ): Batch[] {
-  if (!schedule || !schedule.workingDays.includes(isoWeekday(day))) return [];
+  if (!schedule || (schedule.workingDays && !schedule.workingDays.includes(isoWeekday(day))))
+    return [];
   const shiftStart = minutesOf(schedule.shiftStart);
   const shiftEnd = minutesOf(schedule.shiftEnd);
   if (shiftEnd <= shiftStart) return [];
@@ -517,10 +522,99 @@ export function belowQuotaAttention(
   return below >= 2 ? { below, of: recent.length } : null;
 }
 
+// ───────────── the planning calendar (Phase 30E-2, D-114) ─────────────
+
+/** Rolls to be used on one day: an estimate, at most this many (A-40). */
+export const MAX_ROLLS_PLANNED = 200;
+/** ASSUMPTION (A-40): a day can be planned up to the end of the third month after this one. */
+export const PLAN_MONTHS_AHEAD = 3;
+
+/** "2026-11" for a day. */
+export function monthOf(day: string): string {
+  return day.slice(0, 7);
+}
+
+export function isMonth(value: string): boolean {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+}
+
+/** The month `n` months after `month` ("2026-11", 2 → "2027-01"). */
+export function addMonths(month: string, n: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+
+/** The last calendar day of a month. */
+export function lastDayOf(month: string): string {
+  return addDays(`${addMonths(month, 1)}-01`, -1);
+}
+
+/** The last day the Floor Manager may plan (A-40). */
+export function lastPlannableDay(today: string): string {
+  return lastDayOf(addMonths(monthOf(today), PLAN_MONTHS_AHEAD));
+}
+
 /**
- * When a schedule, lunch or quota change takes effect (D-083, D-085): tomorrow, except the first
- * quota ever, which applies from today (Dylan 5A).
+ * The month as calendar weeks, Monday to Sunday (D-114). Days of the next or previous month that
+ * fill the first and last week are null.
  */
-export function effectiveFromFor(today: string, first = false): string {
-  return first ? today : addDays(today, 1);
+export function monthWeeks(month: string): (string | null)[][] {
+  const first = `${month}-01`;
+  const last = lastDayOf(month);
+  const weeks: (string | null)[][] = [];
+  let week: (string | null)[] = Array.from({ length: isoWeekday(first) - 1 }, () => null);
+  for (let d = first; d <= last; d = addDays(d, 1)) {
+    week.push(d);
+    if (week.length === 7) {
+      weeks.push(week);
+      week = [];
+    }
+  }
+  if (week.length) weeks.push([...week, ...Array.from({ length: 7 - week.length }, () => null)]);
+  return weeks;
+}
+
+export function isWeekend(day: string): boolean {
+  return isoWeekday(day) > 5;
+}
+
+/**
+ * Why a day can't be planned or marked, or null (D-105, D-114, A-40): Saturdays and Sundays never,
+ * past days never, and nothing after the last plannable day.
+ */
+export function planProblem(day: string, today: string): string | null {
+  if (isWeekend(day))
+    return "Saturdays and Sundays can't be planned. The factory works Monday to Friday.";
+  if (day < today) return `${formatAttendanceDay(day)} has passed, so its plan can't change.`;
+  const last = lastPlannableDay(today);
+  if (day > last) return `Days can be planned up to ${formatAttendanceDay(last)}.`;
+  return null;
+}
+
+/** "every 4 h", "once a day": the short interval on a calendar day. */
+export function shortInterval(minutes: number | null): string {
+  if (minutes === null) return "once a day";
+  return minutes === 60 ? "every 1 h" : `every ${minutes / 60} h`;
+}
+
+/** "5 rolls · 128 pairs · every 4 h" (a converted day has no rolls: "128 pairs · every 2 h"). */
+export function describePlanShort(p: {
+  rollsPlanned: number | null;
+  quota: number | null;
+  intervalMinutes: number | null;
+}): string {
+  return [
+    p.rollsPlanned === null ? null : `${p.rollsPlanned} roll${p.rollsPlanned === 1 ? "" : "s"}`,
+    p.quota === null ? null : pairsWord(p.quota),
+    shortInterval(p.intervalMinutes),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** "3 of 5 rolls scanned" or "3 rolls scanned" when none were planned (a converted day). */
+export function rollsScannedLine(scanned: number, planned: number | null): string {
+  if (planned === null) return `${scanned} roll${scanned === 1 ? "" : "s"} scanned`;
+  return `${scanned} of ${planned} roll${planned === 1 ? "" : "s"} scanned`;
 }

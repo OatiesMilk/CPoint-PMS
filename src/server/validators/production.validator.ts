@@ -3,8 +3,10 @@ import {
   FACTORY_CLOSES,
   FACTORY_OPENS,
   INTERVAL_MINUTES,
+  isMonth,
   isTime,
   MAX_PAIRS_PER_CHECK_IN,
+  MAX_ROLLS_PLANNED,
   minutesOf,
 } from "@/lib/production-rules";
 import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
@@ -121,21 +123,48 @@ const timeField = (label: string, example: string) =>
     .refine(isTime, `Enter the ${label} as a time, like ${example}.`);
 
 export const INTERVAL_MESSAGE =
-  "Choose how often: every 1, 2, 3 or 4 hours, or once at the end of the day.";
+  "Choose the check-in interval: every 4 hours, or once at the end of the day.";
 
-export const WORKING_DAYS_MESSAGE = "Working days are Monday to Friday.";
 export const SHIFT_START_WINDOW_MESSAGE = `Shift start must be ${FACTORY_OPENS} or later.`;
 export const SHIFT_END_WINDOW_MESSAGE = `Shift end must be ${FACTORY_CLOSES} or earlier.`;
 
+export const ROLLS_PLANNED_MESSAGE =
+  "Enter the rolls to be used as a whole number, like 5. Enter 0 if none.";
+
+/** Rolls to be used on a day (D-114): an estimate, 0 to 200. */
+export const rollsPlannedSchema = wholeNumber(
+  ROLLS_PLANNED_MESSAGE,
+  MAX_ROLLS_PLANNED,
+  `Rolls to be used can't be more than ${MAX_ROLLS_PLANNED}. Check the number.`,
+);
+
+/** The plan's `updatedAt` the form loaded, or null for a day with nothing saved yet (STALE). */
+const expectedUpdatedAt = z.iso
+  .datetime({ offset: true, error: OUT_OF_DATE })
+  .nullable()
+  .optional()
+  .transform((v) => v ?? null);
+
 /**
- * PUT /api/v1/production/schedule (D-097, D-105). Applies from tomorrow. The shift sits inside the
- * factory's hours (Monday to Friday, 08:00 to 17:00); a shorter shift inside them is fine.
+ * PUT /api/v1/production/plans/{day} (D-114, D-115, D-105): rolls to be used, the quota, the
+ * check-in interval (every 4 hours or once at the end of the day) and the shift, inside the
+ * factory's hours (08:00 to 17:00; a shorter shift is fine).
  */
-export const scheduleSchema = z
+export const dayPlanSchema = z
   .object({
+    rollsPlanned: rollsPlannedSchema,
+    quota: quotaPairsSchema,
+    // Sent by the form from the suggestion it showed, never typed, so a bad value means a stale page.
+    suggestedQuota: z
+      .number({ error: OUT_OF_DATE })
+      .int(OUT_OF_DATE)
+      .min(0, OUT_OF_DATE)
+      .nullable()
+      .optional()
+      .transform((v) => v ?? null),
     shiftStart: timeField("shift start", "08:00"),
     shiftEnd: timeField("shift end", "17:00"),
-    // A number of working minutes, or null (the form sends "end") for once at the end of the day.
+    // 240, or null (the form sends "end") for once at the end of the day.
     intervalMinutes: z.preprocess(
       (v) => (v === "end" ? null : typeof v === "string" && v.trim() !== "" ? Number(v) : v),
       z
@@ -146,16 +175,7 @@ export const scheduleSchema = z
           INTERVAL_MESSAGE,
         ),
     ),
-    workingDays: z
-      .array(
-        z.coerce
-          .number({ error: WORKING_DAYS_MESSAGE })
-          .int(WORKING_DAYS_MESSAGE)
-          .min(1, WORKING_DAYS_MESSAGE)
-          .max(5, WORKING_DAYS_MESSAGE),
-        { error: "Pick at least one working day." },
-      )
-      .min(1, "Pick at least one working day."),
+    expectedUpdatedAt,
   })
   .superRefine((v, ctx) => {
     if (isTime(v.shiftStart) && minutesOf(v.shiftStart) < minutesOf(FACTORY_OPENS))
@@ -173,25 +193,26 @@ export const scheduleSchema = z
         message: "Shift end must be after shift start.",
       });
   });
-export type ScheduleInput = z.infer<typeof scheduleSchema>;
+export type DayPlanInput = z.infer<typeof dayPlanSchema>;
 
-/** PUT /api/v1/production/quotas: the one daily quota for the whole line (C-30). */
-export const quotaSchema = z.object({
-  pairs: quotaPairsSchema,
-  // Sent by the form from the suggestion it showed, never typed, so a bad value means a stale page.
-  suggestedPairs: z
-    .number({ error: OUT_OF_DATE })
-    .int(OUT_OF_DATE)
-    .min(0, OUT_OF_DATE)
-    .nullable()
+/** PUT and DELETE /api/v1/production/plans/{day}/non-working: only the STALE stamp. */
+export const dayMarkSchema = z.object({ expectedUpdatedAt });
+export type DayMarkInput = z.infer<typeof dayMarkSchema>;
+
+/** The `{day}` of a plan route: "YYYY-MM-DD". */
+export const planDaySchema = attendanceDaySchema;
+
+/** `?month=2026-11` for GET /api/v1/production/plans. */
+export const planMonthSchema = z.object({
+  month: z
+    .string({ error: "Give the month as YYYY-MM, like 2026-11." })
+    .refine(isMonth, "Give the month as YYYY-MM, like 2026-11.")
     .optional(),
 });
-export type QuotaInput = z.infer<typeof quotaSchema>;
 
 /**
  * PUT /api/v1/settings/lunch-break (C-3, A-4): a start and an end, or `{ none: true }` for no
- * lunch break. Whether it fits inside the shift is checked by the service against tomorrow's
- * schedule.
+ * lunch break. Whether it fits inside the factory's hours is checked by the service.
  */
 export const lunchBreakSchema = z
   .object({

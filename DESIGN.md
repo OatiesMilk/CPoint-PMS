@@ -113,6 +113,25 @@ For whoever finishes today's batches (the QI, or the Floor Manager covering, D-0
 - **Tab title** starts with "(n)" while n batches are due.
 - No sound, push or browser notification; nothing animates beyond the standard fade.
 
+**Plan today (D-114, A-37)**, for the Floor Manager on a weekday with no plan, from 00:00 until the
+day is planned or marked Non-working / Holiday: the same info banner (`border-info bg-info-soft`,
+`BellRing`) "Today has no plan yet, so there are no batches. Plan today." with **Plan today**
+(`size="lg"`, `h-11`), a **Plan today** card first on the FM home, and a bell item. The Quality
+Inspector reads "No batches yet today. The Floor Manager plans them first." on Batches.
+
+## Plan calendar (D-114)
+
+Batches → Plan days, desktop: a month grid, Monday to Sunday (`grid-cols-7`, the one place a fixed
+column count is the content itself), each day a card cell (`min-h-24`): the date, a **Today** brand
+badge, then the plan in three short lines (rolls, pairs, interval) and, for today and past days,
+"3 of 5 rolls scanned". Weekends and past days are muted, not buttons. A weekday from today on is
+a button that opens the day dialog (`size="lg"`); **Non-working / Holiday** cells have a dashed
+border and `CalendarOff`; today unplanned uses the caution tone with an icon and "Not planned
+yet". Below 640 px the grid becomes a list of the month's weekdays. The dialog: Rolls to be used
+and Quota side by side, the suggestion box with **Use suggestion**, Check-in interval (two
+choices) and the shift, a live batch preview, **Save plan** (primary) and **Mark Non-working /
+Holiday** (secondary, left).
+
 ## Components
 
 | Component              | Purpose                                | Variants                                                                                                                                                                                                                         | Required states                                                                                                                                                                                                                |

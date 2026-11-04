@@ -1,20 +1,24 @@
 /**
  * Batches (Phase 27, D-097 to D-099; before it production progression, Phase 23, D-082 to D-087).
- * A batch is one check-in interval of the working day: the Floor Manager sets how often and the
- * daily quota, the System Admin sets the lunch break that pauses a batch, and the Quality Inspector
+ * A batch is one check-in interval of the working day: the Floor Manager plans each working day on
+ * a calendar (Phase 30E-2, D-114: rolls to be used, the quota, the check-in interval and the shift),
+ * the System Admin sets the lunch break that pauses a batch, and the Quality Inspector
  * finishes each batch with the pairs finished and the pairs that failed inspection. Internally a
  * finished batch is still a `ProductionCheckIn`.
  *
- * Everything returned is per batch or per day for the whole line (D-008). The only name on a batch
- * is who finished or corrected it, a log-book fact that is never totalled (D-086). Worker counts
+ * Everything returned is per batch or per day for the whole line (D-008). The only names are who
+ * finished or corrected a batch and who last changed a day's plan, log-book facts that are never
+ * totalled (D-086). Worker counts
  * come from attendance's `workforceFor` (D-080), never counted here.
  */
 import type { Role } from "@/lib/domain";
 import { formatAttendanceDay } from "@/lib/attendance-rules";
-import { manilaToday } from "@/lib/format";
+import { formatManilaDateTime, manilaToday } from "@/lib/format";
 import {
   DEFAULT_LUNCH,
-  DEFAULT_SCHEDULE,
+  FACTORY_CLOSES,
+  FACTORY_OPENS,
+  addMonths,
   batchesFor,
   batchState,
   batchTimes,
@@ -22,17 +26,22 @@ import {
   clockTime,
   describeInterval,
   describeMinutes,
-  effectiveFromFor,
+  describePlanShort,
   enteredLate,
   explainShortfall,
   failedShare,
   finishOpensAt,
   finishWindow,
   inForceOn,
+  isWeekend,
+  lastDayOf,
   lunchProblem,
   manilaDayOf,
+  monthOf,
+  monthWeeks,
   pairsPerConstructor,
   pausedForLunch,
+  planProblem,
   quotaProgress,
   suggestQuota,
   type Batch,
@@ -49,32 +58,34 @@ import { runInTransaction } from "@/server/models/db";
 import {
   correctCheckIn as correctCheckInRow,
   countLunchBreaks,
-  countSchedules,
+  deleteDayPlan,
   findCheckIn,
   findCheckInBySlot,
+  findDayPlan,
   firstCheckInDay,
   insertCheckIn,
+  insertDayPlan,
   insertLunchBreak,
-  insertQuota,
-  insertSchedule,
   listCheckIns,
+  listDayPlans,
   listLunchBreaks,
-  listQuotas,
-  listSchedules,
+  updateDayPlan,
   type CheckInRow,
+  type DayPlanData,
+  type DayPlanRow,
 } from "@/server/models/production.model";
 import { checkInCoverReason, mayEnterCheckIns } from "@/server/policies/permissions";
 import {
   parseBatchCounts,
   type CheckInInput,
   type CorrectionInput,
+  type DayMarkInput,
+  type DayPlanInput,
   type LunchBreakInput,
-  type QuotaInput,
-  type ScheduleInput,
 } from "@/server/validators/production.validator";
 import { qualityInspectorPresentOn, workforceByDay } from "./attendance.service";
 import { recordAudit } from "./audit.service";
-import { rollsUsedByCheckIn } from "./roll.service";
+import { rollsScannedByDay, rollsUsedByCheckIn } from "./roll.service";
 
 type Actor = { id: string; name?: string };
 /** Who finishes a batch: the role decides whether they may (D-088). */
@@ -92,56 +103,44 @@ function daysFrom(from: string, to: string): string[] {
   return out;
 }
 
-function scheduleRule(row: ScheduleRule | null): ScheduleRule | null {
-  return row
+/** The shift and interval of a planned day; null when it isn't planned or is Non-working. */
+function planRule(plan: DayPlanRow | null | undefined): ScheduleRule | null {
+  return plan?.kind === "PLANNED" && plan.shiftStart && plan.shiftEnd
     ? {
-        shiftStart: row.shiftStart,
-        shiftEnd: row.shiftEnd,
-        intervalMinutes: row.intervalMinutes,
-        workingDays: row.workingDays,
+        shiftStart: plan.shiftStart,
+        shiftEnd: plan.shiftEnd,
+        intervalMinutes: plan.intervalMinutes,
       }
     : null;
 }
 
 type Plans = {
-  schedules: Awaited<ReturnType<typeof listSchedules>>;
+  /** Day plans and Non-working marks by day. */
+  plans: Map<string, DayPlanRow>;
   lunches: Awaited<ReturnType<typeof listLunchBreaks>>;
 };
+
+const byDay = (rows: DayPlanRow[]) => new Map(rows.map((r) => [r.day, r]));
 
 function lunchOn(lunches: Plans["lunches"], day: string): LunchRule | null {
   const row = inForceOn(lunches, day);
   return row ? { startTime: row.startTime, endTime: row.endTime } : null;
 }
 
-/** A day's batches from the schedule and the lunch break in force that day. */
+/** A day's batches from its plan (D-114) and the lunch break in force that day. None unplanned. */
 function batchesOn(plans: Plans, day: string): Batch[] {
-  return batchesFor(
-    scheduleRule(inForceOn(plans.schedules, day)),
-    breaksOf(lunchOn(plans.lunches, day)),
-    day,
-  );
-}
-
-const WEEKDAY_NAMES = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function describeDays(workingDays: readonly number[]): string {
-  const days = [...workingDays].sort((a, b) => a - b);
-  const consecutive = days.every((d, i) => i === 0 || d === days[i - 1] + 1);
-  if (days.length === 7) return "every day";
-  if (consecutive && days.length > 2)
-    return `${WEEKDAY_NAMES[days[0]]} to ${WEEKDAY_NAMES[days.at(-1)!]}`;
-  return days.map((d) => WEEKDAY_NAMES[d]).join(", ");
+  return batchesFor(planRule(plans.plans.get(day)), breaksOf(lunchOn(plans.lunches, day)), day);
 }
 
 /** "Batch 1 08:00–13:00, lunch 11:00–12:00; Batch 2 13:00–17:00" for a sample working day. */
 export function describeBatches(rule: ScheduleRule, breaks: readonly BreakRule[]): string {
-  const sample = batchesFor({ ...rule, workingDays: [1, 2, 3, 4, 5, 6, 7] }, breaks, "2026-01-05");
+  const sample = batchesFor({ ...rule, workingDays: undefined }, breaks, "2026-01-05");
   return sample.map((b) => `Batch ${b.number} ${batchTimes(b)}`).join("; ");
 }
 
-/** "08:00 to 17:00, every 4 hours, Mon to Fri". */
+/** "08:00 to 17:00, every 4 hours". */
 export function describeSchedule(rule: ScheduleRule): string {
-  return `${rule.shiftStart} to ${rule.shiftEnd}, ${describeInterval(rule.intervalMinutes)}, ${describeDays(rule.workingDays)}`;
+  return `${rule.shiftStart} to ${rule.shiftEnd}, ${describeInterval(rule.intervalMinutes)}`;
 }
 
 /** "11:00 to 12:00" or "No lunch break". */
@@ -151,33 +150,8 @@ export function describeLunch(lunch: LunchRule | null): string {
     : "No lunch break";
 }
 
-/** Earliest day the bootstrap defaults cover, so they are in force from the first day of use. */
-export const DEFAULT_SCHEDULE_FROM = "2000-01-01";
-
-/**
- * The bootstrap default (D-105): 08:00 to 17:00, every 4 hours, Monday to Friday. Only when no
- * schedule exists; the Floor Manager changes it under Batches → Plan.
- */
-export async function ensureDefaultSchedule(db: Tx) {
-  if ((await countSchedules(db)) > 0) return false;
-  const row = await insertSchedule(
-    {
-      ...DEFAULT_SCHEDULE,
-      workingDays: [...DEFAULT_SCHEDULE.workingDays],
-      effectiveFrom: DEFAULT_SCHEDULE_FROM,
-      createdById: null,
-    },
-    db,
-  );
-  await recordAudit(db, {
-    actor: { type: "SYSTEM" },
-    action: "production.schedule.default",
-    entity: "ProductionSchedule",
-    entityId: row.id,
-    after: { ...DEFAULT_SCHEDULE, effectiveFrom: DEFAULT_SCHEDULE_FROM },
-  });
-  return true;
-}
+/** Earliest day the bootstrap's lunch covers, so it is in force from the first day of use. */
+export const DEFAULT_LUNCH_FROM = "2000-01-01";
 
 /**
  * The bootstrap's default lunch, 11:00 to 12:00 (A-4), only when no lunch row exists. On a database
@@ -188,7 +162,7 @@ export async function ensureDefaultLunchBreak(db: Tx, now: Date = new Date()) {
   if ((await countLunchBreaks(db)) > 0) return false;
   const effectiveFrom = (await firstCheckInDay(db))
     ? addDays(manilaToday(now), 1)
-    : DEFAULT_SCHEDULE_FROM;
+    : DEFAULT_LUNCH_FROM;
   const row = await insertLunchBreak({ ...DEFAULT_LUNCH, effectiveFrom, createdById: null }, db);
   await recordAudit(db, {
     actor: { type: "SYSTEM" },
@@ -219,6 +193,10 @@ export type DayRow = {
   quota: number | null;
   /** passed ÷ quota (C-41). */
   share: number | null;
+  /** Rolls to be used that day (D-114); null when not planned or converted. */
+  rollsPlanned: number | null;
+  /** Rolls whose scan was finished at Capture that day. */
+  rollsScanned: number;
   attendanceTaken: boolean;
   constructorsPresent: number | null;
   constructorsOnRoster: number;
@@ -228,25 +206,30 @@ export type DayRow = {
 };
 
 type Loaded = Plans & {
-  quotas: Awaited<ReturnType<typeof listQuotas>>;
   checkIns: CheckInRow[];
+  rolls: Map<string, number>;
 };
 
 async function load(from: string, to: string): Promise<Loaded> {
-  const [schedules, lunches, quotas, checkIns] = await Promise.all([
-    listSchedules(),
+  const [plans, lunches, checkIns, rolls] = await Promise.all([
+    listDayPlans(from, to),
     listLunchBreaks(),
-    listQuotas(),
     listCheckIns(from, to),
+    rollsScannedByDay(from, to),
   ]);
-  return { schedules, lunches, quotas, checkIns };
+  return { plans: byDay(plans), lunches, checkIns, rolls };
 }
 
-const quotaOn = (quotas: Loaded["quotas"], day: string) => inForceOn(quotas, day)?.pairs ?? null;
+/** The day's quota from its plan (D-114). */
+const quotaOn = (plans: Plans["plans"], day: string) =>
+  plans.get(day)?.kind === "PLANNED" ? (plans.get(day)?.quota ?? null) : null;
+const rollsPlannedOn = (plans: Plans["plans"], day: string) =>
+  plans.get(day)?.kind === "PLANNED" ? (plans.get(day)?.rollsPlanned ?? null) : null;
 
 /**
- * One row per working day from `from` to `to` (a day with batches scheduled or finished), oldest
- * first, from the first day a batch was ever finished.
+ * One row per working day from `from` to `to` (a day with batches planned or finished), oldest
+ * first, from the first day a batch was ever finished. Unplanned and Non-working days have no
+ * batches, so they aren't working days here (D-114).
  */
 export async function productionDays(
   from: string,
@@ -270,7 +253,7 @@ export async function productionDays(
     const finished = dayCheckIns.reduce((s, c) => s + c.pairs, 0);
     const failed = dayCheckIns.reduce((s, c) => s + c.failedPairs, 0);
     const passed = Math.max(0, finished - failed);
-    const quota = quotaOn(data.quotas, day);
+    const quota = quotaOn(data.plans, day);
     const wf = workforce.get(day)!;
     rows.push({
       day,
@@ -284,6 +267,8 @@ export async function productionDays(
       failedShare: failedShare(finished, failed),
       quota,
       share: quota ? passed / quota : null,
+      rollsPlanned: rollsPlannedOn(data.plans, day),
+      rollsScanned: data.rolls.get(day) ?? 0,
       attendanceTaken: wf.taken,
       constructorsPresent: wf.constructorsPresent,
       constructorsOnRoster: wf.constructorsOnRoster,
@@ -413,7 +398,8 @@ export async function productionToday(viewer: { role: Role }, now: Date = new Da
     qualityInspectorPresentOn(day),
   ]);
   const wf = workforce.get(day)!;
-  const rule = scheduleRule(inForceOn(data.schedules, day));
+  const plan = data.plans.get(day) ?? null;
+  const rule = planRule(plan);
   const lunch = lunchOn(data.lunches, day);
   const batches = batchesOn(data, day);
   const canEnter = mayEnterCheckIns(viewer.role, qiPresent);
@@ -423,7 +409,7 @@ export async function productionToday(viewer: { role: Role }, now: Date = new Da
     const row = data.checkIns.find((c) => c.slotAt.getTime() === b.at.getTime());
     return batchView(b, row, now, wf.constructorsPresent, row ? (used.get(row.id) ?? []) : []);
   });
-  const quota = quotaOn(data.quotas, day);
+  const quota = quotaOn(data.plans, day);
   const finished = data.checkIns.reduce((s, c) => s + c.pairs, 0);
   const failed = data.checkIns.reduce((s, c) => s + c.failedPairs, 0);
   const left = rows.filter((r) => !r.checkIn && r.state !== "MISSED").length;
@@ -448,6 +434,14 @@ export async function productionToday(viewer: { role: Role }, now: Date = new Da
     schedule: rule ? describeSchedule(rule) : null,
     lunch: describeLunch(lunch),
     workingDay: batches.length > 0,
+    /** Today's plan in short ("5 rolls · 128 pairs · every 4 h"), or null (D-114). */
+    plan: rule && plan ? describePlanShort(plan) : null,
+    /** Marked Non-working / Holiday: no batches and no notice. */
+    nonWorking: plan?.kind === "NON_WORKING",
+    /** A weekday with no plan yet: no batches, and the Floor Manager's start-of-day notice (A-37). */
+    planNeeded: !plan && !isWeekend(day),
+    rollsPlanned: rollsPlannedOn(data.plans, day),
+    rollsScanned: data.rolls.get(day) ?? 0,
     rows,
     progress,
     next,
@@ -466,176 +460,281 @@ export async function productionToday(viewer: { role: Role }, now: Date = new Da
 
 export type ProductionToday = Awaited<ReturnType<typeof productionToday>>;
 
-// ───────────── the plan: schedule, quota and lunch ─────────────
+// ───────────── the planning calendar (Phase 30E-2, D-114, D-115) ─────────────
 
-export async function productionPlan(now: Date = new Date()) {
+export const TODAY_LOCKED =
+  "A batch is already finished today, so today's plan can't change. Plan the coming days instead.";
+
+/** The quota suggestion (D-099) from the recent full working days, for the day dialog. */
+async function quotaSuggestion(now: Date): Promise<Suggestion> {
   const today = manilaToday(now);
-  const tomorrow = addDays(today, 1);
-  const [schedules, lunches, quotas, history, workforce] = await Promise.all([
-    listSchedules(),
-    listLunchBreaks(),
-    listQuotas(),
+  const [history, workforce] = await Promise.all([
     recentProductionDays(20, now),
     workforceByDay([today]),
   ]);
-  const current = inForceOn(schedules, today);
-  const upcoming = schedules.filter((s) => s.effectiveFrom > today).at(-1) ?? null;
   const expected = workforce.get(today)!.constructorsOnRoster || null;
-
-  const todayQuota = inForceOn(quotas, today);
-  const pending = quotas.filter((q) => q.effectiveFrom > today).at(-1) ?? null;
   const dayHistory: DayHistory[] = history.days.map((d) => ({
     day: d.day,
     full: d.full,
     passed: d.passed,
     constructorsPresent: d.constructorsPresent,
   }));
-  const suggestion: Suggestion = suggestQuota(dayHistory, expected);
-  const tomorrowLunch = lunchOn(lunches, tomorrow);
-  const tomorrowRule = scheduleRule(inForceOn(schedules, tomorrow));
-  const lunchOutside =
-    tomorrowLunch?.startTime && tomorrowLunch.endTime && tomorrowRule
-      ? lunchProblem(
-          { startTime: tomorrowLunch.startTime, endTime: tomorrowLunch.endTime },
-          tomorrowRule,
-        )
-      : null;
-
-  return {
-    today,
-    tomorrow,
-    schedule: current
-      ? {
-          shiftStart: current.shiftStart,
-          shiftEnd: current.shiftEnd,
-          intervalMinutes: current.intervalMinutes,
-          workingDays: current.workingDays,
-          description: describeSchedule(current),
-        }
-      : null,
-    upcomingSchedule: upcoming
-      ? { from: upcoming.effectiveFrom, description: describeSchedule(upcoming) }
-      : null,
-    /** Tomorrow's lunch, for the preview: the System Admin sets it (C-3). */
-    tomorrowLunch: tomorrowLunch?.startTime && tomorrowLunch.endTime ? tomorrowLunch : null,
-    tomorrowLunchText: describeLunch(tomorrowLunch),
-    /** Tomorrow's lunch isn't inside tomorrow's shift, so the batches ignore it. */
-    lunchWarning: lunchOutside
-      ? `Tomorrow's lunch (${describeLunch(tomorrowLunch)}) isn't inside the shift, so the batches don't pause for it. Ask the System Admin to change it under Settings → Lunch break.`
-      : null,
-    scheduleHistory: [...schedules].reverse().map((s) => ({
-      id: s.id,
-      effectiveFrom: s.effectiveFrom,
-      description: describeSchedule(s),
-      setBy: s.createdBy?.name ?? "Default",
-      setAt: s.createdAt.toISOString(),
-    })),
-    quota: {
-      today: todayQuota?.pairs ?? null,
-      upcoming: pending ? { pairs: pending.pairs, from: pending.effectiveFrom } : null,
-      /** The first quota applies from today (Dylan 5A); a change from tomorrow. */
-      appliesFrom: effectiveFromFor(today, quotas.length === 0),
-      suggestion,
-    },
-    quotaHistory: [...quotas].reverse().map((q) => ({
-      id: q.id,
-      pairs: q.pairs,
-      suggestedPairs: q.suggestedPairs,
-      effectiveFrom: q.effectiveFrom,
-      setBy: q.createdBy.name,
-      setAt: q.createdAt.toISOString(),
-    })),
-  };
+  return suggestQuota(dayHistory, expected);
 }
 
-export type ProductionPlan = Awaited<ReturnType<typeof productionPlan>>;
-
-/** A new schedule (D-083, D-105): always from tomorrow, so today's batches stay as they were. */
-export async function saveSchedule(input: ScheduleInput, actor: Actor, now: Date = new Date()) {
-  const effectiveFrom = addDays(manilaToday(now), 1);
-  const workingDays = [...new Set(input.workingDays)].sort((a, b) => a - b);
-  // A schedule equal to the one in force tomorrow is skipped, so the history keeps one row per
-  // change (team QA, 2026-11-02). The newest save already wins; this only stops repeat rows.
-  const before = scheduleRule(inForceOn(await listSchedules(), effectiveFrom));
-  if (
-    before &&
-    before.shiftStart === input.shiftStart &&
-    before.shiftEnd === input.shiftEnd &&
-    before.intervalMinutes === input.intervalMinutes &&
-    sameDays(before.workingDays, workingDays)
-  )
-    return { saved: false, effectiveFrom };
-  return runInTransaction(async (tx) => {
-    const row = await insertSchedule(
-      {
-        shiftStart: input.shiftStart,
-        shiftEnd: input.shiftEnd,
-        intervalMinutes: input.intervalMinutes,
-        workingDays,
-        effectiveFrom,
-        createdById: actor.id,
-        createdAt: now,
-      },
-      tx,
-    );
-    await recordAudit(tx, {
-      actor: { type: "USER", userId: actor.id },
-      action: "production.schedule.set",
-      entity: "ProductionSchedule",
-      entityId: row.id,
-      after: { ...input, workingDays, effectiveFrom },
-    });
-    return { saved: true, id: row.id, effectiveFrom };
-  });
-}
-
-function sameDays(a: readonly number[], b: readonly number[]) {
-  const sorted = [...new Set(a)].sort((x, y) => x - y);
-  return sorted.length === b.length && sorted.every((d, i) => d === b[i]);
+function changedBy(row: DayPlanRow): string {
+  return row.updatedBy?.name ?? row.createdBy?.name ?? "Converted from the old schedule";
 }
 
 /**
- * The one daily quota for the whole line (D-085, D-099): a change applies from tomorrow; the
- * first quota ever from today (Dylan 5A). A quota equal to the one in force that day is skipped.
+ * Batches → Plan (D-114): a month of the calendar. Each day says whether it is planned, marked
+ * Non-working / Holiday or not planned, whether the Floor Manager may change it now, and, for
+ * today and past days, the rolls scanned against the rolls planned.
  */
-export async function saveQuota(input: QuotaInput, actor: Actor, now: Date = new Date()) {
+export async function planMonth(month: string, now: Date = new Date()) {
   const today = manilaToday(now);
-  const quotas = await listQuotas();
-  const from = effectiveFromFor(today, quotas.length === 0);
-  const before = inForceOn(quotas, from)?.pairs ?? null;
-  const pairs = input.pairs as number;
-  if (before === pairs) return { saved: false, effectiveFrom: from };
+  const from = `${month}-01`;
+  const to = lastDayOf(month);
+  const [rows, lunches, todayCheckIns, rolls, suggestion] = await Promise.all([
+    listDayPlans(from, to),
+    listLunchBreaks(),
+    listCheckIns(today, today),
+    rollsScannedByDay(from, to),
+    quotaSuggestion(now),
+  ]);
+  const plans = byDay(rows);
+  const todayLocked = todayCheckIns.length > 0 && plans.get(today)?.kind === "PLANNED";
+  const days = monthWeeks(month)
+    .flat()
+    .filter((d): d is string => d !== null)
+    .map((day) => {
+      const row = plans.get(day) ?? null;
+      const rule = planRule(row);
+      const lunch = breaksOf(lunchOn(lunches, day))[0] ?? null;
+      const problem =
+        planProblem(day, today) ?? (day === today && todayLocked ? TODAY_LOCKED : null);
+      return {
+        day,
+        label: formatAttendanceDay(day),
+        weekend: isWeekend(day),
+        past: day < today,
+        isToday: day === today,
+        kind: row?.kind ?? null,
+        plan:
+          row && rule
+            ? {
+                rollsPlanned: row.rollsPlanned,
+                quota: row.quota,
+                intervalMinutes: row.intervalMinutes,
+                shiftStart: rule.shiftStart,
+                shiftEnd: rule.shiftEnd,
+                short: describePlanShort(row),
+                batches: describeBatches(rule, lunch ? [lunch] : []),
+              }
+            : null,
+        updatedAt: row ? row.updatedAt.toISOString() : null,
+        changed: row ? { by: changedBy(row), at: row.updatedAt.toISOString() } : null,
+        /** That day's lunch, for the dialog's preview (the System Admin's, C-3). */
+        lunch,
+        /** Today and past days: rolls whose scan was finished that day. */
+        rollsScanned: day <= today ? (rolls.get(day) ?? 0) : null,
+        editable: problem === null,
+        lockedReason: problem,
+      };
+    });
+  const lastMonth = monthOf(lastDayOf(addMonths(monthOf(today), 3)));
+  return {
+    month,
+    today,
+    weeks: monthWeeks(month),
+    days,
+    prevMonth: addMonths(month, -1),
+    nextMonth: month < lastMonth ? addMonths(month, 1) : null,
+    suggestion,
+    factory: { opens: FACTORY_OPENS, closes: FACTORY_CLOSES },
+  };
+}
+
+export type PlanMonth = Awaited<ReturnType<typeof planMonth>>;
+export type PlanDay = PlanMonth["days"][number];
+
+/**
+ * A day the Floor Manager may plan or mark now (D-114, A-36); 409 with the reason otherwise.
+ * Today locks once one of its planned batches is finished. A today with batches finished before
+ * it had a plan (older data) stays open, so the Floor Manager is never left with a notice they
+ * can't act on.
+ */
+async function openDay(day: string, now: Date): Promise<DayPlanRow | null> {
+  const today = manilaToday(now);
+  const problem = planProblem(day, today);
+  if (problem) throw Errors.conflict(problem);
+  const row = await findDayPlan(day);
+  if (day === today && row?.kind === "PLANNED" && (await listCheckIns(today, today)).length > 0)
+    throw Errors.conflict(TODAY_LOCKED);
+  return row;
+}
+
+/** STALE when the day changed since the dialog opened (`expected` is the updatedAt it saw). */
+function assertUnchanged(row: DayPlanRow | null, expected: string | null) {
+  const current = row ? row.updatedAt.toISOString() : null;
+  const seen = expected ? new Date(expected).toISOString() : null;
+  if (current === seen) return;
+  throw Errors.stale(
+    row
+      ? `${changedBy(row)} changed ${formatAttendanceDay(row.day)} at ${formatManilaDateTime(row.updatedAt)}. Refresh to see it.`
+      : "Someone else cleared this day. Refresh to see it.",
+  );
+}
+
+function planAudit(row: DayPlanRow | null) {
+  if (!row) return null;
+  return {
+    kind: row.kind,
+    rollsPlanned: row.rollsPlanned,
+    quota: row.quota,
+    intervalMinutes: row.intervalMinutes,
+    shiftStart: row.shiftStart,
+    shiftEnd: row.shiftEnd,
+  };
+}
+
+const samePlan = (row: DayPlanRow, data: DayPlanData) =>
+  row.kind === data.kind &&
+  row.rollsPlanned === data.rollsPlanned &&
+  row.quota === data.quota &&
+  row.intervalMinutes === data.intervalMinutes &&
+  row.shiftStart === data.shiftStart &&
+  row.shiftEnd === data.shiftEnd;
+
+/** Writes a day's plan or mark: a new row, or a change guarded by the updatedAt it was read at. */
+async function writeDay(
+  day: string,
+  row: DayPlanRow | null,
+  data: DayPlanData,
+  action: string,
+  actor: Actor,
+  now: Date,
+) {
+  try {
+    return await runInTransaction(async (tx) => {
+      let id: string;
+      if (row) {
+        const ok = await updateDayPlan(row.id, row.updatedAt, data, actor.id, now, tx);
+        if (!ok) throw Errors.stale("Someone else changed this day. Refresh to see it.");
+        id = row.id;
+      } else id = (await insertDayPlan(day, data, actor.id, now, tx)).id;
+      await recordAudit(tx, {
+        actor: { type: "USER", userId: actor.id },
+        action,
+        entity: "DayPlan",
+        entityId: id,
+        before: planAudit(row),
+        after: { day, ...data },
+      });
+      return { saved: true, day };
+    });
+  } catch (error) {
+    // Two people planning the same new day at once: the unique day decides, the second is stale.
+    if ((error as { code?: string })?.code === "P2002") {
+      const winner = await findDayPlan(day);
+      assertUnchanged(winner, null);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Plan a day (D-114, D-115): rolls to be used, the quota, the check-in interval and the shift. A
+ * weekday from today to the last plannable day (A-40); today only until its first batch is
+ * finished (A-36). A plan equal to the one saved is skipped (D-107).
+ */
+export async function saveDayPlan(
+  day: string,
+  input: DayPlanInput,
+  actor: Actor,
+  now: Date = new Date(),
+) {
+  const row = await openDay(day, now);
+  assertUnchanged(row, input.expectedUpdatedAt);
+  const data: DayPlanData = {
+    kind: "PLANNED",
+    rollsPlanned: input.rollsPlanned as number,
+    quota: input.quota as number,
+    suggestedQuota: input.suggestedQuota,
+    intervalMinutes: input.intervalMinutes,
+    shiftStart: input.shiftStart,
+    shiftEnd: input.shiftEnd,
+  };
+  if (row && samePlan(row, data)) return { saved: false, day };
+  return writeDay(day, row, data, "production.plan.set", actor, now);
+}
+
+/** Mark a weekday Non-working / Holiday (D-114): no batches, no notice, no stock reminder. */
+export async function markNonWorking(
+  day: string,
+  input: DayMarkInput,
+  actor: Actor,
+  now: Date = new Date(),
+) {
+  const row = await openDay(day, now);
+  assertUnchanged(row, input.expectedUpdatedAt);
+  if (row?.kind === "NON_WORKING") return { saved: false, day };
+  const data: DayPlanData = {
+    kind: "NON_WORKING",
+    rollsPlanned: null,
+    quota: null,
+    suggestedQuota: null,
+    intervalMinutes: null,
+    shiftStart: null,
+    shiftEnd: null,
+  };
+  return writeDay(day, row, data, "production.plan.nonWorking", actor, now);
+}
+
+/** Undo a Non-working mark: the day is a working day again, still to be planned. */
+export async function clearNonWorking(
+  day: string,
+  input: DayMarkInput,
+  actor: Actor,
+  now: Date = new Date(),
+) {
+  const row = await openDay(day, now);
+  assertUnchanged(row, input.expectedUpdatedAt);
+  if (row?.kind !== "NON_WORKING")
+    throw Errors.conflict(`${formatAttendanceDay(day)} isn't marked Non-working / Holiday.`);
   return runInTransaction(async (tx) => {
-    const row = await insertQuota(
-      {
-        pairs,
-        suggestedPairs: input.suggestedPairs ?? null,
-        effectiveFrom: from,
-        createdById: actor.id,
-        createdAt: now,
-      },
-      tx,
-    );
+    const ok = await deleteDayPlan(row.id, row.updatedAt, tx);
+    if (!ok) throw Errors.stale("Someone else changed this day. Refresh to see it.");
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
-      action: "production.quota.set",
-      entity: "DailyQuota",
+      action: "production.plan.cleared",
+      entity: "DayPlan",
       entityId: row.id,
-      before: { pairs: before },
-      after: { pairs, suggestedPairs: input.suggestedPairs ?? null, effectiveFrom: from },
+      before: { day, ...planAudit(row) },
     });
-    return { saved: true, effectiveFrom: from };
+    return { saved: true, day };
   });
+}
+
+/**
+ * The Floor Manager's start-of-day notice (A-37): from 00:00 on a weekday that has no plan and
+ * isn't marked Non-working / Holiday, until the plan is saved.
+ */
+export async function planNoticeDue(now: Date = new Date()): Promise<boolean> {
+  const today = manilaToday(now);
+  if (isWeekend(today)) return false;
+  return (await findDayPlan(today)) === null;
 }
 
 /** Settings → Lunch break (C-3): tomorrow's lunch, the shift it must sit in, and the history. */
 export async function lunchBreakSettings(now: Date = new Date()) {
   const today = manilaToday(now);
   const tomorrow = addDays(today, 1);
-  const [lunches, schedules] = await Promise.all([listLunchBreaks(), listSchedules()]);
+  const lunches = await listLunchBreaks();
   const current = lunchOn(lunches, today);
   const next = lunchOn(lunches, tomorrow);
-  const shift = scheduleRule(inForceOn(schedules, tomorrow));
+  // Each day plans its own shift (D-114), so lunch sits inside the factory's hours (D-105).
+  const shift = { shiftStart: FACTORY_OPENS, shiftEnd: FACTORY_CLOSES };
   const upcoming = lunches.filter((l) => l.effectiveFrom > today).at(-1) ?? null;
   return {
     today,
@@ -658,14 +757,17 @@ export async function lunchBreakSettings(now: Date = new Date()) {
 export type LunchBreakSettings = Awaited<ReturnType<typeof lunchBreakSettings>>;
 
 /**
- * The System Admin's lunch break (C-3, C-25, A-4): the same every working day, inside the shift in
- * force tomorrow, applying from tomorrow like the schedule (D-083).
+ * The System Admin's lunch break (C-3, C-25, A-4): the same every working day, inside the factory's
+ * hours (D-105), applying from tomorrow. A day planned with a shorter shift that leaves it out
+ * ignores it (the day dialog says so).
  */
 export async function saveLunchBreak(input: LunchBreakInput, actor: Actor, now: Date = new Date()) {
   const effectiveFrom = addDays(manilaToday(now), 1);
   if (input.startTime && input.endTime) {
-    const shift = scheduleRule(inForceOn(await listSchedules(), effectiveFrom));
-    const problem = lunchProblem({ startTime: input.startTime, endTime: input.endTime }, shift);
+    const problem = lunchProblem(
+      { startTime: input.startTime, endTime: input.endTime },
+      { shiftStart: FACTORY_OPENS, shiftEnd: FACTORY_CLOSES },
+    );
     if (problem) throw Errors.validation([{ path: [problem.field], message: problem.message }]);
   }
   // A lunch equal to the one in force tomorrow is skipped (team QA, 2026-11-02), like the schedule.
@@ -732,12 +834,12 @@ export async function saveCheckIn(
   const slotAt = new Date(input.slotAt);
   const day = manilaDayOf(slotAt);
   const { covering } = await assertMayEnter(actor, day);
-  const [schedules, lunches, workforce] = await Promise.all([
-    listSchedules(),
+  const [plan, lunches, workforce] = await Promise.all([
+    findDayPlan(day),
     listLunchBreaks(),
     workforceByDay([day]),
   ]);
-  const batch = batchesOn({ schedules, lunches }, day).find(
+  const batch = batchesOn({ plans: byDay(plan ? [plan] : []), lunches }, day).find(
     (b) => b.at.getTime() === slotAt.getTime(),
   );
   if (!batch)
@@ -815,8 +917,8 @@ export async function correctCheckIn(
         ? `This batch was already corrected by ${row.correctedBy?.name ?? "someone"} at ${clockTime(row.correctedAt)}. Refresh to see it.`
         : "This batch was changed by someone else. Refresh to see it.",
     );
-  const [schedules, lunches] = await Promise.all([listSchedules(), listLunchBreaks()]);
-  const batch = batchesOn({ schedules, lunches }, day).find(
+  const [plan, lunches] = await Promise.all([findDayPlan(day), listLunchBreaks()]);
+  const batch = batchesOn({ plans: byDay(plan ? [plan] : []), lunches }, day).find(
     (b) => b.at.getTime() === row.slotAt.getTime(),
   );
   const number = batch?.number ?? 0;
@@ -888,6 +990,8 @@ export async function productionCsv(range: ReportRange, now: Date = new Date()) 
     { header: "% of quota (passed)", value: (d) => pct(d.share) },
     { header: "Batches finished", value: (d) => d.finishedBatches },
     { header: "Batches scheduled", value: (d) => d.batches },
+    { header: "Rolls planned", value: (d) => d.rollsPlanned ?? "" },
+    { header: "Rolls scanned", value: (d) => d.rollsScanned },
     { header: "Shoe Constructors present", value: (d) => d.constructorsPresent ?? "" },
     { header: "Shoe Constructors on the roster", value: (d) => d.constructorsOnRoster },
     {
