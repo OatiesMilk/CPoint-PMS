@@ -53,3 +53,12 @@ on. If that matters, F1 alone is a small standalone fix that can go first withou
 2. Week picker labelled by date ("Week of 26 Oct"), not "Week 1 to 12" (recommended)?
 3. Which database were the screenshots taken on (whose PC, after a `demo:reset`?), so the 0 pairs
    can be checked?
+
+## Phase 30E changes this plan (2026-11-04)
+
+Phase 30E-1 (D-111 to D-113) runs before this plan. A roll now leaves stock when its scan is
+finished at Capture (`OUT` −1, "Roll … scanned at Capture"), nobody ticks Fully used and the Floor
+Manager no longer returns rolls. So **F8** stays "no change needed" (the deduction is at Capture),
+and **F9** becomes: leather Used per week = **Scanned at Capture** (OUT with a `rollId`) and
+**Removed (other)** (a Correction on Update stock, such as water damage); Returned to supplier is
+history only (Phase 30C). Pairs per roll counts Scanned at Capture.

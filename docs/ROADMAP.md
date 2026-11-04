@@ -500,11 +500,18 @@ was never built. Each phase gets its own criteria here when its plan is approved
 - [ ] Follow-up (D-108, 2026-11-02, Dylan): no unknown defect classes (migration
       `no_unknown_classes`); Materials reads "Week 1: Nov. 2"; `npm run check` passed (622); Codex
       run 1 next
-- [ ] Phase 30C: cuts from 3 inches Not accepted; a roll over 10% defects (of its entered area)
-      marked Return to supplier, the FM decides (built 2026-11-03, D-110; Codex run 1 next)
+- [x] Phase 30C: cuts from 3 inches Not accepted; a roll over 10% defects (of its entered area)
+      marked Return to supplier, the FM decides (D-110; QA run 3 passed; merged #34)
+- [x] Phase 30E-1: the constructor picks the leather, then the roll, at Capture; each roll keeps
+      the area the FM entered; a roll leaves stock at Finish roll; the QI no longer ticks rolls; no
+      Send back or Keep (D-111 to D-113; built 2026-11-04, Codex run 1 next). Plan
+      `docs/prompts/plans/phase-30e-plan.md`
+- [ ] Phase 30E-2: a planning calendar (any day: rolls to be used, quota, check-in interval of
+      every 2 h, every 4 h or once a day), planned against scanned in the reports, the start-of-day
+      notice (next session, same plan)
 - [ ] Phase 30D: the team's QA notes on Reports → Materials (week picker by date, no Last 8
-      weeks or Per 100 pairs, on hand per week, pairs change and pairs per roll, leather Used split
-      into Fully used, Returned to supplier and Removed); plan
+      weeks or Per 100 pairs, on hand per week, pairs change and pairs per roll; leather Used is
+      now Scanned at Capture and Removed (other) by correction, D-113); plan
       `docs/prompts/plans/groupmates-feedback-plan.md`
 - [ ] Phase 31: the documentation and the paper's figures match the system
 
@@ -698,4 +705,34 @@ sheet's corners, a cut from 3 in counts a flat 1%, one session). Decisions: D-10
       load timeouts in the full run passed alone)
 - [x] Set up this phone fits the whole photo (Dylan's iPhone showed only its top)
 - [x] Phase 30C marked done in the progress list (D-110)
+- [x] Committed, PR open, CI green, merged (#34)
+
+## Phase 30E-1 — The constructor picks the leather, then the roll; rolls leave stock at Capture
+
+Brief: `docs/prompts/rolls-by-color-and-same-day-plan.md`. Plan:
+`docs/prompts/plans/phase-30e-plan.md` (approved 2026-11-03; on 4 Nov Dylan chose: no color, each
+roll keeps the area the FM entered, the constructor picks the leather and then the roll). Decisions:
+D-111 to D-113.
+
+- [x] Migration `rolls_leave_stock_at_capture` (data only): scanned rolls off stock, rolls in stock
+      kept; tried on a scratch database (ledger 0)
+- [x] Capture: Leather, then Roll on the table, then Start scanning; Finish roll takes the roll off
+      stock; Put roll back for an empty roll
+- [x] Finish batch: pairs finished and failed only; no Rolls fully used, no ticks in Correct
+- [x] Reports → Rolls: Too many defects for information, no To return band or filter, no Send back
+      or Keep; Remove for a roll in stock or being scanned; claim sheet kept
+- [x] Settings → Thresholds: "A roll has too many defects when they cover more than __%";
+      Supplier quality: Too many defects (Returned and its CSV column gone)
+- [x] Demo week: no ticks or returns; every scanned roll took one off stock; CI's Docker job checks
+      it
+- [x] `npm run check` passes (651 unit tests); e2e `capture`, `batches`, `returns`, `rolls`
+      updated, not run (Codex)
+- [x] Laptop database restored from the backup and migrated (Dylan; ledger 0)
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_30E.md` (BLOCKED: `demo:reset` stopped on
+      deactivated demo suppliers; the reset now turns them back on)
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_30E_RUN2.md` (FAIL on full-suite timeouts only;
+      manual scenarios passed)
+- [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_30E_RUN3.md`: **PASS** (each failing spec alone;
+      ledger 0)
+- [ ] Committed, PR open, CI green
 - [ ] Committed, PR open, CI green

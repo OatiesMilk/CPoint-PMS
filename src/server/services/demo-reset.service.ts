@@ -6,6 +6,7 @@ import { runInTransaction } from "@/server/models/db";
 import {
   countResetTargets,
   deleteResetTargets,
+  reactivateSuppliers,
   setDemoAccountNames,
   upsertDefectTypeState,
   type ResetCounts,
@@ -169,6 +170,8 @@ export async function resetDemoData(
   await runInTransaction(
     async (tx) => {
       await deleteResetTargets(keep, tx);
+      // The demo week adds its leather items for the demo suppliers, so they must be on.
+      const suppliersReactivated = await reactivateSuppliers(keep.supplierNames, tx);
       // The audit log starts again with this row first, so anyone can see when and what was reset;
       // the default lunch and the defect types it sets come after it.
       await recordAudit(tx, {
@@ -181,6 +184,7 @@ export async function resetDemoData(
           origin: options.origin ?? "command line",
           keptAccounts: keep.emails,
           keptDeviceTokens: keep.tokenHashes.length,
+          suppliersReactivated,
           defectTypes: MODEL_DEFECT_TYPES.map((d) => ({
             key: d.key,
             isActive: d.isActive,

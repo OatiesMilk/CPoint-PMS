@@ -14,7 +14,7 @@ import { findInventoryItem, findInventoryItemBySku } from "@/server/models/inven
 import { listActiveSuppliers, listDefectTypes } from "@/server/models/reference-data.model";
 import { findUserByEmail } from "@/server/models/user.model";
 import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
-import { addRolls, decideReturn, finishRoll, removeRoll, startRoll } from "./roll.service";
+import { addRolls, finishRoll, removeRoll, startRoll } from "./roll.service";
 import { ensureSupplierWithCode } from "./supplier-code.service";
 import { setCameraOperator } from "./camera.service";
 import { saveCheckIn, saveQuota } from "./production.service";
@@ -58,8 +58,8 @@ export const SECTIONS_PER_ROLL = 10;
 export const DEMO_WIDTH_IN = 24;
 /**
  * The rolls (by their place in the week) whose leather is badly cut: a long cut on every shot, so
- * they go over the 10% limit and are marked Return to supplier. The Floor Manager returns the
- * first, keeps the second and leaves the third for the demo (Phase 30C, C-36).
+ * they go over the 10% limit and show Too many defects (for the Floor Manager's information since
+ * Phase 30E, D-112).
  */
 export const DEMO_CUT_ROLLS = [2, 4, 8];
 
@@ -294,9 +294,7 @@ export async function seedDemoWeek(
     const i = list.findIndex((r) => r.addedAt.getTime() <= t.getTime());
     return i === -1 ? null : list.splice(i, 1)[0];
   };
-  const finishedRolls: { id: string; finishedAt: Date }[] = [];
-  /** Finished rolls marked Return to supplier, in the order they were finished (Phase 30C). */
-  const markedRolls: { id: string; code: string; finishedAt: Date }[] = [];
+  let marked = 0;
   const hasCut = classes.some((c) => c.key === "cut");
 
   // ── rolls: two a working day (Mon–Fri, D-105), each picked, captured shot by shot and finished at
@@ -386,8 +384,7 @@ export async function seedDemoWeek(
       // on the next stock update. The newest roll stays open, so Capture opens on a roll.
       if (past(t) && !newest && captured > 0) {
         const finished = await finishRoll(roll.id, capturer, t);
-        if (finished.marked) markedRolls.push({ id: roll.id, code: roll.code, finishedAt: t });
-        else finishedRolls.push({ id: roll.id, finishedAt: t });
+        if (finished.marked) marked += 1;
         await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE));
         await stock("AD-001", "OUT", 0.5, "Soling", plus(t, 20 * MINUTE));
         await stock("NL-001", "OUT", 1, "Soling", plus(t, 25 * MINUTE));
@@ -404,39 +401,7 @@ export async function seedDemoWeek(
   if (damaged)
     await removeRoll(damaged.id, "Water damage in storage; the supplier was told.", fm, removeAt);
 
-  // ── rolls marked Return to supplier (Phase 30C, C-36): the Floor Manager returns the first the
-  //    next morning and keeps the second an hour after it is finished (it can then be ticked Fully
-  //    used); the last stays To return for the demo. ──
-  let returnedRolls = 0;
-  for (const [i, marked] of markedRolls.entries()) {
-    if (i === markedRolls.length - 1 && markedRolls.length > 1) break;
-    if (i === 0) {
-      const at9 = at(addDays(manilaToday(marked.finishedAt), 1), 9);
-      if (!past(at9)) continue;
-      await decideReturn(
-        marked.id,
-        {
-          decision: "RETURNED",
-          returnedOn: manilaToday(at9),
-          note: "Long cuts across the roll; the supplier's driver took it back.",
-        },
-        fm,
-        at9,
-      );
-      returnedRolls += 1;
-    } else {
-      const later = plus(marked.finishedAt, HOUR);
-      if (!past(later)) continue;
-      await decideReturn(
-        marked.id,
-        { decision: "KEPT", note: "The cuts are near one edge; the cutters can work around them." },
-        fm,
-        later,
-      );
-      finishedRolls.push({ id: marked.id, finishedAt: marked.finishedAt });
-    }
-  }
-  logger.info({ marked: markedRolls.length, returned: returnedRolls }, "Demo week: returns");
+  logger.info({ marked }, "Demo week: rolls with too many defects");
 
   // ── two more deliveries: thread and tacks on the second working day, tacks on the fourth (with
   //    the leather rolls added above). They reach the ledger on the next stock update. ──
@@ -593,7 +558,6 @@ export async function seedDemoWeek(
     const hours = fullDay.reduce((t, b) => t + b.workingMinutes, 0) / 60;
     const rate = hours > 0 ? demoRate(most, hours) : 0;
     let entered = 0;
-    const ticked = new Set<string>();
     for (const day of workingDays) {
       const batches = batchesFor(DEFAULT_SCHEDULE, [DEFAULT_LUNCH], day);
       const present = views.get(day) ?? 0;
@@ -605,20 +569,12 @@ export async function seedDemoWeek(
         if (!past(when)) continue;
         const pairs = Math.round(present * (batch.workingMinutes / 60) * rate);
         const failedPairs = Math.min(pairs, 1 + Math.floor(random() * 2));
-        // The line says which rolls ran out (Phase 30A): a roll scanned on an earlier day is
-        // ticked Fully used at the next batch finished; the last day's rolls stay Scanned, so
-        // Finish batch has rolls to tick.
-        const usedRollIds = finishedRolls
-          .filter((r) => !ticked.has(r.id) && manilaToday(r.finishedAt) < day)
-          .map((r) => r.id);
-        for (const id of usedRollIds) ticked.add(id);
         await saveCheckIn(
           {
             slotAt: batch.at.toISOString(),
             pairs,
             failedPairs,
             notes: late ? "Counted late: the sole press was down." : undefined,
-            usedRollIds,
           },
           day === qiAwayDay && qiMarkedAbsent ? fm! : qi!,
           when,

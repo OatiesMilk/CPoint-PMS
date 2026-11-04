@@ -3,45 +3,45 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-03 (Phase 30C run 3 PASS after allowed reruns; setup window fixed; Dylan's phone check next)
-**Branch:** `main` at 6966fcd has Phase 30B (#30, #31), D-105 (#32) and D-107 to D-109 (#33).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30C, cuts from 3 inches and the return to the
-supplier (D-110). Plan `docs/prompts/plans/phase-30c-plan.md`, handoff
-`qa/handoffs/2026-11-03-phase-30c-cuts-and-returns.md`, prompt `qa/CODEX_PROMPT_PHASE_30C.md`.
+**Last updated:** 2026-11-04 (Phase 30E-1 QA passed, run 3; commit next)
+**Branch:** `main` at 9bfd10e has Phase 30C (#34).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30E-1 (D-111 to D-113). Brief
+`docs/prompts/rolls-by-color-and-same-day-plan.md`, plan `docs/prompts/plans/phase-30e-plan.md`,
+handoff `qa/handoffs/2026-11-04-phase-30e-rolls-by-color.md`, prompt `qa/CODEX_PROMPT_PHASE_30E.md`.
 
-- **Current phase:** 30C. A cut is Not accepted from 3 in (box diagonal) and Usable below; each cut
-  from 3 in adds a flat 1% to its roll; holes, scratches and creases count by box area. Phones are
-  calibrated on Capture (tap a sheet's corners). Finish roll saves the defect share; over 10% the
-  roll is marked Return to supplier and the Floor Manager returns it or keeps it.
-- Migration `20261103103243_measure_and_return` is applied to the laptop's `cpoint_pms`.
-- Checks: `npm run check` passed (670 unit tests). Demo week checked on a scratch database (3 marked
-  rolls: returned, kept, waiting; ledger 0). E2E not run (Codex): `tests/e2e/returns.spec.ts` new.
-- **Codex run 1 FAIL** (`qa/reports/2026-11-03-phase-30c-run1.md`): 11 of 14 passed (S4 and S11
-  not possible: no camera, no batch due), S7 failed: Esc on Keep flashed the Send back dialog (F1,
-  fixed). E2E 87 passed, 5 failed, 2 skipped: two test faults (the Thresholds toast text, the roll's
-  area shown twice; fixed) and three 30 s timeouts under the full run (rerun alone in run 2).
-- **Plain words (Dylan):** every 30C screen rewritten short and plain ("This roll has too many
-  defects", "Send back to supplier…", "Set up this phone first."); list in
-  `docs/prompts/plans/phase-30c-plain-words.md`. `npm run check` passed again (670).
-- **Codex run 2 FAIL** (`qa/reports/2026-11-03-phase-30c-run2.md`): R2 (Esc), R3, R4, R5, R7
-  passed; `returns.spec.ts:128` still expected the old badge text (fixed). Full e2e 91 passed, 2
-  failed (that test, and a smoke timeout that passed 10/10 alone).
-- **Codex run 3 PASS** (`qa/reports/2026-11-03-phase-30c-run3.md`, "pass with issues"): returns
-  5/5; full suite 88 passed, 4 timed out at 30 s under `next dev` load, and admin 6/6, inventory
-  8/8, smoke 10/10 when rerun alone.
-- **Phone check (Dylan, iPhone through the tunnel):** a real Capture shot was saved whole (1080 ×
-  1920, matching the preview). The Set up this phone window showed only the top of a tall photo, so
-  the corners couldn't be tapped; it now fits the whole photo on screen (`calibration.tsx`).
-  `npm run check` passed (670). Dylan rechecks it on the phone.
-- `.env` `DEV_ORIGINS` now also has the tunnel host, so Dylan can sign in through the quick tunnel
-  on his phone (restart `npm run dev` after a change).
-- `.github/workflows/ci.yml`: the Docker job checks every scanned demo roll has a share (edited
-  here; include it in the commit).
+- **Current phase:** 30E-1. The FM still adds each leather roll with its own area (Phase 30A). At
+  Capture the constructor picks the **leather, then the roll** by the code on its label (Dylan's
+  choice (a), 4 Nov); Finish roll takes the roll off stock whatever its Defect %. The QI's Finish
+  batch asks only for pairs. Too many defects is information for the FM; no Send back or Keep.
+- Migration `20261104090000_rolls_leave_stock_at_capture` (data only: scanned rolls off stock) tried
+  on a scratch database (ledger 0). The laptop's `cpoint_pms` was restored from
+  `storage/backups/before-phase30e-2026-11-04.dump` (Dylan, 4 Nov) and migrated: 3 scanned rolls
+  taken off stock, 9 rolls still in stock, ledger 0.
+- Checks: `npm run check` passed (651 unit tests). Demo week checked on a scratch database (rolls in
+  stock, one OUT per scanned roll, no Fully used, one removed, ledger 0). E2E not run (Codex):
+  `capture`, `batches`, `returns`, `rolls` updated.
+- **Codex run 1 BLOCKED** (`qa/reports/2026-11-04-phase-30e-run1.md`): `demo:reset` stopped because
+  the demo suppliers on the laptop were deactivated (F1, an older gap); Codex restored its backup.
+  Fixed: the reset turns the kept suppliers back on before seeding (`reactivateSuppliers`, audited);
+  tried on a copy of that backup (seeded, 5 turned on, ledger 0). `npm run check` passed (651).
+- **Codex run 2 FAIL** (`qa/reports/2026-11-04-phase-30e-run2.md`, no reset, Dylan's own leathers):
+  12 manual scenarios passed, S5 and S6 not possible (today's saved schedule leaves Wednesday out;
+  no current roll over the limit); targeted specs 33/1/1 (Inventory passed alone); full suite
+  85 passed, 7 failed, 2 skipped, all 30 s timeouts or aborted loads under `next dev`. No app fault
+  found.
+- **Codex run 3 PASS** (`qa/reports/2026-11-04-phase-30e-run3.md`): capture, reports, returns,
+  rolls, smoke and inventory each passed alone (41 passed, 1 skipped); the full suite 91 passed, 1
+  failed (a Materials load timeout in the smoke journey, which passed 10/10 alone), 2 skipped;
+  ledger 0. QA done for 30E-1: commit on a new branch (git commands in the 30E thread).
+- `.github/workflows/ci.yml`: the Docker job's demo roll checks follow 30E (include it in the
+  commit).
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
-- **Next:** Dylan sets up the phone on Capture, then commits 30C (git commands in the thread). **Then:** 30D the team's QA notes (needs 30C's Returned to
-  supplier), 31 the docs.
-- **Overall:** 33 phases built (0 to 29, 30A, 30B, 30C); 2 planned (30D, 31).
+- **Next:** commit 30E-1 and open the PR. **Then:** Phase 30E-2 in a new session:
+  a calendar where the FM picks any day and plans its rolls to be used (one total, an estimate:
+  constructors may start more, and reports compare planned with scanned), quota and check-in
+  interval (every 2 h, every 4 h or once a day), with the start-of-day notice; then 30D, 31.
+- **Overall:** 33 phases built (0 to 29, 30A, 30B, 30C) and 30E-1; 3 planned (30E-2, 30D, 31).
 
 ## Phase progress
 
@@ -88,12 +88,32 @@ supplier (D-110). Plan `docs/prompts/plans/phase-30c-plan.md`, handoff
 - [x] 30B. The measuring check: a cut in inches, on a letter-size piece of leather (`cv/` only);
       measured by the box, D-106 (QA passed, run 4; merged #30, follow-up PR next)
 - [x] 30C. Cuts from 3 inches Not accepted; a roll over 10% defects marked Return to supplier
-      (D-110; QA passed, run 3; commit next)
+      (D-110; QA passed, run 3; merged #34)
+- [x] 30E-1. The constructor picks the leather, then the roll; a roll leaves stock at Finish roll;
+      the QI counts pairs only (D-111 to D-113; QA passed, run 3)
+- [ ] 30E-2. A planning calendar: rolls to be used, quota and check-in interval per day; How often
+      without 1 h and 3 h
 - [ ] 30D. The team's QA notes on Reports → Materials
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
 
+- **Rolls leave stock at Capture (Phase 30E-1, D-111 to D-113; uncommitted):**
+  - **Capture → Start a roll:** **Leather** ("Brown suede (topsiders) · Marikina Leather Trading ·
+    3 rolls"), then **Roll on the table** ("LR-MLT-012 · 24.5 sq ft · tag 88-14"), then **Start
+    scanning**; nothing to type. **Finish roll** takes it off stock ("… It is taken off the Brown
+    suede (topsiders) stock."). Put roll back for an empty roll, as before.
+  - **Finish batch:** pairs finished and failed only; no roll list (old ticks show as history).
+  - **Reports → Rolls:** Defect % and **Too many defects** (information only); no To return band or
+    filter, no Send back or Keep. **Remove** works on a roll in stock or being scanned (−1); a
+    scanned roll is already off stock. The claim sheet stays. Supplier quality: Too many defects
+    (Returned gone).
+  - Settings → Thresholds: "A roll has too many defects when they cover more than __%".
+  - Inventory is unchanged from 30A: **Add rolls** with each roll's area; the count follows the
+    rolls.
+  - API: `POST /api/v1/rolls/{id}/return-decision` is gone (404); check-ins take no `usedRollIds`.
+  - Where the bullets below mention Fully used ticks or Return to supplier decisions, Phase 30E-1
+    replaced them.
 - **Cuts from 3 inches and the return to the supplier (Phase 30C, D-106, D-110; uncommitted):**
   - **Settings → Thresholds:** "Mark a roll Return to supplier when defects cover more than __%"
     (default 10, strict). **Settings → Defect types:** "Not accepted from __ in long" and "Counts as
@@ -561,12 +581,13 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-1. Dylan: set up the phone on Capture through the tunnel (the fixed setup window), then commit 30C
-   on a new branch from main (git commands in the 30C thread) and open the PR (D-032).
+0. Dylan: commit Phase 30E-1 on a new branch and open the PR (git commands in the 30E thread). After a full pass,
+   the git commands come in the 30E thread. Then Phase 30E-2 in a new session.
+1. Dylan: set up the phone on Capture through the tunnel (the fixed setup window).
 2. Dylan, at the station: calibrate the real phone on Capture and capture a few real knife cuts on
    scrap leather (2.5, 3 and 4 in) to check the 3-inch line on real cuts.
-3. Phase 30D (the team's QA notes): leather Used split into Fully used, Returned to supplier and
-   Removed, now that Returned exists.
+3. Phase 30D (the team's QA notes), after 30E: leather Used is now Scanned at Capture, and
+   Removed (other) through Remove (D-112).
 4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
 5. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
    `docker image prune -a -f` frees about 8.4 GB.
@@ -583,6 +604,27 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-11-04, D-113): no color; each roll keeps its own area, entered by the FM when
+  added; the constructor picks the leather, then the roll (choice (a)). Planning (30E-2): the FM
+  plans any day from a calendar: rolls to be used (one total, an estimate; constructors may start
+  more and reports compare), quota and check-in interval. "Go" on the rest of the plan, so these
+  are Claude's recommendations, to confirm with CPoint:
+- ASSUMPTION (A-31, D-112): a roll over the limit still shows its Defect % and Too many defects,
+  for the Floor Manager's information only; the claim sheet stays.
+- ASSUMPTION (A-33, D-112): Remove still works on a roll in stock or being scanned (−1); a scanned
+  roll can't be removed, since it is already off stock.
+- ASSUMPTION (A-35, D-113): old rolls stay as history; rolls in stock stay pickable; scanned rolls
+  not yet ticked leave stock in the migration.
+- Decided (Dylan, 2026-11-04, 30E-2): every working day must have a plan (no copying; an FM is
+  always at the factory to plan); with none, no batches and the start-of-day notice. The FM can mark
+  a weekday as a Non-working day / Holiday (no batches, no notice).
+- ASSUMPTION (A-36, 30E-2): a day's plan can change until its first batch is finished; lunch stays
+  the Admin's, from tomorrow; a holiday mark has no name and can be undone (Dylan: no names).
+- ASSUMPTION (A-37, 30E-2): the start-of-day notice is the FM's only, from 00:00 on a working day
+  until the plan is saved (banner, bell, FM home); the QI reads "The Floor Manager plans them
+  first."
+- ASSUMPTION (A-38): 30E before 30D, in two sessions (30E-1 rolls and color, 30E-2 planning).
+- Decided (Dylan, 2026-11-04, 30E-2): a month calendar; click a weekday to plan it (weekends not selectable, no working-days ticks); the check-in interval is every 4 hours or once at the end of the day only. ASSUMPTION (A-39): saved plans of every 1, 2 or 3 hours become every 4 hours.
 - Decided (Dylan, 2026-11-03, Phase 30C plan, D-110): a cut is Not accepted from 3 in by its box
   diagonal; each cut from 3 in counts a flat 1% of its roll "for now", shorter cuts nothing; holes
   and scratches by box area; phones calibrated once on Capture by tapping a sheet's corners. Tell

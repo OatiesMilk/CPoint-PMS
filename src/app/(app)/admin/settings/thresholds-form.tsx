@@ -133,12 +133,12 @@ export function ThresholdsForm({ found, returnLimit }: { found: number; returnLi
       />
       <PercentField
         id="returnPercent"
-        label="Send a roll back when defects cover more than"
+        label="A roll has too many defects when they cover more than"
         value={limit}
         onChange={edit("returnPercent", setLimit)}
         onBlur={() => setTouched((t) => ({ ...t, returnPercent: true }))}
         error={errorOf("returnPercent")}
-        hint="Checked when the roll is finished at Capture."
+        hint="Checked when the roll is finished at Capture. The Floor Manager sees it on Reports → Rolls."
       />
 
       <div className="rounded-lg border bg-card p-4" aria-live="polite">
@@ -162,7 +162,7 @@ export function ThresholdsForm({ found, returnLimit }: { found: number; returnLi
             <Undo2 aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <span>
               <span className="font-medium">Too many defects</span> when more than {shownLimit} of a
-              finished roll has defects. The Floor Manager decides to send it back or keep it.
+              finished roll has defects. The Floor Manager sees it on the roll and its claim sheet.
             </span>
           </li>
         </ul>

@@ -134,6 +134,19 @@ export function upsertDefectTypeState(
   });
 }
 
+/**
+ * Turns the kept suppliers (the bootstrap's and the demo's) back on, so the demo week can add its
+ * leather items (Phase 30E run 1: a deactivated demo supplier stopped the seed half way). Returns
+ * how many were off.
+ */
+export async function reactivateSuppliers(names: string[], db: Db): Promise<number> {
+  const { count } = await db.supplier.updateMany({
+    where: { name: { in: names }, isActive: false },
+    data: { isActive: true },
+  });
+  return count;
+}
+
 /** Puts the demo accounts' names back (D-090); an account that isn't there is skipped. */
 export async function setDemoAccountNames(people: { email: string; name: string }[], db: Db) {
   for (const { email, name } of people)

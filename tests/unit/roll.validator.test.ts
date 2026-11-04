@@ -5,7 +5,6 @@ import {
   itemRollsQuerySchema,
   removeRollSchema,
   rollListQuerySchema,
-  usedRollIdsSchema,
 } from "@/server/validators/roll.validator";
 
 const SUPPLIER = "0199a000-0000-7000-8000-000000000001";
@@ -70,20 +69,6 @@ describe("removeRollSchema", () => {
     );
     expect(removeRollSchema.safeParse({ reason: "x".repeat(201) }).error?.issues[0].message).toBe(
       "The reason can be up to 200 characters.",
-    );
-  });
-});
-
-describe("usedRollIdsSchema (Finish batch, Phase 30A)", () => {
-  it("takes no list, an empty list or roll ids", () => {
-    expect(usedRollIdsSchema.parse(undefined)).toBeUndefined();
-    expect(usedRollIdsSchema.parse([])).toEqual([]);
-    expect(usedRollIdsSchema.parse([SUPPLIER])).toEqual([SUPPLIER]);
-  });
-
-  it("refuses something that isn't a roll", () => {
-    expect(usedRollIdsSchema.safeParse(["LR-MLT-001"]).error?.issues[0].message).toBe(
-      "A ticked roll wasn’t found. Refresh the page.",
     );
   });
 });

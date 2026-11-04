@@ -24,8 +24,9 @@ type RemoveResult =
   { ok: true } | { ok: false; error: string; code?: string; fieldErrors?: Record<string, string> };
 
 /**
- * Remove a roll (the Floor Manager, Phase 30A): damaged, lost or added by mistake. The dialog names
- * the roll and asks why. A roll from Inventory leaves stock; its shots stay, out of the reports.
+ * Remove a roll (the Floor Manager, Phase 30A): damaged, lost or added by mistake, while it is in
+ * stock or being scanned (Phase 30E). The dialog names the roll and asks why. A roll from Inventory
+ * leaves stock; its shots stay, out of the reports.
  */
 export function RemoveRoll({
   code,
@@ -113,7 +114,7 @@ export function RemoveRoll({
         <DialogContent>
           <DialogTitle>Remove {code}?</DialogTitle>
           <DialogDescription>
-            {fromInventory ? "It leaves stock and can’t be scanned or ticked. " : ""}
+            {fromInventory ? "It leaves stock and can’t be scanned. " : ""}
             {shots > 0
               ? `Its ${shots} ${shots === 1 ? "shot stays" : "shots stay"} on record but ${shots === 1 ? "is" : "are"} left out of the reports. `
               : ""}

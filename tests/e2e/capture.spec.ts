@@ -212,13 +212,23 @@ test.describe("Capture on a phone (Phase 26)", () => {
 
     // Other tests' rolls may be open (the dropdown lists every open roll); pick our own. There is
     // nothing to type: no supplier, no tag (Phase 30A).
-    const another = page.getByRole("button", { name: "Scan another roll" });
+    const another = page.getByRole("button", { name: "Start another roll" });
     if (await another.isVisible()) await another.click();
-    await expect(page.getByRole("heading", { name: "Scan a roll" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Start a roll" })).toBeVisible();
     await expect(page.getByLabel("Supplier")).toHaveCount(0);
-    const find = page.getByLabel("Find a roll");
-    if (await find.isVisible()) await find.fill(code);
-    await page.getByRole("button", { name: `Scan ${code}` }).click();
+    // Phase 30E (D-113): the leather first, then the roll on the table by its code.
+    const onTable = page.getByLabel("Roll on the table");
+    await expect(onTable).toBeDisabled();
+    await page.getByRole("button", { name: "Start scanning" }).click();
+    await expect(page.getByText("Choose the leather you’re scanning.")).toBeVisible();
+    await page.getByLabel("Leather", { exact: true }).selectOption(roll.item);
+    await page.getByRole("button", { name: "Start scanning" }).click();
+    await expect(
+      page.getByText("Choose the roll on the table. Its code is on its label."),
+    ).toBeVisible();
+    await expect(onTable).toContainText(`${code} · 24.5 sq ft`);
+    await onTable.selectOption(roll.id);
+    await page.getByRole("button", { name: "Start scanning" }).click();
 
     const line = page.getByTestId("capture-roll-line");
     await expect(line).toContainText(`Roll ${code}`);
@@ -260,7 +270,9 @@ test.describe("Capture on a phone (Phase 26)", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toContainText(`Is all of ${code} scanned?`);
     await dialog.getByRole("button", { name: "Finish roll" }).click();
-    await expect(page.getByText(`${code} is finished with 1 shot.`)).toBeVisible();
+    await expect(
+      page.getByText(`${code} is finished with 1 shot. It is taken off the ${roll.item} stock.`),
+    ).toBeVisible();
   });
 
   test("a constructor without camera access is told who grants it", async ({ page }) => {

@@ -1,10 +1,11 @@
 /**
- * Rolls. Since Phase 30A (D-103, D-104) a roll's life starts in Inventory: the Floor Manager adds
- * each leather roll to its item with its own area (+1 in stock); a Shoe Constructor with camera
- * access picks it at Capture, captures it shot by shot and finishes it; the Quality Inspector (the
- * Floor Manager on a day no QI is in, D-088) ticks it Fully used at Finish batch (−1); the Floor
- * Manager may remove a roll that isn't fully used, with a reason (−1). Every stock change is a
- * ledger movement with the roll's id (D-023). No person is named on a roll (D-008).
+ * Rolls. The Floor Manager adds each leather roll to its item with its own area (+1 in stock,
+ * Phase 30A, D-103); a Shoe Constructor with camera access picks the leather, then the roll, at
+ * Capture (Phase 30E, D-113), captures it shot by shot and finishes it, and then it leaves stock
+ * (−1) whatever its Defect % (D-112). Nobody ticks rolls Fully used and the Floor Manager no longer
+ * returns or keeps them; those rolls from before stay as history. The Floor Manager may remove a
+ * roll still in stock or being scanned, with a reason (−1). Every stock change is a ledger movement
+ * with the roll's id (D-023). No person is named on a roll (D-008).
  */
 import type { Prisma } from "@/generated/prisma/client";
 import type { RollStatus } from "@/lib/domain";
@@ -17,12 +18,9 @@ import {
   planPutBack,
   planRemove,
   planStart,
-  planUnuse,
-  planUse,
   rollClosedMessage,
   rollCodePrefix,
   ROLL_MESSAGES,
-  planDecide,
   type Plan,
 } from "@/lib/roll-rules";
 import { rollShare } from "@/lib/measure";
@@ -34,18 +32,14 @@ import { findSupplier, listActiveSuppliers } from "@/server/models/reference-dat
 import {
   countDefectsForRolls,
   countOpenRolls,
-  countRollsToReturn,
   countVerdictsForRolls,
   findRollDetail,
-  findRollsState,
   findRollState,
   insertRoll,
-  keepRoll,
   listOpenRolls,
   listRollShotMeasures,
   listReadyRolls,
   listRolls,
-  listRollsToTick,
   listRollsUsedIn,
   moveRoll,
   nextRollCodeNumber,
@@ -55,11 +49,7 @@ import {
   type RollDetailRow,
   type RollListRow,
 } from "@/server/models/roll.model";
-import type {
-  AddRollsValues,
-  ReturnDecisionValues,
-  RollListQuery,
-} from "@/server/validators/roll.validator";
+import type { AddRollsValues, RollListQuery } from "@/server/validators/roll.validator";
 import { recordAudit } from "./audit.service";
 import { postMovement } from "./inventory.service";
 
@@ -110,7 +100,6 @@ export async function listRollsForReport(
   const { rows, total } = await listRolls(
     {
       status: query.status,
-      toReturn: query.toReturn,
       supplierId: query.supplierId,
       since,
       q: query.q,
@@ -167,10 +156,8 @@ export async function listItemRolls(
 
 export type RollDetail = Omit<RollDetailRow, "areaSqFt" | "returnedOn"> & {
   areaSqFt: number | null;
+  /** The day it went back to the supplier: a Phase 30C decision, kept as history. */
   returnedOn: string | null;
-  /** The Floor Manager may return it to the supplier, or keep a marked one (Phase 30C). */
-  canReturn: boolean;
-  canKeep: boolean;
   passed: number;
   rejected: number;
   /** What the Floor Manager may do here: remove the roll, with a reason. */
@@ -181,12 +168,7 @@ export async function getRollDetail(id: string): Promise<RollDetail | null> {
   const roll = await findRollDetail(id);
   if (!roll) return null;
   const passed = roll.scans.filter((s) => s.finalVerdict === "PASS").length;
-  const state = {
-    status: roll.status,
-    fromInventory: !!roll.item,
-    markedForReturn: roll.markedForReturn,
-    returnDecision: roll.returnDecision,
-  };
+  const state = { status: roll.status, fromInventory: !!roll.item };
   return {
     ...roll,
     areaSqFt: area(roll.areaSqFt),
@@ -194,8 +176,6 @@ export async function getRollDetail(id: string): Promise<RollDetail | null> {
     passed,
     rejected: roll.scans.length - passed,
     canRemove: planRemove(state).ok,
-    canReturn: planDecide(state, "RETURNED").ok,
-    canKeep: planDecide(state, "KEPT").ok,
   };
 }
 
@@ -263,8 +243,6 @@ const stateOf = (r: OpenRollRow) => ({
   status: r.status,
   fromInventory: r.itemId !== null,
   shots: r._count.scans,
-  markedForReturn: r.markedForReturn,
-  returnDecision: r.returnDecision,
 });
 
 /**
@@ -384,9 +362,10 @@ export type FinishResult = {
 };
 
 /**
- * Finish a roll at Capture once all of it is scanned. It needs at least one shot. Its defect share
- * is worked out and saved (Phase 30C): its shots' defect area over its entered area, plus the flat
- * shares; more than the supplier limit marks it Return to supplier for the Floor Manager (C-9).
+ * Finish a roll at Capture once all of it is scanned. It needs at least one shot. It leaves its
+ * item's stock (−1) whatever its verdicts (Phase 30E, D-112). Its defect share is worked out and
+ * saved (Phase 30C): its shots' defect area over its entered area, plus the flat shares; more than
+ * the limit marks it Too many defects, for the Floor Manager's information (C-9).
  */
 export async function finishRoll(
   id: string,
@@ -405,6 +384,7 @@ export async function finishRoll(
       tx,
     );
     if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
+    await takeFromStock(tx, roll, `Roll ${roll.code} scanned at Capture`, actor, now);
     const share = rollShare(area(roll.areaSqFt), await listRollShotMeasures(id, tx), limitPct);
     const measure = share.measured
       ? {
@@ -450,66 +430,6 @@ export async function finishRoll(
 }
 
 /**
- * The Floor Manager's decision on a scanned roll (Phase 30C, C-36): Returned to supplier on a day
- * (it leaves stock, −1), or Keep a roll marked Return to supplier, with a reason (it can then be
- * ticked Fully used). A roll under the limit may be returned too. A decision is final (A-27).
- */
-export async function decideReturn(
-  id: string,
-  values: ReturnDecisionValues,
-  actor: Actor,
-  now: Date = new Date(),
-) {
-  const roll = await loadRoll(id);
-  refuse(planDecide(stateOf(roll), values.decision));
-  if (values.decision === "RETURNED" && values.returnedOn > manilaToday(now))
-    throw Errors.validation([{ path: ["returnedOn"], message: ROLL_MESSAGES.returnedInFuture }]);
-  return runInTransaction(async (tx) => {
-    if (values.decision === "KEPT") {
-      const done = await keepRoll(
-        id,
-        { returnNote: values.note, returnDecidedAt: now, returnDecidedById: actor.id },
-        tx,
-      );
-      if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
-    } else {
-      const done = await moveRoll(
-        id,
-        "FINISHED",
-        {
-          status: "RETURNED",
-          returnDecision: "RETURNED",
-          returnedOn: new Date(`${values.returnedOn}T00:00:00Z`),
-          returnNote: values.note ?? null,
-          returnDecidedAt: now,
-          returnDecidedById: actor.id,
-        },
-        tx,
-        { returnDecision: null },
-      );
-      if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
-      const why = values.note ? `: ${values.note}` : "";
-      await takeFromStock(tx, roll, `Roll ${roll.code} returned to supplier${why}`, actor, now);
-    }
-    await recordAudit(tx, {
-      actor: { type: "USER", userId: actor.id },
-      action: values.decision === "KEPT" ? "roll.keep" : "roll.return",
-      entity: "Roll",
-      entityId: id,
-      before: { status: roll.status, markedForReturn: roll.markedForReturn },
-      after: {
-        code: roll.code,
-        decision: values.decision,
-        status: values.decision === "KEPT" ? roll.status : "RETURNED",
-        ...(values.decision === "RETURNED" ? { returnedOn: values.returnedOn } : {}),
-        note: values.note ?? null,
-      },
-    });
-    return { id, code: roll.code, decision: values.decision };
-  });
-}
-
-/**
  * Put back at Capture: a roll picked by mistake, with no shots. A roll from Inventory waits to be
  * scanned again; one from before Phase 30A is cancelled, as it was then.
  */
@@ -541,9 +461,10 @@ export async function putBackRoll(id: string, actor: Actor, now: Date = new Date
 }
 
 /**
- * Remove a roll (the Floor Manager, with a reason): a roll from Inventory that isn't fully used
- * (damaged, lost, added by mistake) leaves stock (−1); a roll from before Phase 30A can be removed
- * only while open, as the old Cancel. Nothing is deleted: its shots stay, out of the reports.
+ * Remove a roll (the Floor Manager, with a reason): a roll from Inventory still in stock or being
+ * scanned (damaged, lost, added by mistake) leaves stock (−1); a scanned roll is already off stock.
+ * A roll from before Phase 30A can be removed only while open, as the old Cancel. Nothing is
+ * deleted: its shots stay, out of the reports.
  */
 export async function removeRoll(id: string, reason: string, actor: Actor, now: Date = new Date()) {
   const roll = await loadRoll(id);
@@ -571,51 +492,30 @@ export async function removeRoll(id: string, reason: string, actor: Actor, now: 
   });
 }
 
-/** One roll's −1 (or +1 when `delta` is 1) on its leather item, in the caller's transaction. */
+/** One roll's −1 on its leather item, in the caller's transaction. */
 async function takeFromStock(
   tx: Tx,
   roll: Pick<OpenRollRow, "id" | "itemId">,
   reason: string,
   actor: Actor,
   now: Date,
-  delta: 1 | -1 = -1,
 ) {
+  const delta = -1;
   if (!roll.itemId) return;
   const item = await findInventoryItem(roll.itemId, tx);
   if (!item) throw Errors.notFound("This roll’s item");
   await postMovement(
     tx,
     { ...item, quantityOnHand: Number(item.quantityOnHand) },
-    { type: delta < 0 ? "OUT" : "IN", delta, reason, rollId: roll.id },
+    { type: "OUT", delta, reason, rollId: roll.id },
     actor,
     now,
   );
 }
 
-// ───────────── Fully used, at Finish batch ─────────────
+// ───────────── Fully used, before Phase 30E (history) ─────────────
 
-export type RollToTick = ReadyRoll & { ticked: boolean };
-
-/**
- * Finish batch's Rolls fully used (Phase 30A): scanned rolls from Inventory not yet used, the
- * oldest scan first; for a correction, also the rolls ticked in that batch (ticked).
- */
-export async function rollsToTick(checkInId?: string): Promise<RollToTick[]> {
-  return (await listRollsToTick(checkInId)).map((r) => {
-    const { id, code, tagCode, supplier, item, areaSqFt } = toOpenRoll(r);
-    return {
-      id,
-      code,
-      tagCode,
-      supplier,
-      item,
-      areaSqFt,
-      ticked: !!checkInId && r.usedCheckInId === checkInId,
-    };
-  });
-}
-
-/** The codes of the rolls ticked in each batch, for Batches' rows. */
+/** The rolls ticked Fully used in each batch before Phase 30E, for Batches' rows (history). */
 export async function rollsUsedByCheckIn(checkInIds: string[]) {
   const rows = await listRollsUsedIn(checkInIds);
   const out = new Map<string, { id: string; code: string }[]>();
@@ -624,77 +524,6 @@ export async function rollsUsedByCheckIn(checkInIds: string[]) {
     out.set(r.usedCheckInId, [...(out.get(r.usedCheckInId) ?? []), { id: r.id, code: r.code }]);
   }
   return out;
-}
-
-async function loadMany(tx: Tx, ids: string[]) {
-  const rows = await findRollsState(ids, tx);
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const missing = ids.filter((id) => !byId.has(id));
-  if (missing.length > 0)
-    throw Errors.stale("A roll on the list was removed. Refresh the page and try again.");
-  return ids.map((id) => byId.get(id)!);
-}
-
-/**
- * Tick rolls Fully used in a batch (C-5, Dylan 26 Oct 2026): each leaves stock (−1). Only scanned
- * rolls from Inventory, each once; anything else is refused by its code. Call inside the batch's
- * transaction.
- */
-export async function markRollsUsed(
-  tx: Tx,
-  ids: string[],
-  batch: { checkInId: string; label: string },
-  actor: Actor,
-  now: Date,
-): Promise<string[]> {
-  if (ids.length === 0) return [];
-  const rolls = await loadMany(tx, ids);
-  for (const roll of rolls) refuse(planUse(stateOf(roll)));
-  for (const roll of rolls) {
-    const done = await moveRoll(
-      roll.id,
-      "FINISHED",
-      { status: "USED", usedAt: now, usedById: actor.id, usedCheckInId: batch.checkInId },
-      tx,
-    );
-    if (!done)
-      throw Errors.stale(`${roll.code} was just changed by someone else. Refresh and try again.`);
-    await takeFromStock(tx, roll, `Fully used in ${batch.label}`, actor, now);
-  }
-  return rolls.map((r) => r.code);
-}
-
-/** Untick in a same-day correction: the roll goes back to Scanned and into stock (+1). */
-export async function unmarkRollsUsed(
-  tx: Tx,
-  ids: string[],
-  batch: { checkInId: string; label: string; reason: string },
-  actor: Actor,
-  now: Date,
-): Promise<string[]> {
-  if (ids.length === 0) return [];
-  const rolls = await loadMany(tx, ids);
-  for (const roll of rolls) refuse(planUnuse(roll, batch.checkInId));
-  for (const roll of rolls) {
-    const done = await moveRoll(
-      roll.id,
-      "USED",
-      { status: "FINISHED", usedAt: null, usedById: null, usedCheckInId: null },
-      tx,
-      { usedCheckInId: batch.checkInId },
-    );
-    if (!done)
-      throw Errors.stale(`${roll.code} was just changed by someone else. Refresh and try again.`);
-    await takeFromStock(
-      tx,
-      roll,
-      `Not fully used after all (${batch.label} corrected: ${batch.reason})`,
-      actor,
-      now,
-      1,
-    );
-  }
-  return rolls.map((r) => r.code);
 }
 
 // ───────────── where a scan goes ─────────────
@@ -733,11 +562,6 @@ async function openWithTimes() {
 export async function deviceTargetRoll(): Promise<OpenRoll | null> {
   const oldest = oldestOpenRoll(await openWithTimes());
   return oldest ? toOpenRoll(oldest) : null;
-}
-
-/** Rolls marked Return to supplier with no decision yet (Phase 30C): Reports → Rolls, FM home. */
-export function rollsToReturnCount(): Promise<number> {
-  return countRollsToReturn();
 }
 
 /** Rolls open now, being captured (the FM home's Rolls today, Phase 28). */

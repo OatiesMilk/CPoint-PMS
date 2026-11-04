@@ -20,9 +20,10 @@ enum Role {
 }
 
 /// A roll is captured shot by shot at Capture until all of it is in (Phase 26, D-095).
-/// A roll's life (Phase 30A, D-104): added to Inventory by the Floor Manager (IN_STOCK), picked at
-/// Capture (OPEN), finished there (FINISHED, scanned), ticked Fully used at Finish batch (USED), or
-/// removed with a reason (CANCELLED).
+/// A roll's life since Phase 30E (D-112, D-113): added to its leather item by the Floor Manager with
+/// its area (IN_STOCK), picked at Capture (OPEN), finished there and taken off stock (FINISHED), or
+/// removed with a reason (CANCELLED). USED (Fully used at Finish batch) and RETURNED (Phase 30C)
+/// remain for old rows only.
 enum RollStatus {
   IN_STOCK
   OPEN

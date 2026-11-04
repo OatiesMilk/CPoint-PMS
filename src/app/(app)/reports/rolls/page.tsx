@@ -27,11 +27,7 @@ import {
 import { formatManilaDateTime } from "@/lib/format";
 import { formatArea } from "@/lib/roll-rules";
 import { requirePermission } from "@/server/policies/guard";
-import {
-  listRollsForReport,
-  rollsToReturnCount,
-  supplierOptions,
-} from "@/server/services/roll.service";
+import { listRollsForReport, supplierOptions } from "@/server/services/roll.service";
 import { rollListQuerySchema } from "@/server/validators/roll.validator";
 import { ReportTabs } from "../_components/report-tabs";
 import { RollFilters } from "./roll-filters";
@@ -42,13 +38,10 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
   await requirePermission("roll:read");
   await connection();
   const query = rollListQuerySchema.parse(await searchParams);
-  const filtered = Boolean(
-    query.status || query.toReturn || query.supplierId || query.days || query.q,
-  );
-  const [{ rows, total, page, pageCount }, suppliers, toReturn] = await Promise.all([
+  const filtered = Boolean(query.status || query.supplierId || query.days || query.q);
+  const [{ rows, total, page, pageCount }, suppliers] = await Promise.all([
     listRollsForReport(query),
     supplierOptions(),
-    rollsToReturnCount(),
   ]);
 
   const pageHref = (p: number) => {
@@ -67,32 +60,13 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
       />
       <ReportTabs current="rolls" />
 
-      {toReturn > 0 && !query.toReturn && (
-        <div
-          role="status"
-          className="flex flex-col gap-3 rounded-md bg-caution-soft p-4 sm:flex-row sm:items-center"
-        >
-          <p className="flex-1">
-            <span className="font-medium">
-              {toReturn === 1
-                ? "1 roll has too many defects and is waiting for your decision."
-                : `${toReturn} rolls have too many defects and are waiting for your decision.`}
-            </span>
-          </p>
-          <Button asChild variant="secondary">
-            <Link href="/reports/rolls?toReturn=1">{toReturn === 1 ? "Show it" : "Show them"}</Link>
-          </Button>
-        </div>
-      )}
-
       {(total > 0 || filtered) && <RollFilters suppliers={suppliers} />}
 
       {total === 0 && !filtered ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-16 text-center">
           <h2 className="text-xl font-semibold">No rolls yet</h2>
           <p className="max-w-md text-muted-foreground">
-            The Floor Manager adds each leather roll on its item in Inventory. Rolls appear here as
-            soon as they are added.
+            A roll appears here as soon as a Shoe Constructor starts scanning it at Capture.
           </p>
         </div>
       ) : total === 0 ? (
@@ -132,6 +106,9 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                     >
                       {r.code}
                     </Link>
+                    {r.item && (
+                      <span className="block text-sm text-muted-foreground">{r.item.name}</span>
+                    )}
                     {r.tagCode && (
                       <span className="block font-mono text-sm text-muted-foreground">
                         Tag {r.tagCode}

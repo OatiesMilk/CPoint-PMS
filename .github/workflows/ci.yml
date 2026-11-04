@@ -129,7 +129,7 @@ jobs:
           # Pass or Reject only (D-093), and every detection has a defect type (D-108).
           q "select count(*) from detections where \"defectTypeId\" is null" | grep -qx 0
           # Rolls at Capture (Phase 26): constructors with camera access capture on their phones,
-          # the newest roll stays open and the Floor Manager cancelled one with a reason.
+          # the newest roll stays open and the Floor Manager removed one with a reason.
           test "$(q "select count(*) from users where \"canCapture\" and role='SHOE_CONSTRUCTOR'")" -ge 1
           test "$(q "select count(*) from batches where status='OPEN'")" -ge 1
           test "$(q "select count(*) from batches where status='CANCELLED' and \"cancelledReason\" is not null")" -eq 1
@@ -148,12 +148,13 @@ jobs:
           test "$(q "select count(*) from stock_updates")" -ge 1
           test "$(q "select count(*) from inventory_movements where \"updateId\" is not null")" -ge 1
           q "select count(*) from inventory_items where category='LEATHER_ROLL' and \"supplierId\" is null" | grep -qx 0
-          # Rolls from Inventory (Phase 30A, D-103, D-104): every demo roll belongs to a leather item
-          # with its own area and an LR- code, some rolls are still
-          # on the shelf and some were ticked Fully used at Finish batch.
+          # Rolls from Inventory (Phase 30A, D-103) leave stock at Capture (Phase 30E, D-112): every
+          # demo roll belongs to a leather item with its own area and an LR- code, some are still
+          # on the shelf, every scanned roll took one off stock, and nobody ticks Fully used.
           q "select count(*) from batches where \"itemId\" is null or \"areaSqFt\" is null or code not like 'LR-%'" | grep -qx 0
           test "$(q "select count(*) from batches where status='IN_STOCK'")" -ge 1
-          test "$(q "select count(*) from batches where status='USED' and \"usedCheckInId\" is not null")" -ge 1
+          q "select count(*) from batches where status in ('USED','RETURNED')" | grep -qx 0
+          q "select count(*) from batches b where b.status='FINISHED' and (select count(*) from inventory_movements m where m.\"batchId\"=b.id and m.type='OUT') <> 1" | grep -qx 0
           # Phase 30C (D-106, D-110): the demo phones are calibrated, so every scanned roll has a
           # defect share, and every detection on it a length.
           q "select count(*) from batches where \"finishedAt\" is not null and \"defectSharePct\" is null" | grep -qx 0

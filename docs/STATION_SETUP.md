@@ -77,7 +77,7 @@ under "Type the width from the calibrate tool instead".
 ## Measuring defects (Phase 30B)
 
 Since Phase 30C the app measures every shot from a calibrated phone itself (a cut from 3 in is
-Not accepted; a roll over 10% defects is marked Return to supplier). The toolkit check below stays
+Not accepted; a roll over 10% defects reads Too many defects). The toolkit check below stays
 for comparing figures: can the camera measure a defect in inches? Photograph a piece of
 known area with marks or cuts of known length, then:
 
@@ -96,29 +96,26 @@ roll's defect share of its entered area, and whether the 3-inch line holds. The 
 Each roll is added first by the Floor Manager in **Inventory**, on its leather item, with its
 area; its code is on the list, like `LR-MLT-001` (write it on the roll's label).
 
-1. **Pick the roll.** Under **Scan a roll**, find the roll on the table (the Find box takes its
-   code, tag, item or supplier) and press **Scan this roll**. No roll on the list? Ask the Floor
-   Manager to add it in Inventory.
+1. **Pick the roll.** Under **Start a roll**, choose the **Leather**, then the **Roll on the table**
+   by the code on its label (the list shows each roll's area), and press **Start scanning**. No
+   roll on the list? Ask the Floor Manager to add it in Inventory.
 2. Check the large line above the camera: "Roll LR-MLT-001 · Black cowhide · 24.5 sq ft · 0
    shots". That is where the next shot goes. With several rolls being scanned, choose the right
-   one under **Roll**; **Scan another roll** picks the next.
+   one under **Roll**; **Start another roll** picks the next.
 3. **Capture** (or Space on a keyboard). Wait for the colour, about a second: green Pass or red
    Reject, with each defect marked Usable or Not accepted. Put that part in the bin of its colour.
 4. Move the roll on, edge to edge, and capture again until all of it is in.
 5. **Finish roll.** The app asks "Is all of LR-MLT-001 scanned?" with the number of shots. A
-   finished roll can't take more shots. The app then says how much of the roll has defects. If it
-   says "12.4% of this roll has defects (limit 10%). Set it aside for the Floor Manager.", put the
-   roll aside: the Floor Manager returns it to the supplier or keeps it (Phase 30C).
+   finished roll can't take more shots, and it comes off the leather stock (Phase 30E). The app
+   then says how much of the roll has defects; if it has too many, the Floor Manager sees it on
+   Reports → Rolls. Nothing to set aside.
 
 Picked the wrong roll? While it has no shots, **Put roll back** at Capture: it waits on the list
 again. A roll with shots is removed only by the Floor Manager, with a reason. Nothing is deleted.
 
-When a scanned roll is all used up, someone on the line tells the Quality Inspector, who ticks it
-**Fully used** when finishing the batch. Only then does it leave the leather stock.
-
 The Floor Manager reads every roll, its shots, its rejects and its defect share in **Reports →
-Rolls**, where **To return** lists the rolls set aside. A marked roll can't be ticked Fully used
-until the Floor Manager keeps it.
+Rolls**; a roll over the limit reads **Too many defects**, and its claim sheet carries the
+findings for the supplier.
 
 ## Floor view (a station PC)
 

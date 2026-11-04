@@ -29,7 +29,6 @@ import { cn } from "@/lib/utils";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { productionToday, recentProductionDays } from "@/server/services/production.service";
-import { formatArea } from "@/lib/roll-rules";
 import { FinishBatchDialog } from "./finish-batch-dialog";
 
 export const metadata: Metadata = { title: "Batches" };
@@ -52,14 +51,6 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
   const primary = today.canEnter ? today.rows.find((r) => r.canFinishNow) : undefined;
   // A notice or the QI home links here with ?finish=next (or a batch's end) to open it at once.
   const openSlot = finish === "next" ? primary?.slotAt : finish;
-  // Finish batch's Rolls fully used (Phase 30A): the code (it names the supplier, LR-MLT-…), the
-  // item and the area, all a QI needs to match the roll on the line.
-  const tickable = today.rollsToTick.map((r) => ({
-    id: r.id,
-    code: r.code,
-    item: r.item ?? null,
-    area: r.areaSqFt === null || r.areaSqFt === undefined ? null : formatArea(r.areaSqFt),
-  }));
 
   return (
     <div className={cn("flex flex-col gap-8", primary && "max-sm:pb-28")}>
@@ -182,7 +173,6 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                                   mode="finish"
                                   batch={r}
                                   workforceLine={workforceLine}
-                                  rolls={tickable}
                                   autoOpen={openSlot === r.slotAt}
                                   primary={isPrimary}
                                 />
@@ -194,7 +184,6 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                                 batch={r}
                                 workforceLine={workforceLine}
                                 checkIn={c}
-                                rolls={tickable}
                               />
                             )}
                           </div>

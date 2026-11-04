@@ -67,39 +67,38 @@ answer within 2 s):
 
 ## Rolls (`/api/v1/rolls`, Phase 26; from Inventory since Phase 30A)
 
-A roll is one leather roll from a supplier (D-095). Since Phase 30A (D-103, D-104) the Floor
-Manager adds each roll to its leather item in Inventory with its own area; a Shoe Constructor with
-camera access picks it at Capture, captures it shot by shot and finishes it; the Quality Inspector
-ticks it **Fully used** at Finish batch, and only then does it leave stock. Several rolls may be
-scanned at once. Nothing is deleted: a removed roll keeps its shots, which the reports leave out.
-Every write is audited (`roll.add`, `roll.start`, `roll.finish`, `roll.cancel`, `roll.remove`,
-`roll.return`, `roll.keep`; a
-tick is in `production.checkin` or `production.checkin.correct`). No response names a person
-(D-008).
+A roll is one leather roll from a supplier (D-095). Since Phase 30A (D-103) the Floor Manager adds
+each roll to its leather item in Inventory with its own area; a Shoe Constructor with camera access
+picks the leather, then the roll, at Capture (Phase 30E, D-113), captures it shot by shot and
+finishes it, and then it **leaves stock (−1)** whatever its Defect % (D-112). Nobody ticks rolls
+Fully used and the Floor Manager no longer returns or keeps them; those rolls from before stay as
+history. Several rolls may be scanned at once. Nothing is deleted: a removed roll keeps its shots,
+which the reports leave out. Every write is audited (`roll.add`, `roll.start`, `roll.finish`,
+`roll.cancel`, `roll.remove`; the migration's one `roll.leave_stock_at_capture`). No response names
+a person (D-008).
 
-| Status (`status`) | Reads                | How it gets there                                       | Stock |
-| ----------------- | -------------------- | ------------------------------------------------------- | ----- |
-| `IN_STOCK`        | Not scanned          | the FM adds it (`POST /inventory/{id}/rolls`)           | +1    |
-| `OPEN`            | Being scanned        | picked at Capture (`POST /rolls/{id}/start`)            |       |
-| `FINISHED`        | Scanned              | `POST /rolls/{id}/finish`, at least one shot            |       |
-| `USED`            | Fully used           | ticked at Finish batch (`usedRollIds`)                  | −1    |
-| `RETURNED`        | Returned to supplier | the FM's `POST /rolls/{id}/return-decision` (Phase 30C) | −1    |
-| `CANCELLED`       | Removed              | the FM's `POST /rolls/{id}/remove`, with a reason       | −1    |
+| Status (`status`) | Reads                | How it gets there                                      | Stock |
+| ----------------- | -------------------- | ------------------------------------------------------ | ----- |
+| `IN_STOCK`        | Not scanned          | the FM adds it (`POST /inventory/{id}/rolls`)          | +1    |
+| `OPEN`            | Being scanned        | picked at Capture (`POST /rolls/{id}/start`)           |       |
+| `FINISHED`        | Scanned              | `POST /rolls/{id}/finish`, at least one shot           | −1    |
+| `CANCELLED`       | Removed              | the FM's `POST /rolls/{id}/remove`, with a reason      | −1    |
+| `USED`            | Fully used           | history only (ticked at Finish batch before Phase 30E) |       |
+| `RETURNED`        | Returned to supplier | history only (the FM's decision in Phase 30C)          |       |
 
-| Method & path                             | Who                                   | Body / query                                                                                               | Returns                                                                                                     |
-| ----------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/inventory/{id}/rolls`       | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagCode? }] }`                                                          | `201 { data: { added: [{ id, code, areaSqFt, tagCode }], quantityOnHand } }`, codes `LR-<supplier>-001`     |
-| `GET /api/v1/rolls`                       | `roll:read` (Floor Manager)           | `status`, `toReturn=1` (marked, no decision yet, Phase 30C), `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
-| `GET /api/v1/rolls/{id}`                  | `roll:read`                           | —                                                                                                          | the roll with its item, area, shots and their detections                                                    |
-| `POST /api/v1/rolls`                      | —                                     | —                                                                                                          | `405`: rolls are added in Inventory and picked at Capture                                                   |
-| `GET /api/v1/rolls/ready`                 | a Shoe Constructor with camera access | —                                                                                                          | `{ data: ReadyRoll[] }`, rolls not scanned yet, oldest first                                                |
-| `POST /api/v1/rolls/{id}/start`           | a Shoe Constructor with camera access | `{}`                                                                                                       | `{ data: OpenRoll }`, status `OPEN`; `409` named when it isn't `IN_STOCK` any more                          |
-| `GET /api/v1/rolls/open`                  | a Shoe Constructor with camera access | —                                                                                                          | `{ data: OpenRoll[] }`, every roll being scanned (the Capture page's Roll dropdown)                         |
-| `POST /api/v1/rolls/{id}/finish`          | a Shoe Constructor with camera access | `{}`                                                                                                       | `{ data: { id, code, status: "FINISHED", shots, sharePct, limitPct, marked, notMeasured } }` (Phase 30C)    |
-| `POST /api/v1/rolls/{id}/return-decision` | `roll:manage` (Floor Manager)         | `{ decision: "RETURNED", returnedOn, note? }` or `{ decision: "KEPT", note }`                              | `{ data: { id, code, decision } }` (Phase 30C, C-36)                                                        |
-| `POST /api/v1/rolls/{id}/cancel`          | a Shoe Constructor with camera access | `{}`                                                                                                       | put back: an empty roll from Inventory returns to `IN_STOCK`; one from before Phase 30A is `CANCELLED`      |
-| `POST /api/v1/rolls/{id}/remove`          | `roll:manage` (Floor Manager)         | `{ reason }` (1 to 200 characters)                                                                         | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
-| `GET /api/v1/rolls/current`               | a device token (`scans:create`)       | —                                                                                                          | the roll being scanned the longest, or `404 NO_OPEN_ROLL`                                                   |
+| Method & path                       | Who                                   | Body / query                                            | Returns                                                                                                     |
+| ----------------------------------- | ------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/inventory/{id}/rolls` | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagCode? }] }`       | `201 { data: { added: [{ id, code, areaSqFt, tagCode }], quantityOnHand } }`, codes `LR-<supplier>-001`     |
+| `GET /api/v1/rolls`                 | `roll:read` (Floor Manager)           | `status`, `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
+| `GET /api/v1/rolls/{id}`            | `roll:read`                           | —                                                       | the roll with its item, area, shots and their detections                                                    |
+| `POST /api/v1/rolls`                | —                                     | —                                                       | `405`: rolls are added in Inventory and picked at Capture                                                   |
+| `GET /api/v1/rolls/ready`           | a Shoe Constructor with camera access | —                                                       | `{ data: ReadyRoll[] }`, rolls not scanned yet, oldest first                                                |
+| `POST /api/v1/rolls/{id}/start`     | a Shoe Constructor with camera access | `{}`                                                    | `{ data: OpenRoll }`, status `OPEN`; `409` named when it isn't `IN_STOCK` any more                          |
+| `GET /api/v1/rolls/open`            | a Shoe Constructor with camera access | —                                                       | `{ data: OpenRoll[] }`, every roll being scanned (the Capture page's Roll dropdown)                         |
+| `POST /api/v1/rolls/{id}/finish`    | a Shoe Constructor with camera access | `{}`                                                    | `{ data: { id, code, status: "FINISHED", shots, sharePct, limitPct, marked, notMeasured } }` (Phase 30C)    |
+| `POST /api/v1/rolls/{id}/cancel`    | a Shoe Constructor with camera access | `{}`                                                    | put back: an empty roll from Inventory returns to `IN_STOCK`; one from before Phase 30A is `CANCELLED`      |
+| `POST /api/v1/rolls/{id}/remove`    | `roll:manage` (Floor Manager)         | `{ reason }` (1 to 200 characters)                      | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
+| `GET /api/v1/rolls/current`         | a device token (`scans:create`)       | —                                                       | the roll being scanned the longest, or `404 NO_OPEN_ROLL`                                                   |
 
 **`ReadyRoll`**: `{ id, code, tagCode, supplier, item, areaSqFt }`. **`OpenRoll`**: the same plus
 `{ shots, startedAt, mine, fromInventory }`; `mine` only says whether the person asking picked it,
@@ -110,28 +109,24 @@ to start the dropdown on their own roll. `/current` leaves it out.
   `areaSqFt` is 0.1 to 200 with at most two decimals; each message names the roll ("Roll 2: enter
   its area in square feet, like 24.5."), at `rolls.<i>.areaSqFt`. `tagCode` is the number on the
   supplier's tag, up to 40. Up to 50 rolls a save. Each roll is an `IN` +1 with its `rollId`.
+- **Start** (Phase 30E, D-113): Capture lists the rolls waiting by leather, then the chosen
+  leather's rolls by code and area; `POST /rolls/{id}/start` picks one (`409` named when it isn't
+  in stock any more).
 - **Finish** needs at least one shot (`409` "A roll needs at least one shot to finish. Put it back
-  instead."). Since Phase 30C (D-106, D-110) it saves the roll's **defect share**: the sum of its
-  shots' defect areas (each shot's union of boxes, overlaps once) over its entered area, plus the
-  flat shares (a cut from 3 in counts 1%). More than `returnSharePct` (Settings, default 10,
-  strict) sets `markedForReturn` (`marked: true`). `sharePct` is null and `notMeasured` says why
-  (`no-area`, `no-shots`, `unscaled`: a shot came from a phone that wasn't calibrated) when it
-  can't be worked out (A-28); such a roll isn't marked.
-- **Return decision** (Phase 30C, C-36): only a `FINISHED` roll from Inventory with no decision.
-  `RETURNED` (`returnedOn` a date, not after today; `note` up to 200) moves it to `RETURNED` and
-  takes it out of stock (`OUT` −1, "Roll LR-… returned to supplier: …"). `KEPT` (a reason, 1 to 200) only for a marked roll; it stays `FINISHED` and can then be ticked. A decision is final
-  (A-27): a second one, Keep on an unmarked roll, or a roll not scanned is `409` named. **Cancel** at Capture only for a roll with no shots.
-- **Remove:** any roll from Inventory that isn't fully used (`OUT` −1 unless it already left
-  stock); a roll from before Phase 30A only while it is open. A fully used roll is `409` ("LR-… is
-  already marked fully used.").
-- **Fully used** is sent with the batch: `POST /api/v1/production/check-ins` and
-  `PATCH /api/v1/production/check-ins/{id}` take an optional `usedRollIds` (uuids, no repeats).
-  Only a `FINISHED` roll from Inventory can be ticked, and a roll marked Return to supplier only
-  after the FM's Keep (`OUT` −1, "Fully used in Batch 2
-  (10:00–13:00)"); a correction may untick a roll ticked in that batch (`IN` +1). Anything else is
-  `409` with the roll's code ("LR-MT-004 isn’t scanned yet. Scan and finish it at Capture before
-  it’s used."). `GET /api/v1/production/today` lists `rollsToTick` for whoever may finish batches,
-  and each finished batch's `checkIn.usedRolls`.
+  instead."). It takes the roll off its item's stock (`OUT` −1, "Roll LR-… scanned at Capture",
+  D-112). It saves the roll's **defect share** (Phase 30C, D-106, D-110): the sum of its shots'
+  defect areas (each shot's union of boxes, overlaps once) over its entered area, plus the flat
+  shares (a cut from 3 in counts 1%). More than `returnSharePct` (Settings, default 10, strict) sets
+  `markedForReturn` (`marked: true`), shown as **Too many defects** for the Floor Manager's
+  information only. `sharePct` is null and `notMeasured` says why (`no-area`, `no-shots`,
+  `unscaled`: a shot came from a phone that wasn't calibrated) when it can't be worked out (A-28);
+  such a roll isn't marked. **Cancel** at Capture only for a roll with no shots.
+- **Remove:** a roll from Inventory still in stock or being scanned (`OUT` −1); a scanned roll is
+  already off stock (`409` "LR-… is already scanned."); a roll from before Phase 30A only while it
+  is open.
+- **Gone in Phase 30E:** `POST /api/v1/rolls/{id}/return-decision` (404) and Fully used:
+  `usedRollIds` on the check-ins is ignored, and `GET /api/v1/production/today` has no
+  `rollsToTick`. Batches finished before still list `checkIn.usedRolls` as history.
 - A roll that is already finished or removed answers `409 CONFLICT`; if someone else changed it
   between the read and the write, `409 STALE` (D-019).
 - Removed (`404`): `/api/v1/batches/**`, `POST …/stages`, `PATCH` of a roll. Rolls from before
@@ -372,14 +367,14 @@ whole line (D-008); the only name is who finished or corrected a batch. Days are
 days. The paths keep `production`; a finished batch is a `check-in` row whose `slotAt` is the
 batch's end.
 
-| Method & path                             | Permission           | Body / query                                                       |
-| ----------------------------------------- | -------------------- | ------------------------------------------------------------------ |
-| `GET /api/v1/production/today`            | `production:read`    | —                                                                  |
-| `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                               |
-| `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes?, usedRollIds? }`            |
-| `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason, usedRollIds? }` |
-| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }` (D-105)   |
-| `PUT /api/v1/production/quotas`           | `production:plan`    | `{ pairs, suggestedPairs? }`                                       |
+| Method & path                             | Permission           | Body / query                                                     |
+| ----------------------------------------- | -------------------- | ---------------------------------------------------------------- |
+| `GET /api/v1/production/today`            | `production:read`    | —                                                                |
+| `GET /api/v1/production/days?from=&to=`   | `production:read`    | default the last 14 days, at most 92                             |
+| `POST /api/v1/production/check-ins`       | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes? }` (no rolls, D-111)      |
+| `PATCH /api/v1/production/check-ins/{id}` | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason }`             |
+| `PUT /api/v1/production/schedule`         | `production:plan`    | `{ shiftStart, shiftEnd, intervalMinutes, workingDays }` (D-105) |
+| `PUT /api/v1/production/quotas`           | `production:plan`    | `{ pairs, suggestedPairs? }`                                     |
 
 `production:read` is the Floor Manager, the Quality Inspector and the System Admin;
 `production:checkin` the Quality Inspector, and the Floor Manager **only on a day attendance shows no
