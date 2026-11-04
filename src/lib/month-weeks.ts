@@ -151,3 +151,19 @@ export function sumByWeek(
 
 /** The day after a week, the exclusive end of its range. */
 export const dayAfter = (w: MonthWeek) => addDays(w.to, 1);
+
+/**
+ * The working days in a week (D-118): Monday to Friday (D-105), less the days the Floor Manager
+ * marked Non-working / Holiday (D-114). Lets a short week explain itself on Materials.
+ */
+export function workingDaysIn(w: MonthWeek, nonWorking: ReadonlySet<string>): number {
+  let count = 0;
+  for (let day = w.from; day <= w.to; day = addDays(day, 1)) {
+    const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+    if (weekday !== 0 && weekday !== 6 && !nonWorking.has(day)) count += 1;
+  }
+  return count;
+}
+
+/** "1 working day", "5 working days". */
+export const workingDaysLabel = (n: number) => `${n} working day${n === 1 ? "" : "s"}`;

@@ -70,6 +70,7 @@ test.describe("capture API (Phase 26)", () => {
         403,
       );
       expect((await api.get("/api/v1/rolls/ready")).status()).toBe(403);
+      expect((await api.get("/api/v1/rolls/plan")).status()).toBe(403);
     }
 
     const sc = await captureApi(browser);
@@ -189,6 +190,63 @@ test.describe("capture API (Phase 26)", () => {
     const late = await capture(sc, randomUUID(), roll.id);
     expect(late.status()).toBe(409);
     expect((await late.json()).error.code).toBe("ROLL_CLOSED");
+  });
+});
+
+test.describe("Capture's counter (Phase 30D, D-118)", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("shows today's rolls scanned against the plan and the next planned days", async ({
+    page,
+    browser,
+  }) => {
+    const api = await captureApi(browser);
+    const res = await api.get("/api/v1/rolls/plan");
+    expect(res.status()).toBe(200);
+    const days = (await res.json()).data as {
+      day: string;
+      isToday: boolean;
+      kind: string;
+      planned: number | null;
+      scanned: number;
+      label: string;
+    }[];
+    // Today first, whatever its plan, then planned days only, in order, five at most.
+    expect(days.length).toBeGreaterThanOrEqual(1);
+    expect(days.length).toBeLessThanOrEqual(5);
+    expect(days[0].isToday).toBe(true);
+    for (const [i, d] of days.slice(1).entries()) {
+      expect(d).toMatchObject({ isToday: false, kind: "PLANNED", scanned: 0 });
+      expect(d.day > days[i].day).toBe(true);
+    }
+
+    await signInCapturer(page);
+    const counter = page.getByTestId("plan-counter");
+    await expect(counter).toContainText(`Today, ${days[0].label}`);
+    const today = page.getByTestId("plan-today");
+    if (days[0].kind === "PLANNED")
+      await expect(today).toContainText(/^Leather rolls scanned \d+(\/\d+)?/);
+    else if (days[0].kind === "NON_WORKING")
+      await expect(today).toContainText("Today is marked Non-working / Holiday.");
+    else await expect(today).toContainText("The Floor Manager hasn’t planned today yet.");
+    if (days.length > 1) {
+      const ahead = page.getByTestId("plan-ahead").getByRole("listitem");
+      await expect(ahead).toHaveCount(days.length - 1);
+      await expect(ahead.first()).toContainText(days[1].label);
+      await expect(ahead.first()).toContainText(
+        days[1].planned === null
+          ? "Leather rolls scanned 0"
+          : `Leather rolls scanned 0/${days[1].planned}`,
+      );
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
+    const axe = await new AxeBuilder({ page })
+      .include('[data-testid="plan-counter"]')
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 });
 

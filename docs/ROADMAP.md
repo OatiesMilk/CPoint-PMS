@@ -506,21 +506,25 @@ was never built. Each phase gets its own criteria here when its plan is approved
       the area the FM entered; a roll leaves stock at Finish roll; the QI no longer ticks rolls; no
       Send back or Keep (D-111 to D-113; QA run 3 passed; merged #35). Plan
       `docs/prompts/plans/phase-30e-plan.md`
-- [ ] Phase 30E-2: a planning calendar (a weekday from today on: rolls to be used, quota, check-in
+- [x] Phase 30E-2: a planning calendar (a weekday from today on: rolls to be used, quota, check-in
       interval of every 4 h or once a day, shift), Non-working / Holiday days, planned against
-      scanned, the start-of-day notice (D-114, D-115; built 2026-11-04, Codex run 1 next). Plan
+      scanned, the start-of-day notice (D-114, D-115; QA run 3 passed; merged #36). Plan
       `docs/prompts/plans/phase-30e2-plan.md`
-- [ ] Reports clean-up (D-116): a roll over the defect limit is Returned to supplier; Rolls status
-      filter Not yet scanned / Scanning passed / Returned to supplier; no "for salvage"; Materials
-      without the 8-week trend and Per 100 pairs, with Returned to supplier per week (built
-      2026-11-04, Codex run 1 next). Plan `docs/prompts/plans/reports-cleanup-plan.md`. With
-      D-117: the reports count whole rolls (passed or returned), no Rejected sections, Rolls open
-      or Rolls finished; plan `docs/prompts/plans/reports-by-roll-plan.md`. QA passed (run 3,
-      2026-11-04)
-- [ ] Phase 30D: the team's QA notes on Reports → Materials (week picker by date, no Last 8
-      weeks or Per 100 pairs (both done by D-116), on hand per week, pairs change and pairs per roll; leather Used is
-      now Scanned at Capture and Removed (other) by correction, D-113); plan
-      `docs/prompts/plans/groupmates-feedback-plan.md`
+- [x] Reports clean-up (D-116) and reports by roll (D-117): a roll over the defect limit is
+      Returned to supplier; the reports count whole rolls (QA run 3 passed; merged #37). Plans
+      `docs/prompts/plans/reports-cleanup-plan.md`, `docs/prompts/plans/reports-by-roll-plan.md`
+- [x] Phase 30D: roll counts (D-118): Capture shows "Leather rolls scanned X/Y" for today and the
+      next planned days; Materials' Rolls used = checked − returned, Removed (other), working days
+      per week; the calendar adds returned rolls. The team's other notes were done by D-107,
+      D-108, D-109, D-113 and D-116; pairs per roll and On hand at week end dropped (Dylan). QA run 2
+      passed (2026-11-04). Plan `docs/prompts/plans/phase-30d-plan.md`
+- [ ] Scale marker: a printed ArUco marker (4x4_50 id 0, 2.00 in) read on every shot sets the
+      scale in place of the tap calibration; its own thread, not started. Printable PDF in the
+      project files (`calibration/cpoint-scale-marker-2in.pdf`)
+- [ ] Follow-up (Dylan, 2026-11-04): the System Admin reaches only the administration modules.
+      The Camera page (the last capture's photo, rolls being captured) is production, not
+      administration: it leaves the Admin's sidebar, home card, permission and APIs, so the
+      Admin keeps Overview, Users, Settings, API tokens and Audit log. Not planned yet
 - [ ] Phase 31: the documentation and the paper's figures match the system
 
 ## Phase 24 — Remove Material Requests and Procurement

@@ -7,6 +7,8 @@ import {
   monthWeeks,
   planProblem,
   rollsScannedLine,
+  capturePlanDays,
+  leatherRollsLine,
   DEFAULT_LUNCH,
   DEFAULT_SCHEDULE,
   batchState,
@@ -478,6 +480,8 @@ describe("the planning calendar (Phase 30E-2, D-114, A-40)", () => {
     );
     expect(rollsScannedLine(3, 5)).toBe("3 of 5 rolls scanned");
     expect(rollsScannedLine(1, null)).toBe("1 roll scanned");
+    expect(rollsScannedLine(3, 5, 1)).toBe("3 of 5 rolls scanned · 1 returned");
+    expect(rollsScannedLine(3, 5, 0)).toBe("3 of 5 rolls scanned");
   });
 
   it("gives a day plan's batches without working days", () => {
@@ -487,5 +491,53 @@ describe("the planning calendar (Phase 30E-2, D-114, A-40)", () => {
       "2026-11-04",
     );
     expect(b.map((x) => `${x.startTime}–${x.time}`)).toEqual(["08:00–13:00", "13:00–17:00"]);
+  });
+});
+
+describe("Capture's counter (Phase 30D, D-118)", () => {
+  const p = (day: string, kind: "PLANNED" | "NON_WORKING", rollsPlanned: number | null) => ({
+    day,
+    kind,
+    rollsPlanned,
+  });
+
+  it("reads Leather rolls scanned 3/15, or a bare count with nothing planned", () => {
+    expect(leatherRollsLine(3, 15)).toBe("Leather rolls scanned 3/15");
+    expect(leatherRollsLine(0, 15)).toBe("Leather rolls scanned 0/15");
+    expect(leatherRollsLine(4, null)).toBe("Leather rolls scanned 4");
+  });
+
+  it("keeps today whatever its plan, then planned days only, five in all", () => {
+    const plans = [
+      p("2026-11-04", "NON_WORKING", null),
+      p("2026-11-03", "PLANNED", 7), // the past: never shown
+      p("2026-11-10", "PLANNED", 4),
+      p("2026-11-05", "PLANNED", 15),
+      p("2026-11-06", "NON_WORKING", null),
+      p("2026-11-11", "PLANNED", 5),
+      p("2026-11-12", "PLANNED", 6),
+      p("2026-11-13", "PLANNED", 2),
+    ];
+    const days = capturePlanDays("2026-11-04", plans, 2);
+    expect(days.map((d) => d.day)).toEqual([
+      "2026-11-04",
+      "2026-11-05",
+      "2026-11-10",
+      "2026-11-11",
+      "2026-11-12",
+    ]);
+    expect(days[0]).toMatchObject({
+      isToday: true,
+      kind: "NON_WORKING",
+      planned: null,
+      scanned: 2,
+    });
+    expect(days[1]).toMatchObject({ isToday: false, kind: "PLANNED", planned: 15, scanned: 0 });
+  });
+
+  it("shows today as not planned when it has no plan", () => {
+    expect(capturePlanDays("2026-11-04", [], 0)).toEqual([
+      { day: "2026-11-04", isToday: true, kind: "NOT_PLANNED", planned: null, scanned: 0 },
+    ]);
   });
 });

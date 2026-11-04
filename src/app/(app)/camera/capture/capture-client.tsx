@@ -23,6 +23,7 @@ import { defaultRollId } from "@/lib/roll-rules";
 import { CalibrateDialog, saveCalibration, savedCalibration, type Frame } from "./calibration";
 import { FloorView, type FloorBand } from "./floor-view";
 import { LastScanSummary, type ScanSummary } from "./last-scan";
+import { PlanCounter, type CapturePlanView } from "./plan-counter";
 import { RollBar, rollLine, type OpenRollView } from "./roll-bar";
 import { PickRollForm, type ReadyRollView } from "./start-roll-form";
 
@@ -130,12 +131,15 @@ type ApiError = { error?: { code?: string; message?: string; details?: unknown }
 
 export function CaptureClient({
   initialRolls,
+  initialPlan,
   ready,
   model,
   earlyModelNotice,
 }: {
   /** Every open roll (Phase 26: several may be open; the Roll dropdown chooses). */
   initialRolls: OpenRollView[];
+  /** Today and the next planned days, with the rolls planned and scanned (D-118). */
+  initialPlan: CapturePlanView[];
   /** Rolls in stock, not scanned yet (Phase 30A): the constructor picks one. */
   ready: ReadyRollView[];
   model: ModelStatus;
@@ -146,6 +150,8 @@ export function CaptureClient({
   const busyRef = useRef(false);
 
   const [camera, setCamera] = useState<CameraState>({ kind: "starting" });
+  // Recounts the plan counter when this phone finishes or puts back a roll (D-118).
+  const planRefresh = useRef<(() => Promise<void>) | null>(null);
   const [devices, setDevices] = useState<{ id: string; label: string }[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [rolls, setRolls] = useState<OpenRollView[]>(initialRolls);
@@ -556,6 +562,7 @@ export function CaptureClient({
     // Room at the bottom on a phone for the fixed Capture button.
     <div className="grid grid-cols-1 items-start gap-6 pb-28 sm:pb-0 xl:grid-cols-3">
       <div className="flex flex-col gap-4 xl:col-span-2">
+        <PlanCounter initial={initialPlan} refreshRef={planRefresh} />
         {rolls.length === 0 || startOpen ? (
           <section
             aria-labelledby="start-roll-title"
@@ -593,6 +600,7 @@ export function CaptureClient({
               onClosed={(id, message) => {
                 dropRoll(id, message);
                 setLast(null);
+                void planRefresh.current?.();
               }}
               disabled={sending}
             />

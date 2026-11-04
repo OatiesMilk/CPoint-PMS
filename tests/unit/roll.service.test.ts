@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const rolls = {
   listRolls: vi.fn(),
+  listRollFinishes: vi.fn(async (): Promise<unknown[]> => []),
   countVerdictsForRolls: vi.fn(async (): Promise<unknown[]> => []),
   countDefectsForRolls: vi.fn(async (): Promise<unknown[]> => []),
   countOpenRolls: vi.fn(async () => 0),
@@ -533,5 +534,30 @@ describe("the defect share and the supplier limit (Phase 30C, D-110)", () => {
       { defectAreaSqIn: null, defectSharePct: null, returnLimitPct: 10, markedForReturn: false },
       "tx",
     );
+  });
+});
+
+describe("rollOutcomesByDay (Phase 30D, D-118)", () => {
+  it("counts each roll on its Manila finish day, and those returned to the supplier", async () => {
+    const finished = (iso: string, extra: object = {}) => ({
+      finishedAt: new Date(iso),
+      status: "FINISHED",
+      markedForReturn: false,
+      returnDecision: null,
+      ...extra,
+    });
+    rolls.listRollFinishes.mockResolvedValueOnce([
+      finished("2026-11-04T01:00:00.000Z"),
+      finished("2026-11-04T02:00:00.000Z", { markedForReturn: true }), // over the limit
+      finished("2026-11-04T03:00:00.000Z", { markedForReturn: true, returnDecision: "KEPT" }),
+      finished("2026-11-03T05:00:00.000Z", { status: "RETURNED" }), // sent back in Phase 30C
+      finished("2026-11-04T17:00:00.000Z"), // 01:00 on 5 Nov in Manila
+    ]);
+    const map = await svc.rollOutcomesByDay("2026-11-03", "2026-11-05");
+    expect(Object.fromEntries(map)).toEqual({
+      "2026-11-03": { scanned: 1, returned: 1 },
+      "2026-11-04": { scanned: 3, returned: 1 },
+      "2026-11-05": { scanned: 1, returned: 0 },
+    });
   });
 });

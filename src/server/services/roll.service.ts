@@ -15,6 +15,7 @@ import { addDays, manilaDayStart } from "@/lib/report-rules";
 import { PAGE_SIZE } from "@/lib/pagination";
 import {
   formatRollCode,
+  isReturnedToSupplier,
   oldestOpenRoll,
   planFinish,
   planPutBack,
@@ -35,7 +36,7 @@ import {
   countDefectsForRolls,
   countOpenRolls,
   countVerdictsForRolls,
-  listRollFinishTimes,
+  listRollFinishes,
   findRollDetail,
   findRollState,
   insertRoll,
@@ -529,18 +530,36 @@ export async function rollsUsedByCheckIn(checkInIds: string[]) {
   return out;
 }
 
+/** Rolls scanned on one Manila day, and how many of them were returned to the supplier. */
+export type RollDayOutcome = { scanned: number; returned: number };
+
 /**
  * Rolls scanned per Manila day from `from` to `to` (Phase 30E-2, D-114): each roll counts on the
- * day its Finish roll was pressed, whatever the leather. Days with none are left out.
+ * day its Finish roll was pressed, whatever the leather; `returned` are those over the defect limit
+ * (D-116), so the rolls used that day are `scanned − returned` (D-118). Days with none are left
+ * out.
  */
-export async function rollsScannedByDay(from: string, to: string): Promise<Map<string, number>> {
-  const times = await listRollFinishTimes(manilaDayStart(from), manilaDayStart(addDays(to, 1)));
-  const out = new Map<string, number>();
-  for (const t of times) {
-    const day = manilaDayOf(t);
-    out.set(day, (out.get(day) ?? 0) + 1);
+export async function rollOutcomesByDay(
+  from: string,
+  to: string,
+): Promise<Map<string, RollDayOutcome>> {
+  const rolls = await listRollFinishes(manilaDayStart(from), manilaDayStart(addDays(to, 1)));
+  const out = new Map<string, RollDayOutcome>();
+  for (const r of rolls) {
+    const day = manilaDayOf(r.finishedAt);
+    const now = out.get(day) ?? { scanned: 0, returned: 0 };
+    out.set(day, {
+      scanned: now.scanned + 1,
+      returned: now.returned + (isReturnedToSupplier(r) ? 1 : 0),
+    });
   }
   return out;
+}
+
+/** Rolls scanned per Manila day from `from` to `to` (Phase 30E-2, D-114). */
+export async function rollsScannedByDay(from: string, to: string): Promise<Map<string, number>> {
+  const outcomes = await rollOutcomesByDay(from, to);
+  return new Map([...outcomes].map(([day, o]) => [day, o.scanned]));
 }
 
 // ───────────── where a scan goes ─────────────

@@ -85,7 +85,7 @@ function DayContent({ d }: { d: PlanDay }) {
           <span className="text-muted-foreground">{shortInterval(d.plan.intervalMinutes)}</span>
           {d.rollsScanned !== null && (
             <span className="mt-1 text-muted-foreground">
-              {rollsScannedLine(d.rollsScanned, d.plan.rollsPlanned)}
+              {rollsScannedLine(d.rollsScanned, d.plan.rollsPlanned, d.rollsReturned ?? 0)}
             </span>
           )}
         </span>
@@ -206,7 +206,7 @@ export function PlanCalendar({ data, openDay }: { data: PlanMonth; openDay: stri
                     {status(d)}
                     {d.plan &&
                       d.rollsScanned !== null &&
-                      ` · ${rollsScannedLine(d.rollsScanned, d.plan.rollsPlanned)}`}
+                      ` · ${rollsScannedLine(d.rollsScanned, d.plan.rollsPlanned, d.rollsReturned ?? 0)}`}
                   </span>
                 </div>
               )}
@@ -400,7 +400,12 @@ function DayDialogBody({
         <DialogDescription>{p ? p.short : "Not planned."}</DialogDescription>
         {p && <p className="text-sm">{p.batches || "No batches."}</p>}
         {p && day.rollsScanned !== null && (
-          <p className="text-sm">{rollsScannedLine(day.rollsScanned, p.rollsPlanned)} so far.</p>
+          <p className="text-sm">
+            {rollsScannedLine(day.rollsScanned, p.rollsPlanned)} so far
+            {(day.rollsReturned ?? 0) > 0
+              ? `: ${day.rollsScanned - (day.rollsReturned ?? 0)} used, ${day.rollsReturned} returned to the supplier (over the defect limit).`
+              : "."}
+          </p>
         )}
         {changed}
         {day.lockedReason && <Alert tone="info">{day.lockedReason}</Alert>}

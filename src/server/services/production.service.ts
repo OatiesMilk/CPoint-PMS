@@ -23,6 +23,7 @@ import {
   batchState,
   batchTimes,
   breaksOf,
+  capturePlanDays,
   clockTime,
   describeInterval,
   describeMinutes,
@@ -85,7 +86,7 @@ import {
 } from "@/server/validators/production.validator";
 import { qualityInspectorPresentOn, workforceByDay } from "./attendance.service";
 import { recordAudit } from "./audit.service";
-import { rollsScannedByDay, rollsUsedByCheckIn } from "./roll.service";
+import { rollOutcomesByDay, rollsScannedByDay, rollsUsedByCheckIn } from "./roll.service";
 
 type Actor = { id: string; name?: string };
 /** Who finishes a batch: the role decides whether they may (D-088). */
@@ -499,7 +500,7 @@ export async function planMonth(month: string, now: Date = new Date()) {
     listDayPlans(from, to),
     listLunchBreaks(),
     listCheckIns(today, today),
-    rollsScannedByDay(from, to),
+    rollOutcomesByDay(from, to),
     quotaSuggestion(now),
   ]);
   const plans = byDay(rows);
@@ -537,7 +538,9 @@ export async function planMonth(month: string, now: Date = new Date()) {
         /** That day's lunch, for the dialog's preview (the System Admin's, C-3). */
         lunch,
         /** Today and past days: rolls whose scan was finished that day. */
-        rollsScanned: day <= today ? (rolls.get(day) ?? 0) : null,
+        rollsScanned: day <= today ? (rolls.get(day)?.scanned ?? 0) : null,
+        /** Of those, the rolls returned to the supplier (D-116); used = scanned − returned. */
+        rollsReturned: day <= today ? (rolls.get(day)?.returned ?? 0) : null,
         editable: problem === null,
         lockedReason: problem,
       };
@@ -556,6 +559,28 @@ export async function planMonth(month: string, now: Date = new Date()) {
 }
 
 export type PlanMonth = Awaited<ReturnType<typeof planMonth>>;
+
+/** How far ahead Capture looks for planned days: the calendar plans up to three months ahead. */
+const CAPTURE_LOOKAHEAD_DAYS = 100;
+
+/**
+ * Capture's counter (Phase 30D, D-118): today and the next planned days, five in all, each with
+ * the rolls the Floor Manager planned and the rolls scanned so far, so a constructor sees
+ * "Leather rolls scanned 3/15". Line totals only, never per person (D-008).
+ */
+export async function capturePlan(now: Date = new Date()) {
+  const today = manilaToday(now);
+  const [plans, rolls] = await Promise.all([
+    listDayPlans(today, addDays(today, CAPTURE_LOOKAHEAD_DAYS)),
+    rollsScannedByDay(today, today),
+  ]);
+  return capturePlanDays(today, plans, rolls.get(today) ?? 0).map((d) => ({
+    ...d,
+    label: formatAttendanceDay(d.day),
+  }));
+}
+
+export type CapturePlan = Awaited<ReturnType<typeof capturePlan>>;
 export type PlanDay = PlanMonth["days"][number];
 
 /**

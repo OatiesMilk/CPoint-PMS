@@ -2,8 +2,9 @@
  * Intent brief (ui-craft §1)
  * Who:   the Floor Manager, at the desk after a stock update (Wednesday and Friday by default).
  * What:  what each material was used for in a picked week of a month against the week before,
- *        and which item may run out before the next update (Phase 29, D-102); leather rolls used,
- *        checked and returned to supplier per week (D-116). Year, Month, Week and Find pick what shows (D-109).
+ *        and which item may run out before the next update (Phase 29, D-102); leather rolls checked,
+ *        used (passed), returned to supplier and removed per week, with each week's working days
+ *        (D-116, D-118). Year, Month, Week and Find pick what shows (D-109).
  * Worst: a miscount read as consumption, or a material running out between updates. So only the
  *        Used entries count (never Corrections), and "May run out" is a labelled badge. No person
  *        is named or counted (D-008).
@@ -29,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import { formatDelta, formatQuantity } from "@/lib/inventory-rules";
 import { clampPage, pageCountFor, pageOf } from "@/lib/pagination";
-import { weekRangeText } from "@/lib/month-weeks";
+import { weekRangeText, workingDaysLabel } from "@/lib/month-weeks";
 import { describeReminderDays } from "@/lib/stock-rules";
 import { requirePermission } from "@/server/policies/guard";
 import { materialsReport, type MaterialsReport } from "@/server/services/materials.service";
@@ -160,7 +161,7 @@ export default async function MaterialsReportPage({
               {report.nothingUsedInWeek && report.rows.length > 0 && (
                 <p className="text-sm text-muted-foreground">
                   Nothing was entered as used in this week. The figures fill in from the Used
-                  entries on Update stock.
+                  entries on Update stock, and leather from the rolls finished at Capture.
                 </p>
               )}
               {report.rows.length === 0 ? (
@@ -212,6 +213,11 @@ export default async function MaterialsReportPage({
                             {row.categoryLabel}
                             {row.supplier && <> · {row.supplier}</>}
                           </span>
+                          {row.category === "LEATHER_ROLL" && (
+                            <span className="block text-sm text-muted-foreground">
+                              Rolls that left stock: used, returned or removed
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell numeric className="whitespace-nowrap">
                           {formatQuantity(row.thisWeek, row.unit)}
@@ -264,9 +270,10 @@ export default async function MaterialsReportPage({
             <CardHeader>
               <CardTitle>Leather rolls</CardTitle>
               <CardDescription>
-                Rolls entered as used on Update stock, beside the rolls the camera checked (finished
-                at Capture), the rolls returned to supplier (over the defect limit) and the pairs
-                finished, for the eight weeks up to the selected one.
+                Rolls checked by the camera are every roll finished at Capture. Each is used (the
+                camera passed it) or returned to supplier (over the defect limit). Removed (other)
+                are rolls the Floor Manager took out of stock, such as water damage. Pairs finished
+                are all pairs counted at Finish batch, for the eight weeks up to the selected one.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -277,6 +284,7 @@ export default async function MaterialsReportPage({
                     <TableHead numeric>Rolls used</TableHead>
                     <TableHead numeric>Rolls checked by the camera</TableHead>
                     <TableHead numeric>Returned to supplier</TableHead>
+                    <TableHead numeric>Removed (other)</TableHead>
                     <TableHead numeric>Pairs finished</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -286,10 +294,14 @@ export default async function MaterialsReportPage({
                       <TableCell className="whitespace-nowrap">
                         {w.week.label}
                         {w.week.year !== selected.year && `, ${w.week.year}`}
+                        <span className="block text-sm text-muted-foreground">
+                          {workingDaysLabel(w.workingDays)}
+                        </span>
                       </TableCell>
                       <TableCell numeric>{fmt(w.rollsUsed)}</TableCell>
                       <TableCell numeric>{fmt(w.rollsChecked)}</TableCell>
                       <TableCell numeric>{fmt(w.rollsReturned)}</TableCell>
+                      <TableCell numeric>{fmt(w.rollsRemoved)}</TableCell>
                       <TableCell numeric>{fmt(w.pairs)}</TableCell>
                     </TableRow>
                   ))}

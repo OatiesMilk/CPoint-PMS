@@ -6,10 +6,13 @@ const model = {
   pairsByDay: vi.fn(),
   rollsCheckedByDay: vi.fn(),
   rollsReturnedByDay: vi.fn(),
+  rollsRemovedByDay: vi.fn(),
   usedBetween: vi.fn(),
 };
+const production = { listDayPlans: vi.fn() };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/materials.model", () => model);
+vi.mock("@/server/models/production.model", () => production);
 vi.mock("@/server/services/stock-update.service", () => ({
   reminderDays: vi.fn(async () => [3, 5]),
 }));
@@ -54,6 +57,12 @@ beforeEach(() => {
   ]);
   model.rollsCheckedByDay.mockResolvedValue([{ day: "2026-10-26", value: 7 }]);
   model.rollsReturnedByDay.mockResolvedValue([{ day: "2026-10-27", value: 2 }]);
+  model.rollsRemovedByDay.mockResolvedValue([{ day: "2026-10-23", value: 1 }]);
+  // Fri 23 Oct marked Non-working: Week 4 (Oct 22–28) keeps 4 of its 5 weekdays.
+  production.listDayPlans.mockResolvedValue([
+    { day: "2026-10-23", kind: "NON_WORKING" },
+    { day: "2026-10-26", kind: "PLANNED" },
+  ]);
   model.usedBetween.mockResolvedValue(
     new Map([
       ["lr", 28],
@@ -104,22 +113,35 @@ describe("materialsReport (Phase 29, D-102, D-109)", () => {
     expect(r.rows[0]).toMatchObject({ daysLeft: 1, mayRunOut: true });
   });
 
-  it("puts leather rolls used beside the rolls checked and returned to supplier (D-116)", async () => {
+  it("counts leather rolls used as checked less returned, with removed apart (D-116, D-118)", async () => {
     const r = await svc.materialsReport({}, now);
     expect(model.rollsReturnedByDay).toHaveBeenCalledWith("2026-09-08", "2026-10-28");
+    expect(model.rollsRemovedByDay).toHaveBeenCalledWith("2026-09-08", "2026-10-28");
+    // 7 checked, 2 returned: 5 used. The Used entries on the item (6) are what left stock.
     expect(r.leather.at(-1)).toMatchObject({
-      rollsUsed: 6,
+      rollsUsed: 5,
       rollsChecked: 7,
       rollsReturned: 2,
+      rollsRemoved: 1,
+      workingDays: 4,
       pairs: 250,
     });
+    expect(r.rows.find((x) => x.id === "lr")).toMatchObject({ thisWeek: 6 });
     expect(r.leather.at(-1)!.week.label).toBe("Week 4 · Oct 22–28");
     expect(r.leather.at(-2)).toMatchObject({
-      rollsUsed: 4,
+      rollsUsed: 0,
       rollsChecked: 0,
       rollsReturned: 0,
+      rollsRemoved: 0,
+      workingDays: 5,
       pairs: 400,
     });
+  });
+
+  it("never shows fewer than 0 rolls used when returns outnumber checks", async () => {
+    model.rollsCheckedByDay.mockResolvedValue([]);
+    const r = await svc.materialsReport({}, now);
+    expect(r.leather.at(-1)).toMatchObject({ rollsUsed: 0, rollsReturned: 2 });
   });
 
   it("writes one CSV row per item and week, without use per 100 pairs (D-116)", async () => {

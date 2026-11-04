@@ -5,6 +5,36 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-04 · Phase 30D run 2 PASS
+
+- Codex run 2 with the USB camera: the counter rose 12/2 → 13/2 after Finish roll without a
+  reload; a planned day read 0/15 (put back after); the calendar read "13 of 2 rolls scanned · 1
+  returned"; ledger 0. QA done for 30D; git commands given to Dylan.
+
+## 2026-11-04 · Phase 30D run 1 BLOCKED by setup
+
+- Codex run 1: 12 passed, 0 failed, 3 blocked (camera held by another app; today's plan locked by
+  a finished batch), 1 skipped as the handoff said; e2e targeted 36/0/1, full 94/0/2; ledger 0. No
+  app fault. Run 2 covers only the blocked checks: `qa/CODEX_PROMPT_PHASE_30D_RUN2.md`.
+
+## 2026-11-04 · Phase 30D: roll counts on Capture, the calendar and Materials (D-118)
+
+- Dylan: Capture should show rolls scanned against the FM's plan ("Leather rolls scanned 0/15")
+  for today and the next days; rolls used = passed by the camera, checked = all scanned, returned
+  = failed, pairs unchanged, in planning too; finish the team's QA notes. The 30D plan was checked
+  against `main` a97d949 first: four contradictions (30C RETURNED rolls missing from checked,
+  removed rolls counted as used, two "used" numbers for leather, uneven weeks), each fixed; pairs
+  per roll, On hand at week end and a change-in-pairs column dropped by Dylan. Plan
+  `docs/prompts/plans/phase-30d-plan.md`; D-118, A-44, A-45.
+- Built: Capture's counter (`GET /api/v1/rolls/plan`), "· N returned" on the planning calendar,
+  Materials' Leather rolls (used = checked − returned, Removed (other), working days). No
+  migration.
+- `npm run check` passed (670 unit tests, build OK) in a cloud copy of main a97d949, then copied
+  to the laptop. E2E `capture.spec.ts` and `inventory.spec.ts` updated; not run (Codex). Handoff
+  `qa/handoffs/2026-11-04-phase-30d-roll-counts.md`, prompt `qa/CODEX_PROMPT_PHASE_30D.md`.
+- Also: the printable scale marker (`calibration/cpoint-scale-marker-2in.pdf` in the project
+  files); Dylan chose it over the tap calibration, to be built in its own thread.
+
 ## 2026-11-04 · Reports clean-up run 3 PASS
 
 - Codex run 3: R1 (batches spec 7/0) and R2 (smoke 10/0) passed; targeted 43/0/0, full 93/0/2

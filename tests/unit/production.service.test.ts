@@ -79,6 +79,7 @@ const recordAudit = vi.fn();
 const rolls = {
   rollsUsedByCheckIn: vi.fn(async () => new Map<string, { id: string; code: string }[]>()),
   rollsScannedByDay: vi.fn(async () => new Map<string, number>()),
+  rollOutcomesByDay: vi.fn(async () => new Map<string, { scanned: number; returned: number }>()),
 };
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
@@ -686,5 +687,39 @@ describe("productionToday (D-008, C-28)", () => {
     model.listDayPlans.mockResolvedValueOnce([plan("2026-10-20", { kind: "NON_WORKING" })]);
     const off = await svc.productionToday(QI, at("2026-10-20T03:30:00.000Z"));
     expect(off).toMatchObject({ rows: [], nonWorking: true, planNeeded: false });
+  });
+});
+
+describe("capturePlan (Phase 30D, D-118)", () => {
+  it("shows today and the next planned days, five in all, with rolls planned and scanned", async () => {
+    model.listDayPlans.mockResolvedValueOnce([
+      plan("2026-11-04", { rollsPlanned: 15 }),
+      plan("2026-11-05", { rollsPlanned: 12 }),
+      plan("2026-11-06", { kind: "NON_WORKING", rollsPlanned: null }),
+      plan("2026-11-09", { rollsPlanned: 10 }),
+      plan("2026-11-10", { rollsPlanned: null }),
+      plan("2026-11-11", { rollsPlanned: 8 }),
+      plan("2026-11-12", { rollsPlanned: 9 }),
+    ]);
+    rolls.rollsScannedByDay.mockResolvedValueOnce(new Map([["2026-11-04", 3]]));
+    // Wednesday 4 Nov 2026, 10:00 in Manila.
+    const days = await svc.capturePlan(new Date("2026-11-04T02:00:00.000Z"));
+    expect(model.listDayPlans).toHaveBeenLastCalledWith("2026-11-04", "2027-02-12");
+    expect(rolls.rollsScannedByDay).toHaveBeenLastCalledWith("2026-11-04", "2026-11-04");
+    expect(days.map((d) => [d.day, d.planned, d.scanned])).toEqual([
+      ["2026-11-04", 15, 3],
+      ["2026-11-05", 12, 0],
+      ["2026-11-09", 10, 0],
+      ["2026-11-10", null, 0],
+      ["2026-11-11", 8, 0],
+    ]);
+    expect(days[0]).toMatchObject({ isToday: true, kind: "PLANNED", label: "Wed, 4 Nov" });
+  });
+
+  it("keeps today on the counter when it isn't planned", async () => {
+    model.listDayPlans.mockResolvedValueOnce([plan("2026-11-05", { rollsPlanned: 12 })]);
+    const days = await svc.capturePlan(new Date("2026-11-04T02:00:00.000Z"));
+    expect(days[0]).toMatchObject({ day: "2026-11-04", kind: "NOT_PLANNED", planned: null });
+    expect(days).toHaveLength(2);
   });
 });

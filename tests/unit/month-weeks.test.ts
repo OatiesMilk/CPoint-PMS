@@ -10,6 +10,8 @@ import {
   sumByWeek,
   weekRangeText,
   weeksEndingWith,
+  workingDaysIn,
+  workingDaysLabel,
   weeksOfMonth,
 } from "@/lib/month-weeks";
 
@@ -164,5 +166,18 @@ describe("sumByWeek and the range text", () => {
 
   it("writes the range with the year", () => {
     expect(weekRangeText(weeksOfMonth(2026, 11)[0])).toBe("Nov 1–7, 2026");
+  });
+});
+
+describe("workingDaysIn (D-118)", () => {
+  it("counts Monday to Friday, less the Non-working days", () => {
+    // Week 1 of November 2026: Sun 1 to Sat 7, five weekdays.
+    const w = monthWeekOf("2026-11-02");
+    expect(workingDaysIn(w, new Set())).toBe(5);
+    expect(workingDaysIn(w, new Set(["2026-11-02", "2026-11-07"]))).toBe(4);
+    // Week 5 of November: Sun 29 and Mon 30, one weekday.
+    expect(workingDaysIn(monthWeekOf("2026-11-30"), new Set())).toBe(1);
+    expect(workingDaysLabel(1)).toBe("1 working day");
+    expect(workingDaysLabel(4)).toBe("4 working days");
   });
 });
