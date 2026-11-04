@@ -1,6 +1,13 @@
 import { manilaToday } from "@/lib/format";
 import { CATEGORY_LABELS } from "@/lib/inventory-rules";
-import { daysIn, monthWeekOf, resolveWeek, sumByWeek, weeksEndingWith } from "@/lib/month-weeks";
+import {
+  daysIn,
+  monthWeekOf,
+  resolveWeek,
+  sumByWeek,
+  weeksEndingWith,
+  workingDaysIn,
+} from "@/lib/month-weeks";
 import { addDays, manilaDayStart, toCsv } from "@/lib/report-rules";
 import {
   daysLeft,
@@ -15,10 +22,12 @@ import {
   listMaterialItems,
   pairsByDay,
   rollsCheckedByDay,
+  rollsRemovedByDay,
   rollsReturnedByDay,
   usedBetween,
   usedByDay,
 } from "@/server/models/materials.model";
+import { listDayPlans } from "@/server/models/production.model";
 import { reminderDays } from "./stock-update.service";
 
 const daysBetween = (from: string, to: string) =>
@@ -56,15 +65,18 @@ export async function materialsReport(options: MaterialsOptions = {}, now = new 
   const from = weeks[0].from;
   const q = normaliseQuery(options.q);
   const paceFrom = addDays(today, -(PACE_DAYS - 1));
-  const [items, usedDays, pairDays, rollDays, returnedDays, used28, days] = await Promise.all([
-    listMaterialItems(),
-    usedByDay(from, selected.to),
-    pairsByDay(from, selected.to),
-    rollsCheckedByDay(from, selected.to),
-    rollsReturnedByDay(from, selected.to),
-    usedBetween(manilaDayStart(paceFrom), now),
-    reminderDays(),
-  ]);
+  const [items, usedDays, pairDays, rollDays, returnedDays, removedDays, plans, used28, days] =
+    await Promise.all([
+      listMaterialItems(),
+      usedByDay(from, selected.to),
+      pairsByDay(from, selected.to),
+      rollsCheckedByDay(from, selected.to),
+      rollsReturnedByDay(from, selected.to),
+      rollsRemovedByDay(from, selected.to),
+      listDayPlans(from, selected.to),
+      usedBetween(manilaDayStart(paceFrom), now),
+      reminderDays(),
+    ]);
   // An item whose stock history starts less than 4 weeks ago is paced from that day, so a new
   // item's days left aren't diluted by days it wasn't on the shelf.
   const paceStart = (since: Date) => {
@@ -100,19 +112,21 @@ export async function materialsReport(options: MaterialsOptions = {}, now = new 
     };
   });
 
-  const leatherIds = new Set(items.filter((i) => i.category === "LEATHER_ROLL").map((i) => i.id));
-  const rollsUsed = sumByWeek(
-    weeks,
-    usedDays.filter((r) => leatherIds.has(r.itemId)).map((r) => ({ day: r.day, value: r.used })),
-  );
+  // D-118: a roll is used when the camera passed it, so Rolls used = checked − returned. Removed
+  // rolls (water damage, …) are neither; they show apart as Removed (other). The leather items'
+  // rows above still count every roll that left stock, which is what Days left needs.
   const rollsChecked = sumByWeek(weeks, rollDays);
   const rollsReturned = sumByWeek(weeks, returnedDays);
+  const rollsRemoved = sumByWeek(weeks, removedDays);
   const pairs = sumByWeek(weeks, pairDays);
+  const nonWorking = new Set(plans.filter((p) => p.kind === "NON_WORKING").map((p) => p.day));
   const leather = weeks.map((week, i) => ({
     week,
-    rollsUsed: rollsUsed[i],
+    workingDays: workingDaysIn(week, nonWorking),
+    rollsUsed: Math.max(0, rollsChecked[i] - rollsReturned[i]),
     rollsChecked: rollsChecked[i],
     rollsReturned: rollsReturned[i],
+    rollsRemoved: rollsRemoved[i],
     pairs: pairs[i],
   }));
 

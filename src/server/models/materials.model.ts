@@ -98,13 +98,18 @@ export async function pairsBetween(fromDay: string, toDay: string, db: Db = defa
   return Number(rows[0]?.pairs ?? 0);
 }
 
-/** Rolls the camera checked (finished at Capture) per Manila day in [fromDay, toDay]. */
+/**
+ * Rolls the camera checked (finished at Capture) per Manila day in [fromDay, toDay]: every roll
+ * scanned, passed or returned. A roll sent back in Phase 30C has status RETURNED and was scanned
+ * too, so it counts here (D-118); without it, used = checked − returned would come out too low.
+ */
 export async function rollsCheckedByDay(fromDay: string, toDay: string, db: Db = defaultDb()) {
   const rows = await db.$queryRaw<{ day: Date; rolls: bigint }[]>`
     SELECT (("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date AS day,
       count(*) AS rolls
     FROM batches
-    WHERE status IN ('FINISHED', 'USED')
+    WHERE status IN ('FINISHED', 'USED', 'RETURNED')
+      AND "finishedAt" IS NOT NULL
       AND (("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date
         BETWEEN ${fromDay}::date AND ${toDay}::date
     GROUP BY day`;
@@ -124,6 +129,25 @@ export async function rollsReturnedByDay(fromDay: string, toDay: string, db: Db 
         OR (status IN ('FINISHED', 'USED') AND "markedForReturn" AND "returnDecision" IS NULL))
       AND "finishedAt" IS NOT NULL
       AND (("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date
+        BETWEEN ${fromDay}::date AND ${toDay}::date
+    GROUP BY day`;
+  return rows.map((r) => ({ day: r.day.toISOString().slice(0, 10), value: Number(r.rolls) }));
+}
+
+/**
+ * Rolls the Floor Manager removed per Manila day in [fromDay, toDay] (D-118): a roll from Inventory
+ * (with an item) that was cancelled, e.g. water damage. Removed (other) on Materials, never use.
+ * Rolls from before Phase 30A have no item and were never in stock, so they're left out.
+ */
+export async function rollsRemovedByDay(fromDay: string, toDay: string, db: Db = defaultDb()) {
+  const rows = await db.$queryRaw<{ day: Date; rolls: bigint }[]>`
+    SELECT (("cancelledAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date AS day,
+      count(*) AS rolls
+    FROM batches
+    WHERE status = 'CANCELLED'
+      AND "itemId" IS NOT NULL
+      AND "cancelledAt" IS NOT NULL
+      AND (("cancelledAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date
         BETWEEN ${fromDay}::date AND ${toDay}::date
     GROUP BY day`;
   return rows.map((r) => ({ day: r.day.toISOString().slice(0, 10), value: Number(r.rolls) }));

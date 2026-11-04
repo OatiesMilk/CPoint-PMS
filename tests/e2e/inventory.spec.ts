@@ -190,6 +190,23 @@ test("Reports → Materials shows what an item used this week, and the CSV", asy
   await expect(row.getByRole("cell").nth(1)).toHaveText("4 boxes");
   await expect(row).toContainText("5 boxes");
 
+  // Leather rolls (D-118): used = checked − returned, removed apart, each week's working days.
+  const leather = page.getByRole("table").last();
+  for (const name of [
+    "Rolls used",
+    "Rolls checked by the camera",
+    "Returned to supplier",
+    "Removed (other)",
+    "Pairs finished",
+  ])
+    await expect(leather.getByRole("columnheader", { name, exact: true })).toBeVisible();
+  const weeks = leather.getByRole("row").filter({ hasText: /^Week \d/ });
+  await expect(weeks.first()).toContainText(/\d+ working days?/);
+  for (const r of await weeks.all()) {
+    const n = async (i: number) => Number((await r.getByRole("cell").nth(i).innerText()).trim());
+    expect(await n(1)).toBe(Math.max(0, (await n(2)) - (await n(3))));
+  }
+
   const csv = await api.get("/api/v1/reports/materials-used.csv");
   expect(csv.status()).toBe(200);
   const text = await csv.text();

@@ -104,7 +104,8 @@ export default async function PlanDaysPage({ searchParams }: PageProps<"/batches
         <p className="text-sm text-muted-foreground">
           Saturdays, Sundays and past days can’t be planned. Today’s plan can change until its first
           batch is finished. Rolls to be used is an estimate: Shoe Constructors may start more, and
-          past days show the rolls scanned. The lunch break is set by the System Admin.
+          today and past days show the rolls scanned and how many were returned to the supplier. The
+          lunch break is set by the System Admin.
         </p>
       </section>
     </>

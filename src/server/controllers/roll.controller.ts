@@ -13,6 +13,7 @@ import {
   removeRoll,
   startRoll,
 } from "@/server/services/roll.service";
+import { capturePlan } from "@/server/services/production.service";
 import { isInventoryId } from "@/server/validators/inventory.validator";
 import {
   addRollsSchema,
@@ -57,6 +58,15 @@ export const rollController = {
   open: handle(async () => {
     const user = await requireApiCapture();
     return json({ data: await openRollsForCapture(user) });
+  }),
+
+  /**
+   * GET /api/v1/rolls/plan: Capture's counter (D-118), today and the next planned days with the
+   * rolls planned and scanned.
+   */
+  plan: handle(async () => {
+    await requireApiCapture();
+    return json({ data: await capturePlan() });
   }),
 
   /** GET /api/v1/rolls/ready: rolls in stock, not scanned yet, for Capture's Scan a roll. */

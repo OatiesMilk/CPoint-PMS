@@ -2310,3 +2310,24 @@ was 30 sections). **Supersedes:** D-116's Rejected sections card, D-072's sectio
 `src/server/models/ops-report.model.ts` (`supplierRolls`, `supplierDefects`,
 `rollsWithMostDefects`), `src/lib/ops-rules.ts`, `src/app/(app)/reports/_components/`. Plan:
 `docs/prompts/plans/reports-by-roll-plan.md`.
+
+### D-118 · 2026-11-04 · Accepted — Rolls used are the rolls the camera passed; Capture counts rolls against the plan (Phase 30D)
+
+**Context:** Dylan (4 Nov): the constructor should see how many rolls are scanned against the
+Floor Manager's plan for the day (e.g. "Leather rolls scanned 0/15" for 5 Nov), for today and the
+next days; and leather should be counted by the camera's result: rolls used = passed, rolls
+checked = every roll scanned, returned to supplier = those that failed, pairs finished unchanged,
+in planning too. The team's remaining QA notes (Phase 30D) were checked against the system first.
+**Decision:** Capture shows today and the next planned days, five in all, each "Leather rolls
+scanned X/Y" (`GET /api/v1/rolls/plan`). Reports → Materials' Leather rolls counts **Rolls used =
+checked − returned**; Rolls checked includes the Phase 30C rolls with status RETURNED; rolls the
+Floor Manager removed show apart as **Removed (other)**; each week shows its working days (Mon–Fri
+less Non-working days). The leather item rows keep counting every roll that left stock (Days left
+needs it) and say so. The planning calendar adds "· N returned" to rolls scanned. Pairs per roll,
+On hand at week end and a change-in-pairs column were dropped (Dylan). **Assumptions:** A-44 (the
+counter counts every finished roll; planned days only ahead), A-45 (a removed roll counts on its
+removal day; pre-30A rolls left out). **Supersedes:** D-102's leather "Used" as rolls used on
+Materials' Leather rolls table. **Where:** `capturePlan` in `production.service.ts`,
+`rollOutcomesByDay` in `roll.service.ts`, `materialsReport` in `materials.service.ts`,
+`rollsCheckedByDay`/`rollsRemovedByDay` in `materials.model.ts`,
+`src/app/(app)/camera/capture/plan-counter.tsx`. Plan: `docs/prompts/plans/phase-30d-plan.md`.

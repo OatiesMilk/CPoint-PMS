@@ -3,73 +3,40 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-04 (Phase 30E-2 QA passed, run 3; uncommitted, git commands next)
-**Branch:** `main` at a94fbe0 has Phase 30E-1 (#35).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30E-2 (D-114, D-115). Plan
-`docs/prompts/plans/phase-30e2-plan.md`, handoff
-`qa/handoffs/2026-11-04-phase-30e2-planning-calendar.md`, prompt `qa/CODEX_PROMPT_PHASE_30E2.md`.
+**Last updated:** 2026-11-04 (Phase 30D QA passed, run 2; commit next)
+**Branch:** `main` at a97d949 has Phase 30E-2 (#36) and the reports by roll (D-116, D-117, #37).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30D (D-118). Plan
+`docs/prompts/plans/phase-30d-plan.md`, handoff `qa/handoffs/2026-11-04-phase-30d-roll-counts.md`,
+prompt `qa/CODEX_PROMPT_PHASE_30D.md`.
 
-- **Current phase:** 30E-2, the planning calendar. **Batches → Plan days** is a month calendar: the
-  FM clicks a weekday, today or later (up to three months ahead), and sets Rolls to be used (an
-  estimate), the Quota, the Check-in interval (every 4 hours or once at the end of the day) and
-  the shift (08:00 to 17:00 prefilled). Or marks it **Non-working / Holiday** (no name, undo). No
-  plan, no batches: from 00:00 the FM gets the **Plan today** banner, bell item and home card; the
-  QI reads "The Floor Manager plans them first." Rolls planned against rolls scanned show on the
-  calendar's past days, Batches, Reports → Operations and `production.csv`.
-- Migration `20261104120000_day_plans`: creates `day_plans`, turns the old schedule and quota into
-  a plan for every past working day and today (same batches and numbers), then drops
-  `production_schedules` and `daily_quotas`. Tried on an old-code demo week with an extra 2-hour
-  schedule and a 140 quota: every day identical before and after. The demo week now saves day
-  plans and marks next week's Wednesday Non-working.
-- API: `GET /api/v1/production/plans?month=`, `PUT /api/v1/production/plans/{day}`,
-  `PUT|DELETE /api/v1/production/plans/{day}/non-working`; `/production/schedule` and
-  `/production/quotas` are 404.
-- Checks: `npm run check` passed (**658 unit tests**, build OK) in a cloud copy of main a94fbe0 with
-  these changes, before they were copied to the laptop. Not yet run on the laptop. E2E not run
-  (Codex): `batches.spec.ts` rewritten (it plans today itself and puts the plan back).
-- Laptop database backed up (`storage/backups/before-phase30e2-2026-11-04.dump`) and migrated by
-  Dylan (4 Nov).
-- **Codex run 1 FAIL** (`qa/reports/2026-11-04-phase-30e2-run1.md`): 13 passed, 2 failed, 2 not
-  possible; targeted e2e 13/1/0 (6 not run), full 85/2/2; ledger 0. F1 past days don't open: the
-  handoff was wrong (Dylan: past days can't be clicked), handoff fixed. F2 Operations had one roll
-  column: now Rolls planned and Rolls scanned. F3 `batches.spec.ts` matched the summary and the
-  field error: now reads the field's error. F4 a smoke toast timeout in the full suite only (passed
-  alone). S8: today had batches finished before it had a plan, so it was locked; an unplanned today
-  now stays plannable. `npm run check` passed (659) in the cloud copy.
-- **Codex run 2 FAIL** (`qa/reports/2026-11-04-phase-30e2-run2.md`): R1 to R3 passed (static past
-  days, two roll columns, plan today from the notice); R4 axe `scrollable-region-focusable` on the
-  wider production table before it was measured. E2E targeted 12/3/0, full 86/2/2, smoke alone
-  10/0; ledger 0. Fixes: `batches.spec.ts` clicks the visible bell; `ScrollRegion` starts as a
-  keyboard stop and measures before paint. `npm run check` passed (659).
-- **Codex run 3 PASS** (`qa/reports/2026-11-04-phase-30e2-run3.md`): R1 (wide tables focusable on
-  first load, axe 0 on four scans); targeted e2e 19/1/0 and full 92/1/2, each failure a 30 s
-  deadline that passed alone (reports 3/0, smoke 10/0); ledger 0. Afterwards: the batches spec's
-  clean-up missed its lunch row on a Manila clock (a Date sent in local time to a column with no
-  zone); it now sends a UTC string (pre-existing, not run again). QA done for 30E-2: commit on a
-  new branch with only this thread's files.
-- **Reports clean-up (D-116, uncommitted, its own thread):** a roll over the defect limit is
-  **Returned to supplier**; Reports → Rolls filters by Not yet scanned, Scanning passed and Returned
-  to supplier; "for salvage" is gone everywhere; Materials without the 8-week trend and Per 100
-  pairs, with Returned to supplier per week on Leather rolls. Plan
-  `docs/prompts/plans/reports-cleanup-plan.md`. Then **D-117** (same thread): the reports count
-  whole rolls, Scanning passed or Returned to supplier, instead of sections; the Rejected sections,
-  Rolls open and Rolls finished cards are gone. Plan `docs/prompts/plans/reports-by-roll-plan.md`.
-  `npm run check` passed (662) in a cloud copy. **Codex run 1 FAIL**
-  (`qa/reports/2026-11-04-reports-cleanup-run1.md`): 21 passed, 1 failed, 1 not possible; e2e
-  targeted 35/1/0, full 91/2/2; ledger 0. F1 the handoff's S15 left out today's pairs (fixed);
-  F2 `reports.spec.ts` matched the claim sheet's help text (now the card's exact title); F3 a smoke
-  deadline in the full suite only. **Run 2 FAIL** (`…-run2.md`): R1 (S15 with today) and R2
-  (reports spec 3/0) passed; targeted 35/1/0, full 86/2/2 (5 not run); smoke alone 10/0; ledger 0.
-  F1 `batches.spec.ts` ran axe while the plan notice was closing (now waits); F2 the FM smoke
-  journey ran past 30 s beside other specs (now 60 s). **Run 3 PASS** (`…-run3.md`): batches 7/0,
-  smoke 10/0, targeted 43/0/0, full 93/0/2; ledger 0. QA done for D-116 and D-117: commit on a
-  new branch with only this thread's files (git commands in the Reports thread).
+- **Current phase:** 30D, roll counts (D-118). **Capture** shows "Today, Wed, 4 Nov" and **Leather
+  rolls scanned 3/15** against the Floor Manager's plan, then the next planned days (five days in
+  all). **Reports → Materials, Leather rolls:** Rolls used = rolls checked − returned to supplier
+  (Dylan's rule: used = passed by the camera), Phase 30C returns counted as checked, **Removed
+  (other)** apart, each week with its working days. **Batches → Plan days:** "3 of 5 rolls scanned
+  · 1 returned". Dropped by Dylan: pairs per roll, On hand at week end, a change-in-pairs column.
+- No migration. API: `GET /api/v1/rolls/plan` (camera access).
+- Checks: `npm run check` passed (**670 unit tests**, build OK) in a cloud copy of main a97d949
+  with these changes, before they were copied to the laptop. E2E not run (Codex):
+  `capture.spec.ts` and `inventory.spec.ts` updated.
+- **Codex run 1 BLOCKED** (`qa/reports/2026-11-04-phase-30d-run1.md`): 12 passed, 0 failed, 3
+  blocked, 1 skipped; e2e targeted 36/0/1, full 94/0/2; ledger 0. No app fault. Blocked by setup:
+  another app held the camera (S4, the live recount after Finish roll) and today's plan was locked
+  by a finished batch (S1, S7 with 15 rolls; the counter read 3/2 correctly). Run 2 checks only
+  those: `qa/CODEX_PROMPT_PHASE_30D_RUN2.md`.
+- **Codex run 2 PASS** (`qa/reports/2026-11-04-phase-30d-run2.md`): with the USB camera, one shot
+  and Finish roll moved the counter 12/2 → 13/2 without a reload; a planned Thu 5 Nov read 0/15
+  under Next planned days (then put back); the calendar read "13 of 2 rolls scanned · 1
+  returned"; ledger 0. QA done for 30D: commit on a new branch (git commands in the 30D thread).
+- **Scale marker (separate thread, not built):** Dylan chose a printed ArUco marker read on every
+  shot in place of the tap calibration; the printable PDF is in the project files
+  (`calibration/cpoint-scale-marker-2in.pdf`).
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
-- **Next:** commit 30E-2 and open the PR (git commands in the 30E-2 thread). Then
-  30D, 31.
-- **Overall:** 34 phases built (0 to 29, 30A, 30B, 30C, 30E-1) and 30E-2 (uncommitted); 2 planned
-  (30D, 31).
+- **Next:** commit 30D on a new branch and open the PR. Then the scale marker (its own thread),
+  then Phase 31.
+- **Overall:** 36 phases built (0 to 29, 30A, 30B, 30C, 30E-1, 30E-2) plus the reports by roll,
+  and 30D (uncommitted); 1 planned (31).
 
 ## Phase progress
 
@@ -119,13 +86,28 @@
       (D-110; QA passed, run 3; merged #34)
 - [x] 30E-1. The constructor picks the leather, then the roll; a roll leaves stock at Finish roll;
       the QI counts pairs only (D-111 to D-113; QA passed, run 3; merged, CI green)
-- [ ] 30E-2. A planning calendar: rolls to be used, quota, check-in interval and shift per day;
-      Non-working / Holiday (D-114, D-115; QA passed, run 3; uncommitted)
-- [ ] 30D. The team's QA notes on Reports → Materials
+- [x] 30E-2. A planning calendar: rolls to be used, quota, check-in interval and shift per day;
+      Non-working / Holiday (D-114, D-115; QA passed, run 3; merged #36)
+- [x] Reports by roll: a roll over the limit is Returned to supplier; reports count whole rolls
+      (D-116, D-117; QA passed, run 3; merged #37)
+- [x] 30D. Roll counts on Capture, the calendar and Materials; the team's last QA notes (D-118;
+      QA passed, run 2; uncommitted)
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
 
+- **Roll counts (Phase 30D, D-118; uncommitted):**
+  - **Capture:** a card above the roll: "Today, Wed, 4 Nov", **Leather rolls scanned 3/15** with a
+    bar ("Plan reached" once met), or "The Floor Manager hasn't planned today yet." / "Today is
+    marked Non-working / Holiday."; then **Next planned days** (up to 4, planned days only,
+    "Leather rolls scanned 0/12"). Recounts after this phone finishes or puts back a roll, every
+    60 s and when the tab returns. `GET /api/v1/rolls/plan`.
+  - **Batches → Plan days:** "3 of 5 rolls scanned · 1 returned"; the dialog: "…so far: 2 used, 1
+    returned to the supplier (over the defect limit)."
+  - **Reports → Materials, Leather rolls:** Rolls used (checked − returned), Rolls checked by the
+    camera (30C returns included), Returned to supplier, Removed (other), Pairs finished; each
+    week with "N working days". A leather item's row reads "Rolls that left stock: used, returned
+    or removed".
 - **Reports count whole rolls (D-117; uncommitted):**
   - Every report counts the rolls finished at Capture on their Manila day, each **Scanning passed**
     or **Returned to supplier**; a shot's Pass or Reject shows only on the roll's page and Capture.
@@ -640,12 +622,12 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-0. Dylan: commit Phase 30E-2 on a new branch (git commands in the 30E-2 thread), open the PR. After a pass, the git commands come in the 30E-2 thread.
+0. Dylan: commit Phase 30D on a new branch (git commands in the 30D thread) and open the PR. After a full pass, the git commands
+   come in the 30D thread.
 1. Dylan: set up the phone on Capture through the tunnel (the fixed setup window).
 2. Dylan, at the station: calibrate the real phone on Capture and capture a few real knife cuts on
    scrap leather (2.5, 3 and 4 in) to check the 3-inch line on real cuts.
-3. Phase 30D (the team's QA notes), after 30E-2: leather Used is now Scanned at Capture, and
-   Removed (other) through Remove (D-112).
+3. The scale marker (its own thread) in place of the tap calibration, then Phase 31.
 4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
 5. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
    `docker image prune -a -f` frees about 8.4 GB.
@@ -662,6 +644,13 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-11-04, D-118): rolls used = passed by the camera; rolls checked = every roll
+  scanned; returned = failed the scan; pairs finished unchanged; Capture shows rolls scanned
+  against the plan for today and the next days. Pairs per roll and On hand at week end dropped.
+- ASSUMPTION (A-44, D-118): Capture's counter counts every roll finished today, passed or
+  returned; the days ahead are planned days only.
+- ASSUMPTION (A-45, D-118): a removed roll counts on its removal day; rolls from before Phase 30A
+  were never in stock and are left out of Removed (other).
 - Decided (Dylan, 2026-11-04, D-113): no color; each roll keeps its own area, entered by the FM when
   added; the constructor picks the leather, then the roll (choice (a)). Planning (30E-2): the FM
   plans any day from a calendar: rolls to be used (one total, an estimate; constructors may start

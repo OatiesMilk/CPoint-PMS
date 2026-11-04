@@ -613,8 +613,67 @@ export function describePlanShort(p: {
     .join(" · ");
 }
 
-/** "3 of 5 rolls scanned" or "3 rolls scanned" when none were planned (a converted day). */
-export function rollsScannedLine(scanned: number, planned: number | null): string {
-  if (planned === null) return `${scanned} roll${scanned === 1 ? "" : "s"} scanned`;
-  return `${scanned} of ${planned} roll${planned === 1 ? "" : "s"} scanned`;
+/**
+ * "3 of 5 rolls scanned", or "3 rolls scanned" when none were planned (a converted day), with
+ * " · 1 returned" when some went over the defect limit (D-116, D-118).
+ */
+export function rollsScannedLine(scanned: number, planned: number | null, returned = 0): string {
+  const line =
+    planned === null
+      ? `${scanned} roll${scanned === 1 ? "" : "s"} scanned`
+      : `${scanned} of ${planned} roll${planned === 1 ? "" : "s"} scanned`;
+  return returned > 0 ? `${line} · ${returned} returned` : line;
+}
+
+/** Capture shows today and the planned days after it, five days in all (Phase 30D, D-118). */
+export const CAPTURE_PLAN_DAYS = 5;
+
+export type CapturePlanDay = {
+  day: string;
+  isToday: boolean;
+  /** Today may be unplanned or Non-working; the days after it are planned days only. */
+  kind: "PLANNED" | "NON_WORKING" | "NOT_PLANNED";
+  /** Rolls to be used (D-114); null when not planned, or on a converted day. */
+  planned: number | null;
+  /** Rolls whose scan was finished at Capture that day (0 for the days ahead). */
+  scanned: number;
+};
+
+/**
+ * The days on Capture's counter (D-118): today whatever its plan, then the next planned days in
+ * order (Non-working days and days not planned yet are skipped), at most `count` days in all.
+ */
+export function capturePlanDays(
+  today: string,
+  plans: { day: string; kind: "PLANNED" | "NON_WORKING"; rollsPlanned: number | null }[],
+  scannedToday: number,
+  count: number = CAPTURE_PLAN_DAYS,
+): CapturePlanDay[] {
+  const todays = plans.find((p) => p.day === today);
+  const first: CapturePlanDay = {
+    day: today,
+    isToday: true,
+    kind: todays?.kind ?? "NOT_PLANNED",
+    planned: todays?.kind === "PLANNED" ? todays.rollsPlanned : null,
+    scanned: scannedToday,
+  };
+  const ahead = plans
+    .filter((p) => p.day > today && p.kind === "PLANNED")
+    .sort((a, b) => a.day.localeCompare(b.day))
+    .slice(0, Math.max(0, count - 1))
+    .map((p): CapturePlanDay => ({
+      day: p.day,
+      isToday: false,
+      kind: "PLANNED",
+      planned: p.rollsPlanned,
+      scanned: 0,
+    }));
+  return [first, ...ahead];
+}
+
+/** "Leather rolls scanned 3/15", or "Leather rolls scanned 3" with no rolls planned (D-118). */
+export function leatherRollsLine(scanned: number, planned: number | null): string {
+  return planned === null
+    ? `Leather rolls scanned ${scanned}`
+    : `Leather rolls scanned ${scanned}/${planned}`;
 }
