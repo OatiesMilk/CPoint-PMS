@@ -33,7 +33,7 @@ export const ROLE_HOME: Record<Role, string> = {
 
 /** A roll's life since Phase 30A (D-104): added, picked at Capture, scanned, fully used, removed. */
 export const ROLL_STATUS_LABELS: Record<RollStatus, string> = {
-  IN_STOCK: "Not scanned",
+  IN_STOCK: "Not yet scanned",
   OPEN: "Being scanned",
   FINISHED: "Scanned",
   USED: "Fully used",

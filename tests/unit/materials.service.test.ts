@@ -5,8 +5,8 @@ const model = {
   usedByDay: vi.fn(),
   pairsByDay: vi.fn(),
   rollsCheckedByDay: vi.fn(),
+  rollsReturnedByDay: vi.fn(),
   usedBetween: vi.fn(),
-  pairsBetween: vi.fn(),
 };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/materials.model", () => model);
@@ -53,13 +53,13 @@ beforeEach(() => {
     { day: "2026-10-26", value: 250 },
   ]);
   model.rollsCheckedByDay.mockResolvedValue([{ day: "2026-10-26", value: 7 }]);
+  model.rollsReturnedByDay.mockResolvedValue([{ day: "2026-10-27", value: 2 }]);
   model.usedBetween.mockResolvedValue(
     new Map([
       ["lr", 28],
       ["nl", 2],
     ]),
   );
-  model.pairsBetween.mockResolvedValue(1400);
 });
 
 describe("materialsReport (Phase 29, D-102, D-109)", () => {
@@ -75,7 +75,6 @@ describe("materialsReport (Phase 29, D-102, D-109)", () => {
       lastWeek: 4,
       diff: 2,
       change: 0.5,
-      perHundredPairs: 2,
       daysLeft: 3,
       mayRunOut: false,
     });
@@ -105,23 +104,32 @@ describe("materialsReport (Phase 29, D-102, D-109)", () => {
     expect(r.rows[0]).toMatchObject({ daysLeft: 1, mayRunOut: true });
   });
 
-  it("puts leather rolls used beside the rolls the camera checked", async () => {
+  it("puts leather rolls used beside the rolls checked and returned to supplier (D-116)", async () => {
     const r = await svc.materialsReport({}, now);
-    expect(r.leather.at(-1)).toMatchObject({ rollsUsed: 6, rollsChecked: 7, pairs: 250 });
+    expect(model.rollsReturnedByDay).toHaveBeenCalledWith("2026-09-08", "2026-10-28");
+    expect(r.leather.at(-1)).toMatchObject({
+      rollsUsed: 6,
+      rollsChecked: 7,
+      rollsReturned: 2,
+      pairs: 250,
+    });
     expect(r.leather.at(-1)!.week.label).toBe("Week 4 · Oct 22–28");
-    expect(r.leather.at(-2)).toMatchObject({ rollsUsed: 4, rollsChecked: 0, pairs: 400 });
+    expect(r.leather.at(-2)).toMatchObject({
+      rollsUsed: 4,
+      rollsChecked: 0,
+      rollsReturned: 0,
+      pairs: 400,
+    });
   });
 
-  it("writes one CSV row per item and week, with use per 100 pairs", async () => {
+  it("writes one CSV row per item and week, without use per 100 pairs (D-116)", async () => {
     const { body, from, to } = await svc.materialsCsv({}, now);
     expect([from, to]).toEqual(["2026-09-08", "2026-10-28"]);
     const lines = body.replace(/^﻿/, "").trim().split("\r\n");
-    expect(lines[0]).toBe(
-      "Week,From,To,Item code,Item,Category,Supplier,Unit,Used,Pairs finished,Used per 100 pairs",
-    );
+    expect(lines[0]).toBe("Week,From,To,Item code,Item,Category,Supplier,Unit,Used,Pairs finished");
     expect(lines).toHaveLength(1 + 8 * 2);
     expect(lines).toContain(
-      "Week 3 · Oct 15–21,2026-10-15,2026-10-21,LR-001,Black cowhide,Leather roll,Meycauayan Tannery,roll,4,400,1",
+      "Week 3 · Oct 15–21,2026-10-15,2026-10-21,LR-001,Black cowhide,Leather roll,Meycauayan Tannery,roll,4,400",
     );
   });
 
@@ -140,14 +148,10 @@ describe("materialsReport (Phase 29, D-102, D-109)", () => {
       },
     ]);
     model.usedBetween.mockResolvedValue(new Map([["lr", 7]]));
-    model.pairsBetween.mockImplementation(async (from: string) =>
-      from === "2026-10-22" ? 350 : 700,
-    );
     const r = await svc.materialsReport({}, now);
-    expect(model.pairsBetween).toHaveBeenCalledWith("2026-10-22", "2026-10-28");
-    // 7 used over 7 days is 1 a day: 10 left lasts 10 days; 7 per 350 pairs is 2 per 100.
-    expect(r.rows[0]).toMatchObject({ daysLeft: 10, perHundredPairs: 2 });
-    expect(r.pace.pairs).toBe(700);
+    // 7 used over 7 days is 1 a day: 10 left lasts 10 days.
+    expect(r.rows[0]).toMatchObject({ daysLeft: 10 });
+    expect(r.rows[0]).not.toHaveProperty("perHundredPairs");
   });
 
   it("follows the picked week and keeps the 28-day pace (D-109)", async () => {
@@ -159,9 +163,9 @@ describe("materialsReport (Phase 29, D-102, D-109)", () => {
     expect(model.usedByDay).toHaveBeenCalledWith("2026-08-22", "2026-10-07");
     const tacks = r.rows.find((x) => x.id === "nl")!;
     expect(tacks).toMatchObject({ thisWeek: 5, lastWeek: 0, change: null });
-    // Days left and per 100 pairs still read the last 28 days up to today.
+    // Days left still reads the last 28 days up to today.
     expect(r.pace).toMatchObject({ fromDay: "2026-10-01", toDay: "2026-10-28" });
-    expect(r.rows.find((x) => x.id === "lr")).toMatchObject({ perHundredPairs: 2, daysLeft: 3 });
+    expect(r.rows.find((x) => x.id === "lr")).toMatchObject({ daysLeft: 3 });
   });
 
   it("falls back to today's week for a week that hasn't started", async () => {

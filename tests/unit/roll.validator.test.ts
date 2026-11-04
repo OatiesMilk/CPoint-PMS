@@ -89,14 +89,14 @@ describe("itemRollsQuerySchema", () => {
 describe("rollListQuerySchema", () => {
   it("keeps valid filters", () => {
     expect(
-      rollListQuerySchema.parse({ status: "OPEN", supplierId: SUPPLIER, days: "30", q: " R-2 " }),
-    ).toEqual({ status: "OPEN", supplierId: SUPPLIER, days: 30, q: "R-2", page: undefined });
+      rollListQuerySchema.parse({ status: "PASSED", supplierId: SUPPLIER, days: "30", q: " R-2 " }),
+    ).toEqual({ status: "PASSED", supplierId: SUPPLIER, days: 30, q: "R-2", page: undefined });
   });
 
   it("drops invalid filter values instead of failing the page", () => {
     expect(
       rollListQuerySchema.parse({
-        status: "IN_PROGRESS",
+        status: "FINISHED",
         supplierId: "x",
         days: "14",
         page: "-3",

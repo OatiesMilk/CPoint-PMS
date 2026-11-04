@@ -1,10 +1,13 @@
 import type { Prisma, RollStatus } from "@/generated/prisma/client";
+import type { RollReportStatus } from "@/lib/roll-rules";
 import { type Db, defaultDb } from "./db";
 
 // ───────────── Reports → Rolls (the Floor Manager) ─────────────
 
 export type RollListFilters = {
   status?: RollStatus;
+  /** Reports → Rolls: Not yet scanned, Scanning passed or Returned to supplier (D-116). */
+  reportStatus?: RollReportStatus;
   supplierId?: string;
   /** Rolls added on or after this instant (the "days" filter). */
   since?: Date;
@@ -39,9 +42,23 @@ const listSelect = {
 
 export type RollListRow = Prisma.RollGetPayload<{ select: typeof listSelect }>;
 
+/** Scanned and over the defect limit, with no Phase 30C decision: Returned to supplier (D-116). */
+const flaggedForReturn: Prisma.RollWhereInput = {
+  status: { in: ["FINISHED", "USED"] },
+  markedForReturn: true,
+  returnDecision: null,
+};
+
+const REPORT_STATUS_WHERE: Record<RollReportStatus, Prisma.RollWhereInput> = {
+  NOT_SCANNED: { status: "IN_STOCK" },
+  PASSED: { status: { in: ["FINISHED", "USED"] }, NOT: flaggedForReturn },
+  RETURNED: { OR: [{ status: "RETURNED" }, flaggedForReturn] },
+};
+
 function listWhere(filters: RollListFilters): Prisma.RollWhereInput {
   const q = filters.q?.trim();
   return {
+    ...(filters.reportStatus ? { AND: [REPORT_STATUS_WHERE[filters.reportStatus]] } : {}),
     status: filters.status,
     supplierId: filters.supplierId,
     itemId: filters.itemId,

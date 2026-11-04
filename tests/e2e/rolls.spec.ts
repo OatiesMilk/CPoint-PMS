@@ -51,9 +51,10 @@ test.describe("Reports → Rolls (Floor Manager)", () => {
     await expect(page).toHaveURL(new RegExp(`[?&]q=${tag}`));
     const row = page.getByTestId("roll-row").filter({ hasText: roll.code });
     await expect(row).toHaveCount(1);
-    await expect(row).toContainText("Scanned");
+    // Not measured (no phone setup), so not over the limit: Scanning passed (D-116).
+    await expect(row).toContainText("Scanning passed");
     await expect(row).toContainText("24.5 sq ft");
-    // Shots 2, passed 1, rejected (for salvage) 1.
+    // Shots 2, passed 1, rejected 1.
     await expect(row.getByRole("cell").nth(4)).toHaveText("2");
     await expect(row.getByRole("cell").nth(5)).toHaveText("1");
     await expect(row.getByRole("cell").nth(6)).toHaveText("1");
@@ -64,7 +65,7 @@ test.describe("Reports → Rolls (Floor Manager)", () => {
     await expect(row.getByRole("link", { name: `View roll ${roll.code}` })).toBeVisible();
     await row.getByRole("link", { name: roll.code, exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(roll.code);
-    await expect(page.getByText("2 shots · 1 passed · 1 rejected (for salvage)")).toBeVisible();
+    await expect(page.getByText("2 shots · 1 passed · 1 rejected", { exact: true })).toBeVisible();
     const shots = page.getByTestId("shot-row");
     await expect(shots).toHaveCount(2);
     await expect(shots.nth(1)).toContainText("Reject");
@@ -141,7 +142,15 @@ test.describe("Reports → Rolls (Floor Manager)", () => {
   });
 
   test("filters by status and clears", async ({ page }) => {
-    await page.goto("/reports/rolls?status=CANCELLED&q=NO-SUCH-ROLL");
+    // Three statuses only (D-116).
+    await page.goto("/reports/rolls");
+    await expect(page.getByLabel("Status").locator("option")).toHaveText([
+      "All statuses",
+      "Not yet scanned",
+      "Scanning passed",
+      "Returned to supplier",
+    ]);
+    await page.goto("/reports/rolls?status=RETURNED&q=NO-SUCH-ROLL");
     await expect(page.getByText("No rolls match these filters")).toBeVisible();
     await page.getByRole("link", { name: "Clear filters" }).click();
     await expect(page).toHaveURL(/\/reports\/rolls$/);

@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseRange } from "@/lib/report-rules";
 
 const model = {
-  dailyScanStats: vi.fn(),
+  dailyRollStats: vi.fn(),
   dailyProduction: vi.fn(),
   defectBreakdown: vi.fn(),
 };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/report.model", () => model);
+const settings = { getCvSettings: vi.fn() };
+vi.mock("@/server/models/cv-settings.model", () => settings);
 
 const svc = await import("@/server/services/report.service");
 const now = new Date("2026-10-03T04:00:00.000Z");
@@ -15,17 +17,11 @@ const range = parseRange({ from: "2026-10-01", to: "2026-10-03" }, now);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  model.dailyScanStats.mockResolvedValue([
-    {
-      day: "2026-10-02",
-      scanned: 10,
-      pass: 7,
-      reject: 3,
-    },
+  settings.getCvSettings.mockResolvedValue({ foundAtOrAbove: 0.6 });
+  model.dailyRollStats.mockResolvedValue([
+    { day: "2026-10-02", rolls: 10, passed: 7, returned: 3 },
   ]);
-  model.defectBreakdown.mockResolvedValue([
-    { key: "cut", label: "Cut", scans: 3, pass: 1, reject: 2 },
-  ]);
+  model.defectBreakdown.mockResolvedValue([{ key: "cut", label: "Cut", rolls: 4, returned: 2 }]);
   model.dailyProduction.mockResolvedValue([{ day: "2026-10-01", started: 2, completed: 1 }]);
 });
 
@@ -51,13 +47,20 @@ const PERSON_KEYS = [
 ];
 
 describe("qualityReport", () => {
-  it("fills every day and totals Pass and Reject (D-093)", async () => {
+  it("fills every day and totals rolls passed and returned to supplier (D-117)", async () => {
     const r = await svc.qualityReport(range);
     expect(r.days.map((d) => d.day)).toEqual(["2026-10-01", "2026-10-02", "2026-10-03"]);
-    expect(r.days[1]).toEqual({ day: "2026-10-02", scanned: 10, pass: 7, reject: 3 });
-    expect(r.days[2]).toEqual({ day: "2026-10-03", scanned: 0, pass: 0, reject: 0 });
-    expect(r.totals).toEqual({ scanned: 10, pass: 7, reject: 3 });
+    expect(r.days[1]).toEqual({ day: "2026-10-02", rolls: 10, passed: 7, returned: 3 });
+    expect(r.days[2]).toEqual({ day: "2026-10-03", rolls: 0, passed: 0, returned: 0 });
+    expect(r.totals).toEqual({ rolls: 10, passed: 7, returned: 3 });
+    expect(model.defectBreakdown).toHaveBeenCalledWith(range, 0.6);
     expect(r).not.toHaveProperty("matrix");
+  });
+
+  it("counts defects from 50% when found-at isn't set yet", async () => {
+    settings.getCvSettings.mockResolvedValue(null);
+    await svc.qualityReport(range);
+    expect(model.defectBreakdown).toHaveBeenCalledWith(range, 0.5);
   });
 
   it("never carries a person", async () => {
@@ -77,17 +80,22 @@ describe("rollFlow (D-082)", () => {
 describe("CSV", () => {
   it("daily CSV has a BOM, a header and one row per day", async () => {
     const csv = await svc.dailyCsv(range);
-    expect(csv.startsWith("﻿Date (Manila),Scanned,Pass")).toBe(true);
-    const lines = csv.trim().split("\r\n");
+    expect(csv.startsWith("\uFEFFDate (Manila),Rolls scanned")).toBe(true);
+    const lines = csv
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .split("\r\n");
     expect(lines).toHaveLength(4);
-    expect(lines[0]).toBe("Date (Manila),Scanned,Pass,Reject (for salvage)");
+    expect(lines[0]).toBe("Date (Manila),Rolls scanned,Scanning passed,Returned to supplier");
     expect(lines[2]).toBe("2026-10-02,10,7,3");
   });
 
-  it("defects CSV has Pass and Reject (for salvage) per type", async () => {
-    const lines = (await svc.defectsCsv(range)).trim().split("\r\n");
-    expect(lines[0]).toContain("Scans,Pass,Reject (for salvage)");
-    expect(lines[0]).not.toContain("Known type");
-    expect(lines[1]).toBe("Cut,cut,3,1,2");
+  it("defects CSV has the rolls each type was found on, and those returned", async () => {
+    const lines = (await svc.defectsCsv(range))
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .split("\r\n");
+    expect(lines[0]).toBe("Defect type,Class key,Rolls found on,Returned to supplier");
+    expect(lines[1]).toBe("Cut,cut,4,2");
   });
 });

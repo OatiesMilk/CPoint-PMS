@@ -260,6 +260,8 @@ test("a weekday with no plan has no batches and the Floor Manager is told to pla
     await fm.getByTestId("batch-bell").filter({ visible: true }).click();
     await expect(fm.getByTestId("plan-today-notice")).toBeVisible();
     await fm.keyboard.press("Escape");
+    // Scan once the menu has closed: while it closes, the page behind it is still aria-hidden.
+    await expect(fm.getByTestId("plan-today-notice")).toBeHidden();
     expect(await axe(fm)).toEqual([]);
 
     const qi = await signedIn(browser, ACCOUNTS.inspector.email, ACCOUNTS.inspector.home);

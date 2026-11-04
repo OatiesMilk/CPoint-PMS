@@ -234,8 +234,8 @@ export type FinishData = {
 };
 
 /**
- * The line after Finish roll (Phase 30E): it is off stock, and over the limit the Floor Manager
- * sees it has too many defects (for information only, D-112).
+ * The line after Finish roll (Phase 30E): it is off stock, and over the limit the system marks it
+ * Returned to supplier (D-116).
  */
 export function finishedLine(
   roll: { code: string; shots: number; item?: string | null },
@@ -247,7 +247,7 @@ export function finishedLine(
   if (!data) return done;
   const pct = (n: number) => `${n.toLocaleString("en-PH", { maximumFractionDigits: 1 })}%`;
   if (data.marked && data.sharePct !== null)
-    return `${done} ${pct(data.sharePct)} of it has defects, which is too many. The Floor Manager will see it.`;
+    return `${done} ${pct(data.sharePct)} of it has defects, over the ${pct(data.limitPct)} limit, so it is marked Returned to supplier. Set it aside for the Floor Manager.`;
   if (data.sharePct !== null) return `${done} ${pct(data.sharePct)} of it has defects.`;
   if (data.notMeasured === "unscaled")
     return `${done} Set up this phone next time so the roll can be checked for defects.`;
@@ -269,7 +269,7 @@ export function defectShareText(roll: {
 }
 
 /**
- * A roll's mark: "to-return" shows Too many defects (for information since Phase 30E); "kept" is a
+ * A roll's mark: "to-return" is Returned to supplier (D-116); "kept" is a
  * Floor Manager's Keep from Phase 30C, kept as history.
  */
 export function returnMark(roll: {
@@ -278,5 +278,37 @@ export function returnMark(roll: {
 }): "to-return" | "kept" | null {
   if (roll.returnDecision === "KEPT") return "kept";
   if (roll.markedForReturn && roll.returnDecision === null) return "to-return";
+  return null;
+}
+
+/** The three statuses Reports → Rolls filters by (D-116). */
+export const ROLL_REPORT_STATUSES = ["NOT_SCANNED", "PASSED", "RETURNED"] as const;
+export type RollReportStatus = (typeof ROLL_REPORT_STATUSES)[number];
+export const ROLL_REPORT_STATUS_LABELS: Record<RollReportStatus, string> = {
+  NOT_SCANNED: "Not yet scanned",
+  PASSED: "Scanning passed",
+  RETURNED: "Returned to supplier",
+};
+
+type StatusRoll = {
+  status: RollStatus;
+  markedForReturn: boolean;
+  returnDecision: "RETURNED" | "KEPT" | null;
+};
+
+/**
+ * Returned to supplier (D-116): the system flags a roll whose defects cover more than the limit
+ * (10%) of its area when it is finished at Capture. Rolls sent back in Phase 30C count too.
+ */
+export function isReturnedToSupplier(roll: StatusRoll): boolean {
+  if (roll.status === "RETURNED") return true;
+  return (roll.status === "FINISHED" || roll.status === "USED") && returnMark(roll) === "to-return";
+}
+
+/** A roll's report status, or null while it is being scanned or after it was removed. */
+export function rollReportStatus(roll: StatusRoll): RollReportStatus | null {
+  if (roll.status === "IN_STOCK") return "NOT_SCANNED";
+  if (isReturnedToSupplier(roll)) return "RETURNED";
+  if (roll.status === "FINISHED" || roll.status === "USED") return "PASSED";
   return null;
 }

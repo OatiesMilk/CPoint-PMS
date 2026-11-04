@@ -19,8 +19,8 @@ const DEFECT_ROWS = 8;
 const share = (part: number, whole: number) => (whole > 0 ? part / whole : null);
 
 /**
- * The quality report: the checkpoint before cutting, Pass or Reject (D-093), and what the camera
- * found. A rejected section is reported for salvage (A-11). The Quality Inspector's report, and a
+ * The quality report: the leather rolls checked before cutting, each Scanning passed or Returned
+ * to supplier (D-116, counted per roll since D-117), and the defects the camera found on them. A
  * tab for the Floor Manager.
  */
 export function QualityView({ quality }: { quality: QualityReport }) {
@@ -34,18 +34,23 @@ export function QualityView({ quality }: { quality: QualityReport }) {
         className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4"
       >
         {[
-          { label: "Scanned", value: t.scanned.toLocaleString("en-PH"), testid: "total-scanned" },
           {
-            label: "Pass",
-            value: formatPercent(share(t.pass, t.scanned)),
-            sub: `${t.pass} sections`,
-            testid: "total-pass",
+            label: "Rolls scanned",
+            value: t.rolls.toLocaleString("en-PH"),
+            sub: "finished at Capture",
+            testid: "total-rolls",
           },
           {
-            label: "Reject (for salvage)",
-            value: formatPercent(share(t.reject, t.scanned)),
-            sub: `${t.reject} sections`,
-            testid: "total-reject",
+            label: "Scanning passed",
+            value: formatPercent(share(t.passed, t.rolls)),
+            sub: `${t.passed} ${t.passed === 1 ? "roll" : "rolls"}`,
+            testid: "total-passed",
+          },
+          {
+            label: "Returned to supplier",
+            value: formatPercent(share(t.returned, t.rolls)),
+            sub: `${t.returned} ${t.returned === 1 ? "roll" : "rolls"}`,
+            testid: "total-returned",
           },
         ].map((tile) => (
           <Card key={tile.label}>
@@ -60,11 +65,11 @@ export function QualityView({ quality }: { quality: QualityReport }) {
         ))}
       </section>
 
-      {t.scanned === 0 ? (
+      {t.rolls === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-14 text-center">
-          <h2 className="text-xl font-semibold">No scans in this range</h2>
+          <h2 className="text-xl font-semibold">No rolls scanned in this range</h2>
           <p className="max-w-md text-muted-foreground">
-            The camera hasn’t sent anything for these days. Try a longer range.
+            No leather roll was finished at Capture on these days. Try a longer range.
           </p>
           <Button asChild variant="secondary">
             <Link href="/reports?view=quality&preset=30d">Show the last 30 days</Link>
@@ -74,10 +79,11 @@ export function QualityView({ quality }: { quality: QualityReport }) {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Scans per day</CardTitle>
+              <CardTitle>Rolls scanned per day</CardTitle>
               <CardDescription>
-                Pass and Reject (for salvage). The camera’s verdict is final. The table at the
-                bottom has the numbers.
+                Each roll on the day it was finished at Capture: passed, or returned to supplier
+                when defects covered more than the limit of its area. The table at the bottom has
+                the numbers.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -89,21 +95,21 @@ export function QualityView({ quality }: { quality: QualityReport }) {
             <CardHeader>
               <CardTitle>Defects by type</CardTitle>
               <CardDescription>
-                Biggest first, with each type’s share and the cumulative share (Pareto): the top few
-                types usually cause most of the defects. Rejected counts the sections whose main
-                defect it was that were rejected, for salvage.
+                The rolls each type was found on, biggest first, with its share and the cumulative
+                share (Pareto): the top few types usually cause most of the defects. Returned counts
+                those rolls that were returned to supplier.
               </CardDescription>
             </CardHeader>
             <CardContent>
               {defects.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No defects detected in this range.</p>
+                <p className="text-sm text-muted-foreground">No defects found in this range.</p>
               ) : (
                 <Table aria-label="Defects by type">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Defect</TableHead>
-                      <TableHead numeric>Sections</TableHead>
-                      <TableHead numeric>Rejected</TableHead>
+                      <TableHead numeric>Rolls found on</TableHead>
+                      <TableHead numeric>Returned</TableHead>
                       <TableHead numeric>Share</TableHead>
                       <TableHead numeric>Cumulative</TableHead>
                     </TableRow>
@@ -112,8 +118,8 @@ export function QualityView({ quality }: { quality: QualityReport }) {
                     {defects.slice(0, DEFECT_ROWS).map((d) => (
                       <TableRow key={d.key}>
                         <TableCell className="font-medium">{d.label}</TableCell>
-                        <TableCell numeric>{d.scans}</TableCell>
-                        <TableCell numeric>{d.reject}</TableCell>
+                        <TableCell numeric>{d.rolls}</TableCell>
+                        <TableCell numeric>{d.returned}</TableCell>
                         <TableCell numeric>{formatPercent(d.share)}</TableCell>
                         <TableCell numeric>{formatPercent(d.cumulative)}</TableCell>
                       </TableRow>
@@ -143,9 +149,9 @@ export function QualityView({ quality }: { quality: QualityReport }) {
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Day</TableHead>
-                <TableHead numeric>Scanned</TableHead>
-                <TableHead numeric>Pass</TableHead>
-                <TableHead numeric>Reject (for salvage)</TableHead>
+                <TableHead numeric>Rolls scanned</TableHead>
+                <TableHead numeric>Scanning passed</TableHead>
+                <TableHead numeric>Returned to supplier</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -153,12 +159,12 @@ export function QualityView({ quality }: { quality: QualityReport }) {
                 <TableRow
                   key={d.day}
                   aria-label={d.day}
-                  className={cn(d.scanned === 0 && "text-muted-foreground")}
+                  className={cn(d.rolls === 0 && "text-muted-foreground")}
                 >
                   <TableCell>{formatDayLabel(d.day)}</TableCell>
-                  <TableCell numeric>{d.scanned}</TableCell>
-                  <TableCell numeric>{d.pass}</TableCell>
-                  <TableCell numeric>{d.reject}</TableCell>
+                  <TableCell numeric>{d.rolls}</TableCell>
+                  <TableCell numeric>{d.passed}</TableCell>
+                  <TableCell numeric>{d.returned}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

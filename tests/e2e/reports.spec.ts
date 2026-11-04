@@ -7,8 +7,10 @@ import {
   createDeviceToken,
   e2eKey,
   ensureRuleTypes,
+  finishRoll,
   managerApi,
   sampleJpeg,
+  withDb,
 } from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
@@ -51,7 +53,31 @@ async function scanOn(
   return (await res.json()).data as { scanId: string; verdict: string };
 }
 
-test("the quality report counts a day exactly, and its CSV matches", async ({
+/**
+ * A roll finished at Capture, then moved onto `day` (a 2025 day no other spec uses) and marked
+ * over the limit or not, so the report's numbers for that day are this test's own (D-117).
+ */
+async function finishedRollOn(
+  sc: APIRequestContext,
+  request: APIRequestContext,
+  token: string,
+  shots: [classKey: string, confidence: number][],
+  returned: boolean,
+) {
+  const roll = await createRoll(sc);
+  for (const [key, confidence] of shots) await scanOn(request, token, roll.id, key, confidence);
+  await finishRoll(sc, roll.id);
+  await withDb((db) =>
+    db.query(
+      `UPDATE batches SET "finishedAt" = $2::timestamptz AT TIME ZONE 'UTC',
+         "markedForReturn" = $3, "returnDecision" = NULL WHERE id = $1`,
+      [roll.id, `${day}T15:00:00+08:00`, returned],
+    ),
+  );
+  return roll;
+}
+
+test("the quality report counts whole rolls on a day exactly, and its CSV matches (D-117)", async ({
   browser,
   page,
   request,
@@ -61,38 +87,59 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
     (await (await api.get(`/api/v1/reports/quality?from=${day}&to=${day}`)).json()).data;
   const before = await report();
 
-  const roll = await createRoll(await captureApi(browser));
+  const sc = await captureApi(browser);
   const { token } = await createDeviceToken();
-  await scanOn(request, token, roll.id, "cut", 0.3); // below found-at: PASS
-  await scanOn(request, token, roll.id, "abrasion", 0.7); // Usable: PASS
-  await scanOn(request, token, roll.id, "cut", 0.95); // Not accepted: REJECT
-  const noType = await scanOn(request, token, roll.id, "e2e-report-class", 0.9);
-  expect(noType.verdict).toBe("PASS"); // a class with no defect type is dropped (D-108)
+  // One roll returned to supplier with a long cut on it; one passed, with an abrasion and a cut
+  // below found-at that doesn't count.
+  await finishedRollOn(
+    sc,
+    request,
+    token,
+    [
+      ["cut", 0.95],
+      ["cut", 0.97],
+    ],
+    true,
+  );
+  await finishedRollOn(
+    sc,
+    request,
+    token,
+    [
+      ["abrasion", 0.7],
+      ["cut", 0.3],
+    ],
+    false,
+  );
 
   const after = await report();
   const delta = (k: string) => after.totals[k] - before.totals[k];
-  expect({ scanned: delta("scanned"), pass: delta("pass"), reject: delta("reject") }).toEqual({
-    scanned: 4,
-    pass: 3,
-    reject: 1,
+  expect({ rolls: delta("rolls"), passed: delta("passed"), returned: delta("returned") }).toEqual({
+    rolls: 2,
+    passed: 1,
+    returned: 1,
   });
-  expect(after).not.toHaveProperty("matrix");
-  const defects = (r: typeof after, key: string) =>
-    r.defects.find((d: { key: string }) => d.key === e2eKey(key))?.scans ?? 0;
-  expect(defects(after, "cut") - defects(before, "cut")).toBe(2);
-  expect(defects(after, "abrasion") - defects(before, "abrasion")).toBe(1);
+  const defect = (r: typeof after, key: string) =>
+    r.defects.find((d: { key: string }) => d.key === e2eKey(key)) ?? { rolls: 0, returned: 0 };
+  // Two cuts on one roll count once.
+  expect(defect(after, "cut").rolls - defect(before, "cut").rolls).toBe(1);
+  expect(defect(after, "cut").returned - defect(before, "cut").returned).toBe(1);
+  expect(defect(after, "abrasion").rolls - defect(before, "abrasion").rolls).toBe(1);
 
-  // The page shows the same numbers for that day.
+  // The page shows the same numbers for that day, and no sections.
   await signInAs(page, ACCOUNTS.manager);
   await page.goto(`/reports?view=quality&from=${day}&to=${day}`);
-  await expect(page.getByTestId("total-scanned")).toHaveText(String(after.totals.scanned));
-  // The tile's title is the share; the line under it is the count.
-  const rejectTile = page
+  await expect(page.getByTestId("total-rolls")).toHaveText(String(after.totals.rolls));
+  const returnedTile = page
     .locator("[data-slot='card']")
-    .filter({ has: page.getByTestId("total-reject") });
-  await expect(rejectTile).toContainText(`${after.totals.reject} sections`);
+    .filter({ has: page.getByTestId("total-returned") });
+  await expect(returnedTile).toContainText(
+    `${after.totals.returned} ${after.totals.returned === 1 ? "roll" : "rolls"}`,
+  );
+  await expect(page.getByRole("heading", { name: "Rolls scanned per day" })).toBeVisible();
+  await expect(page.getByText(/sections/i)).toHaveCount(0);
   await expect(page.getByTestId("daily-table").getByRole("row", { name: day })).toContainText(
-    String(after.totals.reject),
+    String(after.totals.returned),
   );
 
   // The CSV: BOM, header, one row for the day, as a download.
@@ -102,9 +149,9 @@ test("the quality report counts a day exactly, and its CSV matches", async ({
   const body = (await csv.body()).toString("utf8");
   expect(body.charCodeAt(0)).toBe(0xfeff);
   const lines = body.slice(1).trim().split("\r\n");
-  expect(lines[0]).toBe("Date (Manila),Scanned,Pass,Reject (for salvage)");
+  expect(lines[0]).toBe("Date (Manila),Rolls scanned,Scanning passed,Returned to supplier");
   expect(lines[1]).toBe(
-    `${day},${after.totals.scanned},${after.totals.pass},${after.totals.reject}`,
+    `${day},${after.totals.rolls},${after.totals.passed},${after.totals.returned}`,
   );
 });
 
@@ -129,11 +176,22 @@ test("the Floor Manager sees production against the quota in place of stage time
   await expect(page.getByTestId("flow-lanes")).toHaveCount(0);
   await expect(page.getByTestId("attention")).toContainText("What needs attention");
   await expect(page.getByTestId("repair-station")).toHaveCount(0);
-  await expect(page.getByTestId("for-salvage")).toContainText("For salvage");
+  // Removed (D-117): the Rejected sections card and the Rolls finished and Rolls open tiles.
+  await expect(page.getByTestId("for-salvage")).toHaveCount(0);
+  // The card's title only: the claim sheet's help text still mentions the rejected sections.
+  await expect(page.getByText("Rejected sections", { exact: true })).toHaveCount(0);
   await expect(page.getByTestId("stock-risk")).toBeVisible();
   await expect(page.getByTestId("supplier-quality")).toBeVisible();
-  for (const kpi of ["kpi-pairs", "kpi-quota", "kpi-rolls", "kpi-rolls-open", "kpi-reject"])
+  for (const kpi of ["kpi-pairs", "kpi-failed", "kpi-quota", "kpi-rolls-passed", "kpi-returned"])
     await expect(page.getByTestId(kpi)).toBeVisible();
+  for (const kpi of ["kpi-rolls", "kpi-rolls-open", "kpi-reject"])
+    await expect(page.getByTestId(kpi)).toHaveCount(0);
+  const tile = (id: string) =>
+    page.locator("[data-slot='card']").filter({ has: page.getByTestId(id) });
+  await expect(tile("kpi-pairs")).toContainText(
+    "all pairs the QI counted at Finish batch, failed ones included",
+  );
+  await expect(tile("kpi-returned")).toContainText(/\d+ of \d+ rolls? scanned/);
   await expect(page.getByTestId("kpi-wip")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Stages CSV" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Production CSV" })).toBeVisible();
@@ -151,7 +209,9 @@ test("the Floor Manager sees production against the quota in place of stage time
   );
   expect(csv).not.toContain("Shoe type");
   const ops = await (await page.request.get("/api/v1/reports/operations.csv?preset=today")).text();
-  expect(ops).toContain("Rolls started,Rolls finished");
+  expect(ops).toContain(
+    "Date (Manila),Rolls started,Rolls scanned,Scanning passed,Returned to supplier",
+  );
   // The purchasing card and the stock CSV's request column left with the module (D-091).
   await expect(page.getByRole("heading", { name: "Purchasing" })).toHaveCount(0);
   const stock = await (await page.request.get("/api/v1/reports/stock.csv?preset=today")).text();
@@ -182,10 +242,13 @@ test("Reports are the Floor Manager's alone, and the FM home shows Rolls today (
   await signInAs(fm, ACCOUNTS.manager);
   await expect(fm.getByTestId("rolls-today")).toContainText("Rolls today");
   await expect(fm.getByTestId("rolls-today-open")).toBeVisible();
+  await expect(fm.getByTestId("rolls-today")).toContainText("Rolls scanned");
+  await expect(fm.getByTestId("rolls-today")).toContainText("Returned to supplier");
+  await expect(fm.getByTestId("rolls-today")).not.toContainText("Sections");
   await expect(fm.getByText("Daily summary")).toBeVisible();
   await expect(fm.getByText("Latest scans")).toHaveCount(0);
   await fm.goto("/reports?view=quality");
-  await expect(fm.getByTestId("total-scanned")).toBeVisible();
+  await expect(fm.getByTestId("total-rolls")).toBeVisible();
   expect((await fm.request.get("/api/v1/reports/quality")).status()).toBe(200);
   await fm.close();
 });

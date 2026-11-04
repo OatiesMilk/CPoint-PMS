@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defectShareText, finishedLine, returnMark } from "@/lib/roll-rules";
+import {
+  defectShareText,
+  finishedLine,
+  isReturnedToSupplier,
+  returnMark,
+  rollReportStatus,
+} from "@/lib/roll-rules";
 import { captureFieldsSchema, ingestFieldsSchema } from "@/server/validators/scan.validator";
 import { defectTypeCreateSchema, thresholdsSchema } from "@/server/validators/settings.validator";
 import { rollListQuerySchema } from "@/server/validators/roll.validator";
@@ -22,12 +28,12 @@ describe("what the lists and Capture say (Phase 30C)", () => {
     expect(returnMark({ markedForReturn: false, returnDecision: null })).toBeNull();
   });
 
-  it("tells the constructor the roll is off stock, and when it has too many defects (Phase 30E)", () => {
+  it("tells the constructor the roll is off stock, and when it is Returned to supplier (D-116)", () => {
     const roll = { code: "LR-MLT-001", shots: 6, item: "Brown suede" };
     expect(
       finishedLine(roll, { sharePct: 12.4, limitPct: 10, marked: true, notMeasured: null }),
     ).toBe(
-      "LR-MLT-001 is finished with 6 shots. It is taken off the Brown suede stock. 12.4% of it has defects, which is too many. The Floor Manager will see it.",
+      "LR-MLT-001 is finished with 6 shots. It is taken off the Brown suede stock. 12.4% of it has defects, over the 10% limit, so it is marked Returned to supplier. Set it aside for the Floor Manager.",
     );
     expect(
       finishedLine(roll, { sharePct: 3.2, limitPct: 10, marked: false, notMeasured: null }),
@@ -85,5 +91,28 @@ describe("the new settings and fields", () => {
 
   it("has no To return filter any more (Phase 30E)", () => {
     expect(rollListQuerySchema.parse({ toReturn: "1" })).not.toHaveProperty("toReturn");
+  });
+});
+
+describe("Reports → Rolls status (D-116)", () => {
+  const roll = (
+    status: Parameters<typeof rollReportStatus>[0]["status"],
+    markedForReturn = false,
+    returnDecision: "RETURNED" | "KEPT" | null = null,
+  ) => ({ status, markedForReturn, returnDecision });
+
+  it("reads Not yet scanned, Scanning passed or Returned to supplier", () => {
+    expect(rollReportStatus(roll("IN_STOCK"))).toBe("NOT_SCANNED");
+    expect(rollReportStatus(roll("FINISHED"))).toBe("PASSED");
+    expect(rollReportStatus(roll("USED"))).toBe("PASSED");
+    expect(rollReportStatus(roll("FINISHED", true))).toBe("RETURNED");
+    expect(rollReportStatus(roll("RETURNED", true, "RETURNED"))).toBe("RETURNED");
+  });
+
+  it("keeps a Phase 30C Keep as passed, and has no report status while scanning or removed", () => {
+    expect(rollReportStatus(roll("FINISHED", true, "KEPT"))).toBe("PASSED");
+    expect(isReturnedToSupplier(roll("FINISHED", true, "KEPT"))).toBe(false);
+    expect(rollReportStatus(roll("OPEN"))).toBeNull();
+    expect(rollReportStatus(roll("CANCELLED", true))).toBeNull();
   });
 });

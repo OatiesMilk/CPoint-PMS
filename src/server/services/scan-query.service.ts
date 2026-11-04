@@ -12,7 +12,7 @@ export function startOfManilaDay(now: Date = new Date()): Date {
   return new Date(Date.UTC(y, m - 1, d) - 8 * 3_600_000);
 }
 
-/** A roll's sections: passed, rejected (reported for salvage, A-11) and the total. */
+/** A roll's sections: passed, rejected and the total. */
 export type RollYield = { passed: number; rejected: number; scanned: number };
 
 export async function rollYield(rollId: string): Promise<RollYield> {

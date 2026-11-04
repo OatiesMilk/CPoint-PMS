@@ -13,9 +13,9 @@ import {
 } from "./cv-helpers";
 
 // Phase 30C (D-106, D-110, C-9, C-37): a cut from 3 in is Not accepted; a finished roll's defects
-// over 10% of its area show Too many defects. Since Phase 30E (D-112) that is for the Floor
-// Manager's information only: the roll leaves stock at Finish roll whatever its Defect %, and
-// nobody sends it back or keeps it in the app. The sample photo is 64 × 48 px; at widthIn 20 it
+// over 10% of its area are marked Returned to supplier by the system (D-116; D-112 before). The
+// roll leaves stock at Finish roll whatever its Defect %, and nobody sends it back or keeps it in
+// the app. The sample photo is 64 × 48 px; at widthIn 20 it
 // covers 20 × 15 in.
 
 const WIDTH_IN = 20;
@@ -115,10 +115,10 @@ test.describe("the 3-inch line (C-37)", () => {
   });
 });
 
-test.describe("Too many defects (information only, Phase 30E)", () => {
+test.describe("Returned to supplier (D-116)", () => {
   test.beforeEach(async ({ page }) => signInAs(page, ACCOUNTS.manager));
 
-  test("a roll over the limit leaves stock at Finish roll and shows Too many defects, with no decision", async ({
+  test("a roll over the limit leaves stock at Finish roll and reads Returned to supplier, with no decision", async ({
     browser,
     page,
     request,
@@ -149,14 +149,21 @@ test.describe("Too many defects (information only, Phase 30E)", () => {
     await page.goto(`/reports/rolls?q=${encodeURIComponent(roll.code)}`);
     const row = page.getByTestId("roll-row").filter({ hasText: roll.code });
     await expect(row).toContainText("16.7%");
-    await expect(row).toContainText("Too many defects");
+    await expect(row).toContainText("Returned to supplier");
+    await expect(row).not.toContainText("Too many defects");
     await expect(row).toContainText(roll.item);
 
     await row.getByRole("link", { name: roll.code, exact: true }).click();
     await expect(
-      page.getByText(/This roll has too many defects \(16\.7%, over 10%\)\./),
+      page.getByText(
+        /Returned to supplier: defects cover 16\.7% of this roll, over the 10% limit\./,
+      ),
     ).toBeVisible();
-    await expect(page.getByText("Scanned and taken off stock.")).toBeVisible();
+    await page.goto(`/reports/rolls?status=RETURNED&q=${encodeURIComponent(roll.code)}`);
+    await expect(page.getByTestId("roll-row").filter({ hasText: roll.code })).toHaveCount(1);
+    await page.goto(`/reports/rolls?status=PASSED&q=${encodeURIComponent(roll.code)}`);
+    await expect(page.getByText("No rolls match these filters")).toBeVisible();
+    await page.goto(`/reports/rolls/${roll.id}`);
     await expect(page.getByRole("heading", { name: "How damaged is this roll?" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Largest defects" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Send back to supplier…" })).toHaveCount(0);
@@ -184,12 +191,12 @@ test.describe("Too many defects (information only, Phase 30E)", () => {
   });
 });
 
-test("the System Admin sets the too-many-defects limit and each type's length limit", async ({
+test("the System Admin sets the Returned to supplier limit and each type's length limit", async ({
   page,
 }) => {
   await signInAs(page, ACCOUNTS.admin);
   await page.goto("/admin/settings?tab=thresholds");
-  const limit = page.getByLabel("A roll has too many defects when they cover more than");
+  const limit = page.getByLabel("Mark a roll Returned to supplier when defects cover more than");
   await expect(limit).toBeVisible();
   await limit.fill("0");
   await page.getByRole("button", { name: "Save", exact: true }).first().click();

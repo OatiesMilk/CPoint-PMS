@@ -62,161 +62,95 @@ export async function stockPosition(range: Range, db: Db = defaultDb()): Promise
   }));
 }
 
+// Since D-117 Supplier quality judges whole rolls: those finished at Capture in the range, passed
+// or returned to supplier (keep RETURNED in step with `isReturnedToSupplier` in roll-rules).
+
 export type SupplierRow = {
   id: string | null;
   name: string;
+  /** Rolls finished at Capture in the range. */
   rolls: number;
-  scanned: number;
-  pass: number;
-  reject: number;
+  returned: number;
 };
 
-/** Scanned sections by the supplier of the roll's leather, split by final verdict. */
-export async function supplierQuality(range: Range, db: Db = defaultDb()): Promise<SupplierRow[]> {
+/** Per supplier, the rolls finished in the range and how many were returned (D-117). */
+export async function supplierRolls(range: Range, db: Db = defaultDb()): Promise<SupplierRow[]> {
   const rows = await db.$queryRaw<Record<string, bigint | string | null>[]>`
     SELECT b."supplierId" AS id, coalesce(sp.name, 'No supplier recorded') AS name,
-      count(DISTINCT b.id) AS rolls, count(*) AS scanned,
-      count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
-    FROM scans s
-    JOIN batches b ON b.id = s."batchId"
+      count(*) AS rolls,
+      count(*) FILTER (WHERE b.status = 'RETURNED'
+        OR (b."markedForReturn" AND b."returnDecision" IS NULL)) AS returned
+    FROM batches b
     LEFT JOIN suppliers sp ON sp.id = b."supplierId"
-    WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-      AND b.status <> 'CANCELLED' -- a cancelled roll never went on to cutting (Phase 26)
+    WHERE b.status IN ('FINISHED', 'USED', 'RETURNED')
+      AND b."finishedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
+      AND b."finishedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
     GROUP BY 1, 2
     ORDER BY count(*) DESC, 2`;
   return rows.map((r) => ({
     id: r.id === null ? null : String(r.id),
     name: String(r.name),
     rolls: n(r.rolls as bigint),
-    scanned: n(r.scanned as bigint),
-    pass: n(r.pass as bigint),
-    reject: n(r.reject as bigint),
-  }));
-}
-
-export type SupplierShareRow = {
-  id: string | null;
-  measured: number;
-  /** Σ(share × area) and Σ(area) over the measured rolls, for an area-weighted share. */
-  weightedShare: number;
-  measuredArea: number;
-  marked: number;
-  returned: number;
-};
-
-/**
- * Per supplier, the rolls finished in the range (Phase 30C): how many were measured, their
- * area-weighted defect share, how many were marked Return to supplier and how many went back.
- */
-export async function supplierRollShares(
-  range: Range,
-  db: Db = defaultDb(),
-): Promise<SupplierShareRow[]> {
-  const rows = await db.$queryRaw<Record<string, bigint | number | string | null>[]>`
-    SELECT b."supplierId" AS id,
-      count(*) FILTER (WHERE b."defectSharePct" IS NOT NULL) AS measured,
-      coalesce(sum(b."defectSharePct" * b."areaSqFt") FILTER (WHERE b."defectSharePct" IS NOT NULL), 0)::float8 AS "weightedShare",
-      coalesce(sum(b."areaSqFt") FILTER (WHERE b."defectSharePct" IS NOT NULL), 0)::float8 AS "measuredArea",
-      count(*) FILTER (WHERE b."markedForReturn") AS marked,
-      count(*) FILTER (WHERE b.status = 'RETURNED') AS returned
-    FROM batches b
-    WHERE b."finishedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND b."finishedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-      AND b.status <> 'CANCELLED'
-    GROUP BY 1`;
-  return rows.map((r) => ({
-    id: r.id === null ? null : String(r.id),
-    measured: n(r.measured as bigint),
-    weightedShare: Number(r.weightedShare ?? 0),
-    measuredArea: Number(r.measuredArea ?? 0),
-    marked: n(r.marked as bigint),
     returned: n(r.returned as bigint),
   }));
 }
 
 /**
- * Each scan's strongest detection, for scans with a final verdict in `verdicts`, as
- * (supplier or roll, defect label) counts. One count per section, never per detection, so "Hole 4"
- * means four sections whose main defect was a hole.
+ * Per supplier and defect type, the rolls finished in the range on which the type was found (at
+ * or above found-at, active types), most rolls first: the first row of a supplier is its top defect.
  */
-async function mainDefects(
-  range: Range,
-  verdicts: string[],
-  groupBy: "supplier" | "roll",
-  rollIds: string[] | null,
-  db: Db,
-) {
-  const rows = await db.$queryRaw<{ groupId: string | null; label: string; sections: bigint }[]>`
-    SELECT CASE WHEN ${groupBy} = 'supplier' THEN b."supplierId"::text ELSE b.id::text END AS "groupId",
-      coalesce(dt.label, d."rawClassKey") AS label, count(*) AS sections
-    FROM scans s
-    JOIN batches b ON b.id = s."batchId"
-    JOIN LATERAL (
-      SELECT x."defectTypeId", x."rawClassKey" FROM detections x
-      WHERE x."scanId" = s.id ORDER BY x.confidence DESC LIMIT 1
-    ) d ON true
-    LEFT JOIN defect_types dt ON dt.id = d."defectTypeId"
-    WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-      AND b.status <> 'CANCELLED' -- a cancelled roll never went on to cutting (Phase 26)
-      AND s."finalVerdict"::text = ANY(${verdicts})
-      AND (${rollIds}::uuid[] IS NULL OR b.id = ANY(${rollIds}::uuid[]))
+export async function supplierDefects(range: Range, foundAtOrAbove: number, db: Db = defaultDb()) {
+  const rows = await db.$queryRaw<{ groupId: string | null; label: string; rolls: bigint }[]>`
+    SELECT b."supplierId"::text AS "groupId", t.label, count(DISTINCT b.id) AS rolls
+    FROM batches b
+    JOIN scans s ON s."batchId" = b.id
+    JOIN detections d ON d."scanId" = s.id
+    JOIN defect_types t ON t.id = d."defectTypeId" AND t."isActive"
+    WHERE b.status IN ('FINISHED', 'USED', 'RETURNED')
+      AND b."finishedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
+      AND b."finishedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+      AND d.confidence >= ${foundAtOrAbove}
     GROUP BY 1, 2
     ORDER BY 3 DESC, 2`;
-  return rows.map((r) => ({ groupId: r.groupId, label: r.label, sections: n(r.sections) }));
+  return rows.map((r) => ({ groupId: r.groupId, label: r.label, rolls: n(r.rolls) }));
 }
 
-/** The main defect of each supplier's rejected sections (for salvage), most common first. */
-export function supplierDefects(range: Range, db: Db = defaultDb()) {
-  return mainDefects(range, ["REJECT"], "supplier", null, db);
-}
-
-export type RollRejectRow = {
+export type RollDefectRow = {
   rollId: string;
   rollCode: string;
   tagCode: string | null;
   supplier: string;
-  sections: number;
-  rejected: number;
-  defects: { label: string; sections: number }[];
+  /** Percent of the roll's area with defects (Phase 30C). */
+  defectSharePct: number;
+  returned: boolean;
 };
 
-/** The rolls (one per roll) with the most rejected sections in the range, worst first. */
-export async function rollsWithMostRejects(
+/** The rolls finished in the range with the highest Defect %, worst first (D-117). */
+export async function rollsWithMostDefects(
   range: Range,
   limit: number,
   db: Db = defaultDb(),
-): Promise<RollRejectRow[]> {
-  const rows = await db.$queryRaw<Record<string, bigint | string>[]>`
+): Promise<RollDefectRow[]> {
+  const rows = await db.$queryRaw<Record<string, string | number | boolean | null>[]>`
     SELECT b.id AS "rollId", b.code AS "rollCode", b."rollCode" AS "tagCode",
       coalesce(sp.name, 'No supplier recorded') AS supplier,
-      count(*) AS sections,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS rejected
-    FROM scans s
-    JOIN batches b ON b.id = s."batchId"
+      b."defectSharePct"::float8 AS "defectSharePct",
+      (b.status = 'RETURNED' OR (b."markedForReturn" AND b."returnDecision" IS NULL)) AS returned
+    FROM batches b
     LEFT JOIN suppliers sp ON sp.id = b."supplierId"
-    WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-      AND b.status <> 'CANCELLED' -- a cancelled roll never went on to cutting (Phase 26)
-    GROUP BY b.id, b.code, b."rollCode", sp.name
-    HAVING count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') > 0
-    ORDER BY 6 DESC, 5 DESC, b.code
+    WHERE b.status IN ('FINISHED', 'USED', 'RETURNED')
+      AND b."defectSharePct" > 0
+      AND b."finishedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
+      AND b."finishedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+    ORDER BY b."defectSharePct" DESC, b.code
     LIMIT ${limit}`;
-  if (rows.length === 0) return [];
-  const ids = rows.map((r) => String(r.rollId));
-  const defects = await mainDefects(range, ["REJECT"], "roll", ids, db);
   return rows.map((r) => ({
     rollId: String(r.rollId),
     rollCode: String(r.rollCode),
     tagCode: r.tagCode == null ? null : String(r.tagCode),
     supplier: String(r.supplier),
-    sections: n(r.sections as bigint),
-    rejected: n(r.rejected as bigint),
-    defects: defects
-      .filter((d) => d.groupId === String(r.rollId))
-      .map((d) => ({ label: d.label, sections: d.sections })),
+    defectSharePct: Number(r.defectSharePct),
+    returned: Boolean(r.returned),
   }));
 }
 

@@ -445,11 +445,11 @@ describe("Reports → Rolls and a leather item's rolls (D-008)", () => {
       { rollId: "r1", finalVerdict: "PASS", _count: { _all: 8 } },
       { rollId: "r1", finalVerdict: "REJECT", _count: { _all: 2 } },
     ]);
-    const result = await svc.listRollsForReport({ status: "FINISHED", days: 7 }, now);
+    const result = await svc.listRollsForReport({ status: "RETURNED", days: 7 }, now);
     expect(result).toMatchObject({ total: 1, page: 1, pageCount: 1 });
     expect(result.rows[0]).toMatchObject({ passed: 8, rejected: 2, areaSqFt: 24.5 });
     const [filters, page] = rolls.listRolls.mock.calls[0];
-    expect(filters).toMatchObject({ status: "FINISHED" });
+    expect(filters).toMatchObject({ reportStatus: "RETURNED" });
     expect(filters.since.toISOString()).toBe("2026-10-19T16:00:00.000Z"); // 20 Oct, Manila
     expect(page).toEqual({ skip: 0, take: 15 });
     for (const key of Object.keys(result.rows[0]))

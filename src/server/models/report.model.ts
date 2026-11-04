@@ -1,6 +1,6 @@
 import { type Db, defaultDb } from "./db";
 
-// Report queries (D-025). Aggregates per Manila day, stage or defect type only: no query here
+// Report queries (D-025). Aggregates per Manila day, roll or defect type only: no query here
 // selects or groups by a person (D-008). Timestamps are stored as UTC `timestamp(3)`, so a
 // Manila day is `(col AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila'`. Range bounds arrive as
 // UTC instants and are compared as UTC timestamps.
@@ -9,32 +9,36 @@ type Range = { start: Date; end: Date };
 const iso = (d: Date) => d.toISOString();
 const n = (v: bigint | number | null) => Number(v ?? 0);
 
-export type DailyScanRow = {
+// Since D-117 the reports judge whole rolls: a roll counts on the Manila day it was finished at
+// Capture, and is Returned to supplier when its defects went over the limit (D-116) or it was sent
+// back in Phase 30C; otherwise Scanning passed. A roll being scanned or removed doesn't count.
+// Keep RETURNED in step with `isReturnedToSupplier` in src/lib/roll-rules.ts.
+
+export type DailyRollRow = {
   day: string;
-  scanned: number;
-  pass: number;
-  /** Rejected sections, which reports call "for salvage" (A-11). */
-  reject: number;
+  /** Rolls finished at Capture that day. */
+  rolls: number;
+  passed: number;
+  returned: number;
 };
 
-export async function dailyScanStats(range: Range, db: Db = defaultDb()): Promise<DailyScanRow[]> {
+/** Rolls finished at Capture per Manila day, passed or returned to supplier (D-117). */
+export async function dailyRollStats(range: Range, db: Db = defaultDb()): Promise<DailyRollRow[]> {
   const rows = await db.$queryRaw<Record<string, bigint | string>[]>`
-    SELECT to_char((s."capturedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila', 'YYYY-MM-DD') AS day,
-      count(*) AS scanned,
-      count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
-    FROM scans s
-    JOIN batches b ON b.id = s."batchId"
-    WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-      AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-      AND b.status <> 'CANCELLED' -- a cancelled roll never went on to cutting (Phase 26)
+    SELECT to_char((b."finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila', 'YYYY-MM-DD') AS day,
+      count(*) AS rolls,
+      count(*) FILTER (WHERE b.status = 'RETURNED'
+        OR (b."markedForReturn" AND b."returnDecision" IS NULL)) AS returned
+    FROM batches b
+    WHERE b.status IN ('FINISHED', 'USED', 'RETURNED')
+      AND b."finishedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
+      AND b."finishedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
     GROUP BY 1`;
-  return rows.map((r) => ({
-    day: String(r.day),
-    scanned: n(r.scanned as bigint),
-    pass: n(r.pass as bigint),
-    reject: n(r.reject as bigint),
-  }));
+  return rows.map((r) => {
+    const rolls = n(r.rolls as bigint);
+    const returned = n(r.returned as bigint);
+    return { day: String(r.day), rolls, passed: rolls - returned, returned };
+  });
 }
 
 /**
@@ -63,43 +67,43 @@ export async function dailyProduction(range: Range, db: Db = defaultDb()) {
 export type DefectRow = {
   key: string;
   label: string;
-  scans: number;
-  pass: number;
-  /** Sections rejected (for salvage) whose main defect was this type. */
-  reject: number;
+  /** Rolls finished in the range on which this type was found. */
+  rolls: number;
+  /** Of those, the rolls returned to supplier. */
+  returned: number;
 };
 
 /**
- * Scans per defect type, by the scan's top detection (the one that drove the decision), split by
- * final verdict. Every detection has a defect type since D-108; a key with none (an old row)
- * is grouped under its raw key.
+ * Per defect type, the rolls finished in the range on which it was found (a detection at or above
+ * "A defect counts as found at", of an active type), and how many of them were returned to
+ * supplier (D-117). One count per roll, however many shots showed it.
  */
-export async function defectBreakdown(range: Range, db: Db = defaultDb()): Promise<DefectRow[]> {
-  const rows = await db.$queryRaw<Record<string, bigint | string | boolean>[]>`
-    WITH top AS (
-      SELECT DISTINCT ON (d."scanId") d."scanId", d."rawClassKey", d."defectTypeId"
-      FROM detections d JOIN scans s ON s.id = d."scanId"
-      JOIN batches b ON b.id = s."batchId"
-      WHERE s."capturedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
-        AND s."capturedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
-        AND b.status <> 'CANCELLED' 
-      ORDER BY d."scanId", d.confidence DESC
+export async function defectBreakdown(
+  range: Range,
+  foundAtOrAbove: number,
+  db: Db = defaultDb(),
+): Promise<DefectRow[]> {
+  const rows = await db.$queryRaw<Record<string, bigint | string>[]>`
+    WITH found AS (
+      SELECT DISTINCT b.id AS roll, t.key, t.label,
+        (b.status = 'RETURNED' OR (b."markedForReturn" AND b."returnDecision" IS NULL)) AS returned
+      FROM batches b
+      JOIN scans s ON s."batchId" = b.id
+      JOIN detections d ON d."scanId" = s.id
+      JOIN defect_types t ON t.id = d."defectTypeId" AND t."isActive"
+      WHERE b.status IN ('FINISHED', 'USED', 'RETURNED')
+        AND b."finishedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
+        AND b."finishedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
+        AND d.confidence >= ${foundAtOrAbove}
     )
-    SELECT coalesce(t.key, top."rawClassKey") AS key,
-      coalesce(t.label, top."rawClassKey") AS label,
-      count(*) AS scans,
-      count(*) FILTER (WHERE s."finalVerdict" = 'PASS') AS pass,
-      count(*) FILTER (WHERE s."finalVerdict" = 'REJECT') AS reject
-    FROM top JOIN scans s ON s.id = top."scanId"
-    LEFT JOIN defect_types t ON t.id = top."defectTypeId"
-      OR (top."defectTypeId" IS NULL AND t.key = top."rawClassKey")
+    SELECT key, label, count(*) AS rolls, count(*) FILTER (WHERE returned) AS returned
+    FROM found
     GROUP BY 1, 2
     ORDER BY count(*) DESC, 2`;
   return rows.map((r) => ({
     key: String(r.key),
     label: String(r.label),
-    scans: n(r.scans as bigint),
-    pass: n(r.pass as bigint),
-    reject: n(r.reject as bigint),
+    rolls: n(r.rolls as bigint),
+    returned: n(r.returned as bigint),
   }));
 }

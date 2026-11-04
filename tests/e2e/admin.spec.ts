@@ -256,7 +256,7 @@ test("a deactivated supplier disappears from the roll supplier lists (Phase 26)"
 
   // The supplier is listed in Reports → Rolls' filter.
   await signInAs(page, ACCOUNTS.manager);
-  await page.goto("/reports/rolls?status=OPEN");
+  await page.goto("/reports/rolls?status=PASSED");
   await expect(page.getByLabel("Supplier").getByRole("option", { name: supplier })).toHaveCount(1);
 
   await admin.goto("/admin/settings?tab=suppliers");

@@ -6,25 +6,25 @@ import { VERDICT_SERIES, VerdictLegend } from "./verdict-legend";
 
 type Day = {
   day: string;
-  pass: number;
-  reject: number;
-  scanned: number;
+  rolls: number;
+  passed: number;
+  returned: number;
 };
 
 /**
- * Scans per Manila day, stacked by final verdict (dataviz: stacked columns for part-to-whole over
+ * Rolls finished at Capture per Manila day, stacked passed and returned to supplier (D-117; dataviz: stacked columns for part-to-whole over
  * time). Fixed series order, 2px surface gaps, rounded data end on the top segment, recessive
  * grid, hover tooltip. The daily table on the same page is its table view.
  */
 export function VerdictTrendChart({ days }: { days: Day[] }) {
-  const lastWithData = [...days].reverse().find((d) => d.scanned > 0);
+  const lastWithData = [...days].reverse().find((d) => d.rolls > 0);
   return (
     <figure className="flex flex-col gap-3">
       <VerdictLegend />
       <div
         className="h-64"
         role="img"
-        aria-label={`Scans per day by final verdict, ${days.length} days`}
+        aria-label={`Rolls scanned per day, passed or returned to supplier, ${days.length} days`}
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
@@ -55,7 +55,7 @@ export function VerdictTrendChart({ days }: { days: Day[] }) {
                 active && payload?.length ? (
                   <div className="rounded-md border bg-popover px-3 py-2 text-sm shadow-2">
                     <p className="mb-1 font-medium">
-                      {formatDayLabel(String(label))} · {(payload[0].payload as Day).scanned}{" "}
+                      {formatDayLabel(String(label))} · {(payload[0].payload as Day).rolls} rolls
                       scanned
                     </p>
                     <ul className="flex flex-col gap-0.5">
@@ -96,8 +96,9 @@ export function VerdictTrendChart({ days }: { days: Day[] }) {
       </div>
       {lastWithData && (
         <figcaption className="text-sm text-muted-foreground">
-          Latest day with scans: {formatDayLabel(lastWithData.day)}, {lastWithData.scanned} scanned
-          ({lastWithData.pass} pass, {lastWithData.reject} reject, for salvage).
+          Latest day with rolls scanned: {formatDayLabel(lastWithData.day)}, {lastWithData.rolls}{" "}
+          {lastWithData.rolls === 1 ? "roll" : "rolls"} ({lastWithData.passed} passed,{" "}
+          {lastWithData.returned} returned to supplier).
         </figcaption>
       )}
     </figure>

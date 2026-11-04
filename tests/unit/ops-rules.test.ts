@@ -45,8 +45,8 @@ describe("daysOfCover", () => {
 
 describe("paretoShares", () => {
   it("sorts biggest first with a running share that ends at 100%", () => {
-    const rows = paretoShares([{ scans: 2 }, { scans: 6 }, { scans: 2 }]);
-    expect(rows.map((r) => r.scans)).toEqual([6, 2, 2]);
+    const rows = paretoShares([{ rolls: 2 }, { rolls: 6 }, { rolls: 2 }]);
+    expect(rows.map((r) => r.rolls)).toEqual([6, 2, 2]);
     expect(rows[0]).toMatchObject({ share: 0.6, cumulative: 0.6 });
     expect(rows[2].cumulative).toBe(1);
   });
@@ -60,7 +60,7 @@ describe("buildAttention", () => {
     belowQuota: null,
     stock: { out: 0, low: 0, shortCover: [] },
     suppliers: [],
-    lineRejectShare: null,
+    lineReturnedShare: null,
   };
 
   it("is empty when nothing is wrong", () => {
@@ -86,18 +86,21 @@ describe("buildAttention", () => {
     });
   });
 
-  it("flags a supplier only with enough sections and a clear gap", () => {
-    const base = { ...quiet, lineRejectShare: 0.2 };
+  it("flags a supplier only with enough rolls and a clear gap (D-117)", () => {
+    const base = { ...quiet, lineReturnedShare: 0.2 };
     const flagged = buildAttention({
       ...base,
       suppliers: [
-        { supplier: "Tannery A", sections: 60, rejectShare: 0.4 },
-        { supplier: "Tannery B", sections: 10, rejectShare: 0.9 }, // too few sections
-        { supplier: "Tannery C", sections: 80, rejectShare: 0.25 }, // not far enough above
+        { supplier: "Tannery A", rolls: 6, returnedShare: 0.5 },
+        { supplier: "Tannery B", rolls: 2, returnedShare: 1 }, // too few rolls
+        { supplier: "Tannery C", rolls: 8, returnedShare: 0.25 }, // not far enough above
       ],
     });
     expect(flagged).toHaveLength(1);
     expect(flagged[0].title).toContain("Tannery A");
+    expect(flagged[0].detail).toBe(
+      "50% of its rolls were returned to supplier, against 20% overall.",
+    );
   });
 
   it("asks for a restock on low stock and links every item to a screen that exists (D-091)", () => {
@@ -105,8 +108,8 @@ describe("buildAttention", () => {
       ...quiet,
       belowQuota: { below: 3, of: 5 },
       stock: { out: 1, low: 2, shortCover: [{ item: "Thread", days: 1.2 }] },
-      suppliers: [{ supplier: "Tannery A", sections: 60, rejectShare: 0.4 }],
-      lineRejectShare: 0.2,
+      suppliers: [{ supplier: "Tannery A", rolls: 6, returnedShare: 0.5 }],
+      lineReturnedShare: 0.2,
     });
     expect(items).toHaveLength(5);
     expect(items.find((i) => i.id === "stock-low")?.detail).toBe(
@@ -117,13 +120,13 @@ describe("buildAttention", () => {
   });
 });
 
-describe("supplierIsHigh (Phase 20)", () => {
-  it("needs enough sections and a clear gap above the line", async () => {
+describe("supplierIsHigh (Phase 20, on rolls since D-117)", () => {
+  it("needs at least 5 rolls and a clear gap above the line", async () => {
     const { supplierIsHigh } = await import("@/lib/ops-rules");
-    expect(supplierIsHigh({ sections: 60, rejectShare: 0.4 }, 0.2)).toBe(true);
-    expect(supplierIsHigh({ sections: 10, rejectShare: 0.9 }, 0.2)).toBe(false);
-    expect(supplierIsHigh({ sections: 80, rejectShare: 0.25 }, 0.2)).toBe(false);
-    expect(supplierIsHigh({ sections: 80, rejectShare: null }, 0.2)).toBe(false);
-    expect(supplierIsHigh({ sections: 80, rejectShare: 0.9 }, null)).toBe(false);
+    expect(supplierIsHigh({ rolls: 5, returnedShare: 0.4 }, 0.2)).toBe(true);
+    expect(supplierIsHigh({ rolls: 4, returnedShare: 0.9 }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ rolls: 8, returnedShare: 0.25 }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ rolls: 8, returnedShare: null }, 0.2)).toBe(false);
+    expect(supplierIsHigh({ rolls: 8, returnedShare: 0.9 }, null)).toBe(false);
   });
 });

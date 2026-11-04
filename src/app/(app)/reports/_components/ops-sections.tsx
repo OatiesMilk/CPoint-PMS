@@ -31,69 +31,6 @@ function SectionLink({ href, children }: { href: string; children: React.ReactNo
   );
 }
 
-const SALVAGE_ROWS = 8;
-
-/**
- * Rejected sections, reported "for salvage" (A-11): how many in this range and the main defect of
- * each. Per roll and per supplier are in Supplier quality, per day in the Daily summary. The report
- * moves no leather (C-20).
- */
-export function ForSalvageCard({
-  salvage,
-  scanned,
-}: {
-  salvage: OperationsReport["forSalvage"];
-  scanned: number;
-}) {
-  return (
-    <Card data-testid="for-salvage">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <CardTitle>For salvage</CardTitle>
-            <CardDescription>
-              Sections the camera rejected in this range, by the main defect of each. They are set
-              aside for salvage; per roll and per supplier are in Supplier quality below.
-            </CardDescription>
-          </div>
-          <SectionLink href="/reports/rolls">Rolls</SectionLink>
-        </div>
-      </CardHeader>
-      <CardContent className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_2fr]">
-        <dl className="text-sm">
-          <dt className="text-muted-foreground">Rejected sections</dt>
-          <dd className="text-2xl font-semibold tabular-nums" data-testid="salvage-total">
-            {salvage.total}
-          </dd>
-          <dd className="text-muted-foreground tabular-nums">
-            {formatPercent(scanned > 0 ? salvage.total / scanned : null)} of {scanned} scanned
-          </dd>
-        </dl>
-        {salvage.byDefect.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No section was rejected in this range.</p>
-        ) : (
-          <Table data-testid="salvage-table">
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Main defect</TableHead>
-                <TableHead numeric>Sections</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {salvage.byDefect.slice(0, SALVAGE_ROWS).map((d) => (
-                <TableRow key={d.key}>
-                  <TableCell>{d.label}</TableCell>
-                  <TableCell numeric>{d.sections}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 const STOCK_ROWS = 8;
 
 /** Items out, low, or running out at the recent pace, with days of cover. */
@@ -195,12 +132,12 @@ export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"
 export function SupplierQualityCard({
   suppliers,
   rolls,
-  lineRejectShare,
+  lineReturnedShare,
   rangeQuery,
 }: {
   suppliers: OperationsReport["suppliers"];
-  rolls: OperationsReport["rejectedRolls"];
-  lineRejectShare: number | null;
+  rolls: OperationsReport["mostDefects"];
+  lineReturnedShare: number | null;
   /** `from=…&to=…`, so the CSVs cover the range on screen. */
   rangeQuery: string;
 }) {
@@ -211,11 +148,11 @@ export function SupplierQualityCard({
           <div>
             <CardTitle>Supplier quality</CardTitle>
             <CardDescription>
-              Shots captured in this range, grouped by the supplier of each roll. Defect area and
-              Too many defects count the rolls finished in this range. Use it as evidence when
-              raising a claim.
-              {lineRejectShare !== null &&
-                ` Across all suppliers, ${formatPercent(lineRejectShare)} were rejected.`}
+              The leather rolls finished at Capture in this range, grouped by supplier: how many
+              passed and how many were returned to supplier. Use it as evidence when raising a
+              claim.
+              {lineReturnedShare !== null &&
+                ` Across all suppliers, ${formatPercent(lineReturnedShare)} of rolls were returned.`}
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -231,7 +168,7 @@ export function SupplierQualityCard({
       <CardContent className="flex flex-col gap-6">
         {suppliers.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No sections were scanned in this range, so there is nothing to compare yet.
+            No roll was finished at Capture in this range, so there is nothing to compare yet.
           </p>
         ) : (
           <Table data-testid="supplier-table">
@@ -239,12 +176,10 @@ export function SupplierQualityCard({
               <TableRow className="hover:bg-transparent">
                 <TableHead>Supplier</TableHead>
                 <TableHead numeric>Rolls</TableHead>
-                <TableHead numeric>Sections</TableHead>
-                <TableHead numeric>Pass</TableHead>
-                <TableHead numeric>Reject</TableHead>
+                <TableHead numeric>Scanning passed</TableHead>
+                <TableHead numeric>Returned to supplier</TableHead>
+                <TableHead numeric>Returned %</TableHead>
                 <TableHead>Top defect</TableHead>
-                <TableHead numeric>Defect area</TableHead>
-                <TableHead numeric>Too many defects</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -256,7 +191,7 @@ export function SupplierQualityCard({
                       {s.high && (
                         <Badge
                           tone="danger"
-                          title="Rejected sections are well above the other suppliers'."
+                          title="Its rolls are returned well more often than the other suppliers'."
                         >
                           <TriangleAlert aria-hidden />
                           High
@@ -265,18 +200,10 @@ export function SupplierQualityCard({
                     </span>
                   </TableCell>
                   <TableCell numeric>{s.rolls}</TableCell>
-                  <TableCell numeric>{s.sections}</TableCell>
-                  <TableCell numeric>{formatPercent(s.passShare)}</TableCell>
-                  <TableCell numeric>{formatPercent(s.rejectShare)}</TableCell>
+                  <TableCell numeric>{s.passed}</TableCell>
+                  <TableCell numeric>{s.returned}</TableCell>
+                  <TableCell numeric>{formatPercent(s.returnedShare)}</TableCell>
                   <TableCell>{s.topDefect ?? "None"}</TableCell>
-                  <TableCell numeric>
-                    {s.defectSharePct === null ? (
-                      <span className="text-muted-foreground">Not measured</span>
-                    ) : (
-                      `${s.defectSharePct.toLocaleString("en-PH", { maximumFractionDigits: 1 })}%`
-                    )}
-                  </TableCell>
-                  <TableCell numeric>{s.rollsMarked}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -284,18 +211,19 @@ export function SupplierQualityCard({
         )}
 
         <div className="flex flex-col gap-2">
-          <h3 className="font-semibold">Rolls with the most rejects</h3>
+          <h3 className="font-semibold">Rolls with the most defects</h3>
           {rolls.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No roll had a rejected section in this range.
+              No roll finished in this range has a measured Defect % above 0.
             </p>
           ) : (
-            <Table data-testid="rejected-rolls">
+            <Table data-testid="most-defects-rolls">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Roll · tag</TableHead>
                   <TableHead>Supplier</TableHead>
-                  <TableHead numeric>Rejected</TableHead>
+                  <TableHead numeric>Defect %</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Defects</TableHead>
                   <TableActionsHead />
                 </TableRow>
@@ -309,10 +237,13 @@ export function SupplierQualityCard({
                     </TableCell>
                     <TableCell>{r.supplier}</TableCell>
                     <TableCell numeric className="whitespace-nowrap">
-                      {r.rejected} of {r.sections}
+                      {`${r.defectSharePct.toLocaleString("en-PH", { maximumFractionDigits: 1 })}%`}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {r.returned ? "Returned to supplier" : "Scanning passed"}
                     </TableCell>
                     <TableCell>
-                      {r.defects.map((d) => `${d.label} ${d.sections}`).join(" · ") || "None"}
+                      {r.defects.map((d) => `${d.label} ${d.detections}`).join(" · ") || "None"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-2">

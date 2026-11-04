@@ -151,7 +151,7 @@ async function DefectsTab({ add }: { add?: string }) {
         { value: "USABLE", label: OUTCOME_LABEL.USABLE },
         { value: "NOT_ACCEPTED", label: OUTCOME_LABEL.NOT_ACCEPTED },
       ],
-      hint: "Usable leaves the section Pass. Not accepted rejects it, and it is reported for salvage. A type with a length limit uses the limit instead.",
+      hint: "Usable leaves the section Pass. Not accepted rejects it. A type with a length limit uses the limit instead.",
     },
     {
       name: "notAcceptedFromIn",
