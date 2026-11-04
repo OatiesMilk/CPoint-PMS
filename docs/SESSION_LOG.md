@@ -5,6 +5,37 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-04 · Reports clean-up run 3 PASS
+
+- Codex run 3: R1 (batches spec 7/0) and R2 (smoke 10/0) passed; targeted 43/0/0, full 93/0/2
+  (two conditional skips); ledger 0. QA done for D-116 and D-117; git commands given to Dylan.
+
+## 2026-11-04 · Reports clean-up run 2 FAIL, fixed
+
+- Codex run 2: R1 (S15 with today's pairs) and R2 (reports spec 3/0) passed; targeted 35/1/0,
+  full 86/2/2, smoke alone 10/0; ledger 0. Fixes, tests only: `batches.spec.ts` waits for the plan
+  notice to close before axe (`aria-hidden-focus` while closing); the FM smoke journey gets 60 s.
+  Prompt `qa/CODEX_PROMPT_REPORTS_CLEANUP_RUN3.md`.
+
+## 2026-11-04 · Reports clean-up run 1 FAIL, fixed
+
+- Codex run 1: 21 passed, 1 failed (S15, a handoff error: Batches' Recent days leaves today out),
+  1 not possible (S12, no rejected leather); e2e targeted 35/1/0, full 91/2/2; ledger 0. Fixes:
+  S15 adds today; `reports.spec.ts` checks the removed card's exact title. F3 smoke deadline in the
+  full suite only, no change. Prompt `qa/CODEX_PROMPT_REPORTS_CLEANUP_RUN2.md`.
+
+## 2026-11-04 · Reports count whole rolls (D-117)
+
+- Dylan: remove the Rejected sections card; judge whole rolls, passed or returned to supplier;
+  scans per day count rolls; explain Pairs finished; remove Rolls open and Rolls finished; no
+  Defect area. Plan `docs/prompts/plans/reports-by-roll-plan.md`, then "implement".
+- Built on c8c68dc + D-116: Quality, Operations, Supplier quality, the FM home cards and every
+  report CSV count rolls finished, Scanning passed or Returned to supplier; Rolls with the most
+  defects by Defect %; A-43 (High from 5 rolls). No migration.
+- `npm run check` passed (662 unit tests, build OK) in a cloud copy, then copied to the laptop.
+  E2E `reports.spec.ts` and `supplier-quality.spec.ts` rewritten; not run (Codex). Handoff and
+  prompt now cover D-116 and D-117 together.
+
 ## 2026-11-04 · Phase 30E-2 run 3 PASS
 
 - Run 3 PASS: wide tables focusable from the first paint (axe 0 on four scans); targeted e2e
@@ -19,6 +50,19 @@ Template:
   passed alone); ledger 0. Fixes: the spec clicks the visible bell; `ScrollRegion` starts focusable
   and measures before paint. `npm run check` passed (659). Prompt
   `qa/CODEX_PROMPT_PHASE_30E2_RUN3.md`.
+
+## 2026-11-04 · Reports clean-up built (D-116)
+
+- Dylan's five asks plus his answer: the system flags a roll over 10% defects of its area and
+  marks it Returned to supplier.
+- Built: Reports → Rolls status filter Not yet scanned / Scanning passed / Returned to supplier
+  (worked out from `markedForReturn`, no migration) and the same words on the badge; "for salvage"
+  removed from every screen and CSV; Materials without the 8 weeks to selected column and Per 100
+  pairs; Returned to supplier per week on Leather rolls and in Supplier quality; the Settings label
+  and the Finish roll line follow.
+- `npm run check` passed (659 unit tests) in a cloud copy of the laptop folder. E2E updated
+  (`rolls`, `returns`, `reports`, `smoke`, `inventory`, `admin`), not run (Codex). Handoff
+  `qa/handoffs/2026-11-04-reports-cleanup.md`, prompt `qa/CODEX_PROMPT_REPORTS_CLEANUP.md`.
 
 ## 2026-11-04 · Phase 30E-2 run 1 FAIL, fixed
 

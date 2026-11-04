@@ -4,7 +4,6 @@ import {
   daysToNextReminder,
   describeReminderDays,
   mayRunOut,
-  perHundredPairs,
   stockUpdateDue,
   weekChange,
 } from "@/lib/stock-rules";
@@ -37,12 +36,6 @@ describe("consumption", () => {
   it("compares this week with last week", () => {
     expect(weekChange(12, 10)).toEqual({ diff: 2, change: 0.2 });
     expect(weekChange(3, 0)).toEqual({ diff: 3, change: null });
-  });
-
-  it("gives use per 100 pairs, with none when no pairs were made", () => {
-    expect(perHundredPairs(6, 300)).toBe(2);
-    expect(perHundredPairs(1, 3)).toBe(33.33);
-    expect(perHundredPairs(4, 0)).toBeNull();
   });
 
   it("works out the days left at the last 4 weeks' pace", () => {

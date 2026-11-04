@@ -41,7 +41,7 @@ export function LastScanSummary({ summary, repeat }: { summary: ScanSummary; rep
       )}
       <p className="text-sm">
         {summary.verdict === "REJECT"
-          ? "Reject: this part of the roll is reported for salvage."
+          ? "Reject: this part of the roll is not for cutting."
           : "Pass: this part of the roll can go on to cutting."}
       </p>
       {summary.defects.length > 0 ? (

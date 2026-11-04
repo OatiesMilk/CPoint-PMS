@@ -189,7 +189,7 @@ export default async function InventoryItemPage({
                       <TableHead>Arrived</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead numeric>Shots</TableHead>
-                      <TableHead numeric>Rejected (for salvage)</TableHead>
+                      <TableHead numeric>Rejected</TableHead>
                       <TableHead>Defects found</TableHead>
                       <TableHead numeric>Defect %</TableHead>
                       {(canReadRolls || canRemoveRolls) && <TableActionsHead />}
@@ -220,7 +220,7 @@ export default async function InventoryItemPage({
                           {r.receivedAt ? formatCalendarDate(r.receivedAt) : "—"}
                         </TableCell>
                         <TableCell>
-                          <RollStatusBadge status={r.status} />
+                          <RollStatusBadge roll={r} />
                         </TableCell>
                         <TableCell numeric>{r._count.scans}</TableCell>
                         <TableCell numeric>{r.rejected}</TableCell>

@@ -102,7 +102,7 @@ export async function listRollsForReport(
     : undefined;
   const { rows, total } = await listRolls(
     {
-      status: query.status,
+      reportStatus: query.status,
       supplierId: query.supplierId,
       since,
       q: query.q,

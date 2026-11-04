@@ -88,10 +88,7 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
             {t.reject} of {t.sections} rejected
             {t.sections > 0 && ` (${formatPercent(t.reject / t.sections)})`}
           </dd>
-          <dd>
-            {t.pass} passed. The camera’s verdict is final; rejected sections are set aside for
-            salvage.
-          </dd>
+          <dd>{t.pass} passed. The camera’s verdict is final; rejected sections are not cut.</dd>
         </div>
       </dl>
 

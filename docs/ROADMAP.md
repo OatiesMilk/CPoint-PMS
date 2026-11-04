@@ -508,10 +508,17 @@ was never built. Each phase gets its own criteria here when its plan is approved
       `docs/prompts/plans/phase-30e-plan.md`
 - [ ] Phase 30E-2: a planning calendar (a weekday from today on: rolls to be used, quota, check-in
       interval of every 4 h or once a day, shift), Non-working / Holiday days, planned against
-      scanned, the start-of-day notice (D-114, D-115; QA run 3 passed). Plan
+      scanned, the start-of-day notice (D-114, D-115; built 2026-11-04, Codex run 1 next). Plan
       `docs/prompts/plans/phase-30e2-plan.md`
+- [ ] Reports clean-up (D-116): a roll over the defect limit is Returned to supplier; Rolls status
+      filter Not yet scanned / Scanning passed / Returned to supplier; no "for salvage"; Materials
+      without the 8-week trend and Per 100 pairs, with Returned to supplier per week (built
+      2026-11-04, Codex run 1 next). Plan `docs/prompts/plans/reports-cleanup-plan.md`. With
+      D-117: the reports count whole rolls (passed or returned), no Rejected sections, Rolls open
+      or Rolls finished; plan `docs/prompts/plans/reports-by-roll-plan.md`. QA passed (run 3,
+      2026-11-04)
 - [ ] Phase 30D: the team's QA notes on Reports → Materials (week picker by date, no Last 8
-      weeks or Per 100 pairs, on hand per week, pairs change and pairs per roll; leather Used is
+      weeks or Per 100 pairs (both done by D-116), on hand per week, pairs change and pairs per roll; leather Used is
       now Scanned at Capture and Removed (other) by correction, D-113); plan
       `docs/prompts/plans/groupmates-feedback-plan.md`
 - [ ] Phase 31: the documentation and the paper's figures match the system

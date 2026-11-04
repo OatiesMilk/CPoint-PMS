@@ -5,6 +5,7 @@ import {
   CANCEL_REASON_MAX,
   parseArea,
   ROLL_MESSAGES,
+  ROLL_REPORT_STATUSES,
   ROLL_TAG_MAX,
 } from "@/lib/roll-rules";
 
@@ -69,9 +70,12 @@ export const removeRollSchema = z.object({
     .max(CANCEL_REASON_MAX, ROLL_MESSAGES.removeReasonTooLong),
 });
 
-/** Reports → Rolls filters (URL search params). Unknown or invalid values are dropped. */
+/**
+ * Reports → Rolls filters (URL search params). Unknown or invalid values are dropped. Status is one
+ * of Not yet scanned, Scanning passed or Returned to supplier (D-116).
+ */
 export const rollListQuerySchema = z.object({
-  status: z.enum(RollStatus).optional().catch(undefined),
+  status: z.enum(ROLL_REPORT_STATUSES).optional().catch(undefined),
   supplierId: z.uuid().optional().catch(undefined),
   days: z.coerce
     .number()

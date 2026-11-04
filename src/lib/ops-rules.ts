@@ -10,26 +10,26 @@ export { stockLevel, type StockLevel } from "./inventory-rules";
 export const ATTENTION = {
   /** Stock that would run out within this many days at the recent pace. */
   coverDays: 3,
-  /** A supplier is flagged when its reject share is this far above the line's. */
+  /** A supplier is flagged when its share of rolls returned is this far above the line's. */
   supplierGap: 0.1,
-  /** Sections needed before a supplier's share means anything. */
-  supplierMinSections: 30,
+  /** Rolls needed before a supplier's share means anything (D-117). */
+  supplierMinRolls: 5,
 } as const;
 
 /**
- * A supplier whose reject share (sections for salvage) is well above the whole line's, over enough
- * sections to mean something. The Supplier quality "High" badge and the attention item use this
- * one rule, so they never disagree (Phase 20; reject only since Phase 25, D-093).
+ * A supplier whose share of rolls returned to supplier is well above the whole line's, over enough
+ * rolls to mean something. The Supplier quality "High" badge and the attention item use this one
+ * rule, so they never disagree (Phase 20; on whole rolls since D-117).
  */
 export function supplierIsHigh(
-  s: { sections: number; rejectShare: number | null },
-  lineRejectShare: number | null,
+  s: { rolls: number; returnedShare: number | null },
+  lineReturnedShare: number | null,
 ): boolean {
   return (
-    lineRejectShare !== null &&
-    s.rejectShare !== null &&
-    s.sections >= ATTENTION.supplierMinSections &&
-    s.rejectShare >= lineRejectShare + ATTENTION.supplierGap
+    lineReturnedShare !== null &&
+    s.returnedShare !== null &&
+    s.rolls >= ATTENTION.supplierMinRolls &&
+    s.returnedShare >= lineReturnedShare + ATTENTION.supplierGap
   );
 }
 
@@ -72,17 +72,20 @@ export function daysOfCover(onHand: number, usedInRange: number, rangeDays: numb
 
 // ───────────── quality ─────────────
 
-/** Pareto: share of the total and the running share, biggest first (the 80/20 reading). */
-export function paretoShares<T extends { scans: number }>(
+/**
+ * Pareto: share of the total and the running share, biggest first (the 80/20 reading). Counted on
+ * rolls since D-117, so a share is of all the times a defect was found on a roll.
+ */
+export function paretoShares<T extends { rolls: number }>(
   rows: T[],
 ): (T & { share: number; cumulative: number })[] {
-  const total = rows.reduce((t, r) => t + r.scans, 0);
+  const total = rows.reduce((t, r) => t + r.rolls, 0);
   let running = 0;
   return [...rows]
-    .sort((a, b) => b.scans - a.scans)
+    .sort((a, b) => b.rolls - a.rolls)
     .map((r) => {
-      running += r.scans;
-      return { ...r, share: total ? r.scans / total : 0, cumulative: total ? running / total : 0 };
+      running += r.rolls;
+      return { ...r, share: total ? r.rolls / total : 0, cumulative: total ? running / total : 0 };
     });
 }
 
@@ -102,8 +105,8 @@ export type AttentionInput = {
   /** "3 of the last 5 working days were below quota" (Phase 23); null when fewer than 2 were. */
   belowQuota: { below: number; of: number } | null;
   stock: { out: number; low: number; shortCover: { item: string; days: number }[] };
-  suppliers: { supplier: string; sections: number; rejectShare: number | null }[];
-  lineRejectShare: number | null;
+  suppliers: { supplier: string; rolls: number; returnedShare: number | null }[];
+  lineReturnedShare: number | null;
 };
 
 /**
@@ -154,16 +157,16 @@ export function buildAttention(i: AttentionInput): AttentionItem[] {
       href: "/batches",
     });
 
-  if (i.lineRejectShare !== null) {
+  if (i.lineReturnedShare !== null) {
     const worst = i.suppliers
-      .filter((s) => supplierIsHigh(s, i.lineRejectShare))
-      .sort((a, b) => (b.rejectShare ?? 0) - (a.rejectShare ?? 0))[0];
+      .filter((s) => supplierIsHigh(s, i.lineReturnedShare))
+      .sort((a, b) => (b.returnedShare ?? 0) - (a.returnedShare ?? 0))[0];
     if (worst)
       out.push({
         id: "supplier",
         severity: "warning",
         title: `Leather from ${worst.supplier} has more defects than the rest`,
-        detail: `${Math.round((worst.rejectShare ?? 0) * 100)}% of its sections were rejected (for salvage), against ${Math.round(i.lineRejectShare * 100)}% overall.`,
+        detail: `${Math.round((worst.returnedShare ?? 0) * 100)}% of its rolls were returned to supplier, against ${Math.round(i.lineReturnedShare * 100)}% overall.`,
         href: "/reports?view=operations#supplier-quality",
       });
   }

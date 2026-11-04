@@ -24,8 +24,8 @@ export const REMINDER_DAY_CHOICES = [1, 2, 3, 4, 5] as const;
 /** Wednesday and Friday (C-32). */
 export const DEFAULT_REMINDER_DAYS = [3, 5];
 
-/** The weeks the Materials trend shows (D-109: ending with the picked week), and the days the pace
- * and "per 100 pairs" look back. */
+/** The weeks the Materials Leather rolls table shows (D-109: ending with the picked week), and the
+ * days the pace looks back. */
 export const TREND_WEEKS = 8;
 export const PACE_DAYS = 28;
 
@@ -57,12 +57,6 @@ export function describeReminderDays(days: readonly number[]): string {
 export function weekChange(thisWeek: number, lastWeek: number) {
   const diff = Math.round((thisWeek - lastWeek) * 100) / 100;
   return { diff, change: lastWeek > 0 ? diff / lastWeek : null };
-}
-
-/** Used per 100 pairs finished (failed ones count as made). Null when no pairs were made. */
-export function perHundredPairs(used: number, pairs: number): number | null {
-  if (pairs <= 0) return null;
-  return Math.round((used / pairs) * 100 * 100) / 100;
 }
 
 /** Days the stock lasts at the pace of the last `paceDays`; null when nothing was used. */

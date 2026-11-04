@@ -36,7 +36,7 @@ import { can } from "@/server/policies/permissions";
 import { getRollDetail } from "@/server/services/roll.service";
 import { isRollId } from "@/server/validators/roll.validator";
 import { RemoveRoll } from "@/components/features/rolls/remove-roll";
-import { formatArea } from "@/lib/roll-rules";
+import { formatArea, isReturnedToSupplier } from "@/lib/roll-rules";
 import { removeRollAction } from "../actions";
 
 export const metadata: Metadata = { title: "Roll" };
@@ -54,7 +54,7 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
   const fromInventory = !!roll.item;
   const canClaim = can(user.role, "report:production") && roll.scans.length > 0;
   const shots = roll.scans.length;
-  const tooMany = roll.markedForReturn && roll.returnDecision === null;
+  const returned = isReturnedToSupplier(roll) && roll.status !== "RETURNED";
   const findings = rollFindings(roll.scans);
 
   const when = (d: Date | null, none: string) => (d ? formatManilaDateTime(d) : none);
@@ -111,11 +111,11 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-mono text-3xl font-semibold tracking-tight">{roll.code}</h1>
-              <RollStatusBadge status={roll.status} />
+              <RollStatusBadge roll={roll} />
             </div>
             <p className="mt-1 text-lg text-muted-foreground">
               {shots} {shots === 1 ? "shot" : "shots"} · {roll.passed} passed · {roll.rejected}{" "}
-              rejected (for salvage)
+              rejected
             </p>
           </div>
           {canClaim && (
@@ -137,16 +137,17 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
             Being scanned at Capture. It is finished there once all of it is scanned.
           </p>
         )}
-        {roll.status === "FINISHED" && fromInventory && (
+        {roll.status === "FINISHED" && fromInventory && !returned && (
           <p className="text-sm text-muted-foreground">Scanned and taken off stock.</p>
         )}
-        {tooMany && (
+        {returned && (
           <p role="status" className="rounded-md bg-caution-soft p-3">
             <span className="font-medium">
-              This roll has too many defects ({formatPct(roll.defectSharePct ?? 0)}, over{" "}
-              {formatPct(roll.returnLimitPct ?? 10)}).
+              Returned to supplier: defects cover {formatPct(roll.defectSharePct ?? 0)} of this
+              roll, over the {formatPct(roll.returnLimitPct ?? 10)} limit.
             </span>{" "}
-            The photos are below. Use the claim sheet if you take it up with the supplier.
+            The system marked it when it was finished at Capture. The claim sheet lists the findings
+            for the supplier.
           </p>
         )}
         {roll.status === "RETURNED" && (

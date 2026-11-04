@@ -47,6 +47,23 @@
   clean-up missed its lunch row on a Manila clock (a Date sent in local time to a column with no
   zone); it now sends a UTC string (pre-existing, not run again). QA done for 30E-2: commit on a
   new branch with only this thread's files.
+- **Reports clean-up (D-116, uncommitted, its own thread):** a roll over the defect limit is
+  **Returned to supplier**; Reports → Rolls filters by Not yet scanned, Scanning passed and Returned
+  to supplier; "for salvage" is gone everywhere; Materials without the 8-week trend and Per 100
+  pairs, with Returned to supplier per week on Leather rolls. Plan
+  `docs/prompts/plans/reports-cleanup-plan.md`. Then **D-117** (same thread): the reports count
+  whole rolls, Scanning passed or Returned to supplier, instead of sections; the Rejected sections,
+  Rolls open and Rolls finished cards are gone. Plan `docs/prompts/plans/reports-by-roll-plan.md`.
+  `npm run check` passed (662) in a cloud copy. **Codex run 1 FAIL**
+  (`qa/reports/2026-11-04-reports-cleanup-run1.md`): 21 passed, 1 failed, 1 not possible; e2e
+  targeted 35/1/0, full 91/2/2; ledger 0. F1 the handoff's S15 left out today's pairs (fixed);
+  F2 `reports.spec.ts` matched the claim sheet's help text (now the card's exact title); F3 a smoke
+  deadline in the full suite only. **Run 2 FAIL** (`…-run2.md`): R1 (S15 with today) and R2
+  (reports spec 3/0) passed; targeted 35/1/0, full 86/2/2 (5 not run); smoke alone 10/0; ledger 0.
+  F1 `batches.spec.ts` ran axe while the plan notice was closing (now waits); F2 the FM smoke
+  journey ran past 30 s beside other specs (now 60 s). **Run 3 PASS** (`…-run3.md`): batches 7/0,
+  smoke 10/0, targeted 43/0/0, full 93/0/2; ledger 0. QA done for D-116 and D-117: commit on a
+  new branch with only this thread's files (git commands in the Reports thread).
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
 - **Next:** commit 30E-2 and open the PR (git commands in the 30E-2 thread). Then
@@ -108,6 +125,37 @@
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
+
+- **Reports count whole rolls (D-117; uncommitted):**
+  - Every report counts the rolls finished at Capture on their Manila day, each **Scanning passed**
+    or **Returned to supplier**; a shot's Pass or Reject shows only on the roll's page and Capture.
+  - **Quality:** tiles Rolls scanned, Scanning passed, Returned to supplier; **Rolls scanned per
+    day**; Defects by type counts Rolls found on and Returned; `daily.csv` and `defects.csv` follow.
+  - **Operations:** tiles Pairs finished ("all pairs the QI counted at Finish batch, failed ones
+    included"), Failed inspection, Of quota, **Rolls passed**, **Returned to supplier**; no Rolls
+    finished, Rolls open, First-pass yield, Reject rate or Rejected sections. Daily summary and
+    `operations.csv`: Rolls started, Rolls scanned, Scanning passed, Returned to supplier.
+  - **Supplier quality:** Rolls, Scanning passed, Returned to supplier, Returned %, Top defect
+    (no Sections or Defect area); High from 5 rolls (A-43). **Rolls with the most defects** by
+    Defect % with Status; `suppliers.csv` and `supplier-rolls.csv` follow.
+  - FM home: Rolls today (Rolls scanned, Returned to supplier, open) and Daily summary by rolls.
+  - Where the bullets below mention sections, Pass % or Reject % on reports, D-117 replaced them.
+
+- **Simpler reports (D-116; uncommitted):**
+  - **Reports → Rolls:** Status filter **Not yet scanned**, **Scanning passed**, **Returned to
+    supplier** (`?status=NOT_SCANNED|PASSED|RETURNED`); the Status badge says the same (Being
+    scanned and Removed as before) and the Too many defects badge is gone. A roll over the limit
+    reads "Returned to supplier: defects cover 16.7% of this roll, over the 10% limit."
+  - **"for salvage" removed:** just Reject or Rejected on every report, chart, CSV, the FM home and
+    Inventory; Operations' card is **Rejected sections**; Capture says "Reject: this part of the
+    roll is not for cutting." and Floor view "Set aside, not for cutting".
+  - **Reports → Materials:** no 8 weeks to selected or Per 100 pairs (nor in
+    `materials-used.csv`); Leather rolls has **Returned to supplier** per week. Supplier quality's
+    column and `suppliers.csv` read Returned to supplier.
+  - Settings → Thresholds: "Mark a roll Returned to supplier when defects cover more than __%";
+    Finish roll tells the constructor "… so it is marked Returned to supplier. Set it aside for the
+    Floor Manager."
+  - Where the bullets below mention Too many defects or "for salvage", D-116 replaced them.
 
 - **Rolls leave stock at Capture (Phase 30E-1, D-111 to D-113; uncommitted):**
   - **Capture → Start a roll:** **Leather** ("Brown suede (topsiders) · Marikina Leather Trading ·
@@ -642,6 +690,13 @@ Later:
   history.
 - ASSUMPTION (A-40, D-114): a day can be planned up to the end of the third month ahead.
 - ASSUMPTION (A-41, D-114): a Non-working / Holiday day has no stock reminder either.
+- Decided (Dylan, 2026-11-04, D-116): the system flags a roll over 10% defects of its area and
+  marks it Returned to supplier; "for salvage", the 8-week trend and Per 100 pairs go. Tell CPoint.
+- ASSUMPTION (A-42, D-116): a roll that couldn't be measured (no phone setup or no area) reads
+  Scanning passed.
+- Decided (Dylan, 2026-11-04, D-117): the reports count whole rolls, passed or returned, not
+  sections; no Rejected sections, Rolls open, Rolls finished or Defect area. Tell CPoint.
+- ASSUMPTION (A-43, D-117): a supplier reads High only with at least 5 rolls in the range.
 - Decided (Dylan, 2026-11-03, Phase 30C plan, D-110): a cut is Not accepted from 3 in by its box
   diagonal; each cut from 3 in counts a flat 1% of its roll "for now", shorter cuts nothing; holes
   and scratches by box area; phones calibrated once on Capture by tapping a sheet's corners. Tell

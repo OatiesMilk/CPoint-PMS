@@ -7,16 +7,15 @@ import {
   daysToNextReminder,
   mayRunOut,
   PACE_DAYS,
-  perHundredPairs,
   TREND_WEEKS,
   weekChange,
 } from "@/lib/stock-rules";
 import type { InventoryCategory } from "@/lib/domain";
 import {
   listMaterialItems,
-  pairsBetween,
   pairsByDay,
   rollsCheckedByDay,
+  rollsReturnedByDay,
   usedBetween,
   usedByDay,
 } from "@/server/models/materials.model";
@@ -32,8 +31,9 @@ const daysBetween = (from: string, to: string) =>
  *
  * D-109: the week shown is picked by Year, Month and Week, a month's weeks being days 1 to 7, 8 to
  * 14 and so on (`lib/month-weeks`); it defaults to the week today falls in. The selected week, the
- * week before it and the last-8-weeks trend follow the pick. Per 100 pairs and Days left keep
- * their meaning: the last 28 days up to today (D-102), whatever week is picked.
+ * week before it follow the pick; the Leather rolls table shows the eight weeks up to it. Days
+ * left keeps its meaning: the last 28 days up to today (D-102), whatever week is picked. The
+ * 8-week trend and Per 100 pairs were removed (Dylan, 4 Nov 2026, D-116).
  */
 
 export type MaterialsOptions = { year?: unknown; month?: unknown; week?: unknown; q?: unknown };
@@ -56,25 +56,21 @@ export async function materialsReport(options: MaterialsOptions = {}, now = new 
   const from = weeks[0].from;
   const q = normaliseQuery(options.q);
   const paceFrom = addDays(today, -(PACE_DAYS - 1));
-  const [items, usedDays, pairDays, rollDays, used28, days] = await Promise.all([
+  const [items, usedDays, pairDays, rollDays, returnedDays, used28, days] = await Promise.all([
     listMaterialItems(),
     usedByDay(from, selected.to),
     pairsByDay(from, selected.to),
     rollsCheckedByDay(from, selected.to),
+    rollsReturnedByDay(from, selected.to),
     usedBetween(manilaDayStart(paceFrom), now),
     reminderDays(),
   ]);
   // An item whose stock history starts less than 4 weeks ago is paced from that day, so a new
-  // item's days left and use per 100 pairs aren't diluted by days it wasn't on the shelf.
+  // item's days left aren't diluted by days it wasn't on the shelf.
   const paceStart = (since: Date) => {
     const added = manilaToday(since);
     return added > paceFrom ? added : paceFrom;
   };
-  const starts = [...new Set([paceFrom, ...items.map((i) => paceStart(i.since))])];
-  const pairsSince = new Map(
-    await Promise.all(starts.map(async (d) => [d, await pairsBetween(d, today)] as const)),
-  );
-  const pairs28 = pairsSince.get(paceFrom) ?? 0;
   const toNext = daysToNextReminder(today, days);
   const usedOf = (itemId: string) =>
     sumByWeek(
@@ -99,7 +95,6 @@ export async function materialsReport(options: MaterialsOptions = {}, now = new 
       lastWeek,
       ...weekChange(thisWeek, lastWeek),
       usedPace: pace,
-      perHundredPairs: perHundredPairs(pace, pairsSince.get(start) ?? 0),
       daysLeft: left,
       mayRunOut: mayRunOut(left, toNext),
     };
@@ -111,11 +106,13 @@ export async function materialsReport(options: MaterialsOptions = {}, now = new 
     usedDays.filter((r) => leatherIds.has(r.itemId)).map((r) => ({ day: r.day, value: r.used })),
   );
   const rollsChecked = sumByWeek(weeks, rollDays);
+  const rollsReturned = sumByWeek(weeks, returnedDays);
   const pairs = sumByWeek(weeks, pairDays);
   const leather = weeks.map((week, i) => ({
     week,
     rollsUsed: rollsUsed[i],
     rollsChecked: rollsChecked[i],
+    rollsReturned: rollsReturned[i],
     pairs: pairs[i],
   }));
 
@@ -144,7 +141,7 @@ export async function materialsReport(options: MaterialsOptions = {}, now = new 
       { length: Number(today.slice(0, 4)) - firstYear + 1 },
       (_, i) => firstYear + i,
     ),
-    pace: { fromDay: paceFrom, toDay: today, days: PACE_DAYS, pairs: pairs28 },
+    pace: { fromDay: paceFrom, toDay: today, days: PACE_DAYS },
     reminderDays: days,
     daysToNextReminder: toNext,
   };
@@ -178,13 +175,6 @@ export async function materialsCsv(options: MaterialsOptions = {}, now = new Dat
       { header: "Unit", value: (r) => r.item.unit },
       { header: "Used", value: (r) => r.used },
       { header: "Pairs finished", value: (r) => r.pairs },
-      {
-        header: "Used per 100 pairs",
-        value: (r) => {
-          const v = perHundredPairs(r.used, r.pairs);
-          return v === null ? "" : v;
-        },
-      },
     ]),
   };
 }

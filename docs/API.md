@@ -86,19 +86,19 @@ a person (D-008).
 | `USED`            | Fully used           | history only (ticked at Finish batch before Phase 30E) |       |
 | `RETURNED`        | Returned to supplier | history only (the FM's decision in Phase 30C)          |       |
 
-| Method & path                       | Who                                   | Body / query                                            | Returns                                                                                                     |
-| ----------------------------------- | ------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/inventory/{id}/rolls` | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagCode? }] }`       | `201 { data: { added: [{ id, code, areaSqFt, tagCode }], quantityOnHand } }`, codes `LR-<supplier>-001`     |
-| `GET /api/v1/rolls`                 | `roll:read` (Floor Manager)           | `status`, `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
-| `GET /api/v1/rolls/{id}`            | `roll:read`                           | —                                                       | the roll with its item, area, shots and their detections                                                    |
-| `POST /api/v1/rolls`                | —                                     | —                                                       | `405`: rolls are added in Inventory and picked at Capture                                                   |
-| `GET /api/v1/rolls/ready`           | a Shoe Constructor with camera access | —                                                       | `{ data: ReadyRoll[] }`, rolls not scanned yet, oldest first                                                |
-| `POST /api/v1/rolls/{id}/start`     | a Shoe Constructor with camera access | `{}`                                                    | `{ data: OpenRoll }`, status `OPEN`; `409` named when it isn't `IN_STOCK` any more                          |
-| `GET /api/v1/rolls/open`            | a Shoe Constructor with camera access | —                                                       | `{ data: OpenRoll[] }`, every roll being scanned (the Capture page's Roll dropdown)                         |
-| `POST /api/v1/rolls/{id}/finish`    | a Shoe Constructor with camera access | `{}`                                                    | `{ data: { id, code, status: "FINISHED", shots, sharePct, limitPct, marked, notMeasured } }` (Phase 30C)    |
-| `POST /api/v1/rolls/{id}/cancel`    | a Shoe Constructor with camera access | `{}`                                                    | put back: an empty roll from Inventory returns to `IN_STOCK`; one from before Phase 30A is `CANCELLED`      |
-| `POST /api/v1/rolls/{id}/remove`    | `roll:manage` (Floor Manager)         | `{ reason }` (1 to 200 characters)                      | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
-| `GET /api/v1/rolls/current`         | a device token (`scans:create`)       | —                                                       | the roll being scanned the longest, or `404 NO_OPEN_ROLL`                                                   |
+| Method & path                       | Who                                   | Body / query                                                                                         | Returns                                                                                                     |
+| ----------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/inventory/{id}/rolls` | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagCode? }] }`                                                    | `201 { data: { added: [{ id, code, areaSqFt, tagCode }], quantityOnHand } }`, codes `LR-<supplier>-001`     |
+| `GET /api/v1/rolls`                 | `roll:read` (Floor Manager)           | `status` (`NOT_SCANNED`, `PASSED`, `RETURNED`, D-116), `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected` |
+| `GET /api/v1/rolls/{id}`            | `roll:read`                           | —                                                                                                    | the roll with its item, area, shots and their detections                                                    |
+| `POST /api/v1/rolls`                | —                                     | —                                                                                                    | `405`: rolls are added in Inventory and picked at Capture                                                   |
+| `GET /api/v1/rolls/ready`           | a Shoe Constructor with camera access | —                                                                                                    | `{ data: ReadyRoll[] }`, rolls not scanned yet, oldest first                                                |
+| `POST /api/v1/rolls/{id}/start`     | a Shoe Constructor with camera access | `{}`                                                                                                 | `{ data: OpenRoll }`, status `OPEN`; `409` named when it isn't `IN_STOCK` any more                          |
+| `GET /api/v1/rolls/open`            | a Shoe Constructor with camera access | —                                                                                                    | `{ data: OpenRoll[] }`, every roll being scanned (the Capture page's Roll dropdown)                         |
+| `POST /api/v1/rolls/{id}/finish`    | a Shoe Constructor with camera access | `{}`                                                                                                 | `{ data: { id, code, status: "FINISHED", shots, sharePct, limitPct, marked, notMeasured } }` (Phase 30C)    |
+| `POST /api/v1/rolls/{id}/cancel`    | a Shoe Constructor with camera access | `{}`                                                                                                 | put back: an empty roll from Inventory returns to `IN_STOCK`; one from before Phase 30A is `CANCELLED`      |
+| `POST /api/v1/rolls/{id}/remove`    | `roll:manage` (Floor Manager)         | `{ reason }` (1 to 200 characters)                                                                   | `{ data: { id, code, status: "CANCELLED" } }`                                                               |
+| `GET /api/v1/rolls/current`         | a device token (`scans:create`)       | —                                                                                                    | the roll being scanned the longest, or `404 NO_OPEN_ROLL`                                                   |
 
 **`ReadyRoll`**: `{ id, code, tagCode, supplier, item, areaSqFt }`. **`OpenRoll`**: the same plus
 `{ shots, startedAt, mine, fromInventory }`; `mine` only says whether the person asking picked it,
@@ -117,8 +117,8 @@ to start the dropdown on their own roll. `/current` leaves it out.
   D-112). It saves the roll's **defect share** (Phase 30C, D-106, D-110): the sum of its shots'
   defect areas (each shot's union of boxes, overlaps once) over its entered area, plus the flat
   shares (a cut from 3 in counts 1%). More than `returnSharePct` (Settings, default 10, strict) sets
-  `markedForReturn` (`marked: true`), shown as **Too many defects** for the Floor Manager's
-  information only. `sharePct` is null and `notMeasured` says why (`no-area`, `no-shots`,
+  `markedForReturn` (`marked: true`): the roll is **Returned to supplier** (D-116; Reports →
+  Rolls' status, Materials' Leather rolls, Supplier quality). `sharePct` is null and `notMeasured` says why (`no-area`, `no-shots`,
   `unscaled`: a shot came from a phone that wasn't calibrated) when it can't be worked out (A-28);
   such a roll isn't marked. **Cancel** at Capture only for a roll with no shots.
 - **Remove:** a roll from Inventory still in stock or being scanned (`OUT` −1); a scanned roll is
@@ -162,7 +162,7 @@ _active_ defect type at or above `foundAtOrAbove` (Settings, default 0.5) gives 
 defect type is dropped: not stored and no effect on the verdict (D-108). Class keys are matched exactly. A new database gets `crease` and `scratch` Usable and
 `cut`, `hole`, `abrasion` and `dirt` Not accepted; for yolo-v1 turn `abrasion` and `dirt` off
 under Admin → Settings (D-052, `cv/README.md`). Add new ones there when the model is retrained.
-A rejected section is reported for salvage; nothing else is created.
+A rejected section is not cut (D-116); nothing else is created.
 
 **Measuring (Phase 30C, D-106, D-110):** with `widthIn` and the photo's size (read from the image,
 EXIF turns applied) each detection gets `lengthIn` (its box diagonal) and `areaSqIn`, and the scan
@@ -440,24 +440,26 @@ Aggregates per Manila day, defect type, supplier or roll, never per person (D-02
 `?preset=today|7d|14d|30d` or `?from=YYYY-MM-DD&to=YYYY-MM-DD` (Manila days, inclusive). The
 default is the last 14 days, at most 92, and never past today.
 
-| Method & path                            | Permission          | Returns                                                                                                                                                                                                                                          |
-| ---------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals: { scanned, pass, reject }, days[], defects[] }`                                                                                                                                                                                |
-| `GET /api/v1/reports/production`         | `report:production` | `{ days[], totals: { finished, failed, passed, failedShare, share, daysBelow, daysWithQuota } }` (Phase 27)                                                                                                                                      |
-| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: Scanned, Pass, Reject (for salvage)                                                                                                                                                                                             |
-| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type (by each scan's top detection): Scans, Pass, Reject (for salvage)                                                                                                                                                        |
-| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day: pairs finished, failed, % failed, passed, quota, % of quota (passed), batches, rolls planned and scanned, constructors, shortfall                                                                                               |
-| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis, attention[], production, days[], stock, suppliers[], rejectedRolls[], lineRejectShare, forSalvage, checkpoint }`                                                                                                                        |
-| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: rolls started and finished, sections scanned, Pass, Reject (for salvage)                                                                                                                                                        |
-| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and added, days of cover, status                                                                                                                                                                 |
-| `GET /api/v1/reports/materials`          | `report:production` | `?year=&month=&week=&q=` (D-109): `{ today, selected, previous, weeks[], days, q, itemCount, rows[], leather[], pace, years[], reminderDays, daysToNextReminder }`. Weeks are days 1–7, 8–14 … of the month; no or an invalid week gives today's |
-| `GET /api/v1/reports/materials-used.csv` | `report:production` | same query; one row per item and week (the 8 weeks ending with the selected one): week, from, to, item code, item, category, supplier, unit, used, pairs finished, used per 100 pairs                                                            |
-| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier: rolls, sections, Pass, Reject (for salvage), Pass %, Reject %, top defect, High (D-072); Defect area %, Rolls measured, Rolls marked Return to supplier, Rolls returned (rolls finished in the range, Phase 30C)                   |
-| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls with the most rejects: roll, tag number, supplier, sections, rejected, main defects (D-072)                                                                                                                                        |
+| Method & path                            | Permission          | Returns                                                                                                                                                                                                                                               |
+| ---------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/reports/quality`            | `report:quality`    | `{ range, totals: { rolls, passed, returned }, days[], defects[] }`: rolls finished at Capture in the range, each Scanning passed or Returned to supplier; `defects[]` is `{ key, label, rolls, returned }`, the rolls each type was found on (D-117) |
+| `GET /api/v1/reports/production`         | `report:production` | `{ days[], totals: { finished, failed, passed, failedShare, share, daysBelow, daysWithQuota } }` (Phase 27)                                                                                                                                           |
+| `GET /api/v1/reports/daily.csv`          | `report:quality`    | one row per day: Rolls scanned, Scanning passed, Returned to supplier (D-117)                                                                                                                                                                         |
+| `GET /api/v1/reports/defects.csv`        | `report:quality`    | one row per defect type: Rolls found on, Returned to supplier (a detection at or above found-at, D-117)                                                                                                                                               |
+| `GET /api/v1/reports/production.csv`     | `report:production` | one row per day: pairs finished, failed, % failed, passed, quota, % of quota (passed), batches, rolls planned and scanned, constructors, shortfall                                                                                                    |
+| `GET /api/v1/reports/operations`         | `report:production` | `{ kpis: { pairs, failedPairs, ofQuota, rollsPassed, rollsReturned }, attention[], production, days[], stock, suppliers[], mostDefects[], lineReturnedShare, checkpoint }` (D-117)                                                                    |
+| `GET /api/v1/reports/operations.csv`     | `report:production` | one row per day: Rolls started, Rolls scanned, Scanning passed, Returned to supplier (D-117)                                                                                                                                                          |
+| `GET /api/v1/reports/stock.csv`          | `report:production` | every active item: on hand, reorder level, used and added, days of cover, status                                                                                                                                                                      |
+| `GET /api/v1/reports/materials`          | `report:production` | `?year=&month=&week=&q=` (D-109): `{ today, selected, previous, weeks[], days, q, itemCount, rows[], leather[], pace, years[], reminderDays, daysToNextReminder }`. Weeks are days 1–7, 8–14 … of the month; no or an invalid week gives today's      |
+| `GET /api/v1/reports/materials-used.csv` | `report:production` | same query; one row per item and week (the 8 weeks ending with the selected one): week, from, to, item code, item, category, supplier, unit, used, pairs finished (no per 100 pairs, D-116)                                                           |
+| `GET /api/v1/reports/suppliers.csv`      | `report:production` | per supplier, rolls finished in the range: Rolls, Scanning passed, Returned to supplier, Returned %, Top defect, High (D-117)                                                                                                                         |
+| `GET /api/v1/reports/supplier-rolls.csv` | `report:production` | the 100 rolls finished in the range with the highest Defect %: Roll, Tag number, Supplier, Defect %, Status, Defects (D-117)                                                                                                                          |
 
 - **Verdicts** are Pass and Reject (D-093); the final verdict is the camera's.
-- **For salvage** (`forSalvage`): `{ total, byDefect: [{ key, label, known, sections }] }`, the
-  rejected sections by main defect (A-11). `/api/v1/reports/repairs` was removed (D-094).
+- **By roll** (D-117): the reports count whole leather rolls on the day they were finished, each
+  Scanning passed or Returned to supplier (D-116); each shot's Pass or Reject stays on the roll's
+  own page. `forSalvage`, `rejectedRolls` and `lineRejectShare` are gone (the Rejected sections
+  card was removed). `/api/v1/reports/repairs` was removed (D-094).
 - **CSV:** UTF-8 with a BOM and CRLF, so it opens correctly in Excel. Text cells starting with
   `= + - @` are prefixed with `'`.
 

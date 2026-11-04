@@ -72,7 +72,7 @@ export function validateFoundAt(foundAtOrAbove: number) {
 export const RETURN_LIMIT_MESSAGE =
   "Enter a percentage from 1 to 100, like 10 (one decimal at most).";
 
-/** "A roll has too many defects when they cover more than __%" (Phase 30C, C-9; Phase 30E). */
+/** "Mark a roll Returned to supplier when defects cover more than __%" (Phase 30C, C-9; D-116). */
 export function validateReturnLimit(pct: number) {
   const ok =
     Number.isFinite(pct) &&

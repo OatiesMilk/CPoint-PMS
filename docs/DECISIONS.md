@@ -2264,3 +2264,49 @@ batches still match. A-39 (moving saved 1 to 3 hour schedules to 4 hours) is wit
 needs converting.
 **Supersedes:** D-097's every 1 to 4 hours. **Where:** `INTERVAL_MINUTES` in
 `src/lib/production-rules.ts`, `src/server/validators/production.validator.ts`.
+
+### D-116 · 2026-11-04 · Accepted — A roll over the defect limit is Returned to supplier; simpler reports
+
+**Context:** Dylan (4 Nov) asked for simpler Floor Manager reports: rejected now means the leather
+goes back to the supplier, so "for salvage" is misleading, and the 8-week trend and Per 100 pairs
+on Materials don't inform anyone.
+**Decision (Dylan, 4 Nov):** the system flags a roll whose defects cover more than the limit
+(Settings, default 10%) of its area when it is finished at Capture, and marks it **Returned to
+supplier**. It is worked out from the existing `markedForReturn` (no Phase 30C Keep), or a Phase
+30C `RETURNED` status; nothing new is stored and there is still no Send back or Keep button.
+Reports → Rolls filters by three statuses: **Not yet scanned**, **Scanning passed** (scanned, not
+over the limit; a Phase 30C Keep and old Fully used count here) and **Returned to supplier**; `?status=`
+takes `NOT_SCANNED`, `PASSED`, `RETURNED`. Rolls being scanned or removed show under All statuses.
+"for salvage" leaves every screen and CSV (just Reject or Rejected); the Operations "For salvage"
+card is **Rejected sections**; Capture's Floor view reads "Set aside, not for cutting". Materials
+loses the **8 weeks to selected** column and **Per 100 pairs** (and `materials-used.csv`'s "Used per
+100 pairs"); its Leather rolls table gains **Returned to supplier** per week; Supplier quality's
+Too many defects column and `suppliers.csv` read Returned to supplier.
+**Supersedes:** D-112's "Too many defects is information only" and A-11's "for salvage".
+**Assumption (A-42):** a roll that couldn't be measured (no phone setup or no area) is Scanning
+passed. **Where:** `rollReportStatus` in `src/lib/roll-rules.ts`, `listRolls` in
+`src/server/models/roll.model.ts`, `rollsReturnedByDay` in `src/server/models/materials.model.ts`.
+
+### D-117 · 2026-11-04 · Accepted — The reports count whole rolls, not sections
+
+**Context:** Dylan (4 Nov): the Rejected sections card isn't helpful, and the reports should judge
+the whole leather roll, passed or returned to supplier (D-116), not its sections; Rolls open and
+Rolls finished go; Pairs finished needs explaining; no Defect area column.
+**Decision:** Reports → Quality, Reports → Operations, Supplier quality, the FM home cards and
+their CSVs count **rolls finished at Capture** on their Manila finish day, each **Scanning passed**
+or **Returned to supplier** (the D-116 rule; a roll that couldn't be measured is passed, A-42).
+"Scans per day" is **Rolls scanned per day**. Defects by type counts the rolls each type was found
+on (a detection at or above found-at on an active type) and those returned. Operations' tiles are
+Pairs finished ("all pairs the QI counted at Finish batch, failed ones included"), Failed
+inspection, Of quota, **Rolls passed** and **Returned to supplier**; Rolls finished, Rolls open,
+First-pass yield, Reject rate and the Rejected sections card are gone. Supplier quality is per
+supplier Rolls, Scanning passed, Returned to supplier, Returned % and Top defect (no Sections, no
+Defect area), High when Returned % is 10 points over the line's with at least 5 rolls; "Rolls with
+the most rejects" is **Rolls with the most defects**, by Defect %. A shot's Pass or Reject stays on
+the roll's page, Capture and Floor view.
+**Assumption (A-43):** a supplier needs at least 5 rolls in the range before it can read High (it
+was 30 sections). **Supersedes:** D-116's Rejected sections card, D-072's section counts.
+**Where:** `src/server/models/report.model.ts` (`dailyRollStats`, `defectBreakdown`),
+`src/server/models/ops-report.model.ts` (`supplierRolls`, `supplierDefects`,
+`rollsWithMostDefects`), `src/lib/ops-rules.ts`, `src/app/(app)/reports/_components/`. Plan:
+`docs/prompts/plans/reports-by-roll-plan.md`.

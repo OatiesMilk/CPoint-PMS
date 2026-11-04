@@ -95,7 +95,7 @@ describe("sending", () => {
 describe("Floor view verdicts (D-074)", () => {
   it("names both verdicts (D-093) with the system's words and the bin it goes to", () => {
     expect(FLOOR_VERDICT.PASS).toEqual({ word: "Pass", next: "Goes on to cutting" });
-    expect(FLOOR_VERDICT.REJECT).toEqual({ word: "Reject", next: "Set aside for salvage" });
+    expect(FLOOR_VERDICT.REJECT).toEqual({ word: "Reject", next: "Set aside, not for cutting" });
     expect(Object.keys(FLOOR_VERDICT).sort()).toEqual(["PASS", "REJECT"]);
   });
 

@@ -88,6 +88,8 @@ test("Floor Manager journey: read the rolls, update stock, read the report", asy
   browser,
   page,
 }) => {
+  // Several pages, each scanned by axe: 10 s alone, up to 28 s and over 30 s beside other specs.
+  test.setTimeout(60_000);
   // Its own stock item, so the journey doesn't depend on the demo inventory being there.
   const api = await managerApi(browser);
   // Item codes are at most 20 characters, and the reorder level is required.
@@ -171,7 +173,7 @@ test("QI lands on Batches; the FM opens a rejected section from its roll", async
   await expectAccessible(fm);
   await fm.getByTestId("shot-row").filter({ hasText: "Reject" }).getByRole("link").first().click();
   await expect(fm).toHaveURL(/\/scans\/[0-9a-f-]{36}$/);
-  await expect(fm.getByText(/A rejected section is reported for salvage\./)).toBeVisible();
+  await expect(fm.getByText(/for salvage/)).toHaveCount(0);
   await expect(fm.getByRole("link", { name: `Roll ${roll.code}` })).toBeVisible();
   await expectAccessible(fm);
   await fmContext.close();

@@ -8,13 +8,15 @@ import {
   createRoll,
   e2eKey,
   ensureRuleTypes,
+  finishRoll,
   sampleJpeg,
   withDb,
 } from "./cv-helpers";
 
 /**
- * Phase 20: Supplier quality on the Floor Manager's Operations report, and the claim sheet. Scans
- * go on a random day in 2024, a year no other spec scans in, so this supplier's numbers are its own.
+ * Phase 20: Supplier quality on the Floor Manager's Operations report, and the claim sheet. Since
+ * D-117 it counts whole rolls on the day they were finished: the roll is moved onto a random day in
+ * 2024, a year no other spec uses, so this supplier's numbers are its own.
  */
 const day = `2024-${String(randomInt(1, 13)).padStart(2, "0")}-${String(randomInt(1, 29)).padStart(2, "0")}`;
 
@@ -52,7 +54,8 @@ async function scan(
 
 /**
  * A supplier of its own (with its short code, Phase 30A), one roll from it added in Inventory and
- * picked at Capture, and three shots: two rejected.
+ * picked at Capture, three shots (two rejected), finished, and then set on `day` as a roll whose
+ * defects cover 16.7% of it: Returned to supplier (D-116).
  */
 async function rollWithRejects(api: APIRequestContext, request: APIRequestContext) {
   await ensureRuleTypes();
@@ -70,10 +73,18 @@ async function rollWithRejects(api: APIRequestContext, request: APIRequestContex
   await scan(request, token, roll.id, "hole", 0.95); // REJECT
   await scan(request, token, roll.id, "hole", 0.96); // REJECT
   await scan(request, token, roll.id, "cut", 0.3); // PASS
+  await finishRoll(api, roll.id);
+  await withDb((db) =>
+    db.query(
+      `UPDATE batches SET "finishedAt" = $2::timestamptz AT TIME ZONE 'UTC',
+         "defectSharePct" = 16.7, "markedForReturn" = true, "returnDecision" = NULL WHERE id = $1`,
+      [roll.id, `${day}T15:00:00+08:00`],
+    ),
+  );
   return { supplier, tagCode, roll };
 }
 
-test("Supplier quality lists the supplier and its roll, and the claim sheet shows the rejects", async ({
+test("Supplier quality counts the supplier's rolls returned, lists the roll, and the claim sheet shows the rejects", async ({
   browser,
   page,
   request,
@@ -85,14 +96,22 @@ test("Supplier quality lists the supplier and its roll, and the claim sheet show
   const card = page.getByTestId("supplier-quality");
   await expect(card.getByText("Supplier quality", { exact: true })).toBeVisible();
   const row = card.getByTestId("supplier-table").getByRole("row", { name: new RegExp(supplier) });
-  // Rolls 1, Sections 3, Pass 33%, Reject 67%, top defect "E2E hole".
-  await expect(row).toContainText("67%");
-  await expect(row).toContainText("E2E hole");
+  // Rolls 1, passed 0, returned 1, 100%, top defect "E2E hole"; no sections (D-117).
+  await expect(row.getByRole("cell")).toHaveText([
+    new RegExp(supplier),
+    "1",
+    "0",
+    "1",
+    "100%",
+    "E2E hole",
+  ]);
+  await expect(card.getByRole("columnheader", { name: /Sections|Defect area/ })).toHaveCount(0);
   const rollRow = card
-    .getByTestId("rejected-rolls")
+    .getByTestId("most-defects-rolls")
     .getByRole("row", { name: new RegExp(roll.code) });
   await expect(rollRow).toContainText(tagCode);
-  await expect(rollRow).toContainText("2 of 3");
+  await expect(rollRow).toContainText("16.7%");
+  await expect(rollRow).toContainText("Returned to supplier");
   await expect(rollRow).toContainText("E2E hole 2");
   await expect(card).toContainText("never by person");
 
@@ -107,7 +126,10 @@ test("Supplier quality lists the supplier and its roll, and the claim sheet show
   const text = await csv.text();
   // The CSV starts with a UTF-8 byte-order mark so Excel reads it (report-rules.ts).
   expect(text.split("\n")[0]).toMatch(/^\uFEFF?Roll,Tag number,Supplier,/);
-  expect(text).toContain(`${roll.code},${tagCode},${supplier},3,2,E2E hole 2`);
+  expect(text.split("\n")[0]).toContain("Roll,Tag number,Supplier,Defect %,Status,Defects");
+  expect(text).toContain(
+    `${roll.code},${tagCode},${supplier},16.7,Returned to supplier,E2E hole 2`,
+  );
 
   await rollRow.getByRole("link", { name: /Claim sheet/ }).click();
   await expect(page).toHaveURL(`/reports/claims/${roll.id}`);

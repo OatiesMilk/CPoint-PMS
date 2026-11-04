@@ -15,20 +15,20 @@ function CardLink({ href, children }: { href: string; children: React.ReactNode 
   );
 }
 
-type Totals = { scanned: number; pass: number; reject: number };
+type Totals = { rolls: number; passed: number; returned: number };
 
 /**
- * FM home: today's rolls at the checkpoint (Phase 28): sections checked, of them rejected (set
- * aside for salvage), and the rolls still open at Capture.
+ * FM home: today's rolls at the checkpoint (Phase 28; whole rolls since D-117): rolls scanned, of
+ * them returned to supplier, and the rolls still open at Capture.
  */
 export function RollsTodayCard({ totals, openRolls }: { totals: Totals; openRolls: number }) {
   const items = [
-    { key: "checked", label: "Sections checked", value: totals.scanned, note: "today" },
+    { key: "scanned", label: "Rolls scanned", value: totals.rolls, note: "finished today" },
     {
-      key: "rejected",
-      label: "Rejected (for salvage)",
-      value: totals.reject,
-      note: `${formatPercent(totals.scanned > 0 ? totals.reject / totals.scanned : null)} of checked`,
+      key: "returned",
+      label: "Returned to supplier",
+      value: totals.returned,
+      note: `${formatPercent(totals.rolls > 0 ? totals.returned / totals.rolls : null)} of scanned`,
     },
     {
       key: "open",
@@ -44,8 +44,8 @@ export function RollsTodayCard({ totals, openRolls }: { totals: Totals; openRoll
           <div>
             <CardTitle>Rolls today</CardTitle>
             <CardDescription>
-              {totals.scanned === 0
-                ? "No sections checked yet today."
+              {totals.rolls === 0
+                ? "No roll finished at Capture yet today."
                 : "The camera check before cutting, today so far."}
             </CardDescription>
           </div>
@@ -77,9 +77,9 @@ type Day = Totals & { day: string };
 /** FM home: yesterday next to today, with the way to the full report and CSV. */
 export function DailySummaryCard({ yesterday, today }: { yesterday: Day; today: Day }) {
   const rows: { label: string; value: (d: Day) => string }[] = [
-    { label: "Scanned", value: (d) => String(d.scanned) },
-    { label: "Passed", value: (d) => String(d.pass) },
-    { label: "Rejected (for salvage)", value: (d) => String(d.reject) },
+    { label: "Rolls scanned", value: (d) => String(d.rolls) },
+    { label: "Scanning passed", value: (d) => String(d.passed) },
+    { label: "Returned to supplier", value: (d) => String(d.returned) },
   ];
   return (
     <Card>

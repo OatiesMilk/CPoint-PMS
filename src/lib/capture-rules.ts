@@ -95,11 +95,11 @@ export function spaceCaptures(target: { tagName?: string; isContentEditable?: bo
 
 /**
  * What the Floor view says for a verdict (D-074, two results since D-093): the word and where the
- * piece goes next. A rejected section is reported for salvage (A-11).
+ * piece goes next. A rejected section is not cut (D-116).
  */
 export const FLOOR_VERDICT = {
   PASS: { word: "Pass", next: "Goes on to cutting" },
-  REJECT: { word: "Reject", next: "Set aside for salvage" },
+  REJECT: { word: "Reject", next: "Set aside, not for cutting" },
 } as const satisfies Record<"PASS" | "REJECT", { word: string; next: string }>;
 
 /**

@@ -129,9 +129,6 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
               <p className="flex items-start gap-2 text-sm text-muted-foreground">
                 <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
                 The camera’s verdict is final.
-                {scan.finalVerdict === "REJECT"
-                  ? " A rejected section is reported for salvage."
-                  : ""}
               </p>
             </CardContent>
           </Card>

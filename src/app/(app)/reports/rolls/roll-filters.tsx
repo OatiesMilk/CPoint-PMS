@@ -6,9 +6,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { ROLL_STATUS_LABELS, type RollStatus } from "@/lib/domain";
-
-const STATUSES = Object.keys(ROLL_STATUS_LABELS) as RollStatus[];
+import { ROLL_REPORT_STATUSES, ROLL_REPORT_STATUS_LABELS } from "@/lib/roll-rules";
 const DAYS = [
   { value: "7", label: "Last 7 days" },
   { value: "30", label: "Last 30 days" },
@@ -89,9 +87,9 @@ export function RollFilters({ suppliers }: { suppliers: { id: string; name: stri
           }}
         >
           <option value="">All statuses</option>
-          {STATUSES.map((s) => (
+          {ROLL_REPORT_STATUSES.map((s) => (
             <option key={s} value={s}>
-              {ROLL_STATUS_LABELS[s]}
+              {ROLL_REPORT_STATUS_LABELS[s]}
             </option>
           ))}
         </Select>

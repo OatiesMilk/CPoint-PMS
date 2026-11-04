@@ -110,3 +110,21 @@ export async function rollsCheckedByDay(fromDay: string, toDay: string, db: Db =
     GROUP BY day`;
   return rows.map((r) => ({ day: r.day.toISOString().slice(0, 10), value: Number(r.rolls) }));
 }
+
+/**
+ * Rolls returned to supplier per Manila day they were finished at Capture (D-116): over the defect
+ * limit with no Phase 30C Keep, or sent back in Phase 30C.
+ */
+export async function rollsReturnedByDay(fromDay: string, toDay: string, db: Db = defaultDb()) {
+  const rows = await db.$queryRaw<{ day: Date; rolls: bigint }[]>`
+    SELECT (("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date AS day,
+      count(*) AS rolls
+    FROM batches
+    WHERE (status = 'RETURNED'
+        OR (status IN ('FINISHED', 'USED') AND "markedForReturn" AND "returnDecision" IS NULL))
+      AND "finishedAt" IS NOT NULL
+      AND (("finishedAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Manila')::date
+        BETWEEN ${fromDay}::date AND ${toDay}::date
+    GROUP BY day`;
+  return rows.map((r) => ({ day: r.day.toISOString().slice(0, 10), value: Number(r.rolls) }));
+}

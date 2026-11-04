@@ -2,18 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseRange } from "@/lib/report-rules";
 
 const report = {
-  dailyScanStats: vi.fn(),
+  dailyRollStats: vi.fn(),
   dailyProduction: vi.fn(),
   defectBreakdown: vi.fn(),
 };
 const ops = {
   stockPosition: vi.fn(),
-  supplierQuality: vi.fn(),
+  supplierRolls: vi.fn(),
   supplierDefects: vi.fn(),
-  rollsWithMostRejects: vi.fn(),
+  rollsWithMostDefects: vi.fn(),
   findClaimRoll: vi.fn(),
   countRollVerdicts: vi.fn(),
-  supplierRollShares: vi.fn(async (): Promise<unknown[]> => []),
 };
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/report.model", () => report);
@@ -46,8 +45,10 @@ const production = {
   recentProductionDays: vi.fn(),
 };
 vi.mock("@/server/services/production.service", () => production);
-vi.mock("@/server/models/roll.model", () => ({
-  countOpenRolls: vi.fn(async () => 2),
+const rolls = { countDefectsForRolls: vi.fn() };
+vi.mock("@/server/models/roll.model", () => rolls);
+vi.mock("@/server/models/cv-settings.model", () => ({
+  getCvSettings: vi.fn(async () => ({ foundAtOrAbove: 0.6 })),
 }));
 
 const svc = await import("@/server/services/ops-report.service");
@@ -56,17 +57,15 @@ const range = parseRange({ from: "2026-10-02", to: "2026-10-08" }, now);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  report.dailyScanStats.mockResolvedValue([
-    {
-      day: "2026-10-07",
-      scanned: 50,
-      pass: 30,
-      reject: 20,
-    },
-  ]);
+  // 15 rolls finished on 7 Oct, 6 of them returned to supplier: 40% for the line (D-117).
+  report.dailyRollStats.mockImplementation(async (r: { start: Date }) =>
+    r.start.toISOString().startsWith("2026-10-01")
+      ? [{ day: "2026-10-07", rolls: 15, passed: 9, returned: 6 }]
+      : [{ day: "2026-09-30", rolls: 10, passed: 8, returned: 2 }],
+  );
   report.defectBreakdown.mockResolvedValue([
-    { key: "cut", label: "Cut", scans: 6, pass: 3, reject: 3 },
-    { key: "hole", label: "Hole", scans: 2, pass: 1, reject: 1 },
+    { key: "cut", label: "Cut", rolls: 6, returned: 3 },
+    { key: "hole", label: "Hole", rolls: 2, returned: 1 },
   ]);
   report.dailyProduction.mockResolvedValue([{ day: "2026-10-06", started: 3, completed: 2 }]);
   production.productionReport.mockImplementation(async (r: { from: string }) =>
@@ -148,41 +147,27 @@ beforeEach(() => {
       received: 0,
     },
   ]);
-  ops.supplierQuality.mockResolvedValue([
-    {
-      id: "s2",
-      name: "Tannery B",
-      rolls: 1,
-      scanned: 10,
-      pass: 10,
-      reject: 0,
-    },
-    {
-      id: "s1",
-      name: "Tannery A",
-      rolls: 2,
-      scanned: 40,
-      pass: 20,
-      reject: 20,
-    },
+  ops.supplierRolls.mockResolvedValue([
+    { id: "s2", name: "Tannery B", rolls: 5, returned: 0 },
+    { id: "s1", name: "Tannery A", rolls: 10, returned: 6 },
   ]);
   ops.supplierDefects.mockResolvedValue([
-    { groupId: "s1", label: "Hole", sections: 12 },
-    { groupId: "s1", label: "Cut", sections: 8 },
+    { groupId: "s1", label: "Hole", rolls: 5 },
+    { groupId: "s1", label: "Cut", rolls: 3 },
   ]);
-  ops.rollsWithMostRejects.mockResolvedValue([
+  ops.rollsWithMostDefects.mockResolvedValue([
     {
       rollId: "b9",
-      rollCode: "B-2026-0009",
+      rollCode: "LR-MLT-009",
       tagCode: "R-0412",
       supplier: "Tannery A",
-      sections: 40,
-      rejected: 6,
-      defects: [
-        { label: "Hole", sections: 4 },
-        { label: "Cut", sections: 2 },
-      ],
+      defectSharePct: 16.7,
+      returned: true,
     },
+  ]);
+  rolls.countDefectsForRolls.mockResolvedValue([
+    { rollId: "b9", label: "Hole", detections: BigInt(4) },
+    { rollId: "b9", label: "Cut", detections: BigInt(2) },
   ]);
 });
 
@@ -208,19 +193,36 @@ const PERSON_KEYS = [
 ];
 
 describe("operationsReport", () => {
-  it("puts the batches' pairs against the quota and the rolls together (Phase 27)", async () => {
+  it("puts the batches' pairs against the quota and the rolls together (Phase 27, D-117)", async () => {
     const r = await svc.operationsReport(range, now);
     expect(r.kpis.pairs).toMatchObject({ value: 164, previous: 100 });
     expect(r.kpis.pairs.change).toBeCloseTo(0.64);
     expect(r.kpis.failedPairs).toMatchObject({ value: 4, previous: 8 });
     expect(r.kpis.ofQuota.value).toBeCloseTo(160 / 170);
-    expect(r.kpis.rollsFinished.value).toBe(2);
-    expect(r.kpis.rollsOpen).toBe(2);
-    expect(r.kpis.rejectRate.value).toBeCloseTo(0.4);
-    expect(r.kpis).not.toHaveProperty("repairsOpen");
+    // Whole rolls: 9 of 15 passed, 6 returned; before, 8 of 10 and 2 of 10.
+    expect(r.kpis.rollsPassed).toMatchObject({ value: 0.6, previous: 0.8 });
+    expect(r.kpis.rollsReturned).toMatchObject({ value: 0.4, previous: 0.2 });
+    expect(Object.keys(r.kpis).sort()).toEqual([
+      "failedPairs",
+      "ofQuota",
+      "pairs",
+      "rollsPassed",
+      "rollsReturned",
+    ]);
     expect(r.production.days).toHaveLength(2);
     expect(r.days).toHaveLength(7);
-    expect(r.days.find((d) => d.day === "2026-10-06")).toMatchObject({ started: 3, completed: 2 });
+    expect(r.days.find((d) => d.day === "2026-10-06")).toEqual({
+      day: "2026-10-06",
+      started: 3,
+      rolls: 0,
+      passed: 0,
+      returned: 0,
+    });
+    expect(r.days.find((d) => d.day === "2026-10-07")).toMatchObject({
+      rolls: 15,
+      passed: 9,
+      returned: 6,
+    });
     expect(r).not.toHaveProperty("flow");
   });
 
@@ -233,20 +235,41 @@ describe("operationsReport", () => {
     expect(stock.all.map((i) => i.level)).toEqual(["OUT", "OK", "OK"]);
   });
 
-  it("rates suppliers worst first, with rolls, shares, top defect and the High flag", async () => {
+  it("rates suppliers by rolls returned, worst first, with the top defect and High (D-117)", async () => {
     const r = await svc.operationsReport(range, now);
-    expect(r.suppliers[0]).toMatchObject({
+    expect(r.suppliers[0]).toEqual({
+      id: "s1",
       supplier: "Tannery A",
-      rolls: 2,
-      passShare: 0.5,
-      rejectShare: 0.5,
+      rolls: 10,
+      passed: 4,
+      returned: 6,
+      returnedShare: 0.6,
       topDefect: "Hole",
-      high: true, // 50% rejected against 40% for the line, over 40 sections
+      high: true, // 60% returned against 40% for the line, over 10 rolls
     });
-    expect(r.suppliers[1]).toMatchObject({ rejectShare: 0, topDefect: null, high: false });
-    expect(r.lineRejectShare).toBeCloseTo(0.4); // 20 of 50 rejected
-    expect(r.rejectedRolls[0]).toMatchObject({ tagCode: "R-0412", rejected: 6 });
-    expect(ops.rollsWithMostRejects).toHaveBeenCalledWith(range, 5);
+    expect(r.suppliers[1]).toMatchObject({ returnedShare: 0, topDefect: null, high: false });
+    expect(r.lineReturnedShare).toBeCloseTo(0.4);
+    expect(ops.supplierDefects).toHaveBeenCalledWith(range, 0.6);
+  });
+
+  it("lists the rolls with the most defects, with what was found on them", async () => {
+    const r = await svc.operationsReport(range, now);
+    expect(ops.rollsWithMostDefects).toHaveBeenCalledWith(range, 5);
+    expect(rolls.countDefectsForRolls).toHaveBeenCalledWith(["b9"], 0.6);
+    expect(r.mostDefects).toEqual([
+      {
+        rollId: "b9",
+        rollCode: "LR-MLT-009",
+        tagCode: "R-0412",
+        supplier: "Tannery A",
+        defectSharePct: 16.7,
+        returned: true,
+        defects: [
+          { label: "Hole", detections: 4 },
+          { label: "Cut", detections: 2 },
+        ],
+      },
+    ]);
   });
 
   it("builds a claim sheet per roll, with no person on it (D-008)", async () => {
@@ -306,33 +329,21 @@ describe("operationsReport", () => {
       "attention",
       "checkpoint",
       "days",
-      "forSalvage",
       "kpis",
-      "lineRejectShare",
+      "lineReturnedShare",
+      "mostDefects",
       "previous",
       "production",
       "range",
-      "rejectedRolls",
       "stock",
       "suppliers",
     ]);
   });
 
-  it("keeps the checkpoint as a short summary with a Pareto", async () => {
+  it("keeps the checkpoint as a short summary of rolls with a Pareto (D-117)", async () => {
     const { checkpoint } = await svc.operationsReport(range, now);
-    expect(checkpoint.totals).toMatchObject({ scanned: 50, firstPassYield: 0.6 });
+    expect(checkpoint.totals).toEqual({ rolls: 15, passed: 9, returned: 6 });
     expect(checkpoint.defects[0]).toMatchObject({ key: "cut", share: 0.75, cumulative: 0.75 });
-  });
-
-  it("reports rejected sections for salvage, by main defect (A-11)", async () => {
-    const { forSalvage } = await svc.operationsReport(range, now);
-    expect(forSalvage).toEqual({
-      total: 20,
-      byDefect: [
-        { key: "cut", label: "Cut", sections: 3 },
-        { key: "hole", label: "Hole", sections: 1 },
-      ],
-    });
   });
 
   it("never carries a person", async () => {
@@ -342,11 +353,17 @@ describe("operationsReport", () => {
 });
 
 describe("CSV", () => {
-  it("operations CSV has one row per day", async () => {
-    const lines = (await svc.operationsCsv(range)).trim().split("\r\n");
+  it("operations CSV has one row per day, in rolls (D-117)", async () => {
+    const lines = (await svc.operationsCsv(range))
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .split("\r\n");
     expect(lines).toHaveLength(8);
-    expect(lines[0]).toContain("Rolls started,Rolls finished");
-    expect(lines.find((l) => l.startsWith("2026-10-06"))).toBe("2026-10-06,3,2,0,0,0");
+    expect(lines[0]).toBe(
+      "Date (Manila),Rolls started,Rolls scanned,Scanning passed,Returned to supplier",
+    );
+    expect(lines.find((l) => l.startsWith("2026-10-06"))).toBe("2026-10-06,3,0,0,0");
+    expect(lines.find((l) => l.startsWith("2026-10-07"))).toBe("2026-10-07,0,15,9,6");
   });
 
   it("stock CSV lists every item, riskiest first", async () => {
@@ -359,8 +376,24 @@ describe("CSV", () => {
     expect(lines[1]).toContain("OUT");
   });
 
-  it("suppliers CSV gives percentages", async () => {
-    const csv = await svc.suppliersCsv(range);
-    expect(csv).toContain("Tannery A,2,40,20,20,50.0,50.0,Hole,yes");
+  it("suppliers CSV gives rolls passed and returned", async () => {
+    const lines = (await svc.suppliersCsv(range))
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .split("\r\n");
+    expect(lines[0]).toBe(
+      "Supplier,Rolls,Scanning passed,Returned to supplier,Returned %,Top defect,High",
+    );
+    expect(lines[1]).toBe("Tannery A,10,4,6,60.0,Hole,yes");
+  });
+
+  it("supplier-rolls CSV lists the rolls with the most defects", async () => {
+    const lines = (await svc.supplierRollsCsv(range))
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .split("\r\n");
+    expect(lines[0]).toBe("Roll,Tag number,Supplier,Defect %,Status,Defects");
+    expect(lines[1]).toBe("LR-MLT-009,R-0412,Tannery A,16.7,Returned to supplier,Hole 4 · Cut 2");
+    expect(ops.rollsWithMostDefects).toHaveBeenCalledWith(range, 100);
   });
 });

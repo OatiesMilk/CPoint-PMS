@@ -1,11 +1,10 @@
-import { Undo2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { defectShareText, returnMark } from "@/lib/roll-rules";
 import type { RollStatus } from "@/lib/domain";
 
 /**
- * A roll's Defect % with its mark (Phase 30C, D-110): "12.4%" and "Too many defects" while the
- * Floor Manager hasn't decided, or "Kept" after Keep.
+ * A roll's Defect % (Phase 30C, D-110): "12.4%", or "Kept" after a Phase 30C Keep. A roll over the
+ * limit reads Returned to supplier in its Status (D-116).
  */
 export function DefectShare({
   roll,
@@ -25,12 +24,6 @@ export function DefectShare({
       <span className={text === "Not measured" ? "text-muted-foreground" : "tabular-nums"}>
         {text}
       </span>
-      {mark === "to-return" && (
-        <Badge tone="warning">
-          <Undo2 aria-hidden />
-          Too many defects
-        </Badge>
-      )}
       {mark === "kept" && <Badge tone="neutral">Kept</Badge>}
     </span>
   );

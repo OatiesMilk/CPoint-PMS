@@ -294,10 +294,10 @@ test("leather rolls are added on the item with their areas, never on the sheet (
   await expect(page.getByText(/2 rolls added to .*: LR-[A-Z0-9]+-\d{3,} to LR-/)).toBeVisible();
   await expect(page.getByTestId("on-hand")).toHaveText("2 rolls");
 
-  // The item's roll table: area, Not scanned, and no Defect % until scanned (Phase 30C).
+  // The item's roll table: area, Not yet scanned, and no Defect % until scanned (Phase 30C).
   const rows = page.getByTestId("item-roll-row");
   await expect(rows).toHaveCount(2);
-  await expect(rows.filter({ hasText: "31.75 sq ft" })).toContainText("Not scanned");
+  await expect(rows.filter({ hasText: "31.75 sq ft" })).toContainText("Not yet scanned");
   await expect(rows.first()).not.toContainText("To be implemented");
 
   // Remove one with a reason: it leaves stock.

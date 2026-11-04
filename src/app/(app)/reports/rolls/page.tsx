@@ -2,7 +2,7 @@
  * Intent brief (ui-craft §1)
  * Who:   the Floor Manager, at the desk, a few times a day.
  * What:  every leather roll: added in Inventory with its area (Phase 30A), scanned at Capture,
- *        how many shots passed or were rejected (for salvage), and whether it is fully used.
+ *        how many shots passed or were rejected, and whether it was returned to the supplier (D-116).
  * Worst: a roll left open for days goes unnoticed, or a roll is read as a person's work. No person
  *        is named or counted on this page (D-008).
  */
@@ -90,7 +90,7 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                 <TableHead>Scanned</TableHead>
                 <TableHead numeric>Shots</TableHead>
                 <TableHead numeric>Passed</TableHead>
-                <TableHead numeric>Rejected (for salvage)</TableHead>
+                <TableHead numeric>Rejected</TableHead>
                 <TableHead numeric>Defect %</TableHead>
                 <TableHead>Status</TableHead>
                 <TableActionsHead />
@@ -133,7 +133,7 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                     <DefectShare roll={r} />
                   </TableCell>
                   <TableCell>
-                    <RollStatusBadge status={r.status} />
+                    <RollStatusBadge roll={r} />
                   </TableCell>
                   <TableCell className="text-right">
                     <TableViewLink href={`/reports/rolls/${r.id}`} what={`roll ${r.code}`} />

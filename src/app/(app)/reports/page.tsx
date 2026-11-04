@@ -3,7 +3,7 @@
  * Who:   the Floor Manager, who runs the production floor. Reports are theirs alone (Phase 28,
  *        D-100). Desktop, end of shift or all day.
  * What:  Operations: what is happening on the floor in these days and right now, and what is
- *        wrong. Quality: how the checkpoint before cutting did: Pass, Reject (for salvage) and the defects.
+ *        wrong. Quality: how the checkpoint before cutting did: Pass, Reject and the defects.
  * Worst: a problem hidden under averages (a short day, an empty shelf), a number read as
  *        something else, or anyone singled out. Every figure says what it counts; everything is
  *        per day, batch, roll, item, supplier or defect type, never per person (D-008, D-033).
@@ -67,7 +67,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         description={
           view === "operations"
             ? "What is happening on the floor, and what needs attention. Never per person."
-            : "The checkpoint before cutting: Pass, Reject (for salvage) and the defects. Never per person."
+            : "The checkpoint before cutting: Pass, Reject and the defects. Never per person."
         }
         actions={
           <div className="flex flex-wrap gap-2">
