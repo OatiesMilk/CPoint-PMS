@@ -14,7 +14,6 @@ const ensureDemoInventory = vi.fn();
 const ensureDemoConstructors = vi.fn();
 const clearUploadFolders = vi.fn();
 const ensureDefaultLunchBreak = vi.fn();
-const ensureDefaultSchedule = vi.fn();
 const runInTransaction = vi.fn(
   async (fn: (tx: unknown) => unknown, _options?: { timeoutMs?: number }) => fn("tx"),
 );
@@ -28,7 +27,6 @@ vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 vi.mock("@/server/services/demo-seed.service", () => ({ seedDemoWeek }));
 vi.mock("@/server/services/production.service", () => ({
   ensureDefaultLunchBreak,
-  ensureDefaultSchedule,
 }));
 vi.mock("@/server/services/bootstrap.service", () => ({
   DEMO_USERS: [
@@ -100,8 +98,6 @@ describe("resetDemoData", () => {
     );
     // The lunch rows go and the default comes back in force from the start (Phase 27).
     expect(ensureDefaultLunchBreak).toHaveBeenCalledWith("tx", undefined);
-    // Every schedule goes and the Monday-to-Friday default comes back from the start (D-105).
-    expect(ensureDefaultSchedule).toHaveBeenCalledWith("tx");
     expect(clearUploadFolders).toHaveBeenCalledWith(["scans", "pod"]);
     // The demo constructors come back before the week, so its attendance has a roster (D-081).
     expect(ensureDemoConstructors).toHaveBeenCalled();

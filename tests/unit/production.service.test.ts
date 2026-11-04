@@ -1,18 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Batches service (Phase 27, D-097 to D-099): finishing a batch, corrections, the schedule, the
-// one daily quota and the lunch break.
+// Batches service (Phase 27, D-097 to D-099; Phase 30E-2, D-114): finishing a batch, corrections,
+// the day plans on the calendar and the lunch break.
 
-const SCHEDULE = {
-  id: "sch1",
-  shiftStart: "08:00",
-  shiftEnd: "17:00",
-  intervalMinutes: 240,
-  workingDays: [1, 2, 3, 4, 5],
-  effectiveFrom: "2000-01-01",
-  createdAt: new Date("2026-01-01T00:00:00Z"),
-  createdById: null,
-  createdBy: null,
+const STAMP = new Date("2026-10-01T00:00:00.000Z");
+/** A day's plan as the model returns it: every 4 hours, 08:00 to 17:00. */
+const plan = (day: string, extra: object = {}) => ({
+  id: `p-${day}`,
+  day,
+  kind: "PLANNED" as "PLANNED" | "NON_WORKING",
+  rollsPlanned: 2 as number | null,
+  quota: null as number | null,
+  suggestedQuota: null,
+  intervalMinutes: 240 as number | null,
+  shiftStart: "08:00" as string | null,
+  shiftEnd: "17:00" as string | null,
+  createdById: "fm1",
+  updatedById: "fm1",
+  createdAt: STAMP,
+  updatedAt: STAMP,
+  createdBy: { name: "Rodel Pascual" },
+  updatedBy: { name: "Rodel Pascual" },
+  ...extra,
+});
+const weekday = (day: string) => {
+  const d = new Date(`${day}T00:00:00Z`).getUTCDay();
+  return d !== 0 && d !== 6;
+};
+const addDay = (day: string, n: number) =>
+  new Date(new Date(`${day}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
+/** Every weekday from `from` to `to` is planned, unless a test says otherwise. */
+const plansBetween = (from: string, to: string) => {
+  const out = [];
+  for (let d = from; d <= to; d = addDay(d, 1)) if (weekday(d)) out.push(plan(d));
+  return out;
 };
 const LUNCH = {
   id: "l1",
@@ -25,14 +46,14 @@ const LUNCH = {
 };
 
 const model = {
-  listSchedules: vi.fn(async () => [SCHEDULE]),
-  countSchedules: vi.fn(async () => 1),
-  insertSchedule: vi.fn(async (d: object) => ({ id: "sch2", ...d })),
+  listDayPlans: vi.fn(async (from: string, to: string) => plansBetween(from, to) as unknown[]),
+  findDayPlan: vi.fn(async (day: string) => (weekday(day) ? plan(day) : null) as unknown),
+  insertDayPlan: vi.fn(async (day: string, d: object) => ({ id: "p-new", day, ...d })),
+  updateDayPlan: vi.fn(async () => true),
+  deleteDayPlan: vi.fn(async () => true),
   listLunchBreaks: vi.fn(async () => [LUNCH] as unknown[]),
   countLunchBreaks: vi.fn(async () => 1),
   insertLunchBreak: vi.fn(async (d: object) => ({ id: "l2", ...d })),
-  listQuotas: vi.fn(async () => [] as unknown[]),
-  insertQuota: vi.fn(async (d: object) => ({ id: "q1", ...d })),
   listCheckIns: vi.fn(async () => [] as unknown[]),
   findCheckIn: vi.fn(),
   firstCheckInDay: vi.fn(async () => "2026-10-01" as string | null),
@@ -57,6 +78,7 @@ const workforce = {
 const recordAudit = vi.fn();
 const rolls = {
   rollsUsedByCheckIn: vi.fn(async () => new Map<string, { id: string; code: string }[]>()),
+  rollsScannedByDay: vi.fn(async () => new Map<string, number>()),
 };
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
@@ -347,96 +369,162 @@ describe("correctCheckIn", () => {
   });
 });
 
-describe("saveSchedule, saveQuota and saveLunchBreak (D-083, D-085, D-097, D-099)", () => {
+describe("day plans on the calendar (Phase 30E-2, D-114, D-115)", () => {
   const now = at("2026-10-21T02:00:00.000Z"); // Wed 21 Oct, 10:00 Manila
+  const input = {
+    rollsPlanned: 5,
+    quota: 128,
+    suggestedQuota: 125,
+    intervalMinutes: 240,
+    shiftStart: "08:00",
+    shiftEnd: "17:00",
+    expectedUpdatedAt: null,
+  };
 
-  it("applies a schedule change from tomorrow, and accepts once at the end of the day", async () => {
-    const r = await svc.saveSchedule(
-      { shiftStart: "09:00", shiftEnd: "16:00", intervalMinutes: null, workingDays: [5, 1, 1] },
-      FM,
-      now,
-    );
-    expect(r.effectiveFrom).toBe("2026-10-22");
-    expect(model.insertSchedule).toHaveBeenCalledWith(
+  it("plans a new weekday and audits it in the same tx", async () => {
+    model.findDayPlan.mockResolvedValueOnce(null);
+    expect(await svc.saveDayPlan("2026-10-22", input, FM, now)).toEqual({
+      saved: true,
+      day: "2026-10-22",
+    });
+    expect(model.insertDayPlan).toHaveBeenCalledWith(
+      "2026-10-22",
       expect.objectContaining({
-        intervalMinutes: null,
-        workingDays: [1, 5],
-        effectiveFrom: "2026-10-22",
+        kind: "PLANNED",
+        rollsPlanned: 5,
+        quota: 128,
+        intervalMinutes: 240,
       }),
+      "fm1",
+      now,
       "tx",
     );
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
-      expect.objectContaining({ action: "production.schedule.set" }),
+      expect.objectContaining({ action: "production.plan.set", entity: "DayPlan", before: null }),
     );
   });
 
-  it("skips a schedule equal to tomorrow's, so repeat saves add no rows (team QA)", async () => {
-    expect(
-      await svc.saveSchedule(
-        {
-          shiftStart: "08:00",
-          shiftEnd: "17:00",
-          intervalMinutes: 240,
-          workingDays: [5, 4, 3, 2, 1],
-        },
-        FM,
-        now,
-      ),
-    ).toEqual({ saved: false, effectiveFrom: "2026-10-22" });
-    expect(model.insertSchedule).not.toHaveBeenCalled();
-    expect(recordAudit).not.toHaveBeenCalled();
-    // A schedule saved earlier today for tomorrow is the one compared.
-    model.listSchedules.mockResolvedValueOnce([
-      SCHEDULE,
-      { ...SCHEDULE, id: "sch3", intervalMinutes: 120, effectiveFrom: "2026-10-22" },
-    ]);
-    const r = await svc.saveSchedule(
-      {
-        shiftStart: "08:00",
-        shiftEnd: "17:00",
-        intervalMinutes: 240,
-        workingDays: [1, 2, 3, 4, 5],
-      },
-      FM,
-      now,
-    );
-    expect(r).toMatchObject({ saved: true, effectiveFrom: "2026-10-22" });
-    expect(model.insertSchedule).toHaveBeenCalledTimes(1);
-  });
-
-  it("applies a first quota from today and a change from tomorrow (Dylan 5A)", async () => {
-    model.listQuotas.mockResolvedValueOnce([]);
-    expect(await svc.saveQuota({ pairs: 128, suggestedPairs: 125 }, FM, now)).toEqual({
-      saved: true,
-      effectiveFrom: "2026-10-21",
+  it("plans today too, until a batch is finished (A-36)", async () => {
+    model.findDayPlan.mockResolvedValueOnce(null);
+    await svc.saveDayPlan("2026-10-21", input, FM, now);
+    expect(model.insertDayPlan).toHaveBeenCalledTimes(1);
+    model.listCheckIns.mockResolvedValueOnce([{ id: "c1" }]);
+    await expect(svc.saveDayPlan("2026-10-21", input, FM, now)).rejects.toMatchObject({
+      status: 409,
+      message: svc.TODAY_LOCKED,
     });
-    expect(model.insertQuota).toHaveBeenLastCalledWith(
-      expect.objectContaining({ pairs: 128, suggestedPairs: 125, effectiveFrom: "2026-10-21" }),
+  });
+
+  it("keeps an unplanned today open even when batches were finished before it had a plan", async () => {
+    model.findDayPlan.mockResolvedValueOnce(null);
+    model.listCheckIns.mockResolvedValue([{ id: "c1" }]);
+    await svc.saveDayPlan("2026-10-21", input, FM, now);
+    expect(model.insertDayPlan).toHaveBeenCalledTimes(1);
+    model.listCheckIns.mockResolvedValue([]);
+  });
+
+  it("refuses weekends, past days and days more than three months ahead (D-105, A-40)", async () => {
+    await expect(svc.saveDayPlan("2026-10-24", input, FM, now)).rejects.toMatchObject({
+      status: 409,
+      message: "Saturdays and Sundays can't be planned. The factory works Monday to Friday.",
+    });
+    await expect(svc.saveDayPlan("2026-10-20", input, FM, now)).rejects.toMatchObject({
+      status: 409,
+      message: "Tue, 20 Oct has passed, so its plan can't change.",
+    });
+    await expect(svc.saveDayPlan("2027-02-01", input, FM, now)).rejects.toMatchObject({
+      status: 409,
+      message: "Days can be planned up to Sun, 31 Jan.",
+    });
+    expect(model.insertDayPlan).not.toHaveBeenCalled();
+  });
+
+  it("answers STALE when the day changed since the dialog opened, naming who", async () => {
+    await expect(svc.saveDayPlan("2026-10-22", input, FM, now)).rejects.toMatchObject({
+      status: 409,
+      code: "STALE",
+      message: expect.stringContaining("Rodel Pascual changed Thu, 22 Oct"),
+    });
+    expect(model.insertDayPlan).not.toHaveBeenCalled();
+    expect(model.updateDayPlan).not.toHaveBeenCalled();
+  });
+
+  it("changes a plan guarded by the updatedAt it saw, and skips one that wouldn't change", async () => {
+    const seen = { ...input, expectedUpdatedAt: STAMP.toISOString() };
+    await svc.saveDayPlan("2026-10-22", seen, FM, now);
+    expect(model.updateDayPlan).toHaveBeenCalledWith(
+      "p-2026-10-22",
+      STAMP,
+      expect.objectContaining({ rollsPlanned: 5, quota: 128 }),
+      "fm1",
+      now,
       "tx",
     );
-    model.listQuotas.mockResolvedValueOnce([{ pairs: 128, effectiveFrom: "2026-10-21" }]);
-    expect(await svc.saveQuota({ pairs: 135, suggestedPairs: null }, FM, now)).toEqual({
-      saved: true,
-      effectiveFrom: "2026-10-22",
+    model.findDayPlan.mockResolvedValueOnce(plan("2026-10-22", { rollsPlanned: 5, quota: 128 }));
+    expect(await svc.saveDayPlan("2026-10-22", seen, FM, now)).toEqual({
+      saved: false,
+      day: "2026-10-22",
     });
+    expect(model.updateDayPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses an old 2-hour interval only in the validator; the service saves what it's given", async () => {
+    model.findDayPlan.mockResolvedValueOnce(null);
+    await svc.saveDayPlan("2026-10-23", { ...input, intervalMinutes: null }, FM, now);
+    expect(model.insertDayPlan).toHaveBeenCalledWith(
+      "2026-10-23",
+      expect.objectContaining({ intervalMinutes: null }),
+      "fm1",
+      now,
+      "tx",
+    );
+  });
+
+  it("marks a weekday Non-working / Holiday and undoes it", async () => {
+    const seen = { expectedUpdatedAt: STAMP.toISOString() };
+    await svc.markNonWorking("2026-10-23", seen, FM, now);
+    expect(model.updateDayPlan).toHaveBeenCalledWith(
+      "p-2026-10-23",
+      STAMP,
+      expect.objectContaining({ kind: "NON_WORKING", quota: null, shiftStart: null }),
+      "fm1",
+      now,
+      "tx",
+    );
     expect(recordAudit).toHaveBeenLastCalledWith(
       "tx",
-      expect.objectContaining({
-        action: "production.quota.set",
-        before: { pairs: 128 },
-      }),
+      expect.objectContaining({ action: "production.plan.nonWorking" }),
     );
+    model.findDayPlan.mockResolvedValueOnce(plan("2026-10-23", { kind: "NON_WORKING" }));
+    expect(await svc.clearNonWorking("2026-10-23", seen, FM, now)).toEqual({
+      saved: true,
+      day: "2026-10-23",
+    });
+    expect(model.deleteDayPlan).toHaveBeenCalledWith("p-2026-10-23", STAMP, "tx");
+    expect(recordAudit).toHaveBeenLastCalledWith(
+      "tx",
+      expect.objectContaining({ action: "production.plan.cleared" }),
+    );
+    await expect(svc.clearNonWorking("2026-10-23", seen, FM, now)).rejects.toMatchObject({
+      status: 409,
+      message: "Fri, 23 Oct isn't marked Non-working / Holiday.",
+    });
   });
 
-  it("skips a quota that wouldn't change", async () => {
-    model.listQuotas.mockResolvedValueOnce([{ pairs: 128, effectiveFrom: "2026-10-01" }]);
-    expect(await svc.saveQuota({ pairs: 128 }, FM, now)).toEqual({
-      saved: false,
-      effectiveFrom: "2026-10-22",
-    });
-    expect(model.insertQuota).not.toHaveBeenCalled();
+  it("shows the start-of-day notice on an unplanned weekday only (A-37)", async () => {
+    model.findDayPlan.mockResolvedValueOnce(null);
+    expect(await svc.planNoticeDue(now)).toBe(true);
+    expect(await svc.planNoticeDue(now)).toBe(false);
+    model.findDayPlan.mockResolvedValueOnce(plan("2026-10-21", { kind: "NON_WORKING" }));
+    expect(await svc.planNoticeDue(now)).toBe(false);
+    // Saturday 24 Oct: no notice, nothing to plan.
+    expect(await svc.planNoticeDue(at("2026-10-24T02:00:00.000Z"))).toBe(false);
   });
+});
+
+describe("saveLunchBreak (C-3)", () => {
+  const now = at("2026-10-21T02:00:00.000Z"); // Wed 21 Oct, 10:00 Manila
 
   it("saves the lunch break from tomorrow and audits it (C-3)", async () => {
     const r = await svc.saveLunchBreak({ startTime: "11:30", endTime: "12:30" }, FM, now);
@@ -456,7 +544,7 @@ describe("saveSchedule, saveQuota and saveLunchBreak (D-083, D-085, D-097, D-099
     );
   });
 
-  it("refuses a lunch outside tomorrow's shift, and allows no lunch", async () => {
+  it("refuses a lunch outside the factory's hours, and allows no lunch", async () => {
     await expect(
       svc.saveLunchBreak({ startTime: "07:00", endTime: "08:00" }, FM, now),
     ).rejects.toMatchObject({ status: 422 });
@@ -528,7 +616,8 @@ describe("productionDays (D-086, D-008, C-41)", () => {
   }
 
   it("totals each day's passed pairs against the quota, explains a short day and names nobody", async () => {
-    model.listQuotas.mockResolvedValueOnce([{ pairs: 85, effectiveFrom: "2026-10-01" }]);
+    model.listDayPlans.mockResolvedValueOnce([plan("2026-10-19", { quota: 85, rollsPlanned: 3 })]);
+    rolls.rollsScannedByDay.mockResolvedValueOnce(new Map([["2026-10-19", 2]]));
     model.listCheckIns.mockResolvedValueOnce(
       ["05:00", "09:00"].map((t, i) => ({
         id: `c${i}`,
@@ -552,6 +641,8 @@ describe("productionDays (D-086, D-008, C-41)", () => {
       failed: 4,
       passed: 76,
       quota: 85,
+      rollsPlanned: 3,
+      rollsScanned: 2,
       constructorsPresent: 14,
       shortfall: "Below quota by 9 pairs. 2 of 16 Shoe Constructors were absent.",
     });
@@ -585,24 +676,15 @@ describe("productionToday (D-008, C-28)", () => {
       finishOpensAt: "12:50",
     });
     expect(r.canEnter).toBe(true);
+    expect(r).toMatchObject({ plan: "2 rolls · every 4 h", planNeeded: false, nonWorking: false });
   });
-});
 
-describe("ensureDefaultSchedule (Dylan 2B)", () => {
-  it("creates 08:00 to 17:00 every 4 hours, Monday to Friday, only once (D-105)", async () => {
-    model.countSchedules.mockResolvedValueOnce(0);
-    expect(await svc.ensureDefaultSchedule("tx" as never)).toBe(true);
-    expect(model.insertSchedule).toHaveBeenCalledWith(
-      expect.objectContaining({
-        shiftStart: "08:00",
-        shiftEnd: "17:00",
-        intervalMinutes: 240,
-        workingDays: [1, 2, 3, 4, 5],
-        createdById: null,
-      }),
-      "tx",
-    );
-    model.countSchedules.mockResolvedValueOnce(1);
-    expect(await svc.ensureDefaultSchedule("tx" as never)).toBe(false);
+  it("has no batches without a plan, and asks the Floor Manager to plan (D-114, A-37)", async () => {
+    model.listDayPlans.mockResolvedValueOnce([]);
+    const r = await svc.productionToday(QI, at("2026-10-20T03:30:00.000Z"));
+    expect(r).toMatchObject({ rows: [], workingDay: false, planNeeded: true, plan: null });
+    model.listDayPlans.mockResolvedValueOnce([plan("2026-10-20", { kind: "NON_WORKING" })]);
+    const off = await svc.productionToday(QI, at("2026-10-20T03:30:00.000Z"));
+    expect(off).toMatchObject({ rows: [], nonWorking: true, planNeeded: false });
   });
 });

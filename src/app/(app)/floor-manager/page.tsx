@@ -4,12 +4,15 @@
  * What:  see what needs attention on the line today (exceptions first).
  * Worst: missing a backlog (a short day, low leather stock) until it stops production.
  * Every card is live (D-025): today's batches against the quota, attendance, rolls today, stock,
- * and today's numbers (Phase 28, D-100). On a reminder day, Stock update today comes first until
- * an update is saved (Phase 29, C-32).
+ * and today's numbers (Phase 28, D-100). On a weekday with no plan, Plan today comes first (A-37);
+ * on a reminder day, Stock update today until an update is saved (Phase 29, C-32).
  */
 import type { Metadata } from "next";
 import { AttendanceCard } from "@/components/features/attendance/attendance-card";
-import { TodaysBatchesCard } from "@/components/features/production/production-cards";
+import {
+  PlanTodayCard,
+  TodaysBatchesCard,
+} from "@/components/features/production/production-cards";
 import { DailySummaryCard, RollsTodayCard } from "@/components/features/reports/home-cards";
 import { LowStockCard } from "@/components/features/inventory/low-stock-card";
 import { StockUpdateCard } from "@/components/features/inventory/stock-update-card";
@@ -44,6 +47,7 @@ export default async function FloorManagerHome() {
         description="Today on the production line."
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {production.planNeeded && <PlanTodayCard day={production.day} />}
         {stock.due && <StockUpdateCard reminderDays={stock.reminderDays} />}
         <TodaysBatchesCard today={production} />
         <AttendanceCard workforce={attendance.workforce} summary={attendance.summary} />

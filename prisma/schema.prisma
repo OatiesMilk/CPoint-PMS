@@ -75,6 +75,12 @@ enum MovementType {
   ADJUST
 }
 
+/// A day on the planning calendar (D-114).
+enum DayKind {
+  PLANNED
+  NON_WORKING
+}
+
 enum ActorType {
   USER
   DEVICE
@@ -101,24 +107,24 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  rollsCreated      Roll[]               @relation("RollCreatedBy")
-  rollsFinished     Roll[]               @relation("RollFinishedBy")
-  rollsCancelled    Roll[]               @relation("RollCancelledBy")
-  rollsStarted      Roll[]               @relation("RollStartedBy")
-  rollsUsed         Roll[]               @relation("RollUsedBy")
-  rollsDecided      Roll[]               @relation("RollReturnDecidedBy")
+  rollsCreated      Roll[]              @relation("RollCreatedBy")
+  rollsFinished     Roll[]              @relation("RollFinishedBy")
+  rollsCancelled    Roll[]              @relation("RollCancelledBy")
+  rollsStarted      Roll[]              @relation("RollStartedBy")
+  rollsUsed         Roll[]              @relation("RollUsedBy")
+  rollsDecided      Roll[]              @relation("RollReturnDecidedBy")
   movements         InventoryMovement[]
   apiTokensCreated  ApiToken[]
   cvSettingsUpdates CvSettings[]
   auditLogs         AuditLog[]
   revokedSessions   SessionRevocation[]
-  attendanceTaken   AttendanceDay[]      @relation("AttendanceTakenBy")
+  attendanceTaken   AttendanceDay[]     @relation("AttendanceTakenBy")
   attendanceMarks   AttendanceMark[]
-  schedulesSet      ProductionSchedule[]
   lunchBreaksSet    LunchBreak[]
-  quotasSet         DailyQuota[]
-  checkInsEntered   ProductionCheckIn[]  @relation("CheckInEnteredBy")
-  checkInsCorrected ProductionCheckIn[]  @relation("CheckInCorrectedBy")
+  dayPlansCreated   DayPlan[]           @relation("DayPlanCreatedBy")
+  dayPlansUpdated   DayPlan[]           @relation("DayPlanUpdatedBy")
+  checkInsEntered   ProductionCheckIn[] @relation("CheckInEnteredBy")
+  checkInsCorrected ProductionCheckIn[] @relation("CheckInCorrectedBy")
   stockUpdates      StockUpdate[]
   inventorySettings InventorySettings[]
 
@@ -205,22 +211,22 @@ model Supplier {
 }
 
 model DefectType {
-  id          String        @id @default(uuid(7)) @db.Uuid
-  key         String        @unique // YOLO class key: "cut", "hole", "abrasion", "dirt"
-  label       String
-  description String?
-  isActive    Boolean       @default(true) // inactive types are ignored by the decision engine
+  id                String        @id @default(uuid(7)) @db.Uuid
+  key               String        @unique // YOLO class key: "cut", "hole", "abrasion", "dirt"
+  label             String
+  description       String?
+  isActive          Boolean       @default(true) // inactive types are ignored by the decision engine
   /// Usable or Not accepted once found (confidence ≥ CvSettings.foundAtOrAbove, D-093)
-  outcome     DefectOutcome
+  outcome           DefectOutcome
   /// Not accepted from this length in inches (the box diagonal, D-106) and Usable below it
   /// (Phase 30C, C-37: cut 3). Null: no length limit, `outcome` applies.
   notAcceptedFromIn Float?
   /// Counts as this flat share of the roll instead of its box area (D-110: a cut from its length
   /// limit counts 1%). Null: counted by its box area.
   flatSharePct      Float?
-  sortOrder   Int           @default(0)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  sortOrder         Int           @default(0)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   detections Detection[]
 
@@ -265,62 +271,62 @@ model RollCodeSequence {
 /// (D-104) the Floor Manager adds it to Inventory with its area; a Shoe Constructor picks it at
 /// Capture, captures it shot by shot and finishes it; the QI ticks it Fully used at Finish batch.
 model Roll {
-  id              String     @id @default(uuid(7)) @db.Uuid
+  id                String          @id @default(uuid(7)) @db.Uuid
   /// LR-MLT-001 since Phase 30A; R-YYYY-NNNN (Phases 26 to 29) and B-YYYY-NNNN rolls keep theirs
-  code            String     @unique
+  code              String          @unique
   /// The number on the supplier's tag, optional.
-  tagCode         String?    @map("rollCode")
-  supplierId      String?    @db.Uuid // the leather item's supplier; older rolls may have none
+  tagCode           String?         @map("rollCode")
+  supplierId        String?         @db.Uuid // the leather item's supplier; older rolls may have none
   /// The leather item it belongs to (Phase 30A); null for rolls from before.
-  itemId          String?    @db.Uuid
+  itemId            String?         @db.Uuid
   /// Its area in square feet, from the stamp or the receipt (D-103); null for rolls from before.
-  areaSqFt        Decimal?   @db.Decimal(8, 2)
-  receivedAt      DateTime?  @db.Date
-  status          RollStatus // always set by the service; no default (the enum value is new)
+  areaSqFt          Decimal?        @db.Decimal(8, 2)
+  receivedAt        DateTime?       @db.Date
+  status            RollStatus // always set by the service; no default (the enum value is new)
   /// Who added the record (the Floor Manager; before Phase 30A, who started it). Kept for the
   /// audit only, never shown or totalled per person (D-008).
-  createdById     String     @db.Uuid
+  createdById       String          @db.Uuid
   /// Picked at Capture: when, and by whom (only to start the Roll dropdown on their roll, D-008).
-  startedAt       DateTime?
-  startedById     String?    @db.Uuid
-  finishedAt      DateTime?
-  finishedById    String?    @db.Uuid
-  cancelledAt     DateTime?
-  cancelledById   String?    @db.Uuid
-  cancelledReason String?
+  startedAt         DateTime?
+  startedById       String?         @db.Uuid
+  finishedAt        DateTime?
+  finishedById      String?         @db.Uuid
+  cancelledAt       DateTime?
+  cancelledById     String?         @db.Uuid
+  cancelledReason   String?
   /// Ticked Fully used at Finish batch (Phase 30A): when, by whom (audit only) and in which batch.
-  usedAt          DateTime?
-  usedById        String?    @db.Uuid
-  usedCheckInId   String?    @db.Uuid
+  usedAt            DateTime?
+  usedById          String?         @db.Uuid
+  usedCheckInId     String?         @db.Uuid
   /// Worked out at Finish roll (Phase 30C, D-110): the defect area, the share of the entered area
   /// (flat shares included) and the limit then. Null when the roll couldn't be measured.
-  defectAreaSqIn  Float?
-  defectSharePct  Float?
-  returnLimitPct  Float?
+  defectAreaSqIn    Float?
+  defectSharePct    Float?
+  returnLimitPct    Float?
   /// Over the limit at Finish roll: Return to supplier, for the Floor Manager to decide.
-  markedForReturn Boolean    @default(false)
+  markedForReturn   Boolean         @default(false)
   /// The Floor Manager's decision (C-36): returned on a date, or kept with a reason. Who decided
   /// is kept for the audit only (D-008).
   returnDecision    ReturnDecision?
-  returnedOn        DateTime?  @db.Date
+  returnedOn        DateTime?       @db.Date
   returnNote        String?
   returnDecidedAt   DateTime?
-  returnDecidedById String?    @db.Uuid
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  returnDecidedById String?         @db.Uuid
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
-  supplier    Supplier?           @relation(fields: [supplierId], references: [id])
-  item        InventoryItem?      @relation(fields: [itemId], references: [id])
-  createdBy   User                @relation("RollCreatedBy", fields: [createdById], references: [id])
-  startedBy   User?               @relation("RollStartedBy", fields: [startedById], references: [id])
-  finishedBy  User?               @relation("RollFinishedBy", fields: [finishedById], references: [id])
-  cancelledBy User?               @relation("RollCancelledBy", fields: [cancelledById], references: [id])
-  usedBy      User?               @relation("RollUsedBy", fields: [usedById], references: [id])
-  returnDecidedBy User?           @relation("RollReturnDecidedBy", fields: [returnDecidedById], references: [id])
-  usedCheckIn ProductionCheckIn?  @relation(fields: [usedCheckInId], references: [id])
-  scans       Scan[]
+  supplier        Supplier?           @relation(fields: [supplierId], references: [id])
+  item            InventoryItem?      @relation(fields: [itemId], references: [id])
+  createdBy       User                @relation("RollCreatedBy", fields: [createdById], references: [id])
+  startedBy       User?               @relation("RollStartedBy", fields: [startedById], references: [id])
+  finishedBy      User?               @relation("RollFinishedBy", fields: [finishedById], references: [id])
+  cancelledBy     User?               @relation("RollCancelledBy", fields: [cancelledById], references: [id])
+  usedBy          User?               @relation("RollUsedBy", fields: [usedById], references: [id])
+  returnDecidedBy User?               @relation("RollReturnDecidedBy", fields: [returnDecidedById], references: [id])
+  usedCheckIn     ProductionCheckIn?  @relation(fields: [usedCheckInId], references: [id])
+  scans           Scan[]
   /// Its stock entries: added (+1), and fully used or removed (−1) since Phase 30A
-  movements   InventoryMovement[]
+  movements       InventoryMovement[]
 
   @@index([status, startedAt])
   @@index([status, startedById])
@@ -518,23 +524,6 @@ model AttendanceMark {
 /// When each batch ends (D-083, D-097): a batch is one check-in interval of the working day. The
 /// row in force on a day is the latest effectiveFrom on or before it; a change applies from the
 /// next day.
-model ProductionSchedule {
-  id              String   @id @default(uuid(7)) @db.Uuid
-  shiftStart      String // "HH:mm", Manila
-  shiftEnd        String // "HH:mm", Manila
-  intervalMinutes Int? // 60, 120, 180 or 240 working minutes; null = once at the end of the day
-  workingDays     Int[] // ISO weekdays, 1 = Monday; 1 to 5 since D-105 (older rows may hold 6)
-  effectiveFrom   DateTime @db.Date
-  createdById     String?  @db.Uuid // null for the bootstrap default
-  createdAt       DateTime @default(now())
-
-  createdBy User? @relation(fields: [createdById], references: [id])
-
-  @@index([effectiveFrom])
-  @@index([createdById])
-  @@map("production_schedules")
-}
-
 /// The lunch break that pauses a batch (D-097, C-3, C-25, C-40), set by the System Admin. The same
 /// on every working day; both times null = no lunch break. Applies from the next day.
 model LunchBreak {
@@ -554,19 +543,34 @@ model LunchBreak {
 
 /// Pairs per day for the whole line (D-085, D-099, C-30): one number, counted on passed pairs
 /// (C-41). Never per person (D-008).
-model DailyQuota {
-  id             String   @id @default(uuid(7)) @db.Uuid
-  pairs          Int
-  suggestedPairs Int? // what the page suggested when it was set
-  effectiveFrom  DateTime @db.Date
-  createdById    String   @db.Uuid
-  createdAt      DateTime @default(now())
+/// A day's plan (Phase 30E-2, D-114): the Floor Manager plans each working day on the calendar,
+/// or marks it Non-working / Holiday. A day with no row has no batches. Old schedules and quotas
+/// became one row per past working day in the migration `day_plans` (no author, no rolls).
+model DayPlan {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  day             DateTime @unique @db.Date // the Manila calendar date
+  kind            DayKind
+  /// Rolls to be used, an estimate (constructors may start more); null on converted days.
+  rollsPlanned    Int?
+  /// Pairs that pass inspection, for the whole line (C-41).
+  quota           Int?
+  /// What the page suggested when the quota was set.
+  suggestedQuota  Int?
+  /// 240 or null (once at the end of the day, D-115); converted days may hold 60 to 180.
+  intervalMinutes Int?
+  shiftStart      String? // "HH:mm", Manila; null when Non-working
+  shiftEnd        String?
+  createdById     String?  @db.Uuid // null when converted
+  updatedById     String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  createdBy User @relation(fields: [createdById], references: [id])
+  createdBy User? @relation("DayPlanCreatedBy", fields: [createdById], references: [id])
+  updatedBy User? @relation("DayPlanUpdatedBy", fields: [updatedById], references: [id])
 
-  @@index([effectiveFrom])
   @@index([createdById])
-  @@map("daily_quotas")
+  @@index([updatedById])
+  @@map("day_plans")
 }
 
 /// A finished batch (D-084, D-098): the pairs finished in it and how many of them failed

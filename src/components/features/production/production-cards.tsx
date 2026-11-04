@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, CircleAlert } from "lucide-react";
+import { ArrowRight, BellRing, CalendarCog, CircleAlert } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Workforce } from "@/lib/attendance-rules";
 import type { BatchState, QuotaProgress as Progress } from "@/lib/production-rules";
@@ -8,6 +9,8 @@ import { QuotaProgress } from "./production-parts";
 /** What the home cards need from the day (the production service's today, passed by the page). */
 type BatchesToday = {
   workingDay: boolean;
+  planNeeded: boolean;
+  nonWorking: boolean;
   next: {
     number: number;
     times: string;
@@ -27,7 +30,9 @@ type BatchesToday = {
 
 function nextLine(today: BatchesToday): string {
   const n = today.next;
-  if (!today.workingDay) return "Today isn’t a working day on the schedule.";
+  if (today.planNeeded) return "Today has no plan yet, so there are no batches.";
+  if (today.nonWorking) return "Today is marked Non-working / Holiday.";
+  if (!today.workingDay) return "Today isn’t a working day.";
   if (!n) return "Every batch for today is finished.";
   if (n.state === "LATE") return `${n.lateBy}: Batch ${n.number} (${n.times}).`;
   if (n.state === "DUE") return `Batch ${n.number} (${n.times}) is due.`;
@@ -75,6 +80,35 @@ export function TodaysBatchesCard({ today }: { today: BatchesToday }) {
           </p>
         )}
         {today.shortfall && <p className="text-sm">{today.shortfall}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * The Floor Manager's start-of-day notice on the home (A-37, D-114): first, from 00:00 on a weekday
+ * with no plan, until today is planned or marked Non-working / Holiday.
+ */
+export function PlanTodayCard({ day }: { day: string }) {
+  return (
+    <Card data-testid="plan-today-card" className="border-info bg-info-soft">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BellRing aria-hidden className="size-5 text-info" />
+          Plan today
+        </CardTitle>
+        <CardDescription>
+          Today has no plan yet, so there are no batches. Set the rolls to be used, the quota and
+          the check-in interval.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button asChild>
+          <Link href={`/batches/plan?day=${day}`}>
+            <CalendarCog aria-hidden />
+            Plan today
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   );

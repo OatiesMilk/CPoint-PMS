@@ -2210,3 +2210,57 @@ adds each roll with its area, and the constructor picks the leather, then the ro
 `docs/prompts/plans/phase-30e-plan.md`.
 **Consequences:** tell CPoint the FM adds each roll with its area, the constructor picks the
 leather and then the roll by its label, and the QI only counts pairs.
+
+### D-114 · 2026-11-04 · Accepted — The Floor Manager plans each working day on a calendar (Phase 30E-2)
+
+**Context:** Dylan (4 Nov): the FM plans a day's batches on that day or ahead, from a month
+calendar, and every working day must have a plan (at least one FM is always at the factory).
+**Decision:**
+
+- **Batches → Plan days** is a month calendar. The FM clicks a weekday, today or later, and sets
+  **Rolls to be used** (0 to 200, an estimate; constructors may start more), the **Quota** (passed
+  pairs, the suggestion of D-099 beside it), the **Check-in interval** (D-115) and the **shift**
+  (prefilled 08:00 to 17:00, inside the factory's hours, D-105; Dylan's answer 1). Saturdays,
+  Sundays and past days can't be clicked; the working-days ticks are gone. A day can be planned up
+  to the end of the third month ahead (A-40). Today's plan changes only until one of its batches is
+  finished (A-36).
+- **No plan, no batches.** Nothing is copied from another day. From 00:00 on an unplanned weekday
+  the FM gets the start-of-day notice: a banner on every page, a bell item and a **Plan today**
+  card first on the home (A-37). The QI reads "No batches yet today. The Floor Manager plans them
+  first."
+- **Non-working / Holiday:** the FM marks a weekday instead of planning it, with no name, and can
+  undo it (the day is then Not planned). That day has no batches, no notice and no stock reminder
+  (A-41).
+- **Planned against scanned** (Dylan's answer 2): rolls scanned = rolls whose Finish roll was that
+  Manila day. Shown on the calendar's past days, on Batches (today and Recent days) and on Reports →
+  Operations with `production.csv` (Rolls planned, Rolls scanned).
+- **Data:** one `day_plans` row per planned or marked day (unique day; STALE on `updatedAt`); every
+  save, mark and undo is audited (`production.plan.set`, `.nonWorking`, `.cleared`). The migration
+  `day_plans` turns the old schedule and quota into one plan per past working day up to and
+  including today (Dylan's answer 3: no switch-over date), with no author and no rolls, so past
+  batches keep matching their finished check-ins and today keeps its batches; then
+  `production_schedules` and `daily_quotas` are dropped (their audit rows stay). Tried on an old
+  demo week: every day's batches and numbers came out identical. The demo week plans each working
+  day that morning and marks next week's Wednesday Non-working.
+- The lunch break stays the System Admin's, from tomorrow, inside 08:00 to 17:00; a day planned
+  with a shorter shift that leaves it out ignores it.
+
+**Supersedes:** "from tomorrow" for the schedule and the quota (D-083, D-085, D-099's first-quota
+rule), D-105's working-day ticks (the factory window stays), D-107 for the schedule and quota (a
+repeat plan is still skipped). **Where:** `src/lib/production-rules.ts` (`planProblem`,
+`monthWeeks`, `describePlanShort`), `src/server/services/production.service.ts` (`planMonth`,
+`saveDayPlan`, `markNonWorking`, `clearNonWorking`, `planNoticeDue`),
+`src/app/(app)/batches/plan/`, `src/components/features/batches/batch-notices.tsx`,
+`prisma/migrations/20261104120000_day_plans/`. Plan: `docs/prompts/plans/phase-30e2-plan.md`.
+**Consequences:** tell CPoint the FM plans every working day, how holidays are marked, and that
+the reports compare rolls planned with rolls scanned.
+
+### D-115 · 2026-11-04 · Accepted — The check-in interval is every 4 hours or once at the end of the day (Phase 30E-2)
+
+**Decision (Dylan, 4 Nov):** a new day plan offers only **every 4 hours** or **once at the end of
+the day**; every 1, 2 and 3 hours go (`422` "Choose the check-in interval: every 4 hours, or once at
+the end of the day."). Days converted from older schedules keep their interval as history, so their
+batches still match. A-39 (moving saved 1 to 3 hour schedules to 4 hours) is withdrawn: nothing
+needs converting.
+**Supersedes:** D-097's every 1 to 4 hours. **Where:** `INTERVAL_MINUTES` in
+`src/lib/production-rules.ts`, `src/server/validators/production.validator.ts`.

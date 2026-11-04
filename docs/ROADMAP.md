@@ -504,11 +504,12 @@ was never built. Each phase gets its own criteria here when its plan is approved
       marked Return to supplier, the FM decides (D-110; QA run 3 passed; merged #34)
 - [x] Phase 30E-1: the constructor picks the leather, then the roll, at Capture; each roll keeps
       the area the FM entered; a roll leaves stock at Finish roll; the QI no longer ticks rolls; no
-      Send back or Keep (D-111 to D-113; built 2026-11-04, Codex run 1 next). Plan
+      Send back or Keep (D-111 to D-113; QA run 3 passed; merged #35). Plan
       `docs/prompts/plans/phase-30e-plan.md`
-- [ ] Phase 30E-2: a planning calendar (any day: rolls to be used, quota, check-in interval of
-      every 2 h, every 4 h or once a day), planned against scanned in the reports, the start-of-day
-      notice (next session, same plan)
+- [ ] Phase 30E-2: a planning calendar (a weekday from today on: rolls to be used, quota, check-in
+      interval of every 4 h or once a day, shift), Non-working / Holiday days, planned against
+      scanned, the start-of-day notice (D-114, D-115; QA run 3 passed). Plan
+      `docs/prompts/plans/phase-30e2-plan.md`
 - [ ] Phase 30D: the team's QA notes on Reports → Materials (week picker by date, no Last 8
       weeks or Per 100 pairs, on hand per week, pairs change and pairs per roll; leather Used is
       now Scanned at Capture and Removed (other) by correction, D-113); plan
@@ -734,5 +735,33 @@ D-111 to D-113.
       manual scenarios passed)
 - [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_30E_RUN3.md`: **PASS** (each failing spec alone;
       ledger 0)
-- [ ] Committed, PR open, CI green
+- [x] Committed, PR open, CI green, merged (#35)
+
+## Phase 30E-2 — The Floor Manager plans each working day on a calendar
+
+Plan: `docs/prompts/plans/phase-30e2-plan.md` (from the 30E plan's "30E-2, the planning calendar"
+and "Decided for 30E-2"; Dylan's go on 4 Nov with his three answers: the shift in each day's plan,
+planned against scanned in three places, and the old schedule turned into day plans). Decisions:
+D-114, D-115.
+
+- [x] Migration `day_plans`: one plan per past working day and today from the old schedule and
+      quota, then `production_schedules` and `daily_quotas` dropped; tried on an old demo week
+      (every day's batches and numbers identical)
+- [x] Batches → Plan days: a month calendar; a weekday from today on opens its plan (rolls to be
+      used, quota with the suggestion, check-in interval every 4 hours or once a day, shift);
+      weekends and past days not clickable; today locks after its first finished batch
+- [x] Non-working / Holiday mark and undo; no batches, notice or stock reminder that day
+- [x] No plan, no batches: the FM's banner, bell item and Plan today card; the QI's line
+- [x] Rolls planned against scanned: calendar past days, Batches (today, Recent days), Operations
+      table and `production.csv`
+- [x] Demo week plans each working day (3, 1, then 2 rolls; 128 pairs; every 4 hours) and marks
+      next week's Wednesday Non-working; `demo:reset` clears day plans; CI's Docker job checks them
+- [x] `npm run check` passes (658 unit tests); e2e `batches` updated, not run (Codex)
+- [x] Laptop database backed up and migrated (Dylan)
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_30E2.md`: FAIL (handoff said past days open; one
+      roll column on Operations; a spec locator; today locked), fixed
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_30E2_RUN2.md`: FAIL (the bell locator; the wide
+      table not focusable on first load), fixed
+- [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_30E2_RUN3.md`: **PASS** (deadline failures passed
+      alone; ledger 0)
 - [ ] Committed, PR open, CI green

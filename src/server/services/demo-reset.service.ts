@@ -13,7 +13,7 @@ import {
   type ResetKeep,
 } from "@/server/models/demo-reset.model";
 import { recordAudit } from "./audit.service";
-import { ensureDefaultLunchBreak, ensureDefaultSchedule } from "./production.service";
+import { ensureDefaultLunchBreak } from "./production.service";
 import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import {
   DEMO_CONSTRUCTORS,
@@ -194,9 +194,8 @@ export async function resetDemoData(
           })),
         },
       });
-      // The default schedule (Monday to Friday, D-105) and lunch, in force from the start: the old
-      // batches are gone (Phase 27).
-      await ensureDefaultSchedule(tx);
+      // The default lunch, in force from the start: the old batches are gone (Phase 27). The demo
+      // week plans its own days (D-114).
       await ensureDefaultLunchBreak(tx, options.now);
       for (const type of MODEL_DEFECT_TYPES) await upsertDefectTypeState(type, tx);
       // Accounts made before the demo names (D-090) get them; the constructors list has its own.

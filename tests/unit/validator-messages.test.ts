@@ -28,8 +28,7 @@ import {
   pairsSchema,
   parseBatchCounts,
   quotaPairsSchema,
-  quotaSchema,
-  scheduleSchema,
+  dayPlanSchema,
 } from "@/server/validators/production.validator";
 import { createTokenSchema } from "@/server/validators/token.validator";
 import { userActiveSchema, userFormSchema } from "@/server/validators/user.validator";
@@ -223,15 +222,15 @@ const CASES: [string, ZodType, unknown[]][] = [
     [{}, { expectedUpdatedAt: "x", pairs: 3, reason: "oops" }],
   ],
   [
-    "production schedule",
-    scheduleSchema,
+    "day plan",
+    dayPlanSchema,
     [
       {},
-      { shiftStart: "8am", shiftEnd: "25:00", intervalMinutes: 90, workingDays: [] },
-      { shiftStart: "17:00", shiftEnd: "08:00", intervalMinutes: 240, workingDays: [1] },
+      { rollsPlanned: "x", quota: "", shiftStart: "8am", shiftEnd: "25:00", intervalMinutes: 90 },
+      { rollsPlanned: 2, quota: 5, shiftStart: "17:00", shiftEnd: "08:00", intervalMinutes: 240 },
+      { rollsPlanned: 201, quota: 5, shiftStart: "08:00", shiftEnd: "17:00", intervalMinutes: 120 },
     ],
   ],
-  ["production quota", quotaSchema, [{}, { pairs: "" }, { pairs: "0", suggestedPairs: "x" }]],
   ["batch pairs", pairsSchema(2), ["", "abc", "-1", "2.5", "2001"]],
   ["failed pairs", failedPairsSchema(), ["abc", "-1", "2.5", "2001"]],
   ["daily quota", quotaPairsSchema, ["", "0", "1.5", "60000"]],
@@ -473,54 +472,59 @@ describe("batch messages (D-038, Phase 27)", () => {
     expect(lunchBreakSchema.parse({ none: true })).toEqual({ startTime: null, endTime: null });
   });
 
-  it("checks the schedule", () => {
-    expect(
-      messages(scheduleSchema, {
-        shiftStart: "17:00",
-        shiftEnd: "08:00",
-        intervalMinutes: 240,
-        workingDays: [1],
-      }),
-    ).toEqual(["Shift end must be after shift start."]);
-    expect(
-      messages(scheduleSchema, {
-        shiftStart: "08:00",
-        shiftEnd: "17:00",
-        intervalMinutes: 90,
-        workingDays: [],
-      }),
-    ).toEqual([
-      "Choose how often: every 1, 2, 3 or 4 hours, or once at the end of the day.",
-      "Pick at least one working day.",
+  it("checks a day plan (D-114, D-115)", () => {
+    const base = {
+      rollsPlanned: 5,
+      quota: 128,
+      shiftStart: "08:00",
+      shiftEnd: "17:00",
+      intervalMinutes: 240,
+    };
+    expect(messages(dayPlanSchema, { ...base, shiftStart: "17:00", shiftEnd: "08:00" })).toEqual([
+      "Shift end must be after shift start.",
     ]);
+    expect(messages(dayPlanSchema, { ...base, rollsPlanned: "", intervalMinutes: 120 })).toEqual([
+      "Enter the rolls to be used as a whole number, like 5. Enter 0 if none.",
+      "Choose the check-in interval: every 4 hours, or once at the end of the day.",
+    ]);
+    expect(messages(dayPlanSchema, { ...base, rollsPlanned: 201 })).toEqual([
+      "Rolls to be used can't be more than 200. Check the number.",
+    ]);
+    expect(messages(dayPlanSchema, { ...base, quota: "" })).toEqual([
+      "Enter the daily quota as a whole number of pairs, at least 1.",
+    ]);
+    // Every 4 hours and once at the end of the day only; 0 rolls is fine.
+    expect(
+      dayPlanSchema.parse({ ...base, intervalMinutes: "end", rollsPlanned: "0" }),
+    ).toMatchObject({
+      intervalMinutes: null,
+      rollsPlanned: 0,
+      expectedUpdatedAt: null,
+      suggestedQuota: null,
+    });
   });
 
-  it("keeps the schedule inside the factory's hours, Monday to Friday, 08:00 to 17:00 (D-105)", () => {
-    const base = { shiftStart: "08:00", shiftEnd: "17:00", intervalMinutes: 240 };
-    for (const day of [6, 7])
-      expect(messages(scheduleSchema, { ...base, workingDays: [1, day] })).toEqual([
-        "Working days are Monday to Friday.",
-      ]);
-    expect(messages(scheduleSchema, { ...base, shiftStart: "07:00", workingDays: [1] })).toEqual([
+  it("keeps a day's shift inside the factory's hours, 08:00 to 17:00 (D-105)", () => {
+    const base = {
+      rollsPlanned: 2,
+      quota: 100,
+      shiftStart: "08:00",
+      shiftEnd: "17:00",
+      intervalMinutes: 240,
+    };
+    expect(messages(dayPlanSchema, { ...base, shiftStart: "07:00" })).toEqual([
       "Shift start must be 08:00 or later.",
     ]);
-    expect(messages(scheduleSchema, { ...base, shiftEnd: "18:00", workingDays: [1] })).toEqual([
+    expect(messages(dayPlanSchema, { ...base, shiftEnd: "18:00" })).toEqual([
       "Shift end must be 17:00 or earlier.",
     ]);
-    expect(
-      messages(scheduleSchema, {
-        ...base,
-        shiftStart: "07:30",
-        shiftEnd: "17:30",
-        workingDays: [1],
-      }),
-    ).toEqual(["Shift start must be 08:00 or later.", "Shift end must be 17:00 or earlier."]);
+    expect(messages(dayPlanSchema, { ...base, shiftStart: "07:30", shiftEnd: "17:30" })).toEqual([
+      "Shift start must be 08:00 or later.",
+      "Shift end must be 17:00 or earlier.",
+    ]);
     // A shorter shift inside the window, and the whole window, are fine.
-    expect(
-      scheduleSchema.safeParse({ ...base, shiftEnd: "16:00", workingDays: [1, 2, 3, 4, 5] })
-        .success,
-    ).toBe(true);
-    expect(scheduleSchema.safeParse({ ...base, workingDays: [1, 2, 3, 4, 5] }).success).toBe(true);
+    expect(dayPlanSchema.safeParse({ ...base, shiftEnd: "16:00" }).success).toBe(true);
+    expect(dayPlanSchema.safeParse(base).success).toBe(true);
   });
 
   it("asks for a reason to correct", () => {

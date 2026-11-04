@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { ensureDefaultLunchBreak, ensureDefaultSchedule } from "./production.service";
+import { ensureDefaultLunchBreak } from "./production.service";
 import type { Role } from "@/lib/domain";
 import { getEnv } from "@/server/lib/env";
 import { logger } from "@/server/lib/logger";
@@ -108,8 +108,8 @@ export const DEMO_CONSTRUCTORS: { name: string; email: string }[] = [
 const DEMO_ACCOUNT_AGE_DAYS = 30;
 
 /**
- * Defect types, the CV rule, a sample supplier, the default batch schedule (D-083), the default
- * lunch break (A-4) and the stock reminder days (Wednesday and Friday, Phase 29). Never
+ * Defect types, the CV rule, a sample supplier, the default lunch break (A-4; the Floor Manager
+ * plans each day's batches, D-114) and the stock reminder days (Wednesday and Friday, Phase 29). Never
  * overwrites existing rows. No shoe types since Phase 27 (C-8).
  */
 export async function ensureReferenceData(): Promise<void> {
@@ -117,7 +117,6 @@ export async function ensureReferenceData(): Promise<void> {
     for (const defectType of REFERENCE_DATA.defectTypes) await ensureDefectType(defectType, tx);
     for (const supplier of REFERENCE_DATA.suppliers) await ensureSupplierWithCode(supplier, tx);
     await ensureCvSettings(REFERENCE_DATA.cvSettings, tx);
-    await ensureDefaultSchedule(tx);
     await ensureDefaultLunchBreak(tx);
     await ensureInventorySettings(tx);
   });

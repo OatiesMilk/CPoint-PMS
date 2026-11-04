@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, BellRing, ClipboardPen, Hourglass, X } from "lucide-react";
+import { Bell, BellRing, CalendarCog, ClipboardPen, Hourglass, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -155,23 +155,31 @@ export function BatchNoticeBanner() {
 export function BatchBell({
   compact = false,
   stockDue = false,
+  planDue = false,
 }: {
   compact?: boolean;
   stockDue?: boolean;
+  planDue?: boolean;
 }) {
   const { data } = useToday();
   const due = useNotices().filter((n) => n.kind === "DUE");
   // Only for whoever finishes today's batches: the QI, or the FM covering (D-088); and the FM
-  // when a stock update is due.
+  // when a stock update is due or today has no plan (A-37).
   const batches = Boolean(data?.canEnter);
-  if (!batches && !stockDue) return null;
-  const count = due.length + (stockDue ? 1 : 0);
+  if (!batches && !stockDue && !planDue) return null;
+  const count = due.length + (stockDue ? 1 : 0) + (planDue ? 1 : 0);
   const batchText = `${due.length} batch${due.length === 1 ? "" : "es"} due`;
-  const label = stockDue
-    ? `Notices: ${due.length > 0 ? `${batchText}, ` : ""}stock update due`
-    : due.length === 0
-      ? "Batch notices: none due"
-      : `Batch notices: ${batchText}`;
+  const others = [
+    due.length > 0 ? batchText : null,
+    planDue ? "today has no plan" : null,
+    stockDue ? "stock update due" : null,
+  ].filter(Boolean);
+  const label =
+    stockDue || planDue
+      ? `Notices: ${others.join(", ")}`
+      : due.length === 0
+        ? "Batch notices: none due"
+        : `Batch notices: ${batchText}`;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -198,6 +206,19 @@ export function BatchBell({
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-w-[calc(100vw-1rem)]">
+        {planDue && (
+          <>
+            <DropdownMenuLabel>Plan</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/batches/plan?day=today" data-testid="plan-today-notice">
+                <CalendarCog aria-hidden />
+                Today has no plan yet. Plan today.
+              </Link>
+            </DropdownMenuItem>
+            {(stockDue || batches) && <DropdownMenuSeparator />}
+          </>
+        )}
         {stockDue && (
           <>
             <DropdownMenuLabel>Stock</DropdownMenuLabel>
@@ -233,5 +254,31 @@ export function BatchBell({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * The Floor Manager's start-of-day notice (A-37, D-114) on every page: on a weekday with no plan,
+ * from 00:00 until today is planned or marked Non-working / Holiday. Worked out by the server on
+ * each page load; saving the plan clears it.
+ */
+export function PlanNoticeBanner({ day }: { day: string }) {
+  return (
+    <div
+      role="status"
+      data-testid="plan-notice"
+      className="flex flex-col gap-3 rounded-lg border border-info bg-info-soft p-4 sm:flex-row sm:items-center"
+    >
+      <p className="flex flex-1 items-start gap-2 text-lg font-medium">
+        <BellRing aria-hidden className="mt-1 size-5 shrink-0 text-info" />
+        Today has no plan yet, so there are no batches. Plan today.
+      </p>
+      <Button asChild size="lg" className="h-11">
+        <Link href={`/batches/plan?day=${day}`}>
+          <CalendarCog aria-hidden />
+          Plan today
+        </Link>
+      </Button>
+    </div>
   );
 }

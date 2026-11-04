@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  addMonths,
+  describePlanShort,
+  lastDayOf,
+  lastPlannableDay,
+  monthWeeks,
+  planProblem,
+  rollsScannedLine,
   DEFAULT_LUNCH,
   DEFAULT_SCHEDULE,
   batchState,
@@ -8,7 +15,6 @@ import {
   breaksOf,
   describeInterval,
   describeMinutes,
-  effectiveFromFor,
   enteredLate,
   explainShortfall,
   failedShare,
@@ -246,7 +252,7 @@ describe("noticesFor (A-9, C-6, C-31)", () => {
   });
 });
 
-describe("inForceOn and effectiveFromFor (D-083, D-085, Dylan 5A)", () => {
+describe("inForceOn (the lunch break, D-097)", () => {
   const rows = [
     { effectiveFrom: "2026-10-01", pairs: 80 },
     { effectiveFrom: "2026-10-20", pairs: 90 },
@@ -261,11 +267,6 @@ describe("inForceOn and effectiveFromFor (D-083, D-085, Dylan 5A)", () => {
   it("lets the later of two same-day rows win", () => {
     const twice = [...rows, { effectiveFrom: "2026-10-20", pairs: 95 }];
     expect(inForceOn(twice, "2026-10-21")?.pairs).toBe(95);
-  });
-
-  it("applies a change from tomorrow and a first quota from today", () => {
-    expect(effectiveFromFor("2026-10-21")).toBe("2026-10-22");
-    expect(effectiveFromFor("2026-10-21", true)).toBe("2026-10-21");
   });
 });
 
@@ -437,5 +438,54 @@ describe("qualityInspectorPresent (D-088)", () => {
         { userId: "fm", present: true },
       ]),
     ).toBe(false);
+  });
+});
+
+describe("the planning calendar (Phase 30E-2, D-114, A-40)", () => {
+  it("lays a month out in weeks, Monday to Sunday", () => {
+    const weeks = monthWeeks("2026-11");
+    // 1 Nov 2026 is a Sunday.
+    expect(weeks[0]).toEqual([null, null, null, null, null, null, "2026-11-01"]);
+    expect(weeks.at(-1)).toEqual(["2026-11-30", null, null, null, null, null, null]);
+    expect(weeks.every((w) => w.length === 7)).toBe(true);
+    expect(addMonths("2026-11", 2)).toBe("2027-01");
+    expect(addMonths("2026-01", -1)).toBe("2025-12");
+    expect(lastDayOf("2028-02")).toBe("2028-02-29");
+  });
+
+  it("plans weekdays from today to the end of the third month ahead", () => {
+    const today = "2026-11-04";
+    expect(planProblem("2026-11-04", today)).toBeNull();
+    expect(planProblem("2027-02-26", today)).toBeNull();
+    expect(planProblem("2026-11-07", today)).toMatch(/Saturdays and Sundays/);
+    expect(planProblem("2026-11-03", today)).toBe(
+      "Tue, 3 Nov has passed, so its plan can't change.",
+    );
+    expect(planProblem("2027-03-01", today)).toBe("Days can be planned up to Sun, 28 Feb.");
+    expect(lastPlannableDay(today)).toBe("2027-02-28");
+  });
+
+  it("says a plan and its rolls in short", () => {
+    expect(describePlanShort({ rollsPlanned: 5, quota: 128, intervalMinutes: 240 })).toBe(
+      "5 rolls · 128 pairs · every 4 h",
+    );
+    // A day converted from the old schedule has no rolls, and may keep an older interval.
+    expect(describePlanShort({ rollsPlanned: null, quota: 85, intervalMinutes: 120 })).toBe(
+      "85 pairs · every 2 h",
+    );
+    expect(describePlanShort({ rollsPlanned: 1, quota: null, intervalMinutes: null })).toBe(
+      "1 roll · once a day",
+    );
+    expect(rollsScannedLine(3, 5)).toBe("3 of 5 rolls scanned");
+    expect(rollsScannedLine(1, null)).toBe("1 roll scanned");
+  });
+
+  it("gives a day plan's batches without working days", () => {
+    const b = batchesFor(
+      { shiftStart: "08:00", shiftEnd: "17:00", intervalMinutes: 240 },
+      [{ startTime: "11:00", endTime: "12:00" }],
+      "2026-11-04",
+    );
+    expect(b.map((x) => `${x.startTime}–${x.time}`)).toEqual(["08:00–13:00", "13:00–17:00"]);
   });
 });

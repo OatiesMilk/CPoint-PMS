@@ -325,3 +325,16 @@ export function countRolls(db: Db = defaultDb()) {
 export function countItemRolls(itemId: string, db: Db = defaultDb()): Promise<number> {
   return db.roll.count({ where: { itemId } });
 }
+
+/**
+ * When each roll finished between two instants had its scan finished at Capture (Phase 30E-2):
+ * every roll finished, whatever happened to it after, except a cancelled one. For planned against
+ * scanned per day.
+ */
+export async function listRollFinishTimes(start: Date, end: Date, db: Db = defaultDb()) {
+  const rows = await db.roll.findMany({
+    where: { finishedAt: { gte: start, lt: end }, status: { not: "CANCELLED" } },
+    select: { finishedAt: true },
+  });
+  return rows.map((r) => r.finishedAt as Date);
+}

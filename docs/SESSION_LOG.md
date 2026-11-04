@@ -5,6 +5,50 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-04 · Phase 30E-2 run 3 PASS
+
+- Run 3 PASS: wide tables focusable from the first paint (axe 0 on four scans); targeted e2e
+  19/1/0, full 92/1/2, each failure a 30 s deadline that passed alone; ledger 0. The batches
+  spec's clean-up now passes its start time as a UTC string (it missed the lunch row on a Manila
+  clock). Git commands for 30E-2 given to Dylan.
+
+## 2026-11-04 · Phase 30E-2 run 2 FAIL, fixed
+
+- Codex run 2: R1 to R3 passed; R4 axe found the wider production table not yet focusable on first
+  load. E2E targeted 12/3/0, full 86/2/2 (the bell locator matched three; a smoke timeout that
+  passed alone); ledger 0. Fixes: the spec clicks the visible bell; `ScrollRegion` starts focusable
+  and measures before paint. `npm run check` passed (659). Prompt
+  `qa/CODEX_PROMPT_PHASE_30E2_RUN3.md`.
+
+## 2026-11-04 · Phase 30E-2 run 1 FAIL, fixed
+
+- Codex run 1 (`qa/reports/2026-11-04-phase-30e2-run1.md`): 13 passed, 2 failed, 2 not possible;
+  e2e targeted 13/1/0 (6 not run), full 85/2/2; ledger 0.
+- Fixes: the handoff said past days open (Dylan decided they can't be clicked); Recent days and
+  Operations get a separate Rolls planned column; `batches.spec.ts` reads the field's own error;
+  an unplanned today is no longer locked by batches finished before it had a plan (S8). F4, a
+  smoke toast timeout in the full suite only, had no code change.
+- `npm run check` passed (659 unit tests) in the cloud copy. Prompt
+  `qa/CODEX_PROMPT_PHASE_30E2_RUN2.md`.
+
+## 2026-11-04 · Phase 30E-2 built: the planning calendar (D-114, D-115)
+
+- Dylan's answers: the shift in each day's plan (prefilled 08:00–17:00); planned against scanned
+  on the calendar, Batches and Operations with `production.csv`; no switch-over date: the demo week
+  writes day plans and the migration turns the old schedule and quota into plans.
+- Built: `day_plans` (migration converts past working days and today, then drops
+  `production_schedules` and `daily_quotas`); Batches → Plan days as a month calendar with the
+  day dialog, Non-working / Holiday and undo, the FM's Plan today banner, bell item and home card,
+  the QI's line, today locked after its first finished batch, rolls scanned per day; How often is
+  every 4 hours or once a day; the stock reminder skips a Non-working day; the lunch sits inside
+  08:00–17:00. API: `GET /production/plans`, `PUT /production/plans/{day}`, `PUT|DELETE
+  …/non-working`; the schedule and quota routes are gone (404).
+- Checks: `npm run check` passed (658 unit tests) in a cloud copy of main a94fbe0 with these
+  changes. The migration was tried on an old demo week (every day's batches and numbers
+  identical before and after) and on a new database with the demo week. E2E `batches.spec.ts`
+  rewritten for Codex, not run. Next: Dylan backs up and migrates the laptop database, then Codex
+  run 1.
+
 ## 2026-11-04 · Phase 30E-1 run 3 PASS
 
 - Run 3 PASS: the six specs that failed under the full run passed alone (41 passed, 1 skipped);

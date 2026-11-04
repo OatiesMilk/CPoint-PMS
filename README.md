@@ -131,9 +131,11 @@ real use.
 2. **Batches:** today's two batches (08:00–13:00 with lunch 11:00–12:00, and 13:00–17:00) and the
    **Recent days** chart and table: three days fell short on passed pairs, each with its sentence,
    "Below quota by 18 pairs. 3 of 12 Shoe Constructors were absent." Nothing names a person.
-   **Plan batches and quota** sets how often (every 1 to 4 hours, or once at the end of the day)
-   with a preview of tomorrow's batches, and the one daily quota with its suggestion; **Use
-   suggestion** fills it in.
+   **Plan days** is a month calendar (Phase 30E-2, D-114): each past day shows its plan and "2 of
+   3 rolls scanned"; click a weekday, today or later, to set the rolls to be used, the quota
+   (**Use suggestion** fills it in), the check-in interval (every 4 hours or once at the end of the
+   day) and the shift, with the batches previewed. Next week's Wednesday is marked **Non-working /
+   Holiday**. A weekday with no plan has no batches and the Floor Manager sees **Plan today**.
 3. **Inventory → Black cowhide (school shoes):** the item's **Rolls**, each with its own code
    (`LR-MT-001`), area, status (Not scanned, Being scanned, Scanned, Fully used, Removed), shots
    and defects found. **Add rolls**: the day they arrived, then each roll's area. The count on hand
@@ -460,8 +462,8 @@ starting the app.
 | `DEMO_LOGIN_TOOLS`         | `true` for the demo sign-in and Reset demo data on the login page, with a Demo mode band (D-101). Needs `SEED_DEMO_USERS=true`. Never for real use. Default off.                           |
 | `SEED_DEMO_WEEK`           | `true` to create a past week of production on first start (panel demo). Default off.                                                                                                       |
 
-On every start the app makes sure the reference data exists: defect types, the batch schedule
-and lunch break, CV
+On every start the app makes sure the reference data exists: defect types, the lunch break (the
+Floor Manager plans each day's batches on Batches → Plan days), CV
 thresholds 90% / 60%, and a sample supplier. It never overwrites values an admin has changed.
 With demo users on, it also adds five demo inventory items the first time.
 `npm run db:seed` runs the same steps by hand.

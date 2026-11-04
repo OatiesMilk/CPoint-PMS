@@ -19,6 +19,8 @@ const postMovement = vi.fn(
 const recordAudit = vi.fn();
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/stock-update.model", () => model);
+const findDayPlan = vi.fn(async () => null as { kind: string } | null);
+vi.mock("@/server/models/production.model", () => ({ findDayPlan }));
 vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn("tx"),
 }));
@@ -162,6 +164,13 @@ describe("the reminder (C-32)", () => {
     expect((await svc.stockUpdateReminder(now)).due).toBe(false);
     // Thursday.
     expect((await svc.stockUpdateReminder(new Date("2026-10-29T02:00:00Z"))).due).toBe(false);
+  });
+
+  it("skips a day marked Non-working / Holiday (D-114, A-41)", async () => {
+    findDayPlan.mockResolvedValueOnce({ kind: "NON_WORKING" });
+    expect((await svc.stockUpdateReminder(now)).due).toBe(false);
+    findDayPlan.mockResolvedValueOnce({ kind: "PLANNED" });
+    expect((await svc.stockUpdateReminder(now)).due).toBe(true);
   });
 
   it("falls back to Wednesday and Friday with no settings row", async () => {

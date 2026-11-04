@@ -3,45 +3,56 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-04 (Phase 30E-1 QA passed, run 3; commit next)
-**Branch:** `main` at 9bfd10e has Phase 30C (#34).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30E-1 (D-111 to D-113). Brief
-`docs/prompts/rolls-by-color-and-same-day-plan.md`, plan `docs/prompts/plans/phase-30e-plan.md`,
-handoff `qa/handoffs/2026-11-04-phase-30e-rolls-by-color.md`, prompt `qa/CODEX_PROMPT_PHASE_30E.md`.
+**Last updated:** 2026-11-04 (Phase 30E-2 QA passed, run 3; uncommitted, git commands next)
+**Branch:** `main` at a94fbe0 has Phase 30E-1 (#35).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30E-2 (D-114, D-115). Plan
+`docs/prompts/plans/phase-30e2-plan.md`, handoff
+`qa/handoffs/2026-11-04-phase-30e2-planning-calendar.md`, prompt `qa/CODEX_PROMPT_PHASE_30E2.md`.
 
-- **Current phase:** 30E-1. The FM still adds each leather roll with its own area (Phase 30A). At
-  Capture the constructor picks the **leather, then the roll** by the code on its label (Dylan's
-  choice (a), 4 Nov); Finish roll takes the roll off stock whatever its Defect %. The QI's Finish
-  batch asks only for pairs. Too many defects is information for the FM; no Send back or Keep.
-- Migration `20261104090000_rolls_leave_stock_at_capture` (data only: scanned rolls off stock) tried
-  on a scratch database (ledger 0). The laptop's `cpoint_pms` was restored from
-  `storage/backups/before-phase30e-2026-11-04.dump` (Dylan, 4 Nov) and migrated: 3 scanned rolls
-  taken off stock, 9 rolls still in stock, ledger 0.
-- Checks: `npm run check` passed (651 unit tests). Demo week checked on a scratch database (rolls in
-  stock, one OUT per scanned roll, no Fully used, one removed, ledger 0). E2E not run (Codex):
-  `capture`, `batches`, `returns`, `rolls` updated.
-- **Codex run 1 BLOCKED** (`qa/reports/2026-11-04-phase-30e-run1.md`): `demo:reset` stopped because
-  the demo suppliers on the laptop were deactivated (F1, an older gap); Codex restored its backup.
-  Fixed: the reset turns the kept suppliers back on before seeding (`reactivateSuppliers`, audited);
-  tried on a copy of that backup (seeded, 5 turned on, ledger 0). `npm run check` passed (651).
-- **Codex run 2 FAIL** (`qa/reports/2026-11-04-phase-30e-run2.md`, no reset, Dylan's own leathers):
-  12 manual scenarios passed, S5 and S6 not possible (today's saved schedule leaves Wednesday out;
-  no current roll over the limit); targeted specs 33/1/1 (Inventory passed alone); full suite
-  85 passed, 7 failed, 2 skipped, all 30 s timeouts or aborted loads under `next dev`. No app fault
-  found.
-- **Codex run 3 PASS** (`qa/reports/2026-11-04-phase-30e-run3.md`): capture, reports, returns,
-  rolls, smoke and inventory each passed alone (41 passed, 1 skipped); the full suite 91 passed, 1
-  failed (a Materials load timeout in the smoke journey, which passed 10/10 alone), 2 skipped;
-  ledger 0. QA done for 30E-1: commit on a new branch (git commands in the 30E thread).
-- `.github/workflows/ci.yml`: the Docker job's demo roll checks follow 30E (include it in the
-  commit).
+- **Current phase:** 30E-2, the planning calendar. **Batches → Plan days** is a month calendar: the
+  FM clicks a weekday, today or later (up to three months ahead), and sets Rolls to be used (an
+  estimate), the Quota, the Check-in interval (every 4 hours or once at the end of the day) and
+  the shift (08:00 to 17:00 prefilled). Or marks it **Non-working / Holiday** (no name, undo). No
+  plan, no batches: from 00:00 the FM gets the **Plan today** banner, bell item and home card; the
+  QI reads "The Floor Manager plans them first." Rolls planned against rolls scanned show on the
+  calendar's past days, Batches, Reports → Operations and `production.csv`.
+- Migration `20261104120000_day_plans`: creates `day_plans`, turns the old schedule and quota into
+  a plan for every past working day and today (same batches and numbers), then drops
+  `production_schedules` and `daily_quotas`. Tried on an old-code demo week with an extra 2-hour
+  schedule and a 140 quota: every day identical before and after. The demo week now saves day
+  plans and marks next week's Wednesday Non-working.
+- API: `GET /api/v1/production/plans?month=`, `PUT /api/v1/production/plans/{day}`,
+  `PUT|DELETE /api/v1/production/plans/{day}/non-working`; `/production/schedule` and
+  `/production/quotas` are 404.
+- Checks: `npm run check` passed (**658 unit tests**, build OK) in a cloud copy of main a94fbe0 with
+  these changes, before they were copied to the laptop. Not yet run on the laptop. E2E not run
+  (Codex): `batches.spec.ts` rewritten (it plans today itself and puts the plan back).
+- Laptop database backed up (`storage/backups/before-phase30e2-2026-11-04.dump`) and migrated by
+  Dylan (4 Nov).
+- **Codex run 1 FAIL** (`qa/reports/2026-11-04-phase-30e2-run1.md`): 13 passed, 2 failed, 2 not
+  possible; targeted e2e 13/1/0 (6 not run), full 85/2/2; ledger 0. F1 past days don't open: the
+  handoff was wrong (Dylan: past days can't be clicked), handoff fixed. F2 Operations had one roll
+  column: now Rolls planned and Rolls scanned. F3 `batches.spec.ts` matched the summary and the
+  field error: now reads the field's error. F4 a smoke toast timeout in the full suite only (passed
+  alone). S8: today had batches finished before it had a plan, so it was locked; an unplanned today
+  now stays plannable. `npm run check` passed (659) in the cloud copy.
+- **Codex run 2 FAIL** (`qa/reports/2026-11-04-phase-30e2-run2.md`): R1 to R3 passed (static past
+  days, two roll columns, plan today from the notice); R4 axe `scrollable-region-focusable` on the
+  wider production table before it was measured. E2E targeted 12/3/0, full 86/2/2, smoke alone
+  10/0; ledger 0. Fixes: `batches.spec.ts` clicks the visible bell; `ScrollRegion` starts as a
+  keyboard stop and measures before paint. `npm run check` passed (659).
+- **Codex run 3 PASS** (`qa/reports/2026-11-04-phase-30e2-run3.md`): R1 (wide tables focusable on
+  first load, axe 0 on four scans); targeted e2e 19/1/0 and full 92/1/2, each failure a 30 s
+  deadline that passed alone (reports 3/0, smoke 10/0); ledger 0. Afterwards: the batches spec's
+  clean-up missed its lunch row on a Manila clock (a Date sent in local time to a column with no
+  zone); it now sends a UTC string (pre-existing, not run again). QA done for 30E-2: commit on a
+  new branch with only this thread's files.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
-- **Next:** commit 30E-1 and open the PR. **Then:** Phase 30E-2 in a new session:
-  a calendar where the FM picks any day and plans its rolls to be used (one total, an estimate:
-  constructors may start more, and reports compare planned with scanned), quota and check-in
-  interval (every 2 h, every 4 h or once a day), with the start-of-day notice; then 30D, 31.
-- **Overall:** 33 phases built (0 to 29, 30A, 30B, 30C) and 30E-1; 3 planned (30E-2, 30D, 31).
+- **Next:** commit 30E-2 and open the PR (git commands in the 30E-2 thread). Then
+  30D, 31.
+- **Overall:** 34 phases built (0 to 29, 30A, 30B, 30C, 30E-1) and 30E-2 (uncommitted); 2 planned
+  (30D, 31).
 
 ## Phase progress
 
@@ -90,9 +101,9 @@ handoff `qa/handoffs/2026-11-04-phase-30e-rolls-by-color.md`, prompt `qa/CODEX_P
 - [x] 30C. Cuts from 3 inches Not accepted; a roll over 10% defects marked Return to supplier
       (D-110; QA passed, run 3; merged #34)
 - [x] 30E-1. The constructor picks the leather, then the roll; a roll leaves stock at Finish roll;
-      the QI counts pairs only (D-111 to D-113; QA passed, run 3)
-- [ ] 30E-2. A planning calendar: rolls to be used, quota and check-in interval per day; How often
-      without 1 h and 3 h
+      the QI counts pairs only (D-111 to D-113; QA passed, run 3; merged, CI green)
+- [ ] 30E-2. A planning calendar: rolls to be used, quota, check-in interval and shift per day;
+      Non-working / Holiday (D-114, D-115; QA passed, run 3; uncommitted)
 - [ ] 30D. The team's QA notes on Reports → Materials
 - [ ] 31. The documentation and the paper's figures match the system
 
@@ -581,12 +592,11 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-0. Dylan: commit Phase 30E-1 on a new branch and open the PR (git commands in the 30E thread). After a full pass,
-   the git commands come in the 30E thread. Then Phase 30E-2 in a new session.
+0. Dylan: commit Phase 30E-2 on a new branch (git commands in the 30E-2 thread), open the PR. After a pass, the git commands come in the 30E-2 thread.
 1. Dylan: set up the phone on Capture through the tunnel (the fixed setup window).
 2. Dylan, at the station: calibrate the real phone on Capture and capture a few real knife cuts on
    scrap leather (2.5, 3 and 4 in) to check the 3-inch line on real cuts.
-3. Phase 30D (the team's QA notes), after 30E: leather Used is now Scanned at Capture, and
+3. Phase 30D (the team's QA notes), after 30E-2: leather Used is now Scanned at Capture, and
    Removed (other) through Remove (D-112).
 4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
 5. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
@@ -624,7 +634,14 @@ Later:
   until the plan is saved (banner, bell, FM home); the QI reads "The Floor Manager plans them
   first."
 - ASSUMPTION (A-38): 30E before 30D, in two sessions (30E-1 rolls and color, 30E-2 planning).
-- Decided (Dylan, 2026-11-04, 30E-2): a month calendar; click a weekday to plan it (weekends not selectable, no working-days ticks); the check-in interval is every 4 hours or once at the end of the day only. ASSUMPTION (A-39): saved plans of every 1, 2 or 3 hours become every 4 hours.
+- Decided (Dylan, 2026-11-04, 30E-2, D-114, D-115): a month calendar; click a weekday to plan it
+  (weekends not selectable, no working-days ticks); the check-in interval is every 4 hours or once
+  at the end of the day only; the shift is in each day's plan (08:00 to 17:00 prefilled); planned
+  against scanned on the calendar, Batches and Operations; no switch-over date, the migration
+  converts the old schedule and quota. A-39 is withdrawn: converted days keep their interval as
+  history.
+- ASSUMPTION (A-40, D-114): a day can be planned up to the end of the third month ahead.
+- ASSUMPTION (A-41, D-114): a Non-working / Holiday day has no stock reminder either.
 - Decided (Dylan, 2026-11-03, Phase 30C plan, D-110): a cut is Not accepted from 3 in by its box
   diagonal; each cut from 3 in counts a flat 1% of its roll "for now", shorter cuts nothing; holes
   and scratches by box area; phones calibrated once on Capture by tapping a sheet's corners. Tell
