@@ -12,7 +12,7 @@ export type ScanSummary = {
     label: string;
     confidence: number;
     effect: DefectOutcome | null;
-    /** Its box diagonal in inches; null when the phone isn't calibrated (Phase 30C). */
+    /** Its box diagonal in inches; null when the shot had no scale (Phase 30C). */
     lengthIn?: number | null;
   }[];
 };

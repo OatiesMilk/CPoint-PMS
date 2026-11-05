@@ -2,7 +2,8 @@
  * Measuring defects in inches (Phase 30C, D-106, D-110). Pure and client-safe; the same maths as
  * `cv/cpoint_cv/measure.py`, so the app's numbers match the toolkit's.
  *
- * The scale is the inches the phone sees across the photo's width (its calibration, A-18). A box
+ * The scale is the inches the phone sees across the photo's width, read from the marker card in
+ * the shot (`scale-marker.ts`, D-120; before it the phone's tap calibration, A-18). A box
  * is in fractions of the photo, so with the photo's height ÷ width it converts straight to inches.
  * A defect's length is its box diagonal; a shot's defect area is the union of its boxes, overlaps
  * counted once (C-35). A type with a flat share (D-110: a cut from 3 in counts 1%) adds that share
@@ -11,13 +12,6 @@
  */
 
 export const SQ_IN_PER_SQ_FT = 144;
-
-/** Known sheet sizes in inches (short side, long side), as in `calibration.py`. */
-export const SHEET_SIZES = {
-  a4: { label: "A4", short: 8.27, long: 11.69 },
-  letter: { label: "Letter", short: 8.5, long: 11 },
-} as const;
-export type SheetKey = keyof typeof SHEET_SIZES;
 
 export type Scale = { widthIn: number; aspect: number };
 export type Box = { x: number; y: number; width: number; height: number };
@@ -169,43 +163,14 @@ export function isOver(sharePct: number, limitPct: number): boolean {
   return Math.round(sharePct * 100) > Math.round(limitPct * 100);
 }
 
-// ───────────── calibration (A-18) ─────────────
-
-const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
-
-/**
- * Pixels per inch from a sheet's four corners tapped on a photo, in any order. The
- * opposite sides are averaged, then the long and short sides, as `cpoint_cv calibrate` does.
- * Returns null when the four points don't look like the sheet (sides off by more than 15%).
- */
-export function pxPerInFromCorners(
-  corners: readonly Point[],
-  sheet: { short: number; long: number },
-): number | null {
-  if (corners.length !== 4) return null;
-  // Taps can come in any order: put them in order around their centre first.
-  const cx = corners.reduce((s, p) => s + p.x, 0) / 4;
-  const cy = corners.reduce((s, p) => s + p.y, 0) / 4;
-  const [a, b, c, d] = [...corners].sort(
-    (p, q) => Math.atan2(p.y - cy, p.x - cx) - Math.atan2(q.y - cy, q.x - cx),
-  );
-  const side1 = (dist(a, b) + dist(c, d)) / 2;
-  const side2 = (dist(b, c) + dist(d, a)) / 2;
-  const longPx = Math.max(side1, side2);
-  const shortPx = Math.min(side1, side2);
-  if (!(shortPx > 0)) return null;
-  const aspect = longPx / shortPx;
-  const sheetAspect = sheet.long / sheet.short;
-  if (Math.abs(aspect - sheetAspect) / sheetAspect > 0.15) return null;
-  return (longPx / sheet.long + shortPx / sheet.short) / 2;
-}
+// ───────────── the scale ─────────────
 
 /** The inches a photo of this width covers at this many pixels per inch. */
 export function widthInFrom(pxPerIn: number, imageWidth: number): number {
   return imageWidth / pxPerIn;
 }
 
-/** The calibration's own bounds: a phone on the stand sees between 4 and 120 in across. */
+/** The scale's bounds: a phone on the stand sees between 4 and 120 in across. */
 export const WIDTH_IN_MIN = 4;
 export const WIDTH_IN_MAX = 120;
 

@@ -29,6 +29,19 @@ const FIELDS = {
   captureId: "0199f0a1-7c2e-4a51-9d3f-2b8c4e6a1f00",
   rollId: "b1",
   source: "WEBCAM" as const,
+  markerCorners: [
+    [
+      { x: 0.4, y: 0.4 },
+      { x: 0.5, y: 0.4 },
+      { x: 0.5, y: 0.5 },
+      { x: 0.4, y: 0.5 },
+    ],
+  ] as [
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+  ][],
 };
 const USER = { id: "user-sc" };
 const SEEN = [
@@ -75,7 +88,7 @@ describe("captureScan", () => {
         modelVersion: "yolo-v1-1d729fb0",
         source: "WEBCAM",
         capturedAt: undefined,
-        widthIn: null,
+        markerCorners: FIELDS.markerCorners,
       },
       { kind: "website", userId: "user-sc" },
       expect.any(Date),

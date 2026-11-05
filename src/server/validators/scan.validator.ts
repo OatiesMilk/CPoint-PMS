@@ -38,9 +38,9 @@ export const detectionSchema = z
 
 export type DetectionValues = z.infer<typeof detectionSchema>;
 
-const WIDTH_IN = `widthIn must be the inches the phone sees across the photo, from ${WIDTH_IN_MIN} to ${WIDTH_IN_MAX}, or left out when it isn't calibrated.`;
+const WIDTH_IN = `widthIn must be the inches the phone sees across the photo, from ${WIDTH_IN_MIN} to ${WIDTH_IN_MAX}, or left out when the device has no scale.`;
 
-/** The phone's calibration (Phase 30C, A-18): inches across the photo's width, sent as text. */
+/** A device's scale (Phase 30C): inches across the photo's width, sent as text. Capture sends the marker card instead (D-120). */
 const widthIn = z.preprocess(
   (v) => (v === undefined || v === null || v === "" ? undefined : v),
   z.coerce
@@ -48,6 +48,35 @@ const widthIn = z.preprocess(
     .refine((n) => Number.isFinite(n) && n >= WIDTH_IN_MIN && n <= WIDTH_IN_MAX, WIDTH_IN)
     .optional(),
 );
+
+const MARKER =
+  'markerCorners must be a JSON array of the marker cards seen, each four corners {x, y} in fractions of the photo, e.g. [[{"x":0.4,"y":0.4},…]].';
+
+/**
+ * The scale marker cards seen on the shot (D-120): each card's four corners, top-left first as
+ * printed, in fractions of the photo (a little outside 0 to 1 is allowed for a card at the edge).
+ */
+const corner = z.object(
+  { x: z.number().min(-0.1).max(1.1), y: z.number().min(-0.1).max(1.1) },
+  { error: MARKER },
+);
+const markerList = z
+  .array(z.tuple([corner, corner, corner, corner], { error: MARKER }), { error: MARKER })
+  .min(1, MARKER)
+  .max(4, "markerCorners can have at most 4 cards. One card in the picture is enough.");
+
+/** Text → JSON; empty → undefined, so `required` can name the missing card. */
+const parseJsonText = (v: unknown, ctx: z.RefinementCtx) => {
+  if (v === undefined || v === null || v === "") return undefined;
+  try {
+    return JSON.parse(String(v)) as unknown;
+  } catch {
+    ctx.addIssue({ code: "custom", message: MARKER });
+    return z.NEVER;
+  }
+};
+
+const markerCorners = z.preprocess(parseJsonText, markerList.optional());
 
 /** The non-file fields of POST /api/v1/scans (multipart/form-data). */
 export const ingestFieldsSchema = z.object({
@@ -89,6 +118,7 @@ export const ingestFieldsSchema = z.object({
     .enum(ScanSource, { error: `source must be one of: ${Object.values(ScanSource).join(", ")}.` })
     .default("WEBCAM"),
   widthIn,
+  markerCorners,
   capturedAt: z.iso
     .datetime({
       offset: true,
@@ -110,15 +140,25 @@ export const isScanId = (value: string) => z.uuid().safeParse(value).success;
 /**
  * The non-file fields of POST /api/v1/scans/capture: a capture from the website's Capture page
  * (Phase 18). The server runs the model, so there are no `detections` or `modelVersion` here.
- * The page always makes a captureId, so a retry never makes a second scan (D-051).
+ * The page always makes a captureId, so a retry never makes a second scan (D-051). It sends the
+ * marker card's corners and the server works out the scale from them (D-120); no `widthIn`.
  */
+export const MARKER_REQUIRED =
+  "markerCorners is required: show the marker card to capture, so the shot carries its scale.";
+
 export const captureFieldsSchema = ingestFieldsSchema
-  .pick({ rollId: true, capturedAt: true, widthIn: true })
+  .pick({ rollId: true, capturedAt: true })
   .extend({
+    markerCorners,
     captureId: z.uuid("captureId must be the UUID this page made for the capture."),
     source: z
       .enum(["WEBCAM", "PHONE"], { error: "source must be WEBCAM or PHONE." })
       .default("WEBCAM"),
+  })
+  // Checked on the object: zod skips a missing optional key's own refinements.
+  .superRefine((v, ctx) => {
+    if (!v.markerCorners)
+      ctx.addIssue({ code: "custom", path: ["markerCorners"], message: MARKER_REQUIRED });
   });
 
 export type CaptureFields = z.infer<typeof captureFieldsSchema>;

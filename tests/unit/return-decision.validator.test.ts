@@ -45,7 +45,7 @@ describe("what the lists and Capture say (Phase 30C)", () => {
     );
     expect(
       finishedLine(roll, { sharePct: null, limitPct: 10, marked: false, notMeasured: "unscaled" }),
-    ).toMatch(/Set up this phone next time/);
+    ).toMatch(/taken before the marker card/);
   });
 });
 
@@ -77,16 +77,38 @@ describe("the new settings and fields", () => {
     );
   });
 
-  it("takes the phone's calibration with a scan, 4 to 120 in, or none", () => {
+  it("takes a device's scale with a scan, 4 to 120 in, or none", () => {
     expect(ingestFieldsSchema.parse({ widthIn: "22.4" }).widthIn).toBe(22.4);
     expect(ingestFieldsSchema.parse({}).widthIn).toBeUndefined();
-    expect(
-      captureFieldsSchema.parse({
-        captureId: "0199f0a1-7c2e-7a51-9d3f-2b8c4e6a1f00",
-        widthIn: "18.5",
-      }).widthIn,
-    ).toBe(18.5);
     expect(message(ingestFieldsSchema.safeParse({ widthIn: "2" }))).toMatch(/^widthIn must be/);
+  });
+
+  it("needs the marker card's corners on a Capture shot, and no widthIn (D-120)", () => {
+    const captureId = "0199f0a1-7c2e-7a51-9d3f-2b8c4e6a1f00";
+    const card = [
+      [
+        { x: 0.4, y: 0.4 },
+        { x: 0.5, y: 0.4 },
+        { x: 0.5, y: 0.5 },
+        { x: 0.4, y: 0.5 },
+      ],
+    ];
+    const parsed = captureFieldsSchema.parse({
+      captureId,
+      markerCorners: JSON.stringify(card),
+      widthIn: "18.5",
+    });
+    expect(parsed.markerCorners).toEqual(card);
+    expect(parsed).not.toHaveProperty("widthIn");
+    expect(message(captureFieldsSchema.safeParse({ captureId }))).toMatch(
+      /^markerCorners is required: show the marker card to capture/,
+    );
+    expect(
+      message(captureFieldsSchema.safeParse({ captureId, markerCorners: '[[{"x":0.4}]]' })),
+    ).toMatch(/^markerCorners must be a JSON array/);
+    expect(
+      message(captureFieldsSchema.safeParse({ captureId, markerCorners: "not json" })),
+    ).toMatch(/^markerCorners must be a JSON array/);
   });
 
   it("has no To return filter any more (Phase 30E)", () => {

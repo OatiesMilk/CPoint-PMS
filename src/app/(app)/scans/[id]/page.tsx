@@ -121,8 +121,10 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                   </span>
                   <span className="text-muted-foreground">
                     {rule.widthIn
-                      ? `Phone calibrated: ${rule.widthIn} in across`
-                      : "Phone not calibrated: nothing measured"}
+                      ? rule.markerCorners?.length
+                        ? `Measured with the marker card: ${rule.widthIn} in across`
+                        : `Scale: ${rule.widthIn} in across`
+                      : "No scale: nothing measured"}
                   </span>
                 </dd>
               </dl>

@@ -27,7 +27,7 @@ export type DefectTypeInfo = {
 
 /**
  * A type's outcome for one detection. With a length limit (Phase 30C, C-37): Not accepted at or
- * above it, Usable below; unmeasured (no calibration) counts as Not accepted, the safe side.
+ * above it, Usable below; unmeasured (no scale) counts as Not accepted, the safe side.
  */
 export function outcomeFor(
   outcome: DefectOutcome | null | undefined,
@@ -104,8 +104,10 @@ export type DecisionSnapshot = {
   /** Phase 30C: each type's "Not accepted from" length in inches, and its flat share. */
   lengthLimits?: Record<string, number>;
   flatShares?: Record<string, number>;
-  /** The inches across the photo from the phone's calibration; null when it had none. */
+  /** The inches across the photo (the marker card's, D-120, or the old calibration); null without. */
   widthIn?: number | null;
+  /** The marker cards' corners on the shot, in fractions (D-120); boxes on them were dropped. */
+  markerCorners?: { x: number; y: number }[][] | null;
   /**
    * Set on scans decided before Phase 25, which used Fixable and the two confidence thresholds
    * (D-011, D-053). Their verdicts were converted (Fixable → Pass, Needs review → Reject).
@@ -122,6 +124,7 @@ export function readSnapshot(json: unknown): DecisionSnapshot {
     lengthLimits?: Record<string, number>;
     flatShares?: Record<string, number>;
     widthIn?: unknown;
+    markerCorners?: unknown;
   };
   return {
     foundAtOrAbove:
@@ -130,6 +133,9 @@ export function readSnapshot(json: unknown): DecisionSnapshot {
     lengthLimits: s.lengthLimits ?? {},
     flatShares: s.flatShares ?? {},
     widthIn: typeof s.widthIn === "number" ? s.widthIn : null,
+    markerCorners: Array.isArray(s.markerCorners)
+      ? (s.markerCorners as { x: number; y: number }[][])
+      : null,
     earlierRule: s.outcomes === undefined || s.rejectAtOrAbove !== undefined,
   };
 }

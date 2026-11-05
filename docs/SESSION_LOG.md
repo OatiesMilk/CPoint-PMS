@@ -5,6 +5,52 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-05 · Scale marker run 4 PASS
+
+- Codex run 4: S9 passed (Floor view's no-card message, the count unchanged); `batches.spec.ts`
+  7/0 after 01:00 Manila; full e2e 76 passed, 19 timeouts, 2 skipped, every timed-out spec passed
+  alone (79/0/2); ledger 0. QA done for the scale marker; git commands given to Dylan.
+
+## 2026-11-05 · Scale marker run 3: the marker passes
+
+- Codex run 3: 5 of 5 Capture button presses saved (run 2's F1 fixed); S6 16.8 in against Dylan's
+  tape 17.5 in (4.0%, inside 5%); ledger 0. FAIL only from `batches.spec.ts` run before 01:00
+  Manila (the known hour with no batch due) and S9's wording not read. No code change. Prompt
+  `qa/CODEX_PROMPT_SCALE_MARKER_RUN4.md` for those two.
+
+## 2026-11-04 · Scale marker run 2 FAIL, fixed
+
+- Codex run 2: 6 passed, 1 failed, 1 blocked (S6, no ruler reading); e2e targeted 24/0/1, full
+  96/0/2; ledger 0; run 1's F2 is fixed. F1 again: the Capture button twice said "Show the marker
+  card to capture" while the preview showed the card (16.9 in); Floor view's Space later saved a
+  measured shot (16.92 in). Cause: the detector finds the card on some frames only, the live check
+  holds a sighting for 1 s, and the press read a single frame. Now a press tries up to 8 frames
+  (about half a second) and sends the first with the card, and each frame is read at 960 and
+  then 640 px (both checks). `npm run check` passed (688). Prompt
+  `qa/CODEX_PROMPT_SCALE_MARKER_RUN3.md`.
+
+## 2026-11-04 · Scale marker run 1 FAIL, fixed
+
+- Codex run 1: 8 passed, 3 failed, 3 blocked; e2e stopped at collection; ledger 0. F1: Capture
+  turned on from the live check (960 px) but the press read the full frame, where js-aruco2 missed
+  the card on the soft USB picture, so no shot saved. Now both read a 960 px copy; unit test added
+  (684). F2: the nested `test.use` with launch options; the no-card test moved to
+  `tests/e2e/capture-no-card.spec.ts` (98 tests collect). S8's handoff expectation corrected.
+  Prompt `qa/CODEX_PROMPT_SCALE_MARKER_RUN2.md`.
+
+## 2026-11-04 · Scale marker: a printed card on the leather replaces the tap calibration (D-120)
+
+- Dylan chose a printed ArUco card (4x4_50 id 0, 2.00 in) read on every shot, no fallback, the
+  card flat on the leather. Before planning, `js-aruco2` read the printed PDF (id 0, 2.00 in, also
+  turned 17°). Plan `docs/prompts/plans/scale-marker-plan.md`; D-120, A-46 to A-48.
+- Built: `scale-marker.ts` (scale, tilt, card outline), `marker-detect.ts`, Capture's live check
+  with Capture and Space gated, `markerCorners` required on `POST /api/v1/scans/capture`, boxes on
+  the card dropped at ingest, `calibration.tsx` deleted, the printable card in `public/` (its text
+  now says "on the leather"). No migration; new dependency `js-aruco2@2.0.0`.
+- `npm run check` passed (683 unit tests, build OK) in a cloud copy of main 5104e29, then copied
+  to the laptop. E2E `capture.spec.ts` uses a fake camera video with the card; not run (Codex).
+  Handoff `qa/handoffs/2026-11-04-scale-marker.md`, prompt `qa/CODEX_PROMPT_SCALE_MARKER.md`.
+
 ## 2026-11-04 · Phase 30D run 2 PASS
 
 - Codex run 2 with the USB camera: the counter rose 12/2 → 13/2 after Finish roll without a

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, LoaderCircle, Maximize2, RefreshCw, Ruler, Send } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,18 @@ import {
   spaceCaptures,
   type CameraProblem,
 } from "@/lib/capture-rules";
+import { findMarkerQuads } from "@/lib/marker-detect";
 import { defaultRollId } from "@/lib/roll-rules";
-import { CalibrateDialog, saveCalibration, savedCalibration, type Frame } from "./calibration";
+import {
+  firstMarkedFrame,
+  MARKER_MESSAGES,
+  MARKER_READ_WIDTHS,
+  scaleFromMarkers,
+  worseProblem,
+  type MarkerProblem,
+  type MarkerScale,
+  type Quad,
+} from "@/lib/scale-marker";
 import { FloorView, type FloorBand } from "./floor-view";
 import { LastScanSummary, type ScanSummary } from "./last-scan";
 import { PlanCounter, type CapturePlanView } from "./plan-counter";
@@ -37,9 +47,12 @@ type Pending = {
   capturedAt: string;
   rollId: string;
   rollCode: string;
-  /** The phone's calibration for this frame size, or null (Phase 30C). */
-  widthIn: number | null;
+  /** The marker cards on this frame, corners in fractions: the server reads the scale (D-120). */
+  markerCorners: Quad[];
 };
+
+/** What the live picture shows of the marker card, read about 4 times a second (D-120). */
+type MarkerView = { ok: true; widthIn: number } | { ok: false; problem: MarkerProblem };
 
 /** The last result, as the capture returned it (a constructor can't open Scans, D-075). */
 type Last = { summary: ScanSummary; repeat: boolean };
@@ -57,6 +70,52 @@ const FLOOR_KEY = "cpoint.capture.floor";
 const ROLL_KEY = "cpoint.capture.roll";
 const ROLL_REFRESH_MS = 20_000;
 const JPEG_QUALITY = 0.92;
+/** The live check for the marker card: how often (D-120). */
+const MARKER_CHECK_MS = 250;
+/** A card seen this recently still counts, so one missed read doesn't flicker the button. */
+const MARKER_HOLD_MS = 1000;
+
+/**
+ * Reads the marker card on copies 960 and then 640 px wide, the first that gives a scale. The live
+ * check and the press read the same sizes (QA run 1, F1: the full 1920 px frame missed a card the
+ * preview had found), and a soft card often reads at one size only. The corners come back in
+ * fractions, which hold for the full frame too.
+ */
+function readMarkerCard(
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+  canvas: HTMLCanvasElement,
+): MarkerScale | null {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx || !width || !height) return null;
+  let problem: MarkerProblem = "none";
+  for (const size of MARKER_READ_WIDTHS) {
+    const ratio = Math.min(1, size / width);
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const read = scaleFromMarkers(findMarkerQuads(image), canvas.width, canvas.height);
+    if (read.ok) return read;
+    problem = worseProblem(problem, read.problem);
+    if (ratio === 1) break; // the picture is already this small
+  }
+  return { ok: false, problem };
+}
+
+/** Until the video shows a new frame (or 60 ms where the browser can't say). */
+function nextFrame(video: HTMLVideoElement) {
+  return new Promise<void>((resolve) => {
+    if (typeof video.requestVideoFrameCallback === "function") {
+      const timer = setTimeout(resolve, 120);
+      video.requestVideoFrameCallback(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    } else setTimeout(resolve, 60);
+  });
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -171,17 +230,8 @@ export function CaptureClient({
   const [last, setLast] = useState<Last | null>(null);
   const [floor, setFloor] = useState(false);
   const fullscreenRef = useRef(false);
-  // Phase 30C: the frame size the camera gives, and this phone's calibration for it (A-18).
-  const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null);
-  const [calibrationVersion, setCalibrationVersion] = useState(0);
-  const [calibrateFrame, setCalibrateFrame] = useState<Frame | null>(null);
-  const calibration = useMemo(
-    () =>
-      frameSize && calibrationVersion >= 0
-        ? savedCalibration(deviceId, frameSize.width, frameSize.height)
-        : null,
-    [frameSize, deviceId, calibrationVersion],
-  );
+  // D-120: is the marker card in the live picture? Capture stays off until it is.
+  const [marker, setMarker] = useState<MarkerView>({ ok: false, problem: "none" });
 
   useEffect(() => {
     // Read after mount: localStorage isn't there on the server.
@@ -354,7 +404,7 @@ export function CaptureClient({
         form.set("capturedAt", pending.capturedAt);
         form.set("rollId", pending.rollId);
         form.set("source", phone ? "PHONE" : "WEBCAM");
-        if (pending.widthIn !== null) form.set("widthIn", String(pending.widthIn));
+        form.set("markerCorners", JSON.stringify(pending.markerCorners));
         try {
           const res = await fetch("/api/v1/scans/capture", { method: "POST", body: form });
           status = res.status;
@@ -412,11 +462,39 @@ export function CaptureClient({
   const live = camera.kind === "live";
   const sending = send.kind === "sending";
   const waitingToResend = send.kind === "failed" && send.pending !== null;
-  const canCapture = live && modelReady && !!roll && !sending && !waitingToResend;
+  // Space may be pressed without the card, to be told why nothing was sent; the button waits.
+  const canPress = live && modelReady && !!roll && !sending && !waitingToResend;
+  const canCapture = canPress && marker.ok;
+
+  // The live check for the marker card, on a small copy of the picture (D-120).
+  useEffect(() => {
+    if (!live) return;
+    const canvas = document.createElement("canvas");
+    let lastSeen = 0;
+    const timer = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.videoWidth === 0 || document.visibilityState !== "visible") return;
+      if (busyRef.current) return;
+      const read = readMarkerCard(video, video.videoWidth, video.videoHeight, canvas);
+      if (!read) return;
+      const now = Date.now();
+      if (read.ok) {
+        lastSeen = now;
+        setMarker((m) =>
+          m.ok && m.widthIn === read.widthIn ? m : { ok: true, widthIn: read.widthIn },
+        );
+      } else if (now - lastSeen > MARKER_HOLD_MS) {
+        setMarker((m) =>
+          !m.ok && m.problem === read.problem ? m : { ok: false, problem: read.problem },
+        );
+      }
+    }, MARKER_CHECK_MS);
+    return () => clearInterval(timer);
+  }, [live]);
 
   const capture = useCallback(async () => {
     const video = videoRef.current;
-    if (!canCapture || !video || !roll || busyRef.current) return;
+    if (!canPress || !video || !roll || busyRef.current) return;
     // No frame yet (the camera is starting, or Floor view's video just got the stream): say so
     // instead of sending an empty picture.
     if (video.videoWidth === 0 || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
@@ -425,11 +503,31 @@ export function CaptureClient({
     }
     busyRef.current = true; // one press, one scan
     try {
-      const capturedAt = new Date().toISOString();
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // The card is read again on the frame being sent: its corners must be on this very
+      // picture. The detector finds a card on some frames, not every one, so a few frames are
+      // tried (about half a second) and the first with the card is sent (QA run 2, F1).
+      const scratch = document.createElement("canvas");
+      let capturedAt = new Date().toISOString();
+      const found = await firstMarkedFrame(
+        () => {
+          if (video.videoWidth === 0) return null;
+          capturedAt = new Date().toISOString();
+          const frame = document.createElement("canvas");
+          frame.width = video.videoWidth;
+          frame.height = video.videoHeight;
+          frame.getContext("2d")?.drawImage(video, 0, 0, frame.width, frame.height);
+          return frame;
+        },
+        (frame) => readMarkerCard(frame, frame.width, frame.height, scratch),
+        () => nextFrame(video),
+      );
+      if (!found.ok) {
+        setMarker({ ok: false, problem: found.problem });
+        setSend({ kind: "failed", message: MARKER_MESSAGES[found.problem], pending: null });
+        return;
+      }
+      const canvas = found.frame;
+      const read = found.scale;
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY),
       );
@@ -449,38 +547,12 @@ export function CaptureClient({
         capturedAt,
         rollId: roll.id,
         rollCode: roll.code,
-        widthIn: savedCalibration(deviceId, canvas.width, canvas.height)?.widthIn ?? null,
+        markerCorners: read.quads,
       });
     } finally {
       busyRef.current = false;
     }
-  }, [roll, canCapture, deliver, floor, deviceId]);
-
-  /** Freezes the live picture for tapping the sheet's corners (Phase 30C). */
-  const openCalibrate = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || video.videoWidth === 0) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY),
-    );
-    if (!blob) return;
-    setCalibrateFrame({
-      url: URL.createObjectURL(blob),
-      width: canvas.width,
-      height: canvas.height,
-    });
-  }, []);
-
-  const closeCalibrate = useCallback(() => {
-    setCalibrateFrame((f) => {
-      if (f) URL.revokeObjectURL(f.url);
-      return null;
-    });
-  }, []);
+  }, [roll, canPress, deliver, floor]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -508,7 +580,9 @@ export function CaptureClient({
           ? "Capture is off until the camera shows a picture."
           : waitingToResend
             ? "Send the last capture again first, or discard it."
-            : null;
+            : !marker.ok
+              ? MARKER_MESSAGES[marker.problem]
+              : null;
 
   const frozen = send.kind === "sending" || send.kind === "failed" ? send.pending : null;
 
@@ -544,7 +618,13 @@ export function CaptureClient({
                   }
                 : last
                   ? { kind: "result", result: { ...last.summary, repeat: last.repeat } }
-                  : { kind: "ready" };
+                  : !marker.ok
+                    ? {
+                        kind: "problem",
+                        title: "Capture is off.",
+                        fix: MARKER_MESSAGES[marker.problem],
+                      }
+                    : { kind: "ready" };
     return (
       <FloorView
         videoRef={videoRef}
@@ -623,14 +703,6 @@ export function CaptureClient({
             autoPlay
             aria-label="Live camera picture"
             className={live ? "block aspect-video w-full object-contain" : "hidden"}
-            onLoadedMetadata={(e) => {
-              const v = e.currentTarget;
-              if (v.videoWidth) setFrameSize({ width: v.videoWidth, height: v.videoHeight });
-            }}
-            onResize={(e) => {
-              const v = e.currentTarget;
-              if (v.videoWidth) setFrameSize({ width: v.videoWidth, height: v.videoHeight });
-            }}
           />
           {frozen && (
             // eslint-disable-next-line @next/next/no-img-element -- a local object URL, not an asset
@@ -674,45 +746,34 @@ export function CaptureClient({
         </div>
 
         {live &&
-          (calibration ? (
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-              <span>
-                <Ruler aria-hidden className="mr-1 inline size-4 align-text-bottom" />
-                This phone is set up to measure cuts.
-              </span>
-              <Button variant="ghost" size="sm" onClick={() => void openCalibrate()}>
-                Set up again
-              </Button>
+          (marker.ok ? (
+            <p
+              data-testid="marker-status"
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+            >
+              <Ruler aria-hidden className="size-4 text-pass" />
+              Marker card found. This shot will be measured ({marker.widthIn.toFixed(1)} in across).
             </p>
           ) : (
-            <div className="flex flex-col gap-3 rounded-md bg-caution-soft p-3 text-sm sm:flex-row sm:items-center">
-              <p className="flex-1">
-                <span className="font-medium">Set up this phone first.</span> It needs one photo of
-                a paper sheet so it can measure cuts.
+            <div
+              data-testid="marker-status"
+              className="flex flex-col gap-1 rounded-md bg-caution-soft p-3 text-sm"
+            >
+              <p className="font-medium">{MARKER_MESSAGES[marker.problem]}</p>
+              <p>
+                Lay the printed marker card flat on the leather, fully in the picture.{" "}
+                <a
+                  href="/cpoint-scale-marker-2in.pdf"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium underline underline-offset-2"
+                >
+                  Print the marker card
+                </a>{" "}
+                at 100% if you don’t have one.
               </p>
-              <Button variant="secondary" onClick={() => void openCalibrate()}>
-                <Ruler aria-hidden />
-                Set up this phone
-              </Button>
             </div>
           ))}
-
-        <CalibrateDialog
-          open={calibrateFrame !== null}
-          frame={calibrateFrame}
-          onClose={closeCalibrate}
-          onSave={(widthIn) => {
-            if (calibrateFrame)
-              saveCalibration(deviceId, {
-                widthIn: Math.round(widthIn * 100) / 100,
-                frameWidth: calibrateFrame.width,
-                frameHeight: calibrateFrame.height,
-                savedAt: new Date().toISOString(),
-              });
-            setCalibrationVersion((v) => v + 1);
-            closeCalibrate();
-          }}
-        />
 
         {send.kind === "failed" && (
           <Alert tone="danger">

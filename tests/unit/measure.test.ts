@@ -5,10 +5,8 @@ import {
   boxLengthIn,
   isOver,
   measureShot,
-  pxPerInFromCorners,
   rollShare,
   scaleOf,
-  SHEET_SIZES,
   unionArea,
   unionAreaSqIn,
   widthInFrom,
@@ -211,29 +209,9 @@ describe("the 3-inch line (C-37)", () => {
   });
 });
 
-describe("calibration from a sheet's corners (A-18)", () => {
-  it("gives the toolkit's pixels per inch, in any tap order", () => {
-    // An A4 sheet at 100 px/in: 827 × 1169 px.
-    const corners = [
-      { x: 100, y: 100 },
-      { x: 927, y: 1269 },
-      { x: 927, y: 100 },
-      { x: 100, y: 1269 },
-    ];
-    const ppi = pxPerInFromCorners(corners, SHEET_SIZES.a4)!;
-    expect(ppi).toBeCloseTo(100, 1);
-    expect(widthInFrom(ppi, 1920)).toBeCloseTo(19.2, 1);
-  });
-
-  it("refuses four points that aren't the sheet's shape", () => {
-    const square = [
-      { x: 0, y: 0 },
-      { x: 500, y: 0 },
-      { x: 500, y: 500 },
-      { x: 0, y: 500 },
-    ];
-    expect(pxPerInFromCorners(square, SHEET_SIZES.letter)).toBeNull();
-    expect(pxPerInFromCorners(square.slice(0, 3), SHEET_SIZES.letter)).toBeNull();
+describe("the scale from pixels per inch", () => {
+  it("gives the inches a photo covers across", () => {
+    expect(widthInFrom(100, 1920)).toBeCloseTo(19.2, 5);
   });
 });
 

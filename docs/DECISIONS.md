@@ -2331,3 +2331,25 @@ Materials' Leather rolls table. **Where:** `capturePlan` in `production.service.
 `rollOutcomesByDay` in `roll.service.ts`, `materialsReport` in `materials.service.ts`,
 `rollsCheckedByDay`/`rollsRemovedByDay` in `materials.model.ts`,
 `src/app/(app)/camera/capture/plan-counter.tsx`. Plan: `docs/prompts/plans/phase-30d-plan.md`.
+
+### D-120 · 2026-11-04 · Accepted — A printed marker card on the leather sets every shot's scale (scale marker)
+
+**Context:** The tap calibration (Phase 30C, A-18) was done once per phone and lost whenever the
+phone moved or the camera came up at another size; a phone not set up left rolls unmeasured, and
+an unmeasured roll reads Scanning passed (A-42). Dylan (4 Nov) chose a printed ArUco marker read on
+every shot instead, with no fallback, and said the card lies flat on top of the leather.
+**Decision:** Capture reads the card (DICT_4X4_50 id 0, a 2.00 in black square;
+`public/cpoint-scale-marker-2in.pdf`) in the browser with `js-aruco2` (MIT), about 4 times a second
+on the live picture and again on the frame it sends. Without a usable card (none, a side under 24
+px, sides more than 15% apart, or outside 4 to 120 in across) Capture and Space send nothing and
+say what to do. The shot sends the cards' corners (`markerCorners`, fractions); the server works out
+`widthIn` from them (two cards averaged), keeps the corners in the rule snapshot and drops every
+detection whose box centre is on a card (the square, its white border and caption) before the
+verdict and the measuring. `POST /api/v1/scans/capture` requires `markerCorners` and no longer
+takes `widthIn`; the device-token API keeps `widthIn` optional. "Set up this phone" and the saved
+calibration are removed; old shots keep their `widthIn`. No migration. **Assumptions:** A-46 (boxes
+on the card ignored), A-47 (the leather under the card isn't checked on that shot), A-48 (A-42 now
+only for old rolls and simulator shots). **Supersedes:** A-18 and the Capture part of D-110's
+phone calibration. **Where:** `src/lib/scale-marker.ts`, `src/lib/marker-detect.ts`,
+`capture-client.tsx`, `scan-ingest.service.ts`, `scan.validator.ts`. Plan:
+`docs/prompts/plans/scale-marker-plan.md`.

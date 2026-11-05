@@ -187,6 +187,19 @@ export async function finishRoll(api: APIRequestContext, id: string) {
 }
 
 let jpeg: Buffer | undefined;
+/**
+ * The marker card's corners on the 64 × 48 sample photo, as Capture sends them (D-120): a square
+ * of 26 px, so 13 px per inch and 4.92 in across. The server trusts the browser's reading.
+ */
+export const MARKER_ON_SAMPLE = [
+  [
+    { x: 0.3, y: 0.2 },
+    { x: 0.3 + 26 / 64, y: 0.2 },
+    { x: 0.3 + 26 / 64, y: 0.2 + 26 / 48 },
+    { x: 0.3, y: 0.2 + 26 / 48 },
+  ],
+];
+
 export async function sampleJpeg(): Promise<Buffer> {
   jpeg ??= await sharp({ create: { width: 64, height: 48, channels: 3, background: "#7a4a26" } })
     .jpeg()

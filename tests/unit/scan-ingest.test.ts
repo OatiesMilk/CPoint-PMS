@@ -422,3 +422,75 @@ describe("measuring at ingest (Phase 30C)", () => {
     expect(detections[0]).toMatchObject({ lengthIn: null, areaSqIn: null });
   });
 });
+
+describe("the marker card gives the scale (D-120)", () => {
+  // 2000 × 1000 px; the card's 2 in square is 200 px wide, so 100 px per inch and 20 in across.
+  const card = [
+    [
+      { x: 0.6, y: 0.4 },
+      { x: 0.7, y: 0.4 },
+      { x: 0.7, y: 0.6 },
+      { x: 0.6, y: 0.6 },
+    ],
+  ] as [
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+    { x: number; y: number },
+  ][];
+  const photo = async () => {
+    const sharp = (await import("sharp")).default;
+    const bytes = await sharp({
+      create: { width: 2000, height: 1000, channels: 3, background: "#7a4a26" },
+    })
+      .jpeg()
+      .toBuffer();
+    return { bytes: new Uint8Array(bytes), type: { mime: "image/jpeg", ext: "jpg" } as const };
+  };
+
+  it("measures from the card and ignores a box on the card", async () => {
+    const storage = memoryStorage();
+    const result = await ingestScan(
+      {
+        image: await photo(),
+        detections: [
+          det("hole", 0.9),
+          // Its centre (0.65, 0.5) is on the card: the card isn't leather (A-46).
+          { ...det("cut", 0.95), box: { x: 0.63, y: 0.45, width: 0.04, height: 0.1 } },
+        ],
+        source: "PHONE",
+        markerCorners: card,
+      },
+      { kind: "website", userId: "u1" },
+      now,
+      storage,
+    );
+    expect(result.verdict).toBe("REJECT");
+    expect(result.defects).toHaveLength(1);
+    expect(result.defects[0].label).toBe("Hole");
+    expect(result.defects[0].lengthIn).toBeCloseTo(Math.hypot(4, 2), 6);
+    const [data, detections] = scans.insertScanWithDetections.mock.calls[0];
+    expect(data).toMatchObject({ widthIn: 20 });
+    expect(detections).toHaveLength(1);
+    expect(data.thresholdsSnapshot).toMatchObject({ widthIn: 20, markerCorners: card });
+  });
+
+  it("refuses a card that can't give a scale, before anything is stored", async () => {
+    const storage = memoryStorage();
+    const tiny = [card[0].map((p) => ({ x: p.x / 20 + 0.5, y: p.y / 20 + 0.5 }))] as typeof card;
+    await expect(
+      ingestScan(
+        { image: await photo(), detections: [], source: "PHONE", markerCorners: tiny },
+        { kind: "website", userId: "u1" },
+        now,
+        storage,
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "MARKER_UNREADABLE",
+      message: "The marker card is too small in the picture. Bring the phone closer.",
+    });
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(scans.insertScanWithDetections).not.toHaveBeenCalled();
+  });
+});
