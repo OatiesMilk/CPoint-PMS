@@ -15,13 +15,26 @@ vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 const { POST } = await import("@/app/api/v1/scans/capture/route");
 
 const CAPTURE_ID = "0199f0a1-7c2e-4a51-9d3f-2b8c4e6a1f00";
+const CARD = [
+  [
+    { x: 0.4, y: 0.4 },
+    { x: 0.5, y: 0.4 },
+    { x: 0.5, y: 0.5 },
+    { x: 0.4, y: 0.5 },
+  ],
+];
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
 
 function request(fields: Record<string, string> = {}, image: Uint8Array | null = JPEG) {
   const form = new FormData();
   if (image)
     form.set("image", new Blob([image as BlobPart], { type: "image/jpeg" }), "capture.jpg");
-  for (const [k, v] of Object.entries({ captureId: CAPTURE_ID, ...fields })) form.set(k, v);
+  for (const [k, v] of Object.entries({
+    captureId: CAPTURE_ID,
+    markerCorners: JSON.stringify(CARD),
+    ...fields,
+  }))
+    form.set(k, v);
   return new Request("http://localhost/api/v1/scans/capture", { method: "POST", body: form });
 }
 
@@ -39,7 +52,7 @@ describe("POST /api/v1/scans/capture", () => {
     expect(guard.requireDevice).not.toHaveBeenCalled();
     expect(capture.captureScan).toHaveBeenCalledWith(
       { bytes: JPEG, type: { mime: "image/jpeg", ext: "jpg" } },
-      { captureId: CAPTURE_ID, source: "WEBCAM" },
+      { captureId: CAPTURE_ID, source: "WEBCAM", markerCorners: CARD },
       { id: "user-qi", role: "QUALITY_INSPECTOR" },
     );
   });
@@ -67,5 +80,11 @@ describe("POST /api/v1/scans/capture", () => {
 
     const badSource = await POST(request({ source: "SIMULATOR" }));
     expect((await badSource.json()).error.message).toMatch(/source must be WEBCAM or PHONE/);
+
+    // D-120: no marker card, no shot; nothing reaches the model.
+    const noCard = await POST(request({ markerCorners: "" }));
+    expect(noCard.status).toBe(422);
+    expect((await noCard.json()).error.message).toMatch(/markerCorners is required/);
+    expect(capture.captureScan).not.toHaveBeenCalled();
   });
 });

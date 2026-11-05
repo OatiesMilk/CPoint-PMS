@@ -3,40 +3,53 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-04 (Phase 30D QA passed, run 2; commit next)
-**Branch:** `main` at a97d949 has Phase 30E-2 (#36) and the reports by roll (D-116, D-117, #37).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30D (D-118). Plan
-`docs/prompts/plans/phase-30d-plan.md`, handoff `qa/handoffs/2026-11-04-phase-30d-roll-counts.md`,
-prompt `qa/CODEX_PROMPT_PHASE_30D.md`.
+**Last updated:** 2026-11-05 (scale marker QA passed, run 4; git commands given)
+**Branch:** `main` at 5104e29 has Phase 30D (D-118, #38).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** the scale marker (D-120). Plan
+`docs/prompts/plans/scale-marker-plan.md`, handoff `qa/handoffs/2026-11-04-scale-marker.md`,
+prompt `qa/CODEX_PROMPT_SCALE_MARKER.md`.
 
-- **Current phase:** 30D, roll counts (D-118). **Capture** shows "Today, Wed, 4 Nov" and **Leather
-  rolls scanned 3/15** against the Floor Manager's plan, then the next planned days (five days in
-  all). **Reports → Materials, Leather rolls:** Rolls used = rolls checked − returned to supplier
-  (Dylan's rule: used = passed by the camera), Phase 30C returns counted as checked, **Removed
-  (other)** apart, each week with its working days. **Batches → Plan days:** "3 of 5 rolls scanned
-  · 1 returned". Dropped by Dylan: pairs per roll, On hand at week end, a change-in-pairs column.
-- No migration. API: `GET /api/v1/rolls/plan` (camera access).
-- Checks: `npm run check` passed (**670 unit tests**, build OK) in a cloud copy of main a97d949
-  with these changes, before they were copied to the laptop. E2E not run (Codex):
-  `capture.spec.ts` and `inventory.spec.ts` updated.
-- **Codex run 1 BLOCKED** (`qa/reports/2026-11-04-phase-30d-run1.md`): 12 passed, 0 failed, 3
-  blocked, 1 skipped; e2e targeted 36/0/1, full 94/0/2; ledger 0. No app fault. Blocked by setup:
-  another app held the camera (S4, the live recount after Finish roll) and today's plan was locked
-  by a finished batch (S1, S7 with 15 rolls; the counter read 3/2 correctly). Run 2 checks only
-  those: `qa/CODEX_PROMPT_PHASE_30D_RUN2.md`.
-- **Codex run 2 PASS** (`qa/reports/2026-11-04-phase-30d-run2.md`): with the USB camera, one shot
-  and Finish roll moved the counter 12/2 → 13/2 without a reload; a planned Thu 5 Nov read 0/15
-  under Next planned days (then put back); the calendar read "13 of 2 rolls scanned · 1
-  returned"; ledger 0. QA done for 30D: commit on a new branch (git commands in the 30D thread).
-- **Scale marker (separate thread, not built):** Dylan chose a printed ArUco marker read on every
-  shot in place of the tap calibration; the printable PDF is in the project files
-  (`calibration/cpoint-scale-marker-2in.pdf`).
+- **Current work:** the scale marker card (D-120) replaces Capture's tap calibration. Capture reads
+  a printed ArUco card (4x4_50 id 0, a 2.00 in black square, `public/cpoint-scale-marker-2in.pdf`)
+  in the live picture about 4 times a second with `js-aruco2`; Capture and Space stay off until
+  it's seen ("Show the marker card to capture."). Each shot sends the card's corners; the server
+  works out `widthIn` from them, keeps the corners in the snapshot and drops defect boxes whose
+  centre is on the card (Dylan: the card lies on the leather). "Set up this phone" is gone; old
+  shots keep their scale.
+- No migration. New dependency `js-aruco2@2.0.0` (MIT): `npm install` after pulling. API:
+  `POST /api/v1/scans/capture` needs `markerCorners`, takes no `widthIn`; `422 MARKER_UNREADABLE`.
+- Checks: `npm run check` passed (**683 unit tests**, build OK) in a cloud copy of main 5104e29
+  with these changes, before they were copied to the laptop. E2E not run (Codex): `capture.spec.ts`
+  uses a fake camera video with the card (`tests/e2e/fixtures/marker-card.y4m`).
+- **Codex run 1 FAIL** (`qa/reports/2026-11-04-scale-marker-run1.md`): 8 passed, 3 failed, 3
+  blocked; e2e didn't collect; ledger 0. F1: the live check found the card and turned Capture on,
+  but the press read the full 1920 px frame, where the detector missed it, so no shot was saved
+  (S4, S9; S5, S10 blocked). Fixed: both read the same 960 px copy (a unit test shows a soft 2880
+  px frame missed at full size and found at 960). F2: `test.use` with launch options inside a
+  describe stops collection; the no-card test is now `tests/e2e/capture-no-card.spec.ts`. S8's
+  expectation was wrong for a steep tilt (the card isn't read at all); the handoff now says so.
+  `npm run check` passed again (**684**); `playwright test --list` collects 98 tests.
+- **Codex run 2 FAIL** (`qa/reports/2026-11-04-scale-marker-run2.md`): 6 passed, 1 failed, 1
+  blocked (S6, no ruler); e2e targeted 24/0/1, full 96/0/2; ledger 0. F1 again: the button missed
+  the card the preview showed (Floor view's Space saved a measured shot, 16.92 in). The detector
+  reads the card on some frames only and the press read one; now a press tries up to 8 frames and
+  sends the first with the card, each read at 960 and then 640 px. `npm run check` passed
+  (**688**).
+- **Codex run 3 FAIL on timing only** (`qa/reports/2026-11-04-scale-marker-run3.md`): 5 of 5
+  Capture button presses saved; S6 16.8 in against Dylan's tape 17.5 in (4.0%); Finish roll 0.6%;
+  ledger 0. E2E targeted 24/0/1; full 91 passed, 2 failed, 2 skipped: inventory passed alone,
+  `batches.spec.ts` ran before 01:00 Manila (the known no-batch-due hour). S9's no-card wording
+  wasn't read (the count did stay). No app fault.
+- **Codex run 4 PASS** (`qa/reports/2026-11-05-scale-marker-run4.md`): S9 (Floor view: "Show
+  the marker card to capture.", the count unchanged); `batches.spec.ts` 7/0 after 01:00; full e2e
+  76 passed, 19 timeouts, 2 skipped, every timed-out spec passed alone (79/0/2); ledger 0.
+- **Next:** Dylan commits the scale marker (git commands in its thread) and opens the PR. After a full pass, the git
+  commands come in the scale marker thread. Then Phase 31. The System Admin
+  modules (D-119) are planned in their own thread.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
-- **Next:** commit 30D on a new branch and open the PR. Then the scale marker (its own thread),
-  then Phase 31.
-- **Overall:** 36 phases built (0 to 29, 30A, 30B, 30C, 30E-1, 30E-2) plus the reports by roll,
-  and 30D (uncommitted); 1 planned (31).
+- **Overall:** 37 phases built (0 to 29, 30A to 30E-2) plus the reports by roll, and the scale
+  marker (uncommitted); 1 planned (31).
 
 ## Phase progress
 
@@ -92,9 +105,19 @@ prompt `qa/CODEX_PROMPT_PHASE_30D.md`.
       (D-116, D-117; QA passed, run 3; merged #37)
 - [x] 30D. Roll counts on Capture, the calendar and Materials; the team's last QA notes (D-118;
       QA passed, run 2; uncommitted)
+- [x] Scale marker: a printed card read on every shot replaces the tap calibration (D-120; QA passed,
+      run 4; uncommitted)
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
+
+- **The scale marker card (D-120; uncommitted):** Capture reads the printed card (ArUco 4x4_50 id
+  0, 2.00 in) in the live picture and on the frame it sends: "Marker card found. This shot will be
+  measured (19.2 in across)." or "Show the marker card to capture." with **Print the marker card**
+  (`/cpoint-scale-marker-2in.pdf`); too small or tilted cards say so. Capture and Space are off
+  without it. The server takes the scale from the corners and ignores boxes on the card. A scan's
+  page reads "Measured with the marker card: N in across". Where the bullets below mention "Set up
+  this phone", "Calibrate this phone" or tapping a sheet's corners, D-120 replaced them.
 
 - **Roll counts (Phase 30D, D-118; uncommitted):**
   - **Capture:** a card above the roll: "Today, Wed, 4 Nov", **Leather rolls scanned 3/15** with a
@@ -622,12 +645,11 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-0. Dylan: commit Phase 30D on a new branch (git commands in the 30D thread) and open the PR. After a full pass, the git commands
-   come in the 30D thread.
-1. Dylan: set up the phone on Capture through the tunnel (the fixed setup window).
-2. Dylan, at the station: calibrate the real phone on Capture and capture a few real knife cuts on
-   scrap leather (2.5, 3 and 4 in) to check the 3-inch line on real cuts.
-3. The scale marker (its own thread) in place of the tap calibration, then Phase 31.
+0. Dylan: commit the scale marker with the git commands in its thread, push, open the PR.
+1. Dylan: try Capture on a phone through the tunnel with the printed card (no phone setup now).
+2. Dylan, at the station: with the card on the leather, capture a few real knife cuts on scrap
+   leather (2.5, 3 and 4 in) to check the 3-inch line on real cuts.
+3. Phase 31 (and the System Admin modules, D-119, in their own thread).
 4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
 5. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
    `docker image prune -a -f` frees about 8.4 GB.
@@ -644,6 +666,15 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-11-04, D-120): a printed ArUco card (4x4_50 id 0, 2.00 in) read on every
+  shot replaces the tap calibration, with no fallback; no card, no shot; the card lies flat on the
+  leather. Tell CPoint to keep the card at the station.
+- ASSUMPTION (A-46, D-120): a defect box whose centre is on the card (square, white border and
+  caption) is ignored; the card isn't leather.
+- ASSUMPTION (A-47, D-120): the leather under the card isn't checked on that shot; the constructor
+  moves the card between shots if a spot matters.
+- ASSUMPTION (A-48, D-120): every new Capture shot is measured, so A-42 now applies only to old
+  rolls and simulator shots.
 - Decided (Dylan, 2026-11-04, D-118): rolls used = passed by the camera; rolls checked = every roll
   scanned; returned = failed the scan; pairs finished unchanged; Capture shows rolls scanned
   against the plan for today and the next days. Pairs per roll and On hand at week end dropped.

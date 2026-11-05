@@ -113,6 +113,7 @@ describe("readSnapshot", () => {
       lengthLimits: {},
       flatShares: {},
       widthIn: null,
+      markerCorners: null,
       earlierRule: false,
     });
   });
@@ -130,6 +131,7 @@ describe("readSnapshot", () => {
       lengthLimits: {},
       flatShares: {},
       widthIn: null,
+      markerCorners: null,
       earlierRule: true,
     });
   });

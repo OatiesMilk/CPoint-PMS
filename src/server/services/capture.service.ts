@@ -45,7 +45,8 @@ export async function captureScan(
       modelVersion: seen.modelVersion,
       source: fields.source,
       capturedAt: fields.capturedAt,
-      widthIn: fields.widthIn ?? null,
+      // The server works out the scale from the card's corners (D-120).
+      markerCorners: fields.markerCorners ?? null,
     },
     origin,
     now,

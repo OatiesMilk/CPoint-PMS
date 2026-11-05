@@ -250,7 +250,7 @@ export function finishedLine(
     return `${done} ${pct(data.sharePct)} of it has defects, over the ${pct(data.limitPct)} limit, so it is marked Returned to supplier. Set it aside for the Floor Manager.`;
   if (data.sharePct !== null) return `${done} ${pct(data.sharePct)} of it has defects.`;
   if (data.notMeasured === "unscaled")
-    return `${done} Set up this phone next time so the roll can be checked for defects.`;
+    return `${done} Some of its shots were taken before the marker card, so it couldn’t be checked for defects.`;
   if (data.notMeasured === "no-area")
     return `${done} It has no size in Inventory, so it couldn’t be checked for defects.`;
   return done;

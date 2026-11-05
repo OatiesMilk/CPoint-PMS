@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, navLabels, signIn } from "./helpers";
@@ -11,6 +12,7 @@ import {
   inspectorApi,
   makeConstructor,
   managerApi,
+  MARKER_ON_SAMPLE,
   sampleJpeg,
   withDb,
 } from "./cv-helpers";
@@ -22,12 +24,19 @@ import {
 const MODEL = process.env.CV_MODEL_PATH ?? "cv/models/yolo-v1.onnx";
 const hasModel = existsSync(MODEL) && existsSync(MODEL.replace(/\.onnx$/, ".json"));
 
-// Chromium's fake camera: a moving test pattern, and no permission prompt.
+// Chromium's fake camera with no permission prompt. It plays a still of leather with the printed
+// marker card on it (D-120: no card, no shot). Chromium's own test pattern, which has no card, is
+// in capture-no-card.spec.ts: launch options apply to a whole file (QA run 1, F2).
+const MARKER_VIDEO = path.join(process.cwd(), "tests/e2e/fixtures/marker-card.y4m");
 test.use({
   permissions: ["camera"],
   launchOptions: {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined,
-    args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+    args: [
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream",
+      `--use-file-for-fake-video-capture=${MARKER_VIDEO}`,
+    ],
   },
 });
 
@@ -37,6 +46,7 @@ async function capture(api: APIRequestContext, captureId: string, rollId?: strin
       image: { name: "capture.jpg", mimeType: "image/jpeg", buffer: await sampleJpeg() },
       captureId,
       source: "PHONE",
+      markerCorners: JSON.stringify(MARKER_ON_SAMPLE),
       ...(rollId ? { rollId } : {}),
     },
   });
@@ -82,6 +92,18 @@ test.describe("capture API (Phase 26)", () => {
     });
     expect(bad.status()).toBe(422);
     expect((await bad.json()).error.message).toMatch(/captureId must be the UUID/);
+
+    // D-120: a website shot carries the marker card's corners; without them nothing is checked.
+    const noCard = await sc.post("/api/v1/scans/capture", {
+      multipart: {
+        image: { name: "capture.jpg", mimeType: "image/jpeg", buffer: await sampleJpeg() },
+        captureId: randomUUID(),
+      },
+    });
+    expect(noCard.status()).toBe(422);
+    expect((await noCard.json()).error.message).toMatch(
+      /markerCorners is required: show the marker card to capture/,
+    );
   });
 
   test("a shot needs a chosen open roll; a finished roll takes no more shots", async ({
@@ -318,6 +340,7 @@ test.describe("Capture on a phone (Phase 26)", () => {
     }
 
     await expect(page.getByLabel("Live camera picture")).toBeVisible();
+    await expect(page.getByTestId("marker-status")).toContainText("Marker card found");
     await button.click();
     await expect(page.getByText(new RegExp(`Shot #1 · ${code}`))).toBeVisible({
       timeout: 30_000,
@@ -378,6 +401,17 @@ test.describe("Capture page on a desktop", () => {
     // Remembered on this browser.
     await page.reload();
     await expect(page.getByTestId("capture-roll-line")).toContainText(`Roll ${theirs.code}`);
+  });
+});
+
+test.describe("the marker card on the live picture (D-120)", () => {
+  test("with the card in view, Capture says the shot will be measured", async ({ page }) => {
+    await signInCapturer(page);
+    await expect(page.getByLabel("Live camera picture")).toBeVisible();
+    await expect(page.getByTestId("marker-status")).toContainText(
+      /Marker card found\. This shot will be measured \(16\.\d in across\)/,
+      { timeout: 15_000 },
+    );
   });
 });
 

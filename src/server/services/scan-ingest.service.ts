@@ -9,6 +9,7 @@ import {
 } from "@/lib/decision-engine";
 import type { ScanSource } from "@/lib/domain";
 import { measureShot, scaleOf } from "@/lib/measure";
+import { MARKER_MESSAGES, onCard, scaleFromFractions, type Quad } from "@/lib/scale-marker";
 import { AppError, Errors } from "@/server/lib/errors";
 import { imageSize, type ImageType } from "@/server/lib/image-type";
 import { logger } from "@/server/lib/logger";
@@ -35,8 +36,10 @@ export type IngestInput = {
   modelVersion?: string;
   source: ScanSource;
   capturedAt?: Date;
-  /** Inches across the photo's width, from the phone's calibration (Phase 30C, A-18). */
+  /** Inches across the photo's width, sent by a device (Phase 30C); Capture sends markers instead. */
   widthIn?: number | null;
+  /** The marker cards on the shot, corners in fractions (D-120): they give the scale. */
+  markerCorners?: Quad[] | null;
 };
 
 export type IngestResult = {
@@ -58,7 +61,7 @@ export type ScanDefect = {
   label: string;
   confidence: number;
   effect: DefectOutcome | null;
-  /** Its box diagonal in inches; null when the phone isn't calibrated (Phase 30C). */
+  /** Its box diagonal in inches; null when the shot had no scale (Phase 30C). */
   lengthIn: number | null;
 };
 
@@ -129,13 +132,26 @@ export async function ingestScan(
     throw new Error("CV settings row is missing; the bootstrap should have created it.");
   const rule = { foundAtOrAbove: settings.foundAtOrAbove };
   const byKey = new Map(defectTypes.map((t) => [t.key, t]));
-  // A class with no defect type is dropped here: not stored, no effect on the verdict (D-108).
-  const detections = input.detections.filter((d) => byKey.has(d.classKey));
-
-  // Phase 30C: each defect's length and area from the phone's calibration, and what the shot's
-  // found defects add to its roll (D-106, D-110). Without a calibration nothing is measured.
+  // D-120: the marker cards give the shot's scale. A card that can't is refused before anything
+  // is stored, with what to do; a device without cards may still send widthIn (Phase 30C).
   const size = await imageSize(input.image.bytes);
-  const widthIn = input.widthIn ?? null;
+  const markers = input.markerCorners?.length ? input.markerCorners : null;
+  let widthIn = input.widthIn ?? null;
+  if (markers) {
+    const read = size ? scaleFromFractions(markers, size.width, size.height) : null;
+    if (!read?.ok)
+      throw new AppError(422, "MARKER_UNREADABLE", MARKER_MESSAGES[read ? read.problem : "none"]);
+    widthIn = read.widthIn;
+  }
+
+  // A class with no defect type is dropped here: not stored, no effect on the verdict (D-108).
+  // So is a box on the marker card: the card isn't leather (A-46).
+  const detections = input.detections.filter(
+    (d) => byKey.has(d.classKey) && !(markers && onCard(d.box, markers)),
+  );
+
+  // Phase 30C: each defect's length and area from the scale, and what the shot's found defects
+  // add to its roll (D-106, D-110). Without a scale nothing is measured.
   const scale = scaleOf(widthIn, size?.width, size?.height);
   const liveType = (key: string) => {
     const type = byKey.get(key);
@@ -174,6 +190,7 @@ export async function ingestScan(
     lengthLimits: pick((t) => t.notAcceptedFromIn),
     flatShares: pick((t) => t.flatSharePct),
     widthIn: scale ? widthIn : null,
+    markerCorners: markers,
   };
 
   const defects: ScanDefect[] = measured.map((d) => {

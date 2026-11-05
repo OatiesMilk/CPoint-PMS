@@ -39,22 +39,34 @@ Put the word on every bin as well as the colour: some people can't tell red from
 3. **Sign in.** A constructor lands straight on **Capture**, their only page. Allow the camera when
    the phone asks. If there are several cameras, pick the back one under **Camera**.
 4. **Put the phone on the stand** at the fixed spot, the Capture button within reach.
-5. **Calibrate the phone** (below), once, so defects can be measured in inches.
+5. **Print the marker card** (below) and keep it at the station.
 
-## Calibrate your phone
+## The marker card (D-120)
 
-Do this once per phone, and again whenever the phone's height or zoom changes or another phone
-goes on the stand. Sliding the stand around the table doesn't matter.
+Every shot measures itself from a printed **marker card**: an ArUco marker (4x4_50, id 0) whose
+black square is exactly 2.00 in a side. There is nothing to set up on the phone, and moving the
+phone or its stand doesn't matter.
 
-**On Capture (Phase 30C, the usual way):** lay an A4 or letter sheet flat on the table, all of it
-in the picture, with the phone where it stays. Press **Calibrate this phone**, choose the sheet,
-and tap its four corners on the photo. Capture shows "This phone sees 22.4 in across the table."
-and keeps it in this browser for this camera and frame size; if the camera comes up at another
-size, Capture asks again. Until a phone is calibrated every cut counts as Not accepted and a
-roll's defect share can't be worked out.
+1. Print `cpoint-scale-marker-2in.pdf` (Capture links it: **Print the marker card**) at **100% /
+   Actual size**, with "Fit to page" off. Check with a ruler: the black square is 2.00 in and the
+   check bar 4.00 in; if not, print again at 100%.
+2. Cut along the dashed line, keeping the white border, and glue it to stiff card (matte, no
+   glossy laminate).
+3. For every shot, lay the card **flat on the leather**, all of it in the picture. Capture reads it
+   about four times a second: "Marker card found. This shot will be measured (19.2 in across)."
+   Without it the Capture button stays off and reads "Show the marker card to capture." Space does
+   nothing but say the same.
+4. Hold the phone flat above the leather. A card that looks tilted ("Hold the phone flat above the
+   leather so the marker card looks square.") or too small ("Bring the phone closer.") isn't used.
 
-**With the toolkit (the other way):** the steps below give the same number; type it on Capture
-under "Type the width from the calibrate tool instead".
+The card isn't leather: a defect box whose centre is on the card is ignored, and the leather under
+the card isn't checked on that shot. Move the card between shots if a spot matters (A-47). Shots
+taken before the card keep the scale they were saved with.
+
+## The toolkit's sheet calibration (`cv/` only)
+
+The model toolkit still measures station photos from a sheet of known size (Phase 30B); Capture
+no longer uses it.
 
 1. Lay a sheet of known size flat in the middle of the table, all of it in the frame with a gap at
    every edge: a plain **A4** paper (8.27 × 11.69 in) or a **letter**-size sheet (8.5 × 11 in). A
@@ -76,7 +88,7 @@ under "Type the width from the calibrate tool instead".
 
 ## Measuring defects (Phase 30B)
 
-Since Phase 30C the app measures every shot from a calibrated phone itself (a cut from 3 in is
+Since Phase 30C the app measures every shot itself (since D-120 from the marker card on it) (a cut from 3 in is
 Not accepted; a roll over 10% defects reads Too many defects). The toolkit check below stays
 for comparing figures: can the camera measure a defect in inches? Photograph a piece of
 known area with marks or cuts of known length, then:

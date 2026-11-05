@@ -518,9 +518,11 @@ was never built. Each phase gets its own criteria here when its plan is approved
       per week; the calendar adds returned rolls. The team's other notes were done by D-107,
       D-108, D-109, D-113 and D-116; pairs per roll and On hand at week end dropped (Dylan). QA run 2
       passed (2026-11-04). Plan `docs/prompts/plans/phase-30d-plan.md`
-- [ ] Scale marker: a printed ArUco marker (4x4_50 id 0, 2.00 in) read on every shot sets the
-      scale in place of the tap calibration; its own thread, not started. Printable PDF in the
-      project files (`calibration/cpoint-scale-marker-2in.pdf`)
+- [x] Scale marker (D-120): a printed ArUco card (4x4_50 id 0, 2.00 in) on the leather, read on
+      every shot, sets the scale in place of the tap calibration; no card, no shot; boxes on the
+      card ignored. QA run 4 passed (2026-11-05; `npm run check` 688; the app read 16.8 in
+      against a 17.5 in tape, 4.0%). Plan
+      `docs/prompts/plans/scale-marker-plan.md`
 - [ ] Follow-up (Dylan, 2026-11-04): the System Admin reaches only the administration modules.
       The Camera page (the last capture's photo, rolls being captured) is production, not
       administration: it leaves the Admin's sidebar, home card, permission and APIs, so the

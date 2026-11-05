@@ -146,16 +146,17 @@ camera station app was retired in Phase 20 (D-069). The simulator is the token c
 
 `multipart/form-data`, one leather section per request:
 
-| Field          | Required | Notes                                                                                                                                                                                                                                                              |
-| -------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `image`        | yes      | JPEG, PNG or WebP (checked by content, not file name), ≤ 10 MB                                                                                                                                                                                                     |
-| `detections`   | no       | JSON array, ≤ 50: `[{ "classKey": "cut", "confidence": 0.93, "box": { "x": 0.12, "y": 0.40, "width": 0.08, "height": 0.05 } }]`. `box` is in fractions (0–1) of the image width and height, from the top-left corner. Omit it or send `[]` when nothing was found. |
-| `source`       | no       | `SIMULATOR`, `PHONE`, `WEBCAM` (default), `DEDICATED_CAMERA`                                                                                                                                                                                                       |
-| `modelVersion` | no       | e.g. `yolov8n-cpoint-2026-10`, shown on the scan                                                                                                                                                                                                                   |
-| `capturedAt`   | no       | ISO 8601 with offset; defaults to the time received                                                                                                                                                                                                                |
-| `rollId`       | no       | The roll the scan belongs to. Omitted: the roll open the longest (see "Which roll")                                                                                                                                                                                |
-| `captureId`    | no       | A UUID the camera makes for each capture. Send the same one on every retry: a repeat returns the first scan instead of making a second one (D-051). `cpoint_cv` always sends it                                                                                    |
-| `widthIn`      | no       | The phone's calibration (Phase 30C, A-18): the inches the photo covers across its width, 4 to 120. Without it nothing is measured                                                                                                                                  |
+| Field           | Required | Notes                                                                                                                                                                                                                                                              |
+| --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `image`         | yes      | JPEG, PNG or WebP (checked by content, not file name), ≤ 10 MB                                                                                                                                                                                                     |
+| `detections`    | no       | JSON array, ≤ 50: `[{ "classKey": "cut", "confidence": 0.93, "box": { "x": 0.12, "y": 0.40, "width": 0.08, "height": 0.05 } }]`. `box` is in fractions (0–1) of the image width and height, from the top-left corner. Omit it or send `[]` when nothing was found. |
+| `source`        | no       | `SIMULATOR`, `PHONE`, `WEBCAM` (default), `DEDICATED_CAMERA`                                                                                                                                                                                                       |
+| `modelVersion`  | no       | e.g. `yolov8n-cpoint-2026-10`, shown on the scan                                                                                                                                                                                                                   |
+| `capturedAt`    | no       | ISO 8601 with offset; defaults to the time received                                                                                                                                                                                                                |
+| `rollId`        | no       | The roll the scan belongs to. Omitted: the roll open the longest (see "Which roll")                                                                                                                                                                                |
+| `captureId`     | no       | A UUID the camera makes for each capture. Send the same one on every retry: a repeat returns the first scan instead of making a second one (D-051). `cpoint_cv` always sends it                                                                                    |
+| `widthIn`       | no       | The scale (Phase 30C): the inches the photo covers across its width, 4 to 120. Without it (and without `markerCorners`) nothing is measured                                                                                                                        |
+| `markerCorners` | no       | The scale marker cards on the photo (D-120), as for `POST /api/v1/scans/capture`. When sent, the scale comes from them and `widthIn` is ignored                                                                                                                    |
 
 **Decision (D-093):** every section is `PASS` or `REJECT`, final at once. A detection of an
 _active_ defect type at or above `foundAtOrAbove` (Settings, default 0.5) gives its type's outcome:
@@ -171,6 +172,13 @@ EXIF turns applied) each detection gets `lengthIn` (its box diagonal) and `areaS
 shares of its found defects counted that way). A type with `notAcceptedFromIn` is `NOT_ACCEPTED`
 at or above that length and `USABLE` below; unmeasured (no `widthIn`) it is `NOT_ACCEPTED`. The
 snapshot keeps `lengthLimits`, `flatShares` and `widthIn`.
+
+**The marker card (D-120):** with `markerCorners` the scale is the cards' square side (2.00 in)
+in pixels, averaged over the cards, and the snapshot keeps `markerCorners`. A detection whose box
+centre lies on a card (the square plus its printed white border and caption) is dropped before the
+verdict, like a class with no defect type (A-46). Cards that can't give a scale (a side under 24
+px, sides more than 15% apart, or 4 to 120 in across not met) are `422` `MARKER_UNREADABLE` with
+what to do; nothing is stored.
 
 **`201`** `{ "data": { "scanId", "rollId", "rollCode", "sequence", "verdict", "duplicate": false, "defects": [{ "label", "confidence", "effect": "USABLE" | "NOT_ACCEPTED" | null, "lengthIn": number | null }] } }`.
 
@@ -192,30 +200,31 @@ longer capture. The app runs the model itself (ONNX Runtime, D-064) and then dec
 
 `multipart/form-data`:
 
-| Field        | Required | Notes                                                                                                        |
-| ------------ | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `image`      | yes      | JPEG, PNG or WebP (checked by content), ≤ 10 MB. The page sends the camera frame as a JPEG                   |
-| `captureId`  | yes      | A UUID the page makes for each press. A retry with the same one returns the first scan without running again |
-| `rollId`     | yes      | The roll chosen in the Roll dropdown. It must still be open                                                  |
-| `source`     | no       | `WEBCAM` (default) or `PHONE` (the page sends `PHONE` from a phone or tablet)                                |
-| `capturedAt` | no       | ISO 8601 with offset: when Capture was pressed                                                               |
-| `widthIn`    | no       | This phone's calibration for this frame size (Phase 30C), as for `POST /api/v1/scans`                        |
+| Field           | Required | Notes                                                                                                                                                                                                                                                              |
+| --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `image`         | yes      | JPEG, PNG or WebP (checked by content), ≤ 10 MB. The page sends the camera frame as a JPEG                                                                                                                                                                         |
+| `captureId`     | yes      | A UUID the page makes for each press. A retry with the same one returns the first scan without running again                                                                                                                                                       |
+| `rollId`        | yes      | The roll chosen in the Roll dropdown. It must still be open                                                                                                                                                                                                        |
+| `source`        | no       | `WEBCAM` (default) or `PHONE` (the page sends `PHONE` from a phone or tablet)                                                                                                                                                                                      |
+| `capturedAt`    | no       | ISO 8601 with offset: when Capture was pressed                                                                                                                                                                                                                     |
+| `markerCorners` | yes      | The scale marker cards Capture read on this frame (D-120): a JSON array of 1 to 4 cards, each four corners `{ "x", "y" }` in fractions of the photo, top-left first as printed. The server works out the scale from them (a 2.00 in square). There is no `widthIn` |
 
 There is no `detections` or `modelVersion` field: the server produces both.
 
 **`201`** `{ "data": { "scanId", "rollId", "rollCode", "sequence", "verdict", "duplicate": false, "defects": [...], "detections": [...], "modelVersion", "inferenceMs" } }`.
 **`200`** the same with `"duplicate": true` (and `detections: []`) for a repeated `captureId`.
 
-| Status | `code`              | When                                                                      |
-| ------ | ------------------- | ------------------------------------------------------------------------- |
-| `401`  | `UNAUTHENTICATED`   | Not signed in                                                             |
-| `403`  | `FORBIDDEN`         | Not allowed to capture (anyone but a Shoe Constructor with camera access) |
-| `409`  | `NO_ROLL_CHOSEN`    | No `rollId`: choose the roll this shot belongs to                         |
-| `409`  | `ROLL_CLOSED`       | The chosen roll was finished or cancelled; checked before the model runs  |
-| `409`  | `CONFLICT`          | The `captureId` was already used by a device-token scan                   |
-| `413`  | `PAYLOAD_TOO_LARGE` | Over 10 MB                                                                |
-| `422`  | `VALIDATION_FAILED` | A field is wrong; `message` names it                                      |
-| `503`  | `MODEL_UNAVAILABLE` | The model files aren't on the server (the message says where to put them) |
+| Status | `code`              | When                                                                                                                       |
+| ------ | ------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `401`  | `UNAUTHENTICATED`   | Not signed in                                                                                                              |
+| `403`  | `FORBIDDEN`         | Not allowed to capture (anyone but a Shoe Constructor with camera access)                                                  |
+| `409`  | `NO_ROLL_CHOSEN`    | No `rollId`: choose the roll this shot belongs to                                                                          |
+| `409`  | `ROLL_CLOSED`       | The chosen roll was finished or cancelled; checked before the model runs                                                   |
+| `409`  | `CONFLICT`          | The `captureId` was already used by a device-token scan                                                                    |
+| `413`  | `PAYLOAD_TOO_LARGE` | Over 10 MB                                                                                                                 |
+| `422`  | `VALIDATION_FAILED` | A field is wrong; `message` names it (no `markerCorners`: "markerCorners is required: show the marker card to capture, …") |
+| `422`  | `MARKER_UNREADABLE` | The cards sent can't give a scale (too small, tilted, out of range); the message says what to do                           |
+| `503`  | `MODEL_UNAVAILABLE` | The model files aren't on the server (the message says where to put them)                                                  |
 
 The scan stores no person (D-008): `deviceTokenId` is null for a website scan, and the audit row
 `scan.create` names the signed-in user as the actor with `origin: "website"`.

@@ -106,6 +106,7 @@ export const scanController = {
       source: text(form.get("source")),
       capturedAt: text(form.get("capturedAt")),
       widthIn: text(form.get("widthIn")),
+      markerCorners: text(form.get("markerCorners")),
     });
 
     const result = await ingestScan({ image, ...fields }, device);
@@ -125,7 +126,7 @@ export const scanController = {
       captureId: text(form.get("captureId")),
       source: text(form.get("source")),
       capturedAt: text(form.get("capturedAt")),
-      widthIn: text(form.get("widthIn")),
+      markerCorners: text(form.get("markerCorners")),
     });
     const result = await captureScan(image, fields, user);
     return json({ data: result }, result.duplicate ? 200 : 201);
