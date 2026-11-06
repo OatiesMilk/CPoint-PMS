@@ -73,7 +73,7 @@ export async function saveThresholds(input: ThresholdsInput, actor: Actor) {
   return next;
 }
 
-/** Turns the Camera page's early-model notice on or off (D-055). */
+/** Turns Capture's early-model notice on or off (D-055). */
 export async function saveModelNotice(input: ModelNoticeInput, actor: Actor) {
   const before = await getThresholds();
   if (before.earlyModelNotice === input.earlyModelNotice) return input;

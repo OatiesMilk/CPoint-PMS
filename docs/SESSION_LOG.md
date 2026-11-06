@@ -5,6 +5,31 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-06 · D-119 run 2 PASS
+
+- Codex run 2: R1 (the Admin's first load of a photo the FM had loaded is 403; the FM's second
+  load 304) and R2 (the notice names Capture) passed; `auth.spec` 21/0/1, full e2e 93/6/2 with
+  every timeout passing alone (27/0/0). QA done for D-119; git commands given to Dylan.
+
+## 2026-11-06 · D-119 run 1 FAIL, fixed
+
+- Codex run 1: 9 of 10 passed; `auth.spec` 21/0/1; full e2e 91/8/2 with every timeout passing
+  alone (37/0/0). F1: the Admin, signed in after the FM on the same browser, saw a photo from the
+  browser cache (the route allowed a day's reuse). The image route now sends `private, no-cache`
+  with an `ETag`, checks the role on every load and answers 304 when unchanged
+  (`tests/unit/scan-image-route.test.ts`). The early-model notice names Capture. `npm run check`
+  passed (708). Prompt `qa/CODEX_PROMPT_ADMIN_MODULES_RUN2.md`.
+
+## 2026-11-06 · D-119: the System Admin has only the administration modules
+
+- Dylan's observation (4 Nov): the Admin's Camera page is production, not administration. Plan
+  posted 4 Nov; Dylan chose to remove the page (not move it to the FM) and gave the go on 6 Nov.
+- Built on main 12448b5: `/camera` deleted (404), the Admin's Camera nav item and home card gone,
+  `camera:view` removed, the scan image route on `requireApiPermission("scan:read")`; unit and
+  `auth.spec.ts` tests, `docs/API.md` and the master spec updated. `npm run check` passed (704) in
+  a cloud copy. Handoff `qa/handoffs/2026-11-06-admin-modules.md`, prompt
+  `qa/CODEX_PROMPT_ADMIN_MODULES.md`. Codex run 1 next.
+
 ## 2026-11-06 · D-121 run 3 PASS
 
 - Codex run 3: the fixed no-card test passed alone (3/0), targeted 22/0/1, full e2e 90/8/2 with

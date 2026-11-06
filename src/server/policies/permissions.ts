@@ -3,7 +3,8 @@ import type { Role } from "@/lib/domain";
 /**
  * Role × permission matrix (docs/prompts/system-rebuild.md → <roles_and_modules>). Each role sees
  * only its own modules (Phase 28, D-100, C-18): the constructor Capture, the QI Batches, the Floor
- * Manager Batches, Attendance, Reports and Inventory, the System Admin the administration pages.
+ * Manager Batches, Attendance, Reports and Inventory, the System Admin the administration pages
+ * only (Overview, Users, Settings, API tokens, Audit log; no Camera page since D-119).
  * Pure and dependency-free so it can be unit-tested and used to build navigation.
  */
 export const PERMISSIONS = {
@@ -11,8 +12,6 @@ export const PERMISSIONS = {
   // one with a reason. Starting and finishing happen at Capture (camera:capture).
   "roll:read": ["FLOOR_MANAGER"],
   "roll:manage": ["FLOOR_MANAGER"],
-  // The Camera page (status, model, early-model notice) is an administration page (D-100).
-  "camera:view": ["SYSTEM_ADMIN"],
   // Capture on their own phones (C-23): only Shoe Constructors the System Admin allows
   // (canCapture, checked by canCaptureFor). Starting, finishing and cancelling an empty roll come
   // with it. The QI and the Floor Manager no longer capture (C-18).

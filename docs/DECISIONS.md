@@ -2332,6 +2332,25 @@ Materials' Leather rolls table. **Where:** `capturePlan` in `production.service.
 `rollsCheckedByDay`/`rollsRemovedByDay` in `materials.model.ts`,
 `src/app/(app)/camera/capture/plan-counter.tsx`. Plan: `docs/prompts/plans/phase-30d-plan.md`.
 
+### D-119 · 2026-11-06 · Accepted — The System Admin has only the administration modules; no Camera page
+
+**Context:** Dylan (4 Nov): the System Admin's Camera page makes no sense; the Admin should have
+only the administration modules. The page showed the last capture's photo, the rolls being
+captured and the model in use, which is production. Since D-100 the Floor Manager sees every shot
+from Reports → Rolls.
+**Decision:** The Camera page is **removed** (Dylan, 6 Nov, over moving it to the Floor Manager):
+`/camera` answers 404 for every role, the Admin's sidebar is Overview, Users, Settings, API
+tokens, Audit log, and the Admin home has no Camera card. `camera:view` leaves the matrix, so
+`GET /api/v1/scans/{id}/image` takes `scan:read` only (the Admin gets `403`). The Admin keeps the
+camera's administration: Users → May capture (`camera:operators`), Settings (defect types, the CV
+rule, the early-model notice, which now names Capture) and API tokens. The image route sends
+`Cache-Control: private, no-cache` with an `ETag` (was `max-age=86400, immutable`), so the browser
+asks on every load and the role check runs each time; an unchanged image answers 304 (QA run 1
+F1: a photo the FM had loaded showed to the Admin in the same browser). No migration. **Changes:** D-100's Admin sidebar and
+home, and the `camera:view` row of Phase 28. **Where:** `src/server/policies/permissions.ts`,
+`navigation.ts`, `src/app/(app)/admin/page.tsx`, `scan.controller.ts`; `docs/API.md`,
+`docs/prompts/system-rebuild.md`.
+
 ### D-120 · 2026-11-04 · Accepted — A printed marker card on the leather sets every shot's scale (scale marker)
 
 **Context:** The tap calibration (Phase 30C, A-18) was done once per phone and lost whenever the

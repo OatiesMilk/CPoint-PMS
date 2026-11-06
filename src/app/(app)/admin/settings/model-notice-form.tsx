@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { saveModelNoticeAction } from "./actions";
 
 /**
- * Whether the Camera page says the model is an early one (D-055). The admin turns it off once a
+ * Whether Capture says the model is an early one (D-055; the Camera page went in D-119). The admin turns it off once a
  * model the team trusts is in use; the page shows the model's version either way.
  */
 export function ModelNoticeForm({ initial }: { initial: boolean }) {
@@ -30,7 +30,7 @@ export function ModelNoticeForm({ initial }: { initial: boolean }) {
             setSaved(checked);
             toast.success(
               checked
-                ? "The Camera page now says the model is an early one."
+                ? "Capture now says the model is an early one."
                 : "The early-model notice is off.",
             );
           } else setError(result.error);
@@ -40,8 +40,8 @@ export function ModelNoticeForm({ initial }: { initial: boolean }) {
       <div>
         <h2 className="font-medium">Early model notice</h2>
         <p className="text-sm text-muted-foreground">
-          Tells everyone on the Camera and Capture pages that the model is still being trained, so
-          some verdicts may be wrong.
+          Tells the constructors on Capture that the model is still being trained, so some verdicts
+          may be wrong.
         </p>
       </div>
       {error && <Alert tone="danger">{error}</Alert>}
@@ -53,7 +53,7 @@ export function ModelNoticeForm({ initial }: { initial: boolean }) {
           checked={checked}
           onChange={(e) => setChecked(e.target.checked)}
         />
-        Show “Early model” on the Camera page
+        Show “Early model” on Capture
       </label>
       <div className="flex items-center gap-3">
         <Button type="submit" variant="secondary" disabled={pending || checked === saved}>

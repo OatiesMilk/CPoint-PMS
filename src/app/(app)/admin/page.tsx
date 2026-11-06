@@ -2,7 +2,8 @@
  * Intent brief (ui-craft §1)
  * Who:   the System Admin, occasionally, to manage accounts and settings.
  * What:  confirm the system is healthy, then go to the admin task at hand. Administration only
- *        (Phase 28, D-100): health, users, the camera and the lunch break.
+ *        (Phase 28, D-100): health, users, the lunch break and the audit log; no camera
+ *        status, which is production (D-119).
  * Worst: not noticing the database is down while the floor relies on the system.
  */
 import type { Metadata } from "next";
@@ -15,18 +16,11 @@ import { ROLE_LABELS, type Role } from "@/lib/domain";
 import { formatDayLabel } from "@/lib/format";
 import { requireRole } from "@/server/policies/guard";
 import { auditCountLastDay } from "@/server/services/audit-query.service";
-import { cameraStatus } from "@/server/services/camera.service";
 import { lunchBreakSettings } from "@/server/services/production.service";
 import { userSummary } from "@/server/services/user-admin.service";
 import { getHealth } from "@/server/services/health.service";
 
 export const metadata: Metadata = { title: "Overview" };
-
-const CAMERA_STATE = {
-  capturing: "Sections are being captured now.",
-  simulator: "Scans are coming from the simulator.",
-  idle: "Nothing captured in the last minute.",
-} as const;
 
 function formatManila(iso: string) {
   return new Intl.DateTimeFormat("en-PH", {
@@ -51,10 +45,9 @@ function CardLink({ href, children }: { href: string; children: React.ReactNode 
 export default async function AdminHome() {
   await requireRole("SYSTEM_ADMIN");
   await connection();
-  const [health, users, camera, lunch, auditDay] = await Promise.all([
+  const [health, users, lunch, auditDay] = await Promise.all([
     getHealth(),
     userSummary(),
-    cameraStatus(),
     lunchBreakSettings(),
     auditCountLastDay(),
   ]);
@@ -122,27 +115,6 @@ export default async function AdminHome() {
             <CardLink href={users.locked > 0 ? "/admin/users?status=locked" : "/admin/users"}>
               Manage users
             </CardLink>
-          </CardContent>
-        </Card>
-        <Card data-testid="camera-status-card">
-          <CardHeader>
-            <CardTitle>Camera</CardTitle>
-            <CardDescription>{CAMERA_STATE[camera.state]}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <dl className="flex flex-col gap-1 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Last capture</dt>
-                <dd className="font-medium">
-                  {camera.lastScan ? formatManila(camera.lastScan.at.toISOString()) : "None yet"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Rolls open</dt>
-                <dd className="font-medium tabular-nums">{camera.openRolls}</dd>
-              </div>
-            </dl>
-            <CardLink href="/camera">Camera status</CardLink>
           </CardContent>
         </Card>
         <Card data-testid="lunch-break-card">

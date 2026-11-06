@@ -18,17 +18,18 @@ test("health endpoint reports app and database up", async ({ request }) => {
 const EXPECTED_NAV = {
   manager: ["Overview", "Batches", "Attendance", "Reports", "Inventory"],
   inspector: ["Batches"],
-  admin: ["Overview", "Users", "Settings", "Camera", "API tokens", "Audit log"],
+  // No Camera: its page is gone (D-119).
+  admin: ["Overview", "Users", "Settings", "API tokens", "Audit log"],
   // Capture is a constructor's only page and home, with or without camera access.
   constructor: ["Capture"],
 } as const;
 
 // A sample of pages each role is refused (403 page), and pages that are gone for everyone (404).
 const REFUSED = {
-  manager: ["/camera", "/admin", "/admin/users", "/camera/capture"],
-  inspector: ["/reports", "/camera", "/attendance", "/inventory", "/floor-manager", "/admin"],
-  admin: ["/batches", "/attendance", "/inventory", "/reports", "/reports/rolls"],
-  constructor: ["/batches", "/reports", "/admin", "/camera"],
+  manager: ["/admin", "/admin/users", "/camera/capture"],
+  inspector: ["/reports", "/attendance", "/inventory", "/floor-manager", "/admin"],
+  admin: ["/batches", "/attendance", "/inventory", "/reports", "/reports/rolls", "/camera/capture"],
+  constructor: ["/batches", "/reports", "/admin"],
 } as const;
 
 for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
@@ -62,6 +63,18 @@ test("the QI home, the Scans list and its API are gone (A-26)", async ({ page })
     expect(res?.status(), path).toBe(404);
   }
   expect((await page.request.get("/api/v1/scans")).status()).toBe(405);
+});
+
+test("the System Admin has no Camera page, home card or scan photos (D-119)", async ({ page }) => {
+  await page.goto("/login");
+  await signIn(page, ACCOUNTS.admin.email);
+  await expect(page).toHaveURL(ACCOUNTS.admin.home);
+  await expect(page.getByTestId("camera-status-card")).toHaveCount(0);
+  const res = await page.goto("/camera");
+  expect(res?.status()).toBe(404);
+  // Refused before the scan is looked up, so any well-formed id will do.
+  const image = await page.request.get("/api/v1/scans/0190a4f2-7c1e-7000-8000-000000000000/image");
+  expect(image.status()).toBe(403);
 });
 
 test("a signed-out visit goes to login, then back to the page after signing in", async ({

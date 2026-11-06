@@ -337,7 +337,7 @@ export function saveRollMeasure(
   return db.roll.update({ where: { id }, data });
 }
 
-/** Rolls open now (being captured), for the reports and the Camera page. */
+/** Rolls open now (being captured), for the reports and Capture. */
 export function countOpenRolls(db: Db = defaultDb()) {
   return db.roll.count({ where: { status: "OPEN" } });
 }

@@ -254,10 +254,10 @@ from before 24 Oct 2026 keep the earlier shape (`rejectAtOrAbove`, `reworkAtOrAb
 
 ## Scans (session)
 
-| Method & path                  | Permission                   | Notes                                                                                     |
-| ------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------- |
-| `GET /api/v1/scans/{id}`       | `scan:read` (FM)             | scan and detections (with boxes); no person                                               |
-| `GET /api/v1/scans/{id}/image` | `scan:read` or `camera:view` | the captured image (`Cache-Control: private`); the Admin's Camera page shows the last one |
+| Method & path                  | Permission       | Notes                                                                                                                                     |
+| ------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/scans/{id}`       | `scan:read` (FM) | scan and detections (with boxes); no person                                                                                               |
+| `GET /api/v1/scans/{id}/image` | `scan:read`      | the captured image (`private, no-cache` with an `ETag`: checked on every load, `304` when unchanged); the System Admin gets `403` (D-119) |
 
 There is no scans list since Phase 28 (A-26, D-100): `GET /api/v1/scans` answers `405` (only the
 device `POST` remains), and a section is reached from its roll (`/api/v1/rolls/{id}`).
