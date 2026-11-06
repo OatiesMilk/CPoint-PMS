@@ -66,6 +66,8 @@ test.describe("capture API (Phase 26)", () => {
     browser,
     request,
   }) => {
+    // Four sign-ins on a dev server (QA run 1 timed out at the fourth after 30 s).
+    test.setTimeout(60_000);
     const anonymous = await request.post("/api/v1/scans/capture", {
       multipart: { captureId: randomUUID() },
     });
@@ -93,17 +95,69 @@ test.describe("capture API (Phase 26)", () => {
     expect(bad.status()).toBe(422);
     expect((await bad.json()).error.message).toMatch(/captureId must be the UUID/);
 
-    // D-120: a website shot carries the marker card's corners; without them nothing is checked.
+    // D-121: a roll's first shot carries the marker card's corners; without them nothing is
+    // saved. (Without the model files the model check comes first.)
+    const roll = await createRoll(sc);
     const noCard = await sc.post("/api/v1/scans/capture", {
       multipart: {
         image: { name: "capture.jpg", mimeType: "image/jpeg", buffer: await sampleJpeg() },
         captureId: randomUUID(),
+        rollId: roll.id,
       },
     });
-    expect(noCard.status()).toBe(422);
-    expect((await noCard.json()).error.message).toMatch(
-      /markerCorners is required: show the marker card to capture/,
-    );
+    if (hasModel) {
+      expect(noCard.status()).toBe(422);
+      expect((await noCard.json()).error).toMatchObject({
+        code: "MARKER_REQUIRED",
+        message: expect.stringMatching(
+          /markerCorners is required for this shot: Show the marker card for this roll's first shot/,
+        ),
+      });
+    } else {
+      expect(noCard.status()).toBe(503);
+    }
+  });
+
+  test("the card once per roll: later shots take the first shot's scale (D-121)", async ({
+    browser,
+  }) => {
+    test.skip(!hasModel, "Needs cv/models/yolo-v1.onnx (export-onnx).");
+    const sc = await captureApi(browser);
+    const roll = await createRoll(sc);
+    expect((await capture(sc, randomUUID(), roll.id)).status()).toBe(201);
+    const later = await sc.post("/api/v1/scans/capture", {
+      multipart: {
+        image: { name: "capture.jpg", mimeType: "image/jpeg", buffer: await sampleJpeg() },
+        captureId: randomUUID(),
+        source: "PHONE",
+        rollId: roll.id,
+      },
+    });
+    expect(later.status()).toBe(201);
+    const scans = await withDb(async (db) => {
+      const res = await db.query(
+        `SELECT sequence, "widthIn", "thresholdsSnapshot"->>'scaleFromShot' AS "from"
+           FROM scans WHERE "batchId" = $1 ORDER BY sequence`,
+        [roll.id],
+      );
+      return res.rows as { sequence: number; widthIn: number; from: string | null }[];
+    });
+    expect(scans).toHaveLength(2);
+    expect(scans[1].widthIn).toBeCloseTo(scans[0].widthIn, 6);
+    expect(scans[1].from).toBe("1");
+
+    // The open roll tells Capture its scale, and the line after Finish roll its time.
+    const open = (await (await sc.get("/api/v1/rolls/open")).json()).data as {
+      id: string;
+      scale: { width: number; height: number; shot: number } | null;
+    }[];
+    expect(open.find((r) => r.id === roll.id)?.scale).toMatchObject({
+      width: 64,
+      height: 48,
+      shot: 2,
+    });
+    const done = await sc.post(`/api/v1/rolls/${roll.id}/finish`, { data: {} });
+    expect((await done.json()).data.scanningMs).toEqual(expect.any(Number));
   });
 
   test("a shot needs a chosen open roll; a finished roll takes no more shots", async ({

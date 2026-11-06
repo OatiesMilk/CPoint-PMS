@@ -141,11 +141,10 @@ export const isScanId = (value: string) => z.uuid().safeParse(value).success;
  * The non-file fields of POST /api/v1/scans/capture: a capture from the website's Capture page
  * (Phase 18). The server runs the model, so there are no `detections` or `modelVersion` here.
  * The page always makes a captureId, so a retry never makes a second scan (D-051). It sends the
- * marker card's corners and the server works out the scale from them (D-120); no `widthIn`.
+ * marker card's corners when the card is in view and the server works out the scale from them
+ * (D-120); a later shot of a roll may leave them out and use the roll's scale (D-121). No
+ * `widthIn`.
  */
-export const MARKER_REQUIRED =
-  "markerCorners is required: show the marker card to capture, so the shot carries its scale.";
-
 export const captureFieldsSchema = ingestFieldsSchema
   .pick({ rollId: true, capturedAt: true })
   .extend({
@@ -154,11 +153,6 @@ export const captureFieldsSchema = ingestFieldsSchema
     source: z
       .enum(["WEBCAM", "PHONE"], { error: "source must be WEBCAM or PHONE." })
       .default("WEBCAM"),
-  })
-  // Checked on the object: zod skips a missing optional key's own refinements.
-  .superRefine((v, ctx) => {
-    if (!v.markerCorners)
-      ctx.addIssue({ code: "custom", path: ["markerCorners"], message: MARKER_REQUIRED });
   });
 
 export type CaptureFields = z.infer<typeof captureFieldsSchema>;

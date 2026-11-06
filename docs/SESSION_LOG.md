@@ -5,6 +5,41 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-06 · D-121 run 3 PASS
+
+- Codex run 3: the fixed no-card test passed alone (3/0), targeted 22/0/1, full e2e 90/8/2 with
+  every timeout passing alone (37/0/0); ledger 0. QA done for D-121; git commands given to Dylan.
+
+## 2026-11-05 · D-121 run 2: the app passes, one e2e test fixed
+
+- Codex run 2: R1 to R4 passed by hand (the evening timer matched the clock to 0.7 s, CSV two
+  decimals, phone size axe 0); full e2e 94/5/2 with the four timeouts passing alone; ledger 0. F1
+  was the test: `capture-no-card.spec.ts` sent the 64 × 48 sample's card corners on a wider
+  picture, which reads as tilted (422); it now draws a square card for the picture's size. Seen
+  once: on reload "a different size" showed for a moment while the camera started. `npm run check`
+  passed (708). Prompt `qa/CODEX_PROMPT_CARD_ONCE_TIMER_RUN3.md`.
+
+## 2026-11-05 · D-121 run 1 FAIL, fixed
+
+- Codex run 1: 13 passed, 2 failed, 1 blocked (S15, no scale-set roll left open), 1 skipped (S14,
+  not in lunch); full e2e 87/11/2; ledger 0. F1 (an evening roll counted 20:53) was the docs, not
+  the code: only a roll's night is left out (A-49 reworded; unit test). F2: the CSV minutes always
+  have two decimals. E2E: the no-card tests wait for the sign-in before `page.request` (401); the
+  capture API role test has 60 s. Capture shows "--:--" before its clock starts. `npm run check`
+  passed (708). Prompt `qa/CODEX_PROMPT_CARD_ONCE_TIMER_RUN2.md`.
+
+## 2026-11-05 · The card once per roll and a scanning timer (D-121)
+
+- Dylan merged the scale marker (#39) and said "go" on
+  `docs/prompts/plans/card-once-per-roll-and-timing-plan.md`. Built on main 1793138: the card on a
+  roll's first shot only (the roll's scale by picture size, Read the card again, `422
+  MARKER_REQUIRED` before the model runs), and a scanning timer per roll from Start scanning to
+  Finish roll with lunch and the night of a roll left open overnight left out (`src/lib/roll-timer.ts`) on
+  Capture, Finish roll, Reports → Rolls (column, average, Download CSV), the roll's page and
+  `GET /api/v1/reports/rolls.csv`. No migration. `npm run check` passed (707 unit tests); e2e
+  updated (capture, capture-no-card, rolls; 101 collect), not run. Handoff
+  `qa/handoffs/2026-11-05-card-once-per-roll-timer.md`, prompt `qa/CODEX_PROMPT_CARD_ONCE_TIMER.md`.
+
 ## 2026-11-05 · Scale marker run 4 PASS
 
 - Codex run 4: S9 passed (Floor view's no-card message, the count unchanged); `batches.spec.ts`

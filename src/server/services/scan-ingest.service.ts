@@ -9,12 +9,20 @@ import {
 } from "@/lib/decision-engine";
 import type { ScanSource } from "@/lib/domain";
 import { measureShot, scaleOf } from "@/lib/measure";
-import { MARKER_MESSAGES, onCard, scaleFromFractions, type Quad } from "@/lib/scale-marker";
+import {
+  CARD_FIRST_SHOT,
+  CARD_NEW_SIZE,
+  MARKER_MESSAGES,
+  onCard,
+  scaleFromFractions,
+  type Quad,
+} from "@/lib/scale-marker";
 import { AppError, Errors } from "@/server/lib/errors";
 import { imageSize, type ImageType } from "@/server/lib/image-type";
 import { logger } from "@/server/lib/logger";
 import { getStorage, type StorageService } from "@/server/lib/storage";
 import { lockOpenRoll } from "@/server/models/roll.model";
+import { findRollScale } from "@/server/models/scan.model";
 import { rollClosedMessage } from "@/lib/roll-rules";
 import { getCvSettings } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
@@ -40,7 +48,30 @@ export type IngestInput = {
   widthIn?: number | null;
   /** The marker cards on the shot, corners in fractions (D-120): they give the scale. */
   markerCorners?: Quad[] | null;
+  /**
+   * Capture (D-121): a shot without the card takes its roll's scale (the card read at the first
+   * shot), and is refused when the roll has none for this frame size.
+   */
+  scaleFromRoll?: boolean;
 };
+
+/**
+ * The roll's scale for a shot without the card (D-121), or why there is none: the card must be
+ * shown once for the roll, and again for a camera whose picture is another size.
+ */
+export async function rollScaleFor(
+  rollId: string,
+  size: { width: number; height: number } | null,
+): Promise<{ widthIn: number; shot: number }> {
+  const found = size ? await findRollScale(rollId, size) : null;
+  if (found?.widthIn) return { widthIn: found.widthIn, shot: found.sequence };
+  const other = await findRollScale(rollId, null);
+  throw new AppError(
+    422,
+    "MARKER_REQUIRED",
+    `markerCorners is required for this shot: ${other ? CARD_NEW_SIZE : CARD_FIRST_SHOT}`,
+  );
+}
 
 export type IngestResult = {
   scanId: string;
@@ -137,11 +168,17 @@ export async function ingestScan(
   const size = await imageSize(input.image.bytes);
   const markers = input.markerCorners?.length ? input.markerCorners : null;
   let widthIn = input.widthIn ?? null;
+  // D-121: a Capture shot without the card takes the roll's scale from its earlier shots.
+  let scaleShot: number | null = null;
   if (markers) {
     const read = size ? scaleFromFractions(markers, size.width, size.height) : null;
     if (!read?.ok)
       throw new AppError(422, "MARKER_UNREADABLE", MARKER_MESSAGES[read ? read.problem : "none"]);
     widthIn = read.widthIn;
+  } else if (input.scaleFromRoll) {
+    const fromRoll = await rollScaleFor(roll.id, size);
+    widthIn = fromRoll.widthIn;
+    scaleShot = fromRoll.shot;
   }
 
   // A class with no defect type is dropped here: not stored, no effect on the verdict (D-108).
@@ -191,6 +228,7 @@ export async function ingestScan(
     flatShares: pick((t) => t.flatSharePct),
     widthIn: scale ? widthIn : null,
     markerCorners: markers,
+    ...(scaleShot !== null ? { scaleFromShot: scaleShot } : {}),
   };
 
   const defects: ScanDefect[] = measured.map((d) => {

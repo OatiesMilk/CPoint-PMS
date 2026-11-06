@@ -3,12 +3,12 @@
  * photo and the roll chosen in the Roll dropdown (Phase 26); the app runs the model and then the
  * same `ingestScan` and decision engine as every scan. Nothing here decides a verdict.
  */
-import type { ImageType } from "@/server/lib/image-type";
+import { imageSize, type ImageType } from "@/server/lib/image-type";
 import type { MappedDetection } from "@/server/lib/cv/mapper";
 import { getModelRunner, modelUnavailable, type ModelRunner } from "@/server/lib/cv/model-runner";
 import type { CaptureFields } from "@/server/validators/scan.validator";
 import { resolveCaptureRoll } from "./roll.service";
-import { earlierCapture, ingestScan, type IngestResult } from "./scan-ingest.service";
+import { earlierCapture, ingestScan, rollScaleFor, type IngestResult } from "./scan-ingest.service";
 
 export type CaptureResult = IngestResult & {
   /** What the model found, in the scan's own boxes. Empty for a repeat (nothing new was run). */
@@ -33,7 +33,9 @@ export async function captureScan(
   const model = await runner.status();
   if (model.state !== "ready") throw modelUnavailable(model.message);
   // A roll finished or cancelled since the page loaded is refused before the model runs.
-  await resolveCaptureRoll(fields.rollId, "website");
+  const roll = await resolveCaptureRoll(fields.rollId, "website");
+  // A shot without the card needs the roll's scale (D-121): refused before the model runs.
+  if (!fields.markerCorners?.length) await rollScaleFor(roll.id, await imageSize(image.bytes));
 
   const seen = await runner.detect(image.bytes);
   const result = await ingestScan(
@@ -45,8 +47,10 @@ export async function captureScan(
       modelVersion: seen.modelVersion,
       source: fields.source,
       capturedAt: fields.capturedAt,
-      // The server works out the scale from the card's corners (D-120).
+      // The server works out the scale from the card's corners (D-120), or without them from the
+      // roll's first shot with the card (D-121).
       markerCorners: fields.markerCorners ?? null,
+      scaleFromRoll: true,
     },
     origin,
     now,

@@ -108,6 +108,8 @@ export type DecisionSnapshot = {
   widthIn?: number | null;
   /** The marker cards' corners on the shot, in fractions (D-120); boxes on them were dropped. */
   markerCorners?: { x: number; y: number }[][] | null;
+  /** D-121: a shot without the card took its roll's scale from this earlier shot. */
+  scaleFromShot?: number | null;
   /**
    * Set on scans decided before Phase 25, which used Fixable and the two confidence thresholds
    * (D-011, D-053). Their verdicts were converted (Fixable → Pass, Needs review → Reject).
@@ -125,6 +127,7 @@ export function readSnapshot(json: unknown): DecisionSnapshot {
     flatShares?: Record<string, number>;
     widthIn?: unknown;
     markerCorners?: unknown;
+    scaleFromShot?: unknown;
   };
   return {
     foundAtOrAbove:
@@ -136,6 +139,7 @@ export function readSnapshot(json: unknown): DecisionSnapshot {
     markerCorners: Array.isArray(s.markerCorners)
       ? (s.markerCorners as { x: number; y: number }[][])
       : null,
+    scaleFromShot: typeof s.scaleFromShot === "number" ? s.scaleFromShot : null,
     earlierRule: s.outcomes === undefined || s.rejectAtOrAbove !== undefined,
   };
 }
