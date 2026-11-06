@@ -5,6 +5,48 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-06 · Phase 30F-1 QA passed (runs 2 and 3)
+
+- Codex run 2 FAIL: R2 (card links) passed; R1 blocked (the Windows animation setting was out of
+  reach); three e2e tests got 404 from `POST /api/v1/rolls/{id}/start` and the Admin's scan-image
+  API. 30F-1 touched no API, service, policy or test, and the same tests passed in run 1, so the
+  dev server was running stale compiled code. Dylan stopped it, deleted `.next\dev` and restarted.
+- Codex run 3 **PASS**: R1 with Playwright's reduced-motion emulation (`none` with reduce, 2 px
+  without); the three tests alone 3/0/0; smoke + auth 31/0/1. Git commands given to Dylan.
+- Lesson: when an untouched API route returns 404 on `next dev`, clear `.next\dev` before
+  debugging.
+
+## 2026-11-06 · Phase 30F-1 run 1 FAIL, fixed
+
+- Codex run 1: 9 of 11 scenarios; all 150 screenshot pairs kept their words, controls and order;
+  axe 0 (targeted 33/0/1, plus dark checks); full e2e 94/5/2 (1 not run), all five timeouts passed
+  alone. F2: the card link's arrow moved 2 px on hover with reduced motion on (the global rule
+  shortens the transition but keeps the transform); now `motion-safe:group-hover:translate-x-0.5`.
+  F1: at 390 px the fixed Capture bar covered a different slice of the live picture, because the
+  page above is 14 px shorter without the title rule; the picture is below the fold on load
+  before and after, so 30F-3 puts it above the bar. `npm run check` passed (708). Prompt
+  `qa/CODEX_PROMPT_PHASE_30F_1_RUN2.md`.
+
+## 2026-11-06 · Phase 30F-1: the foundation of the polished look
+
+- Dylan asked for a phase that makes the system look expensive but simple on a React component
+  library; the brief `docs/prompts/premium-ui.md` (three parts, before Phase 31) and Dylan's pick,
+  shadcn/ui on Radix (already in use). Phase 31 is paused until 30F is done (Dylan).
+- Codex took 150 baseline screenshots (`qa/reports/2026-11-06-phase-30f-baseline.md`); the audit
+  and plan are in `docs/prompts/plans/phase-30f1-plan.md`; Dylan gave the go with the three
+  recommended answers.
+- Built on main 120205b in a cloud copy (D-122): tokens (page and sidebar a step from the cards,
+  two-layer shadows, a dark top light, field outlines 3.13:1 on the page, `text-kpi`); contrast
+  measured with an OKLCH to sRGB script, every text pair at or above DESIGN.md's ratios. New
+  `PageHeader` (no rule under it, back link, meta, title addon), `CardLink` replacing seven copies
+  of the card link, `KpiTile`, `Skeleton` and `states.tsx` (the six loading pages and five error
+  pages use them, same words). Secondary buttons get `shadow-1`; the sidebar's items are 36 px with
+  muted text until hovered or active; the Demo mode band is quieter; the demo sign-in panel is a
+  muted card with Reset apart; 403 and 404 icons sit in a circle. No word, role or route changed.
+- Checks: `npm run check` passed (**708 unit tests**, build OK); the token grep found nothing. E2E
+  and screenshots not run (Codex). Handoff `qa/handoffs/2026-11-06-phase-30f-1.md`, prompt
+  `qa/CODEX_PROMPT_PHASE_30F_1.md`.
+
 ## 2026-11-06 · D-119 run 2 PASS
 
 - Codex run 2: R1 (the Admin's first load of a photo the FM had loaded is 403; the FM's second

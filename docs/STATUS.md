@@ -3,35 +3,37 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-06 (D-119 QA passed, run 2; git commands given)
-**Branch:** `main` at 12448b5 has the card once per roll and the scanning timer (D-121, #40).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** the System Admin reaches only the administration
-modules (D-119). Handoff `qa/handoffs/2026-11-06-admin-modules.md`, prompt
-`qa/CODEX_PROMPT_ADMIN_MODULES.md`.
+**Last updated:** 2026-11-06 (Phase 30F-1 QA passed, run 3)
+**Branch:** `main` at 120205b has D-119 (#41).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30F-1, the foundation of the polished look
+(D-122). Brief `docs/prompts/premium-ui.md`, plan `docs/prompts/plans/phase-30f1-plan.md`, handoff
+`qa/handoffs/2026-11-06-phase-30f-1.md`, prompt `qa/CODEX_PROMPT_PHASE_30F_1.md`.
 
-- **Current work (D-119, Dylan's observation of 4 Nov):** the Camera page (the last capture's
-  photo, rolls being captured) was production, not administration. It is removed: the Admin's
-  sidebar is Overview, Users, Settings, API tokens, Audit log; the Admin home has no Camera card;
-  `/camera` answers 404 for everyone; `camera:view` is gone from the matrix; the scan image route
-  takes `scan:read` only (the Admin gets `403`). The Admin keeps the camera's administration: Users
-  → May capture, Settings (defect types, thresholds, early-model notice) and API tokens. No
-  migration, no other role changes.
-- Checks: `npm run check` passed (**704 unit tests**, build OK) in a cloud copy of main 12448b5
-  with these changes. E2E not run (Codex): `auth.spec.ts` updated (Admin nav; `/camera` 404, no
-  card, image `403`).
-- **Codex run 1 FAIL** (`qa/reports/2026-11-06-admin-modules-run1.md`): 9 of 10 passed; `auth.spec`
-  21/0/1; full e2e 91/8/2 (1 not run), all eight timeouts passed alone (37/0/0). F1: the image
-  route let the browser reuse a photo for a day (`max-age=86400, immutable`), so after the FM
-  signed out the Admin in the same browser saw the cached copy. It now sends `private, no-cache`
-  with an `ETag` (the role check runs on every load; 304 when unchanged; 4 unit tests). The
-  early-model notice in Settings named the Camera page; it now names Capture. `npm run check`
-  passed (**708**).
-- **Codex run 2 PASS** (`qa/reports/2026-11-06-admin-modules-run2.md`): R1 (the Admin's first load
-  of a photo the FM had loaded is 403, no photo; the FM's second load 304 with the photo) and R2
-  (the notice names Capture) passed; `auth.spec` 21/0/1; full e2e 93/6/2 (1 not run), all six
-  timeouts passed alone (27/0/0). QA done for D-119.
-- **Next:** Dylan commits D-119 on a new branch (git commands in its thread) and opens the PR. Then
-  Phase 31.
+- **Current work (Phase 30F, D-122):** the look, not the behaviour, on the existing shadcn/ui and
+  Radix components, in three parts; Phase 31 waits until 30F-3 is done (Dylan). 30F-1: tokens
+  (page and sidebar a step from the cards, two-layer shadows, `text-kpi`, field outlines 3.13:1
+  on the page), `PageHeader` with no rule under it, `CardLink` on every card, `KpiTile`,
+  `Skeleton` and shared loading and error states, the sidebar, the Demo mode band, the demo
+  sign-in panel, 403 and 404. No word, role, route or API changed; no migration, no dependency.
+- Baseline: Codex's 150 before screenshots (`qa/reports/2026-11-06-phase-30f-baseline.md`).
+- Checks: `npm run check` passed (**708 unit tests**, build OK) in a cloud copy of main 120205b
+  with these changes; the token grep is clean. E2E and the after screenshots not run (Codex).
+- **Codex run 1 FAIL** (`qa/reports/2026-11-06-phase-30f-1-run1.md`): 9 of 11; all 150 pairs kept
+  their words and controls; targeted e2e 33/0/1, full 94/5/2 (1 not run), all five timeouts passed
+  alone. F2: the card link's arrow moved on hover with reduced motion on; it now moves only with
+  `motion-safe`. F1: at 390 px the fixed Capture bar covered a different slice of the live picture,
+  because the page above it is 14 px shorter (no title rule); the picture is below the fold on
+  load before and after, so it moves to 30F-3 (the live picture above the Capture bar on a phone).
+  `npm run check` passed (708).
+- **Codex run 2 FAIL** (`qa/reports/2026-11-06-phase-30f-1-run2.md`): R2 passed; R1 blocked (the
+  Windows setting was out of reach); three e2e tests got 404 from API routes 30F-1 didn't touch,
+  which passed in run 1, so the dev server ran stale code. Run 3 checks R1 with Playwright's
+  reduced-motion emulation after Dylan clears `.next\dev`.
+- **Codex run 3 PASS** (`qa/reports/2026-11-06-phase-30f-1-run3.md`): the arrow stays still with
+  reduced motion and moves 2 px without; the three run 2 tests passed alone (3/0/0) and in smoke +
+  auth (31/0/1) on a clean dev cache.
+- **Next:** Dylan commits 30F-1 with the git commands in its thread, pushes, opens the PR; then
+  30F-2 (the desktop pages), 30F-3, then Phase 31.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
 - **Overall:** 38 phases and features built (0 to 29, 30A to 30E-2, the reports by roll, the scale
@@ -96,6 +98,8 @@ modules (D-119). Handoff `qa/handoffs/2026-11-06-admin-modules.md`, prompt
 - [x] The card once per roll and a scanning timer per roll (D-121; QA passed, run 3; merged #40)
 - [ ] The System Admin reaches only the administration modules; no Camera page (D-119; QA
       passed, run 2; uncommitted)
+- [ ] 30F. A polished look on shadcn/ui and Radix (D-122): 30F-1 QA passed (run 3, uncommitted);
+      30F-2 and 30F-3 to come
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now

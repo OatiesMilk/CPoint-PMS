@@ -2400,3 +2400,27 @@ size needs its own card reading). **Changes:** D-120's "no card, no shot" for la
 roll. **Where:** `src/lib/roll-timer.ts`, `src/lib/scale-marker.ts`, `scan-ingest.service.ts`,
 `capture.service.ts`, `roll.service.ts`, `capture-client.tsx`, `roll-bar.tsx`,
 `reports/rolls/**`. Plan: `docs/prompts/plans/card-once-per-roll-and-timing-plan.md`.
+
+### D-122 · 2026-11-06 · Accepted — A polished look on the existing shadcn/ui and Radix components (Phase 30F)
+
+**Context:** the screens were built over 30 phases and it shows: page headers, card links, key
+figures, empty states and surfaces differ from page to page (the audit in
+`docs/prompts/plans/phase-30f1-plan.md`, from Codex's 150 baseline screenshots,
+`qa/reports/2026-11-06-phase-30f-baseline.md`). **Decision (Dylan, 2026-11-05 and 2026-11-06):**
+the library stays **shadcn/ui on Radix** (`new-york`, the one `radix-ui` package); missing pieces
+are copied into `src/components/ui/` and restyled with the tokens; no second component library
+and no new runtime package. Phase 30F changes the look only: the words, roles, routes, APIs and
+tests stay. Three parts (30F-1 foundation, 30F-2 desktop pages, 30F-3 Capture, Floor view and
+Batches), before Phase 31. **30F-1 tokens:** `--background` light 0.982 → 0.975 L and dark 0.17 →
+0.155 L (cards 1.07:1 and 1.09:1 against the page, from 1.05 and 1.07), `--sidebar` 0.962 /
+0.135, `--border` 0.91, `--input` 0.66 → 0.64 L (3.13:1 on the page, 3.36:1 on a card; it was
+under 3:1 on the page), two-layer `--shadow-1`/`--shadow-2`, a dark top light in place of a dark
+shadow alone, `--text-kpi` 28/32 px. Text pairs stay at or above DESIGN.md's ratios (light
+`muted-foreground` 6.35:1 on the page, 6.12:1 on the sidebar, 6.83:1 on a card; dark 8.18, 8.37 and
+7.49). **New shared pieces:** `PageHeader` (back link, title addon, meta line, no rule under it),
+`CardLink`, `KpiTile`, `Skeleton` and `states.tsx` (skeletons, `EmptyState`, `ErrorState`).
+**Kept on purpose:** the Reports and Settings tabs stay links with `aria-current` (Radix Tabs
+would change their role). **Answers (Dylan, 2026-11-06):** a table wider than 1280 px is
+tightened first, and a column is dropped only if it is also on the detail page (30F-2); the rule
+under page titles goes; Capture's repeated hint is shown once (30F-3, a wording change).
+Brief: `docs/prompts/premium-ui.md`.

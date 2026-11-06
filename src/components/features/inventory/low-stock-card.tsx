@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, CircleCheck } from "lucide-react";
+import { CircleCheck } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatQuantity, type StockLevel } from "@/lib/inventory-rules";
 import { StockBadge } from "./stock-badge";
+import { CardLink } from "@/components/ui/card-link";
 
 type Item = {
   id: string;
@@ -27,13 +28,7 @@ export function LowStockCard({ count, items }: { count: number; items: Item[] })
                 : `${count} item${count === 1 ? " is" : "s are"} at or below the reorder level.`}
             </CardDescription>
           </div>
-          <Link
-            href={count > 0 ? "/inventory?stock=low" : "/inventory"}
-            className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
-          >
-            Inventory
-            <ArrowRight aria-hidden className="size-4" />
-          </Link>
+          <CardLink href={count > 0 ? "/inventory?stock=low" : "/inventory"}>Inventory</CardLink>
         </div>
       </CardHeader>
       <CardContent>

@@ -1,3 +1,24 @@
+# UI audit
+
+## Phase 30F (2026-11-06)
+
+From Codex's 150 baseline screenshots (`qa/reports/2026-11-06-phase-30f-baseline.md`, every page
+per role at 1440 and 1280 px, Capture and Batches at 390 px, light and dark). Full findings and
+what each part changes: `docs/prompts/plans/phase-30f1-plan.md` §2.
+
+- **30F-1 (built):** three lines under every page title (the header rule removed); card links as
+  bold as titles (`CardLink`, muted); seven copies of the card link (one component); cards close
+  to the page in tone (page and sidebar a step down, two-layer shadows, a dark top light); field
+  outlines under 3:1 on the page (0.64 L, 3.13:1); loading and error pages each built by hand
+  (`states.tsx`); the demo sign-in panel dashed and the Reset button beside the accounts (a muted
+  card, Reset apart). Token grep: clean.
+- **30F-2 (next):** headers built by hand on the roll and item pages and the Reports CSV buttons;
+  key figures in three styles (`KpiTile`); Reports → Rolls and Operations → Production wider than
+  1280 px (tighten, then drop a column also on the detail page); empty states per page.
+- **30F-3:** on a phone the live picture sits under the fixed Capture bar on load (run 1 F1);
+  Capture's hint "Choose the roll this shot belongs to" shown three times (once);
+  Capture and Batches at 390 px.
+
 # UI audit — Phase 8
 
 The ui-craft audit (`.claude/skills/ui-craft/SKILL.md`) across every screen, plus an automated axe

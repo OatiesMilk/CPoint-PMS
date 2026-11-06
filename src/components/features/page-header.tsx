@@ -1,23 +1,52 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
+/**
+ * The one page header (Phase 30F): an optional back link, the title, one plain line of
+ * description, an optional meta line (period, "as of …"), and the page's actions at the right.
+ * No rule under it: the space before the content separates them.
+ */
 export function PageHeader({
   title,
   description,
   actions,
+  back,
+  meta,
+  titleAddon,
 }: {
-  title: string;
-  description?: string;
+  title: ReactNode;
+  description?: ReactNode;
   actions?: ReactNode;
+  back?: { href: string; label: string };
+  meta?: ReactNode;
+  /** Sits beside the title, e.g. a status badge. */
+  titleAddon?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b pb-5">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        {description && (
-          <p className="mt-1 max-w-3xl text-lg text-muted-foreground">{description}</p>
-        )}
+    <header className="flex flex-col gap-3">
+      {back && (
+        <Link
+          href={back.href}
+          className="-mx-2 inline-flex h-7 items-center gap-1.5 self-start rounded-md px-2 text-sm text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-accent hover:text-foreground"
+        >
+          <ArrowLeft aria-hidden className="size-4" />
+          {back.label}
+        </Link>
+      )}
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+            {titleAddon}
+          </div>
+          {description && (
+            <p className="mt-1.5 max-w-3xl text-lg text-muted-foreground">{description}</p>
+          )}
+          {meta && <p className="mt-1 text-sm text-muted-foreground">{meta}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </header>
   );
 }

@@ -535,6 +535,17 @@ was never built. Each phase gets its own criteria here when its plan is approved
       tokens and Audit log (D-119). Built 2026-11-06, `npm run check` passed (704); Codex run 1
       FAIL (a photo cached by the FM showed to the Admin in the same browser; the image route now
       revalidates every load), fixed; run 2 **PASS** (2026-11-06)
+- [ ] Phase 30F: a polished, premium look on the existing shadcn/ui and Radix components; copy,
+      behaviour and tests unchanged; three parts (30F-1 foundation, 30F-2 desktop pages, 30F-3
+      Capture, Floor view and Batches). Brief `docs/prompts/premium-ui.md` (D-122)
+  - [x] Baseline: Codex's 150 before screenshots (`qa/reports/2026-11-06-phase-30f-baseline.md`)
+  - [x] 30F-1 the foundation: tokens, `ui/`, `PageHeader`, `CardLink`, `KpiTile`, states, the
+        shell, sign-in, 403 and 404. Built 2026-11-06, `npm run check` passed (708); Codex run 1
+        FAIL (the card-link arrow moved with reduced motion, fixed); run 2 FAIL (a stale dev cache);
+        **run 3 PASS** (`qa/reports/2026-11-06-phase-30f-1-run3.md`). Plan `docs/prompts/plans/phase-30f1-plan.md`
+  - [ ] 30F-2 the desktop pages
+  - [ ] 30F-3 Capture, Floor view and Batches (with the live picture above the Capture bar on a
+        phone, run 1 F1)
 - [ ] Phase 31: the documentation and the paper's figures match the system
 
 ## Phase 24 — Remove Material Requests and Procurement

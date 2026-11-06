@@ -26,6 +26,9 @@
   --text-2xl--line-height: 2rem;
   --text-3xl: 2rem;
   --text-3xl--line-height: 2.4rem;
+  /* A key figure on a KPI tile (30F): 28 / 32, used with font-semibold and tracking-tight. */
+  --text-kpi: 1.75rem;
+  --text-kpi--line-height: 2rem;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

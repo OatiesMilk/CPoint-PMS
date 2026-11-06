@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ArrowRight, BellRing, CalendarCog, CircleAlert } from "lucide-react";
+import { BellRing, CalendarCog, CircleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Workforce } from "@/lib/attendance-rules";
 import type { BatchState, QuotaProgress as Progress } from "@/lib/production-rules";
 import { QuotaProgress } from "./production-parts";
+import { CardLink } from "@/components/ui/card-link";
 
 /** What the home cards need from the day (the production service's today, passed by the page). */
 type BatchesToday = {
@@ -53,13 +54,7 @@ export function TodaysBatchesCard({ today }: { today: BatchesToday }) {
             <CardTitle>Today’s batches</CardTitle>
             <CardDescription>{nextLine(today)}</CardDescription>
           </div>
-          <Link
-            href="/batches"
-            className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
-          >
-            Open
-            <ArrowRight aria-hidden className="size-4" />
-          </Link>
+          <CardLink href="/batches">Open</CardLink>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

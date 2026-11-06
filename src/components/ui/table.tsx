@@ -25,7 +25,7 @@ export function Table({
 }
 
 export function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead className={cn("border-b bg-muted/60", className)} {...props} />;
+  return <thead className={cn("border-b bg-muted/50", className)} {...props} />;
 }
 
 export function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {

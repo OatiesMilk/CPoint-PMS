@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, FileText, TriangleAlert } from "lucide-react";
+import { FileText, TriangleAlert } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,18 +18,7 @@ import { formatPercent } from "@/lib/format";
 import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
 import type { InventoryCategory } from "@/lib/domain";
 import type { OperationsReport } from "@/server/services/ops-report.service";
-
-function SectionLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
-    >
-      {children}
-      <ArrowRight aria-hidden className="size-4" />
-    </Link>
-  );
-}
+import { CardLink } from "@/components/ui/card-link";
 
 const STOCK_ROWS = 8;
 
@@ -46,7 +35,7 @@ export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"
               {days === 1 ? "" : "s"}.
             </CardDescription>
           </div>
-          <SectionLink href="/inventory">Inventory</SectionLink>
+          <CardLink href="/inventory">Inventory</CardLink>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -156,12 +145,8 @@ export function SupplierQualityCard({
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-3">
-            <SectionLink href={`/api/v1/reports/suppliers.csv?${rangeQuery}`}>
-              Suppliers CSV
-            </SectionLink>
-            <SectionLink href={`/api/v1/reports/supplier-rolls.csv?${rangeQuery}`}>
-              Rolls CSV
-            </SectionLink>
+            <CardLink href={`/api/v1/reports/suppliers.csv?${rangeQuery}`}>Suppliers CSV</CardLink>
+            <CardLink href={`/api/v1/reports/supplier-rolls.csv?${rangeQuery}`}>Rolls CSV</CardLink>
           </div>
         </div>
       </CardHeader>

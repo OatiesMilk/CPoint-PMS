@@ -12,9 +12,11 @@ export default async function Forbidden() {
   const user = await requireUser();
   return (
     <div className="flex flex-col items-center gap-4 py-24 text-center">
-      <ShieldX aria-hidden className="size-10 text-muted-foreground" />
+      <span className="flex size-14 items-center justify-center rounded-full bg-muted">
+        <ShieldX aria-hidden className="size-7 text-muted-foreground" />
+      </span>
       <p className="text-sm font-medium text-muted-foreground">Error 403</p>
-      <h1 className="text-2xl font-semibold">You don’t have access to that page</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">You don’t have access to that page</h1>
       <p className="max-w-md text-muted-foreground">
         Your role ({ROLE_LABELS[user.role]}) can’t open it.
         {user.role === "SYSTEM_ADMIN"

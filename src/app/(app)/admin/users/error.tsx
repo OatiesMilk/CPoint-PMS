@@ -1,7 +1,6 @@
 "use client";
 
-import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/features/states";
 
 export default function UsersError({
   retry,
@@ -10,16 +9,8 @@ export default function UsersError({
   retry: () => void;
 }) {
   return (
-    <div className="flex max-w-xl flex-col gap-4 py-10">
-      <Alert tone="danger">
-        <strong className="font-semibold">Couldn’t load accounts.</strong>
-        <span>
-          Nothing was changed. This is usually a brief connection problem with the database.
-        </span>
-      </Alert>
-      <div>
-        <Button onClick={() => retry()}>Try again</Button>
-      </div>
-    </div>
+    <ErrorState title="Couldn’t load accounts." onRetry={() => retry()}>
+      Nothing was changed. This is usually a brief connection problem with the database.
+    </ErrorState>
   );
 }

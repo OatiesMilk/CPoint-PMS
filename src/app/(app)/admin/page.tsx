@@ -8,8 +8,7 @@
  */
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import Link from "next/link";
-import { ArrowRight, CheckCircle2, CircleAlert } from "lucide-react";
+import { CheckCircle2, CircleAlert } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ROLE_LABELS, type Role } from "@/lib/domain";
@@ -19,6 +18,7 @@ import { auditCountLastDay } from "@/server/services/audit-query.service";
 import { lunchBreakSettings } from "@/server/services/production.service";
 import { userSummary } from "@/server/services/user-admin.service";
 import { getHealth } from "@/server/services/health.service";
+import { CardLink } from "@/components/ui/card-link";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -28,18 +28,6 @@ function formatManila(iso: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(iso));
-}
-
-function CardLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
-    >
-      {children}
-      <ArrowRight aria-hidden className="size-4" />
-    </Link>
-  );
 }
 
 export default async function AdminHome() {

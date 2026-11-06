@@ -230,15 +230,15 @@ function DesktopSidebar({
                       title={item.label}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "relative flex h-8 items-center justify-center gap-2.5 rounded-md transition-colors duration-(--dur-fast) lg:justify-start lg:px-2",
-                        "hover:bg-accent",
-                        active && "bg-sidebar-active font-medium",
+                        "relative flex h-9 items-center justify-center gap-2.5 rounded-md text-muted-foreground transition-colors duration-(--dur-fast) lg:justify-start lg:px-2.5",
+                        "hover:bg-accent hover:text-foreground",
+                        active && "bg-sidebar-active font-medium text-foreground",
                       )}
                     >
                       {active && (
                         <span
                           aria-hidden
-                          className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-sidebar-indicator"
+                          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-sidebar-indicator"
                         />
                       )}
                       <Icon aria-hidden className="size-4 shrink-0" />
