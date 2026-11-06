@@ -528,10 +528,13 @@ was never built. Each phase gets its own criteria here when its plan is approved
       left out, on Capture, Finish roll, Reports → Rolls (average), the roll's page and
       `rolls.csv`. `npm run check` passed (708); QA run 3 passed (2026-11-06). Plan
       `docs/prompts/plans/card-once-per-roll-and-timing-plan.md`
-- [ ] Follow-up (Dylan, 2026-11-04): the System Admin reaches only the administration modules.
+- [x] Follow-up (Dylan, 2026-11-04): the System Admin reaches only the administration modules.
       The Camera page (the last capture's photo, rolls being captured) is production, not
-      administration: it leaves the Admin's sidebar, home card, permission and APIs, so the
-      Admin keeps Overview, Users, Settings, API tokens and Audit log. Not planned yet
+      administration: removed (`/camera` 404), with the Admin home's Camera card, `camera:view`
+      and the Admin's access to scan photos, so the Admin keeps Overview, Users, Settings, API
+      tokens and Audit log (D-119). Built 2026-11-06, `npm run check` passed (704); Codex run 1
+      FAIL (a photo cached by the FM showed to the Admin in the same browser; the image route now
+      revalidates every load), fixed; run 2 **PASS** (2026-11-06)
 - [ ] Phase 31: the documentation and the paper's figures match the system
 
 ## Phase 24 — Remove Material Requests and Procurement

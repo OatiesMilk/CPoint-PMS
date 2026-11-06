@@ -219,8 +219,8 @@ Seed one demo account per role (password from `.env`, documented in README).
 
 Each role sees only its modules (Phase 28, D-100, C-18). Sidebars, in order: Shoe Constructor
 **Capture**; Quality Inspector **Batches**; Floor Manager **Overview, Batches, Attendance, Reports,
-Inventory**; System Admin **Overview, Users, Settings, Camera, API tokens, Audit log**. Everything
-else answers 403.
+Inventory**; System Admin **Overview, Users, Settings, API tokens, Audit log** (no Camera page since
+D-119). Everything else answers 403.
 
 | Module                                                      | Floor Manager | Quality Inspector | System Admin       | Shoe Constructor   |
 | ----------------------------------------------------------- | ------------- | ----------------- | ------------------ | ------------------ |
@@ -232,7 +232,6 @@ else answers 403.
 | Batches: finish and correct a batch (D-098, D-088)          | no QI present | ✅                | —                  | —                  |
 | Batches: how often and the one daily quota (D-097, D-099)   | ✅            | —                 | —                  | —                  |
 | Settings → Lunch break (D-097)                              | —             | —                 | ✅                 | —                  |
-| Camera page: status, model, early-model notice              | —             | —                 | ✅                 | —                  |
 | Capture page and Floor view (constructors only)             | —             | —                 | —                  | if allowed (D-075) |
 | Attendance: one day at a time (D-077 to D-079)              | ✅            | —                 | —                  | —                  |
 | Inventory + movements                                       | ✅            | —                 | —                  | —                  |
@@ -244,15 +243,14 @@ else answers 403.
 
 **Floor Manager overview:** today's batches against the quota, today's attendance, Rolls today
 (sections checked, rejected for salvage, rolls still open), low-stock alerts and the daily summary.
-**System Admin overview:** system health, users, camera status, unknown defect classes, the lunch
-break and the audit log.
+**System Admin overview:** system health, users, the lunch break and the audit log (no camera
+status, D-119).
 **Demo tools (D-101):** with `DEMO_LOGIN_TOOLS=true` the login page has a demo sign-in per role and
 Reset demo data, and every page shows a Demo mode band.
 
-**Camera page (placeholder):** shows the connected source as "Not connected" with a
-"Simulator active" state when demo scans are arriving. It has a batch selector (the open batch at
-Preparation), an image-frame area with an empty state, and a note: "Phone/webcam capture will be
-connected here." It doesn't use `getUserMedia` yet.
+**Camera page:** removed (D-119). Capture is the constructors' page; the System Admin keeps only
+the camera's administration: Users → May capture, Settings (defect types, the CV rule, the
+early-model notice) and API tokens.
 </roles_and_modules>
 
 <cv_integration_contract>

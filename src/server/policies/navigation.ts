@@ -5,7 +5,6 @@ export type NavIcon =
   | "overview"
   | "production"
   | "attendance"
-  | "camera"
   | "capture"
   | "inventory"
   | "reports"
@@ -66,7 +65,6 @@ const MENUS: Record<Role, Definition[]> = {
     },
     { label: "Users", href: "/admin/users", icon: "users", permission: "user:manage" },
     { label: "Settings", href: "/admin/settings", icon: "settings", permission: "settings:manage" },
-    { label: "Camera", href: "/camera", icon: "camera", permission: "camera:view" },
     { label: "API tokens", href: "/admin/tokens", icon: "tokens", permission: "token:manage" },
     { label: "Audit log", href: "/admin/audit", icon: "audit", permission: "audit:read" },
   ],

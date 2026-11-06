@@ -19,7 +19,6 @@ const SC: Role = "SHOE_CONSTRUCTOR";
 const EXPECTED: Record<Permission, Role[]> = {
   "roll:read": [FM],
   "roll:manage": [FM],
-  "camera:view": [AD],
   "camera:capture": [SC],
   "camera:operators": [AD],
   "scan:read": [FM],
@@ -79,7 +78,7 @@ describe("production access (Phase 23, Dylan 3B)", () => {
     expect(can(FM, "roll:read")).toBe(true);
     expect(can(QI, "roll:read")).toBe(false);
     expect(can(AD, "roll:read")).toBe(false);
-    for (const gone of ["roll:finish", "camera:manage"])
+    for (const gone of ["roll:finish", "camera:manage", "camera:view"])
       expect(Object.keys(PERMISSIONS)).not.toContain(gone);
   });
 });
@@ -92,14 +91,7 @@ describe("navigationFor", () => {
     expect(labels(SC)).toEqual(["Capture"]);
     expect(labels(QI)).toEqual(["Batches"]);
     expect(labels(FM)).toEqual(["Overview", "Batches", "Attendance", "Reports", "Inventory"]);
-    expect(labels(AD)).toEqual([
-      "Overview",
-      "Users",
-      "Settings",
-      "Camera",
-      "API tokens",
-      "Audit log",
-    ]);
+    expect(labels(AD)).toEqual(["Overview", "Users", "Settings", "API tokens", "Audit log"]);
   });
 
   it("uses one list without headings, and never the Scans list (A-26)", () => {
@@ -124,7 +116,6 @@ describe("navigationFor", () => {
       "/admin",
       "/admin/users",
       "/admin/settings",
-      "/camera",
       "/admin/tokens",
       "/admin/audit",
     ]);

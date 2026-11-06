@@ -1,13 +1,7 @@
 import { Errors } from "@/server/lib/errors";
 import { handle, json } from "@/server/lib/http";
 import { sniffImageType } from "@/server/lib/image-type";
-import {
-  requireApiCapture,
-  requireApiPermission,
-  requireApiUser,
-  requireDevice,
-} from "@/server/policies/guard";
-import { can } from "@/server/policies/permissions";
+import { requireApiCapture, requireApiPermission, requireDevice } from "@/server/policies/guard";
 import { CAMERA_OPERATORS_FORBIDDEN, setCameraOperator } from "@/server/services/camera.service";
 import { getStorage } from "@/server/lib/storage";
 import { captureScan } from "@/server/services/capture.service";
@@ -72,13 +66,26 @@ export const scanController = {
     return json({ data: scan });
   }),
 
-  /** GET /api/v1/scans/{id}/image: the captured image (private, cacheable: keys are never reused). */
-  image: handle(async (_request: Request, ctx: IdContext) => {
-    // The Floor Manager's section pages, and the last capture on the System Admin's Camera page.
-    const user = await requireApiUser();
-    if (!can(user.role, "scan:read") && !can(user.role, "camera:view")) throw Errors.forbidden();
+  /**
+   * GET /api/v1/scans/{id}/image: the captured image, for the Floor Manager's section pages and
+   * claim sheets only (D-119). The browser keeps a copy but must ask again on every load
+   * (`no-cache` with an ETag), so the role check runs each time: another role signed in on the same
+   * browser gets 403, never the copy (D-119 run 1, F1). An unchanged image answers 304, no bytes.
+   */
+  image: handle(async (request: Request, ctx: IdContext) => {
+    await requireApiPermission("scan:read");
     const scan = await getScanDetail(await scanIdFrom(ctx));
     if (!scan?.imagePath) throw Errors.notFound("This scan's image");
+    // A scan's image never changes once saved, so its id is its version.
+    const etag = `"${scan.id}"`;
+    const cacheHeaders = {
+      "Cache-Control": "private, no-cache",
+      ETag: etag,
+      "X-Content-Type-Options": "nosniff",
+    };
+    if (request.headers.get("if-none-match") === etag) {
+      return new Response(null, { status: 304, headers: cacheHeaders });
+    }
     let bytes: Buffer;
     try {
       bytes = await getStorage().read(scan.imagePath);
@@ -87,9 +94,8 @@ export const scanController = {
     }
     return new Response(new Uint8Array(bytes), {
       headers: {
+        ...cacheHeaders,
         "Content-Type": scan.imageMime ?? "application/octet-stream",
-        "Cache-Control": "private, max-age=86400, immutable",
-        "X-Content-Type-Options": "nosniff",
       },
     });
   }),

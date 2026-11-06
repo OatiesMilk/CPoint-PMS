@@ -82,7 +82,7 @@ export const thresholdsSchema = z
     returnPercent,
   }));
 
-/** The early-model notice on the Camera page (D-055). */
+/** The early-model notice on Capture (D-055). */
 export const modelNoticeSchema = z.object({
   earlyModelNotice: z.boolean({ error: OUT_OF_DATE }),
 });

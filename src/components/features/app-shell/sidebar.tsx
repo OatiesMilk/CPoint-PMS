@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import {
   Aperture,
   CalendarCheck,
-  Camera,
   ChartColumn,
   ChevronsUpDown,
   KeyRound,
@@ -40,7 +39,6 @@ type NavIcon =
   | "overview"
   | "production"
   | "attendance"
-  | "camera"
   | "capture"
   | "inventory"
   | "reports"
@@ -55,7 +53,6 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   overview: LayoutDashboard,
   production: Layers,
   attendance: CalendarCheck,
-  camera: Camera,
   capture: Aperture,
   inventory: Package,
   reports: ChartColumn,
@@ -82,7 +79,7 @@ function isActive(pathname: string, href: string, exact = false) {
   return pathname === href || (!exact && pathname.startsWith(`${href}/`));
 }
 
-/** The one item to mark: the longest match, so /camera/capture marks Capture, not Camera too. */
+/** The one item to mark: the longest match, so /admin/users marks Users, not Overview too. */
 function activeHref(pathname: string, sections: SidebarSection[]): string | null {
   let best: string | null = null;
   for (const item of sections.flatMap((s) => s.items)) {

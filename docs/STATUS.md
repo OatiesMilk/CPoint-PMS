@@ -3,50 +3,39 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-06 (D-121 QA passed, run 3; git commands given)
-**Branch:** `main` at 1793138 has the scale marker (D-120, #39).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** the card once per roll and the scanning timer
-(D-121). Plan `docs/prompts/plans/card-once-per-roll-and-timing-plan.md`, handoff
-`qa/handoffs/2026-11-05-card-once-per-roll-timer.md`, prompt `qa/CODEX_PROMPT_CARD_ONCE_TIMER.md`.
+**Last updated:** 2026-11-06 (D-119 QA passed, run 2; git commands given)
+**Branch:** `main` at 12448b5 has the card once per roll and the scanning timer (D-121, #40).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** the System Admin reaches only the administration
+modules (D-119). Handoff `qa/handoffs/2026-11-06-admin-modules.md`, prompt
+`qa/CODEX_PROMPT_ADMIN_MODULES.md`.
 
-- **Current work (D-121):** the factory cameras are fixed, so the marker card is needed on a
-  roll's **first shot** only; later shots take that shot's scale ("Scale set at the first shot: N in
-  across. The card can come off the leather."). **Read the card again** asks for it on the next
-  shot; a picture of another size needs it once; a card in view is still used. Each roll has a
-  **scanning timer** from Start scanning to Finish roll, lunch and the night of a roll left open
-  overnight left out: on Capture ("Scanning time 08:42", "Paused for lunch"), Finish roll ("Scanning time:
-  12:34."), Reports → Rolls (column and "Average scanning time: 14:05 over 23 rolls"), the roll's
-  page and `GET /api/v1/reports/rolls.csv` ("Scanning time (min)"). Dylan compares it with the
-  manual check by hand.
-- No migration, no new package. API: `markerCorners` optional on `POST /api/v1/scans/capture`
-  (`422 MARKER_REQUIRED` when the roll has no scale for that picture size); finish returns
-  `scanningMs`.
-- Checks: `npm run check` passed (**707 unit tests**, build OK) in a cloud copy of main 1793138
-  with these changes; `playwright test --list` collects 101 tests. E2E not run (Codex).
-- **Codex run 1 FAIL** (`qa/reports/2026-11-05-card-once-timer-run1.md`): 13 passed, 2 failed, 1
-  blocked, 1 skipped; full e2e 87/11/2, every timeout passed alone except below; ledger 0. The card
-  once per roll worked end to end (16.9 in, 8 shots, Read the card again, Floor view). F1: an
-  evening roll (20:43 to 21:04) counted its 20:53, against the docs' "outside 08:00 to 17:00 isn't
-  counted". The code was right and the docs wrong: only the night of a roll left open overnight is
-  left out, so evening tests and overtime count (A-49 reworded, a unit test added). F2: the CSV
-  read 20.9 (20.898 rounded); now always two decimals (20.90). The two new no-card e2e tests used
-  `page.request` before the sign-in finished (401); they now wait for Capture. The capture API
-  role test ran out of 30 s at its fourth sign-in; it has 60 s. Capture shows "--:--", not 00:00,
-  before the clock starts. `npm run check` passed (**708**).
-- **Codex run 2 FAIL on one test** (`qa/reports/2026-11-05-card-once-timer-run2.md`): R1 to R4
-  passed by hand (17.1 in; "--:--" then the time on reload; phone size axe 0; 02:40 against the
-  clock's 02:40.7; CSV 2.68); full e2e 94/5/2, the four timeouts passed alone; ledger 0. F1: the
-  no-card UI test sent the 64 × 48 sample's card corners on the fake camera's wider picture, so the
-  card looked tilted (422). The test now draws a square card for the picture's own size. No app
-  change. `npm run check` passed (708).
-- **Codex run 3 PASS** (`qa/reports/2026-11-05-card-once-timer-run3.md`): `capture-no-card.spec.ts`
-  3/0 alone; targeted 22/0/1; full e2e 90/8/2 (1 not run), all eight timeouts passed with their
-  specs alone (37/0/0); ledger 0. QA done for D-121.
-- **Next:** Dylan commits D-121 (git commands in its thread) and opens the PR. Then Phase 31. The System Admin modules (D-119) are planned in their own thread.
+- **Current work (D-119, Dylan's observation of 4 Nov):** the Camera page (the last capture's
+  photo, rolls being captured) was production, not administration. It is removed: the Admin's
+  sidebar is Overview, Users, Settings, API tokens, Audit log; the Admin home has no Camera card;
+  `/camera` answers 404 for everyone; `camera:view` is gone from the matrix; the scan image route
+  takes `scan:read` only (the Admin gets `403`). The Admin keeps the camera's administration: Users
+  → May capture, Settings (defect types, thresholds, early-model notice) and API tokens. No
+  migration, no other role changes.
+- Checks: `npm run check` passed (**704 unit tests**, build OK) in a cloud copy of main 12448b5
+  with these changes. E2E not run (Codex): `auth.spec.ts` updated (Admin nav; `/camera` 404, no
+  card, image `403`).
+- **Codex run 1 FAIL** (`qa/reports/2026-11-06-admin-modules-run1.md`): 9 of 10 passed; `auth.spec`
+  21/0/1; full e2e 91/8/2 (1 not run), all eight timeouts passed alone (37/0/0). F1: the image
+  route let the browser reuse a photo for a day (`max-age=86400, immutable`), so after the FM
+  signed out the Admin in the same browser saw the cached copy. It now sends `private, no-cache`
+  with an `ETag` (the role check runs on every load; 304 when unchanged; 4 unit tests). The
+  early-model notice in Settings named the Camera page; it now names Capture. `npm run check`
+  passed (**708**).
+- **Codex run 2 PASS** (`qa/reports/2026-11-06-admin-modules-run2.md`): R1 (the Admin's first load
+  of a photo the FM had loaded is 403, no photo; the FM's second load 304 with the photo) and R2
+  (the notice names Capture) passed; `auth.spec` 21/0/1; full e2e 93/6/2 (1 not run), all six
+  timeouts passed alone (27/0/0). QA done for D-119.
+- **Next:** Dylan commits D-119 on a new branch (git commands in its thread) and opens the PR. Then
+  Phase 31.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
 - **Overall:** 38 phases and features built (0 to 29, 30A to 30E-2, the reports by roll, the scale
-  marker) plus D-121 (uncommitted); 1 planned (31).
+  marker, D-121) plus D-119 (uncommitted); 1 planned (31).
 
 ## Phase progress
 
@@ -104,12 +93,18 @@
       QA passed, run 2; uncommitted)
 - [x] Scale marker: a printed card read on every shot replaces the tap calibration (D-120; QA passed,
       run 4; merged #39)
-- [x] The card once per roll and a scanning timer per roll (D-121; QA passed, run 3; uncommitted)
+- [x] The card once per roll and a scanning timer per roll (D-121; QA passed, run 3; merged #40)
+- [ ] The System Admin reaches only the administration modules; no Camera page (D-119; QA
+      passed, run 2; uncommitted)
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now
 
-- **The card once per roll and the scanning timer (D-121; uncommitted):** the card on a roll's
+- **The System Admin's modules (D-119; uncommitted):** Overview, Users, Settings, API tokens,
+  Audit log only. No Camera page (`/camera` is 404), no Camera card on the Admin home, no
+  `camera:view`; scan photos for the Floor Manager only. Where the bullets below mention the
+  Admin's Camera page or its Camera card, D-119 removed them.
+- **The card once per roll and the scanning timer (D-121; merged #40):** the card on a roll's
   first shot only, then "Scale set at the first shot: N in across." with Read the card again; a
   later shot's page reads "Measured with the roll's marker card from Shot #1". A scanning timer
   from Start scanning to Finish roll (lunch and nights left out) on Capture, Finish roll, Reports →
@@ -650,11 +645,11 @@ STALE`); a same-day **Correct** with a reason keeps both counts in the audit.
 
 ## Next step (exact)
 
-0. Dylan: commit D-121 with the git commands in its thread, push, open the PR.
+0. Dylan: commit D-119 with the git commands in its thread, push, open the PR.
 1. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.
 2. Dylan, at the station: with the card on the leather, capture a few real knife cuts on scrap
    leather (2.5, 3 and 4 in) to check the 3-inch line on real cuts.
-3. Phase 31 (and the System Admin modules, D-119, in their own thread).
+3. Phase 31.
 4. Dylan: delete `%TEMP%\cpoint-qa-uploads-phase26` if still there, and the two Phase 25 folders.
 5. Optional (Dylan's call): the backups in `storage/backups/` and the old `certs/` files;
    `docker image prune -a -f` frees about 8.4 GB.
@@ -671,6 +666,9 @@ Later:
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-11-04 and 06, D-119): the System Admin has only the administration
+  modules; the Camera page is removed, not moved to the Floor Manager, who sees every shot from
+  Reports → Rolls. Tell CPoint.
 - Decided (Dylan, 2026-11-05, D-121): the factory cameras are fixed, so the card is read once per
   roll at its first shot; a scanning timer per roll from Start scanning to Finish roll, lunch left
   out, minutes per roll only, no manual time entered. Tell CPoint.

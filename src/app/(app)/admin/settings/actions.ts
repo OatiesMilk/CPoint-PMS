@@ -44,7 +44,6 @@ export async function saveModelNoticeAction(input: unknown): Promise<ActionResul
   try {
     await saveModelNotice(modelNoticeSchema.parse(input), admin);
     refresh();
-    revalidatePath("/camera");
     return { ok: true };
   } catch (error) {
     return toResult(error);
