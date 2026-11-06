@@ -57,7 +57,7 @@ export function DemoTools({ accounts }: { accounts: Account[] }) {
   return (
     <section
       aria-labelledby="demo-tools-title"
-      className="flex flex-col gap-4 rounded-lg border border-dashed bg-card p-6"
+      className="flex flex-col gap-4 rounded-lg border bg-muted/40 p-6"
       data-testid="demo-tools"
       data-demo-tools
     >
@@ -84,7 +84,9 @@ export function DemoTools({ accounts }: { accounts: Account[] }) {
           </Button>
         ))}
       </div>
-      <ResetDemoData disabled={pendingRole !== null} />
+      <div className="border-t pt-4">
+        <ResetDemoData disabled={pendingRole !== null} />
+      </div>
     </section>
   );
 }

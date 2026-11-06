@@ -1,14 +1,6 @@
-import Link from "next/link";
-import {
-  ArrowDown,
-  ArrowRight,
-  ArrowUp,
-  CircleAlert,
-  Info,
-  Minus,
-  OctagonAlert,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, CircleAlert, Info, Minus, OctagonAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { CardLink } from "@/components/ui/card-link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { describeChange, type AttentionItem } from "@/lib/ops-rules";
 
@@ -102,14 +94,9 @@ export function AttentionList({ items, asOf }: { items: AttentionItem[]; asOf: s
                     <p className="font-medium">{item.title}</p>
                     <p className="text-sm text-muted-foreground">{item.detail}</p>
                   </div>
-                  <Link
-                    href={item.href}
-                    className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
-                  >
-                    Open
-                    <ArrowRight aria-hidden className="size-4" />
-                    <span className="sr-only">: {item.title}</span>
-                  </Link>
+                  <CardLink href={item.href}>
+                    Open<span className="sr-only">: {item.title}</span>
+                  </CardLink>
                 </li>
               );
             })}

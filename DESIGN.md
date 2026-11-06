@@ -25,7 +25,7 @@ hex, oklch, or arbitrary pixel values. This file overrides the defaults in `.cla
 | Brand red | **Logo only.** Never used for buttons, links, or chrome.                                                                                                                                            | On a QC screen, red means Reject. A red brand accent would make every button look like an alarm. |
 | Verdicts  | Pass = green, Reject = red, and nothing else (D-093). Always icon + label + color. Orange (`caution`) and blue (`info`) are status tones for warnings and notes, never a verdict.                   | Fixed meaning everywhere. Orange is not yellow, so it never reads as "brand".                    |
 | Space     | 4px base. Scale 4/8/12/16/24/32/48. Tight inside groups, loose between sections.                                                                                                                    | Dense tables, readable page rhythm.                                                              |
-| Finish    | Radius 6px everywhere (`rounded-md`); 4px for badges (`rounded-sm`). 1px borders for structure; `shadow-1` for cards, `shadow-2` for popovers/dialogs only. No gradients.                           | Soft-industrial: crisp, not bubbly.                                                              |
+| Finish    | Radius 6px (`rounded-md`); 4px badges. 1px borders for structure; two-layer `shadow-1` for cards and tables, `shadow-2` for popovers/dialogs only; a top light in dark. No gradients.               | Soft-industrial: crisp, not bubbly. Three surface levels (30F).                                  |
 | Icons     | Lucide, 16px in controls, 14px in badges, stroke 2.                                                                                                                                                 | Matches Figtree's weight.                                                                        |
 
 ## Tokens
@@ -41,7 +41,7 @@ Names match the code (`--name` in CSS → `bg-name` / `text-name` in Tailwind).
 | Brand   | `brand-yellow`, `brand-ink`, `brand-red` (logo only)                                                                                                                         |
 | Verdict | `pass`, `reject`, each with `-soft` background; status tones `caution`, `info` (renamed from `rework`, `review` in Phase 25). Text-on-soft ≥ 4.7:1 in both themes.           |
 | Chart   | `chart-pass`, `chart-reject` (CVD-validated for stacked marks: Pass lighter than Reject, D-093), `chart-info` (the quota line), `chart-bar`, `chart-bar-muted`, `chart-grid` |
-| Type    | `text-xs` 12 · `text-sm` 13 · `text-base` 14 · `text-lg` 16 · `text-xl` 20 · `text-2xl` 24 · `text-3xl` 32                                                                   |
+| Type    | `text-xs` 12 · `sm` 13 · `base` 14 · `lg` 16 · `xl` 20 · `2xl` 24 · `3xl` 32 · `text-kpi` 28 (key figures)                                                                   |
 | Finish  | `--radius` 6px → `rounded-sm/md/lg`; `shadow-1`, `shadow-2`                                                                                                                  |
 | Motion  | `--ease-out`, `--ease-in-out`, `--dur-press` 120ms, `--dur-fast` 150ms, `--dur-base` 220ms                                                                                   |
 
@@ -52,6 +52,29 @@ wins; otherwise the OS setting applies.
 
 Contrast was measured for every text/surface pair (see `docs/SESSION_LOG.md`, Phase 0).
 Re-measure whenever a color token changes.
+
+## Look (Phase 30F, D-122)
+
+What makes the app read as one finished product. Built on shadcn/ui (`new-york`) and Radix,
+restyled with these tokens; no second component library.
+
+- **Rhythm:** page padding 16 px on a phone, 40 px from `lg`; 32 px (`gap-8`) between a page's
+  sections, 16 px between cards in a grid, 20 px inside a card. Tight inside a group, loose between.
+- **Page header** (`PageHeader`): optional back link (muted, `ArrowLeft`), the title (`text-3xl`
+  600 `tracking-tight`) with an optional addon such as a status badge, one line of description
+  (`text-lg` muted), an optional meta line (`text-sm` muted), the page's actions at the right.
+  **No rule under it**: the space before the content separates them.
+- **Three surface levels:** the page (`background`), cards and tables (`card`, `shadow-1`, a
+  border), and popovers and dialogs (`popover`, `shadow-2`). The sidebar sits a step below the
+  page.
+- **Card links** (`CardLink`): a card's way out ("Open", "Edit", "Inventory") is muted `text-sm`
+  with an arrow, darker with a wash on hover. Never bold black: it mustn't compete with the title.
+- **Key figures** (`KpiTile`): a small muted label, the figure in `text-kpi`, then at most two
+  short muted lines; tiles in a row share one height.
+- **States** (`states.tsx`): `SkeletonHeader`, `SkeletonTable`, `SkeletonTiles`, `EmptyState`
+  (icon in a muted circle, why, one next step, dashed border) and `ErrorState` (what happened,
+  that nothing changed, Try again). Pages pass their own words.
+- **Tabs** (Reports, Settings) stay links with `aria-current`, restyled, not Radix Tabs.
 
 ## Hierarchy rules
 

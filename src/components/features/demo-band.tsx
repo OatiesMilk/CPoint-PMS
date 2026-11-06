@@ -5,7 +5,7 @@ export function DemoBand({ on }: { on: boolean }) {
     <section
       aria-label="Demo mode"
       data-testid="demo-band"
-      className="bg-caution-soft px-4 py-1 text-center text-sm font-medium text-foreground print:hidden"
+      className="border-b border-caution/25 bg-caution-soft px-4 py-1.5 text-center text-sm text-foreground print:hidden"
     >
       Demo mode: quick sign-in and Reset demo data are on. Never use this setup for real work.
     </section>

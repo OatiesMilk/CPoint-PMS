@@ -1,19 +1,6 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDayLabel, formatPercent } from "@/lib/format";
-
-function CardLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1 text-sm font-medium underline-offset-4 hover:underline"
-    >
-      {children}
-      <ArrowRight aria-hidden className="size-4" />
-    </Link>
-  );
-}
+import { CardLink } from "@/components/ui/card-link";
 
 type Totals = { rolls: number; passed: number; returned: number };
 
