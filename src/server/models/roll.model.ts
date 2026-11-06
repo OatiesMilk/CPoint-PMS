@@ -93,6 +93,17 @@ export async function listRolls(
 }
 
 /**
+ * The start and finish of every scanned roll the filters match (D-121): for the average scanning
+ * time above Reports → Rolls, over all pages, not just the one shown.
+ */
+export function listRollTimes(filters: RollListFilters, db: Db = defaultDb()) {
+  return db.roll.findMany({
+    where: { AND: [listWhere(filters), { startedAt: { not: null }, finishedAt: { not: null } }] },
+    select: { startedAt: true, finishedAt: true },
+  });
+}
+
+/**
  * The defects found on a page of rolls (Inventory → the item, Phase 30A): per roll and class, the
  * detections of each defect type the decision engine counted, never per person.
  */
@@ -212,6 +223,13 @@ const openSelect = {
   supplier: { select: { name: true } },
   item: { select: { name: true } },
   _count: { select: { scans: true } },
+  // The roll's scale (D-121): its latest measured shot, set by the marker card at the first shot.
+  scans: {
+    where: { widthIn: { not: null } },
+    orderBy: { sequence: "desc" },
+    take: 1,
+    select: { sequence: true, widthIn: true, imageWidth: true, imageHeight: true },
+  },
 } satisfies Prisma.RollSelect;
 
 export type OpenRollRow = Prisma.RollGetPayload<{ select: typeof openSelect }>;

@@ -523,6 +523,11 @@ was never built. Each phase gets its own criteria here when its plan is approved
       card ignored. QA run 4 passed (2026-11-05; `npm run check` 688; the app read 16.8 in
       against a 17.5 in tape, 4.0%). Plan
       `docs/prompts/plans/scale-marker-plan.md`
+- [x] Card once per roll and scanning timer (D-121): the card on a roll's first shot only (fixed
+      cameras), Read the card again; a scanning timer from Start scanning to Finish roll with lunch
+      left out, on Capture, Finish roll, Reports → Rolls (average), the roll's page and
+      `rolls.csv`. `npm run check` passed (708); QA run 3 passed (2026-11-06). Plan
+      `docs/prompts/plans/card-once-per-roll-and-timing-plan.md`
 - [ ] Follow-up (Dylan, 2026-11-04): the System Admin reaches only the administration modules.
       The Camera page (the last capture's photo, rolls being captured) is production, not
       administration: it leaves the Admin's sidebar, home card, permission and APIs, so the

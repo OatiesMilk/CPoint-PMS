@@ -7,6 +7,7 @@
  * Worst: removing the wrong roll (the dialog names it and asks why), or reading it as one
  *        person's work. No person is named here (D-008).
  */
+import { formatScanningTime } from "@/lib/roll-timer";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -82,6 +83,17 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
         ? when(roll.cancelledAt, "—")
         : when(roll.finishedAt, roll.status === "OPEN" ? "Still being scanned" : "Not yet"),
     ],
+    ...(roll.scanningMs !== null
+      ? ([
+          [
+            "Scanning time",
+            <span key="t" className="tabular-nums">
+              {formatScanningTime(roll.scanningMs)}{" "}
+              <span className="text-muted-foreground">(lunch left out)</span>
+            </span>,
+          ],
+        ] as [string, React.ReactNode][])
+      : []),
     ...(roll.usedAt
       ? ([
           [

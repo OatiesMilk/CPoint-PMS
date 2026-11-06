@@ -19,6 +19,7 @@ const scans = {
   ),
   findLatestScan: vi.fn(),
   findScanByCaptureId: vi.fn(async (_captureId: string): Promise<unknown> => null),
+  findRollScale: vi.fn(async (..._args: unknown[]): Promise<unknown> => null),
 };
 const recordAudit = vi.fn();
 
@@ -492,5 +493,68 @@ describe("the marker card gives the scale (D-120)", () => {
     });
     expect(storage.put).not.toHaveBeenCalled();
     expect(scans.insertScanWithDetections).not.toHaveBeenCalled();
+  });
+
+  it("a later shot without the card takes the roll's scale from its first shot (D-121)", async () => {
+    scans.findRollScale.mockResolvedValueOnce({ sequence: 1, widthIn: 20 });
+    await ingestScan(
+      {
+        image: await photo(),
+        detections: [det("hole", 0.9)],
+        source: "PHONE",
+        scaleFromRoll: true,
+      },
+      { kind: "website", userId: "u1" },
+      now,
+      memoryStorage(),
+    );
+    expect(scans.findRollScale).toHaveBeenCalledWith(expect.any(String), {
+      width: 2000,
+      height: 1000,
+    });
+    const [data] = scans.insertScanWithDetections.mock.calls[0];
+    expect(data).toMatchObject({ widthIn: 20 });
+    expect(data.thresholdsSnapshot).toMatchObject({
+      widthIn: 20,
+      markerCorners: null,
+      scaleFromShot: 1,
+    });
+  });
+
+  it("refuses a roll's first shot without the card, and a camera of another size", async () => {
+    const storage = memoryStorage();
+    const shot = async () =>
+      ingestScan(
+        { image: await photo(), detections: [], source: "PHONE", scaleFromRoll: true },
+        { kind: "website", userId: "u1" },
+        now,
+        storage,
+      );
+    await expect(shot()).rejects.toMatchObject({
+      status: 422,
+      code: "MARKER_REQUIRED",
+      message: expect.stringMatching(/the marker card for this roll's first shot/),
+    });
+    // The roll has a scale, but from a picture of another size.
+    scans.findRollScale
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ sequence: 1, widthIn: 18 });
+    await expect(shot()).rejects.toMatchObject({
+      code: "MARKER_REQUIRED",
+      message: expect.stringMatching(/a different size from the roll's first shot/),
+    });
+    expect(storage.put).not.toHaveBeenCalled();
+    expect(scans.insertScanWithDetections).not.toHaveBeenCalled();
+  });
+
+  it("a device without the card or widthIn stays unmeasured, as before", async () => {
+    await ingestScan(
+      { image: await photo(), detections: [], source: "WEBCAM" },
+      { kind: "website", userId: "u1" },
+      now,
+      memoryStorage(),
+    );
+    expect(scans.findRollScale).not.toHaveBeenCalled();
+    expect(scans.insertScanWithDetections.mock.calls[0][0]).toMatchObject({ widthIn: null });
   });
 });

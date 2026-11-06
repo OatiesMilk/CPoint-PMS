@@ -1,3 +1,4 @@
+import { manilaToday } from "@/lib/format";
 import { Errors } from "@/server/lib/errors";
 import { handle, json, readJsonBody } from "@/server/lib/http";
 import { requireApiCapture, requireApiPermission, requireDevice } from "@/server/policies/guard";
@@ -11,6 +12,7 @@ import {
   putBackRoll,
   readyRollsForCapture,
   removeRoll,
+  rollsCsv,
   startRoll,
 } from "@/server/services/roll.service";
 import { capturePlan } from "@/server/services/production.service";
@@ -37,8 +39,24 @@ export const rollController = {
   index: handle(async (request: Request) => {
     await requireApiPermission("roll:read");
     const query = rollListQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
-    const { rows, total, page, pageCount } = await listRollsForReport(query);
-    return json({ data: rows, meta: { total, page, pageCount } });
+    const { rows, total, page, pageCount, scanning } = await listRollsForReport(query);
+    return json({ data: rows, meta: { total, page, pageCount, scanning } });
+  }),
+
+  /**
+   * GET /api/v1/reports/rolls.csv?status=&supplierId=&days=&q=: the rolls Reports → Rolls shows,
+   * every page, with each roll's scanning time (D-121). The Floor Manager only.
+   */
+  csv: handle(async (request: Request) => {
+    await requireApiPermission("roll:read");
+    const query = rollListQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
+    return new Response(await rollsCsv(query), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="cpoint-rolls-${manilaToday()}.csv"`,
+        "Cache-Control": "no-store",
+      },
+    });
   }),
 
   /**

@@ -9,13 +9,24 @@
  */
 import type { Prisma } from "@/generated/prisma/client";
 import type { RollStatus } from "@/lib/domain";
-import { manilaToday } from "@/lib/format";
-import { manilaDayOf } from "@/lib/production-rules";
-import { addDays, manilaDayStart } from "@/lib/report-rules";
+import { formatManilaDateTime, manilaToday } from "@/lib/format";
+import { manilaDayOf, type BreakRule } from "@/lib/production-rules";
+import {
+  averageMs,
+  formatScanningTime,
+  lunchDays,
+  lunchLookup,
+  scanningMinutes,
+  scanningMs,
+  type LunchOn,
+} from "@/lib/roll-timer";
+import type { RollScale } from "@/lib/scale-marker";
+import { addDays, manilaDayStart, toCsv } from "@/lib/report-rules";
 import { PAGE_SIZE } from "@/lib/pagination";
 import {
   formatRollCode,
   isReturnedToSupplier,
+  rollStatusText,
   oldestOpenRoll,
   planFinish,
   planPutBack,
@@ -31,6 +42,7 @@ import { AppError, Errors } from "@/server/lib/errors";
 import { getCvSettings } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
 import { findInventoryItem } from "@/server/models/inventory.model";
+import { listLunchBreaks } from "@/server/models/production.model";
 import { findSupplier, listActiveSuppliers } from "@/server/models/reference-data.model";
 import {
   countDefectsForRolls,
@@ -44,6 +56,7 @@ import {
   listRollShotMeasures,
   listReadyRolls,
   listRolls,
+  listRollTimes,
   listRollsUsedIn,
   moveRoll,
   nextRollCodeNumber,
@@ -76,10 +89,18 @@ export type RollListItem = Omit<RollListRow, "areaSqFt" | "returnedOn"> & {
   areaSqFt: number | null;
   passed: number;
   rejected: number;
+  /** Working time from Start scanning to Finish roll, lunch left out (D-121); null unfinished. */
+  scanningMs: number | null;
 };
 
+const timeOf = (r: { startedAt: Date | null; finishedAt: Date | null }, lunchOn: LunchOn) =>
+  r.startedAt && r.finishedAt ? scanningMs(r.startedAt, r.finishedAt, lunchOn) : null;
+
 async function withVerdicts(rows: RollListRow[]): Promise<RollListItem[]> {
-  const counts = await countVerdictsForRolls(rows.map((r) => r.id));
+  const [counts, lunchOn] = await Promise.all([
+    countVerdictsForRolls(rows.map((r) => r.id)),
+    loadLunchOn(),
+  ]);
   const count = (id: string, verdict: "PASS" | "REJECT") =>
     counts.find((c) => c.rollId === id && c.finalVerdict === verdict)?._count._all ?? 0;
   return rows.map((r) => ({
@@ -88,34 +109,86 @@ async function withVerdicts(rows: RollListRow[]): Promise<RollListItem[]> {
     returnedOn: dayOf(r.returnedOn),
     passed: count(r.id, "PASS"),
     rejected: count(r.id, "REJECT"),
+    scanningMs: timeOf(r, lunchOn),
   }));
 }
 
-export async function listRollsForReport(
-  query: RollListQuery,
-  now: Date = new Date(),
-): Promise<{ rows: RollListItem[]; total: number; page: number; pageCount: number }> {
-  const page = query.page ?? 1;
+function reportFilters(query: RollListQuery, now: Date) {
   const since = query.days
     ? new Date(
         `${manilaToday(new Date(now.getTime() - (query.days - 1) * 86_400_000))}T00:00:00+08:00`,
       )
     : undefined;
-  const { rows, total } = await listRolls(
-    {
-      reportStatus: query.status,
-      supplierId: query.supplierId,
-      since,
-      q: query.q,
-    },
-    { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE },
-  );
+  return { reportStatus: query.status, supplierId: query.supplierId, since, q: query.q };
+}
+
+/** The average scanning time of every roll the filters match, over all pages (D-121). */
+async function averageScanning(query: RollListQuery, now: Date) {
+  const [times, lunchOn] = await Promise.all([
+    listRollTimes(reportFilters(query, now)),
+    loadLunchOn(),
+  ]);
+  const ms = times.map((t) => timeOf(t, lunchOn));
+  return { averageMs: averageMs(ms), count: ms.filter((t) => t !== null).length };
+}
+
+export async function listRollsForReport(
+  query: RollListQuery,
+  now: Date = new Date(),
+): Promise<{
+  rows: RollListItem[];
+  total: number;
+  page: number;
+  pageCount: number;
+  scanning: { averageMs: number | null; count: number };
+}> {
+  const page = query.page ?? 1;
+  const [{ rows, total }, scanning] = await Promise.all([
+    listRolls(reportFilters(query, now), { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
+    averageScanning(query, now),
+  ]);
   return {
     rows: await withVerdicts(rows),
     total,
     page,
     pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    scanning,
   };
+}
+
+/** At most this many rows in the Rolls CSV; the filters narrow it. */
+const CSV_MAX_ROLLS = 5_000;
+
+/**
+ * GET /api/v1/reports/rolls.csv: the rolls the Reports → Rolls filters show, every page, with
+ * each roll's scanning time (D-121) for comparing with the manual check. No person named.
+ */
+export async function rollsCsv(query: RollListQuery, now: Date = new Date()): Promise<string> {
+  const { rows } = await listRolls(reportFilters(query, now), { skip: 0, take: CSV_MAX_ROLLS });
+  const items = await withVerdicts(rows);
+  const when = (d: Date | null) => (d ? formatManilaDateTime(d) : "");
+  return toCsv(items, [
+    { header: "Roll", value: (r) => r.code },
+    { header: "Leather", value: (r) => r.item?.name ?? "" },
+    { header: "Supplier", value: (r) => r.supplier?.name ?? "" },
+    { header: "Area (sq ft)", value: (r) => r.areaSqFt },
+    { header: "Started scanning (Manila)", value: (r) => when(r.startedAt) },
+    { header: "Finished (Manila)", value: (r) => when(r.finishedAt) },
+    {
+      header: "Scanning time",
+      value: (r) => (r.scanningMs === null ? "" : formatScanningTime(r.scanningMs)),
+    },
+    {
+      header: "Scanning time (min)",
+      // Always two decimals (20.90, not 20.9), so the paper's column lines up (QA run 1, F2).
+      value: (r) => (r.scanningMs === null ? null : scanningMinutes(r.scanningMs).toFixed(2)),
+    },
+    { header: "Shots", value: (r) => r._count.scans },
+    { header: "Passed", value: (r) => r.passed },
+    { header: "Rejected", value: (r) => r.rejected },
+    { header: "Defect %", value: (r) => r.defectSharePct },
+    { header: "Status", value: (r) => rollStatusText(r) },
+  ]);
 }
 
 export type ItemRoll = RollListItem & {
@@ -166,6 +239,8 @@ export type RollDetail = Omit<RollDetailRow, "areaSqFt" | "returnedOn"> & {
   rejected: number;
   /** What the Floor Manager may do here: remove the roll, with a reason. */
   canRemove: boolean;
+  /** Working time from Start scanning to Finish roll, lunch left out (D-121). */
+  scanningMs: number | null;
 };
 
 export async function getRollDetail(id: string): Promise<RollDetail | null> {
@@ -180,6 +255,7 @@ export async function getRollDetail(id: string): Promise<RollDetail | null> {
     passed,
     rejected: roll.scans.length - passed,
     canRemove: planRemove(state).ok,
+    scanningMs: timeOf(roll, await loadLunchOn()),
   };
 }
 
@@ -199,9 +275,25 @@ export type OpenRoll = {
   mine: boolean;
   /** Added in Inventory (Phase 30A): Put back returns it there; older rolls are cancelled. */
   fromInventory: boolean;
+  /** The scale its first shot's marker card set (D-121); null before a measured shot. */
+  scale: RollScale | null;
+  /** The lunch break of each day since it started, so Capture's timer leaves lunch out (D-121). */
+  lunches: Record<string, BreakRule | null>;
 };
 
-const toOpenRoll = (r: OpenRollRow, viewerId?: string): OpenRoll => ({
+const scaleOfRoll = (r: OpenRollRow): RollScale | null => {
+  const s = r.scans[0];
+  return s?.widthIn && s.imageWidth && s.imageHeight
+    ? { widthIn: s.widthIn, width: s.imageWidth, height: s.imageHeight, shot: s.sequence }
+    : null;
+};
+
+const toOpenRoll = (
+  r: OpenRollRow,
+  viewerId?: string,
+  lunchOn?: LunchOn,
+  now: Date = new Date(),
+): OpenRoll => ({
   id: r.id,
   code: r.code,
   tagCode: r.tagCode,
@@ -212,11 +304,22 @@ const toOpenRoll = (r: OpenRollRow, viewerId?: string): OpenRoll => ({
   startedAt: (r.startedAt ?? new Date(0)).toISOString(),
   mine: !!viewerId && r.startedById === viewerId,
   fromInventory: r.itemId !== null,
+  scale: scaleOfRoll(r),
+  lunches: r.startedAt && lunchOn ? lunchDays(r.startedAt, now, lunchOn) : {},
 });
 
+/** Settings → Lunch break's rows as a lookup by day, for the scanning timer (D-121). */
+async function loadLunchOn(): Promise<LunchOn> {
+  return lunchLookup(await listLunchBreaks());
+}
+
 /** Every open roll, for the Capture page's Roll dropdown (newest first). */
-export async function openRollsForCapture(viewer: Actor): Promise<OpenRoll[]> {
-  return (await listOpenRolls()).map((r) => toOpenRoll(r, viewer.id));
+export async function openRollsForCapture(
+  viewer: Actor,
+  now: Date = new Date(),
+): Promise<OpenRoll[]> {
+  const [rows, lunchOn] = await Promise.all([listOpenRolls(), loadLunchOn()]);
+  return rows.map((r) => toOpenRoll(r, viewer.id, lunchOn, now));
 }
 
 export type ReadyRoll = Pick<
@@ -348,7 +451,12 @@ export async function startRoll(id: string, actor: Actor, now: Date = new Date()
       before: { status: "IN_STOCK" },
       after: { status: "OPEN", code: roll.code },
     });
-    return toOpenRoll({ ...roll, status: "OPEN", startedAt: now, startedById: actor.id }, actor.id);
+    return toOpenRoll(
+      { ...roll, status: "OPEN", startedAt: now, startedById: actor.id },
+      actor.id,
+      await loadLunchOn(),
+      now,
+    );
   });
 }
 
@@ -363,6 +471,8 @@ export type FinishResult = {
   marked: boolean;
   /** Why it wasn't measured: no area, or shots from a phone that wasn't calibrated (A-28). */
   notMeasured: "no-area" | "no-shots" | "unscaled" | null;
+  /** Working time from Start scanning to now, lunch left out (D-121). */
+  scanningMs: number | null;
 };
 
 /**
@@ -378,8 +488,9 @@ export async function finishRoll(
 ): Promise<FinishResult> {
   const roll = await loadRoll(id);
   refuse(planFinish(stateOf(roll)));
-  const settings = await getCvSettings();
+  const [settings, lunchOn] = await Promise.all([getCvSettings(), loadLunchOn()]);
   const limitPct = settings?.returnSharePct ?? 10;
+  const timeMs = roll.startedAt ? scanningMs(roll.startedAt, now, lunchOn) : null;
   return runInTransaction(async (tx) => {
     const done = await moveRoll(
       id,
@@ -417,6 +528,7 @@ export async function finishRoll(
         defectSharePct: measure.defectSharePct,
         returnLimitPct: limitPct,
         markedForReturn: measure.markedForReturn,
+        scanningMs: timeMs,
         ...(share.measured ? {} : { notMeasured: share.reason }),
       },
     });
@@ -429,6 +541,7 @@ export async function finishRoll(
       limitPct,
       marked: measure.markedForReturn,
       notMeasured: share.measured ? null : share.reason,
+      scanningMs: timeMs,
     };
   });
 }

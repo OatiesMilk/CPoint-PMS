@@ -15,6 +15,27 @@ export function insertScanWithDetections(
 }
 
 /** The scan a camera already sent with this capture id (D-051), with what the result needs. */
+/**
+ * A roll's scale for a shot of this frame size (D-121): its latest measured shot of the same size
+ * (any size with none given).
+ * The marker card sets it at the roll's first shot; a later card reading replaces it.
+ */
+export function findRollScale(
+  rollId: string,
+  size: { width: number; height: number } | null,
+  db: Db = defaultDb(),
+) {
+  return db.scan.findFirst({
+    where: {
+      rollId,
+      widthIn: { not: null },
+      ...(size ? { imageWidth: size.width, imageHeight: size.height } : {}),
+    },
+    orderBy: { sequence: "desc" },
+    select: { sequence: true, widthIn: true },
+  });
+}
+
 export function findScanByCaptureId(captureId: string, db: Db = defaultDb()) {
   return db.scan.findUnique({
     where: { captureId },

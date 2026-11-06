@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CircleCheck, LoaderCircle, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CircleCheck, LoaderCircle, Plus, Timer, X } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,10 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { formatManilaWeekdayDate, manilaToday } from "@/lib/format";
+import type { BreakRule } from "@/lib/production-rules";
 import { finishedLine, formatArea, openSinceLine, type FinishData } from "@/lib/roll-rules";
+import { formatScanningTime, inLunch, lunchFromMap, scanningMs } from "@/lib/roll-timer";
+import type { RollScale } from "@/lib/scale-marker";
 
 /** An open roll as GET /api/v1/rolls/open sends it. */
 export type OpenRollView = {
@@ -31,7 +34,44 @@ export type OpenRollView = {
   mine: boolean;
   /** Added in Inventory: Put back returns it there. A roll from before Phase 30A is cancelled. */
   fromInventory: boolean;
+  /** The scale its first shot's marker card set (D-121), or null before one. */
+  scale: RollScale | null;
+  /** Each day's lunch break since it started, so the timer leaves lunch out (D-121). */
+  lunches: Record<string, BreakRule | null>;
 };
+
+/**
+ * The scanning timer (D-121): working time since Start scanning, ticking every second; it stops
+ * at Finish roll, and reads "Paused for lunch" during the lunch break, which doesn't count.
+ */
+export function ScanningTimer({ roll }: { roll: OpenRollView }) {
+  // Set after the page loads, so the server's render and the browser's agree.
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, []);
+  const lunchOn = lunchFromMap(roll.lunches);
+  // "--:--" until the clock starts, never a misleading 00:00 (QA run 1, S5).
+  const shown = now
+    ? formatScanningTime(scanningMs(new Date(roll.startedAt), now, lunchOn))
+    : "--:--";
+  const paused = now ? inLunch(now, lunchOn) : false;
+  return (
+    <p className="flex items-center gap-2 text-base" data-testid="scanning-timer">
+      <Timer aria-hidden className="size-4 text-muted-foreground" />
+      <span>
+        Scanning time <span className="font-semibold tabular-nums">{shown}</span>
+        {paused && <span className="text-muted-foreground"> · Paused for lunch</span>}
+      </span>
+    </p>
+  );
+}
 
 const shotsText = (n: number) => `${n} ${n === 1 ? "shot" : "shots"}`;
 
@@ -157,6 +197,7 @@ export function RollBar({
           Choose the roll this shot belongs to.
         </p>
       )}
+      {chosen && <ScanningTimer roll={chosen} />}
       {since && (
         <p role="status" className="rounded-md bg-caution-soft p-3 text-sm">
           {since}

@@ -83,7 +83,7 @@ describe("the new settings and fields", () => {
     expect(message(ingestFieldsSchema.safeParse({ widthIn: "2" }))).toMatch(/^widthIn must be/);
   });
 
-  it("needs the marker card's corners on a Capture shot, and no widthIn (D-120)", () => {
+  it("reads the marker card's corners on a Capture shot, and no widthIn (D-120, D-121)", () => {
     const captureId = "0199f0a1-7c2e-7a51-9d3f-2b8c4e6a1f00";
     const card = [
       [
@@ -100,9 +100,8 @@ describe("the new settings and fields", () => {
     });
     expect(parsed.markerCorners).toEqual(card);
     expect(parsed).not.toHaveProperty("widthIn");
-    expect(message(captureFieldsSchema.safeParse({ captureId }))).toMatch(
-      /^markerCorners is required: show the marker card to capture/,
-    );
+    // D-121: a later shot of a roll may leave the corners out; the service takes its scale.
+    expect(captureFieldsSchema.parse({ captureId }).markerCorners).toBeUndefined();
     expect(
       message(captureFieldsSchema.safeParse({ captureId, markerCorners: '[[{"x":0.4}]]' })),
     ).toMatch(/^markerCorners must be a JSON array/);

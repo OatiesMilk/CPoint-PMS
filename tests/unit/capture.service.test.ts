@@ -13,6 +13,7 @@ const ingest = {
     duplicate: false,
     defects: [],
   })),
+  rollScaleFor: vi.fn(async (..._args: unknown[]) => ({ widthIn: 16.84, shot: 1 })),
 };
 const rolls = { resolveCaptureRoll: vi.fn() };
 vi.mock("@/server/services/scan-ingest.service", () => ingest);
@@ -89,6 +90,7 @@ describe("captureScan", () => {
         source: "WEBCAM",
         capturedAt: undefined,
         markerCorners: FIELDS.markerCorners,
+        scaleFromRoll: true,
       },
       { kind: "website", userId: "user-sc" },
       expect.any(Date),
@@ -116,6 +118,32 @@ describe("captureScan", () => {
   it("checks the chosen roll from the website, before the model runs", async () => {
     await captureScan(IMAGE, FIELDS, USER, fakeRunner());
     expect(rolls.resolveCaptureRoll).toHaveBeenCalledWith("b1", "website");
+  });
+
+  it("a shot without the card needs the roll's scale, checked before the model runs (D-121)", async () => {
+    const noCard = { ...FIELDS, markerCorners: undefined };
+    await captureScan(IMAGE, noCard, USER, fakeRunner());
+    expect(ingest.rollScaleFor).toHaveBeenCalledWith("b1", null);
+    expect(ingest.ingestScan).toHaveBeenCalledWith(
+      expect.objectContaining({ markerCorners: null, scaleFromRoll: true }),
+      expect.anything(),
+      expect.any(Date),
+    );
+
+    ingest.rollScaleFor.mockRejectedValueOnce(
+      new AppError(422, "MARKER_REQUIRED", "markerCorners is required for this shot: …"),
+    );
+    const runner = fakeRunner();
+    await expect(captureScan(IMAGE, noCard, USER, runner)).rejects.toMatchObject({
+      status: 422,
+      code: "MARKER_REQUIRED",
+    });
+    expect(runner.detect).not.toHaveBeenCalled();
+  });
+
+  it("with the card, doesn't look up the roll's scale", async () => {
+    await captureScan(IMAGE, FIELDS, USER, fakeRunner());
+    expect(ingest.rollScaleFor).not.toHaveBeenCalled();
   });
 
   it("refuses without a chosen roll (Phase 26)", async () => {

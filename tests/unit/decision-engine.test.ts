@@ -114,6 +114,7 @@ describe("readSnapshot", () => {
       flatShares: {},
       widthIn: null,
       markerCorners: null,
+      scaleFromShot: null,
       earlierRule: false,
     });
   });
@@ -132,6 +133,7 @@ describe("readSnapshot", () => {
       flatShares: {},
       widthIn: null,
       markerCorners: null,
+      scaleFromShot: null,
       earlierRule: true,
     });
   });

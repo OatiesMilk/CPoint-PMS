@@ -123,7 +123,9 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
                     {rule.widthIn
                       ? rule.markerCorners?.length
                         ? `Measured with the marker card: ${rule.widthIn} in across`
-                        : `Scale: ${rule.widthIn} in across`
+                        : rule.scaleFromShot
+                          ? `Measured with the roll's marker card from Shot #${rule.scaleFromShot}: ${rule.widthIn} in across`
+                          : `Scale: ${rule.widthIn} in across`
                       : "No scale: nothing measured"}
                   </span>
                 </dd>

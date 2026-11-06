@@ -2353,3 +2353,31 @@ only for old rolls and simulator shots). **Supersedes:** A-18 and the Capture pa
 phone calibration. **Where:** `src/lib/scale-marker.ts`, `src/lib/marker-detect.ts`,
 `capture-client.tsx`, `scan-ingest.service.ts`, `scan.validator.ts`. Plan:
 `docs/prompts/plans/scale-marker-plan.md`.
+
+### D-121 · 2026-11-05 · Accepted — The marker card once per roll, and a scanning timer per roll
+
+**Context:** D-120 asked for the card on every shot. Dylan (5 Nov): every camera at the factory,
+phone or webcam, is at a fixed position, so the scale doesn't change between shots of a roll.
+CPoint also wants to know how long scanning one roll takes, to compare with their manual check,
+which Dylan times by hand outside the system.
+**Decision:** (1) The card is needed on a roll's **first shot** only. A roll's scale is its latest
+marked shot of the same picture size (`widthIn`, `imageWidth`, `imageHeight`); later shots of that
+size send no `markerCorners` and the server takes that scale, recording the shot it came from in
+the rule snapshot (`scaleFromShot`). A card still in view on a later shot is read and used. A
+picture of another size (another camera or resolution) needs the card once more. **Read the card
+again** on Capture makes the next shot need the card, and its scale is used from then on. Without a
+scale `POST /api/v1/scans/capture` answers `422 MARKER_REQUIRED` before the model runs. (2) A
+**scanning timer** per roll, from **Start scanning** to **Finish roll**, worked out from the saved
+start and finish times: the day's lunch break (as in force that day) is left out, and so is the night
+of a roll left open overnight (A-49: from 17:00, or its start if later, to 08:00 the next day; time
+on the same day counts even after 17:00). Capture shows "Scanning time 08:42" (h:mm:ss past an hour) and
+"Paused for lunch"; Finish roll ends with "Scanning time: 12:34."; Reports → Rolls has a Scanning
+time column and "Average scanning time: 14:05 over 23 rolls" for the rolls the filters show; the
+roll's page shows it; `GET /api/v1/reports/rolls.csv` has "Scanning time (min)" (two decimals).
+Minutes per roll only: no minutes per sq ft, no manual time to enter, no constructor named. No
+migration. **Assumptions:** A-49 (a roll left open overnight counts from 08:00 the next day),
+A-50 (a later card reading replaces the roll's scale for the shots after it), A-51 (each picture
+size needs its own card reading). **Changes:** D-120's "no card, no shot" for later shots of a
+roll. **Where:** `src/lib/roll-timer.ts`, `src/lib/scale-marker.ts`, `scan-ingest.service.ts`,
+`capture.service.ts`, `roll.service.ts`, `capture-client.tsx`, `roll-bar.tsx`,
+`reports/rolls/**`. Plan: `docs/prompts/plans/card-once-per-roll-and-timing-plan.md`.

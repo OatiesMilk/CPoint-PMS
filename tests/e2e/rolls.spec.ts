@@ -54,10 +54,24 @@ test.describe("Reports → Rolls (Floor Manager)", () => {
     // Not measured (no phone setup), so not over the limit: Scanning passed (D-116).
     await expect(row).toContainText("Scanning passed");
     await expect(row).toContainText("24.5 sq ft");
-    // Shots 2, passed 1, rejected 1.
-    await expect(row.getByRole("cell").nth(4)).toHaveText("2");
-    await expect(row.getByRole("cell").nth(5)).toHaveText("1");
+    // Scanning time, Start scanning to Finish roll (D-121), then shots 2, passed 1, rejected 1.
+    await expect(row.getByRole("cell").nth(4)).toHaveText(/^\d{2}:\d{2}$/);
+    await expect(row.getByRole("cell").nth(5)).toHaveText("2");
     await expect(row.getByRole("cell").nth(6)).toHaveText("1");
+    await expect(row.getByRole("cell").nth(7)).toHaveText("1");
+    await expect(page.getByTestId("average-scanning")).toContainText(
+      /Average scanning time: \d{2}:\d{2} over \d+ rolls?/,
+    );
+    // The Rolls CSV with the filters on the page (D-121).
+    const csv = await page.request.get(`/api/v1/reports/rolls.csv?q=${tag}`);
+    expect(csv.status()).toBe(200);
+    const lines = (await csv.text())
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .split(/\r?\n/);
+    expect(lines[0]).toContain("Scanning time (min)");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain(roll.code);
     // No person anywhere on the list (D-008).
     await expect(page.getByRole("columnheader", { name: /by|person|constructor/i })).toHaveCount(0);
 
@@ -73,6 +87,7 @@ test.describe("Reports → Rolls (Floor Manager)", () => {
     // The roll's item and area (Phase 30A).
     await expect(page.getByRole("link", { name: /LR-E2E-/ })).toBeVisible();
     await expect(page.getByText("24.5 sq ft")).toBeVisible();
+    await expect(page.getByText("(lunch left out)", { exact: true })).toBeVisible();
     // It's off stock (Phase 30E): a scanned roll can no longer be removed.
     await expect(page.getByText("Scanned and taken off stock.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Remove roll…" })).toHaveCount(0);
@@ -164,6 +179,7 @@ test.describe("who sees rolls", () => {
       await page.goto("/reports/rolls");
       await expect(page).toHaveURL(/\/forbidden/);
       expect((await page.request.get("/api/v1/rolls")).status()).toBe(403);
+      expect((await page.request.get("/api/v1/reports/rolls.csv")).status()).toBe(403);
       // Leave the app first: a request still in flight (the QI's batch notices, Phase 27) could
       // set the session cookie again after it's cleared, and /login would then redirect home.
       await page.goto("about:blank");
@@ -188,5 +204,6 @@ test.describe("who sees rolls", () => {
 
   test("the API needs a session", async ({ request }) => {
     expect((await request.get("/api/v1/rolls")).status()).toBe(401);
+    expect((await request.get("/api/v1/reports/rolls.csv")).status()).toBe(401);
   });
 });

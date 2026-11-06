@@ -114,6 +114,27 @@ export const MARKER_MESSAGES: Record<MarkerProblem, string> = {
 };
 
 /**
+ * The card once per roll (D-121): every camera at the factory is fixed, so the card read at a
+ * roll's first shot gives the scale for its later shots of the same frame size.
+ */
+export const CARD_FIRST_SHOT =
+  "Show the marker card for this roll's first shot. It sets the scale for the rest of the roll.";
+export const CARD_NEW_SIZE =
+  "This camera's picture is a different size from the roll's first shot. Show the marker card once to set its scale.";
+
+/** The roll's scale, as Capture gets it with the roll: the latest measured shot's. */
+export type RollScale = { widthIn: number; width: number; height: number; shot: number };
+
+/** Whether a frame of this size can use the roll's scale without the card. */
+export function rollScaleFits(
+  scale: RollScale | null,
+  width: number,
+  height: number,
+): scale is RollScale {
+  return !!scale && scale.width === width && scale.height === height;
+}
+
+/**
  * The printed card's outline from its marker's corners, by the square's own directions. Corners
  * and outline are in the same units (fractions of the photo's width and height work).
  */

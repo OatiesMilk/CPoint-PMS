@@ -19,7 +19,12 @@ const rolls = {
     async (): Promise<{ defectAreaSqIn: number | null; flatSharePct: number | null }[]> => [],
   ),
   saveRollMeasure: vi.fn(async () => ({})),
+  listRollTimes: vi.fn(async (): Promise<unknown[]> => []),
 };
+// Lunch 11:00 to 12:00 from the start (D-121's timer leaves it out).
+const listLunchBreaks = vi.fn(async (): Promise<unknown[]> => [
+  { effectiveFrom: "2026-01-01", startTime: "11:00", endTime: "12:00" },
+]);
 const refs = {
   findSupplier: vi.fn(async (): Promise<unknown> => ({
     id: "sp1",
@@ -47,6 +52,7 @@ vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/roll.model", () => rolls);
 vi.mock("@/server/models/reference-data.model", () => refs);
 vi.mock("@/server/models/inventory.model", () => inventory);
+vi.mock("@/server/models/production.model", () => ({ listLunchBreaks }));
 vi.mock("@/server/models/cv-settings.model", () => ({
   getCvSettings: vi.fn(async () => ({ foundAtOrAbove: 0.5, returnSharePct: 10 })),
 }));
@@ -76,6 +82,7 @@ const state = (over: object = {}) => ({
   supplier: { name: "Marikina Leather Trading" },
   item: { name: "Brown suede" },
   _count: { scans: 4 },
+  scans: [],
   ...over,
 });
 
@@ -234,6 +241,7 @@ describe("picking and finishing at Capture", () => {
       limitPct: 10,
       marked: false,
       notMeasured: "no-shots",
+      scanningMs: 60 * 60_000, // 09:00 to 10:00 Manila (D-121)
     });
     expect(rolls.moveRoll).toHaveBeenCalledWith(
       "r1",
@@ -398,13 +406,26 @@ describe("rolls at Capture", () => {
         "fromInventory",
         "id",
         "item",
+        "lunches",
         "mine",
+        "scale",
         "shots",
         "startedAt",
         "supplier",
         "tagCode",
       ].sort(),
     );
+  });
+
+  it("sends each roll's scale and its days' lunch for Capture's timer (D-121)", async () => {
+    rolls.listOpenRolls.mockResolvedValue([
+      state({
+        scans: [{ sequence: 1, widthIn: 16.84, imageWidth: 1920, imageHeight: 1080 }],
+      }),
+    ]);
+    const [roll] = await svc.openRollsForCapture(SC, now);
+    expect(roll.scale).toEqual({ widthIn: 16.84, width: 1920, height: 1080, shot: 1 });
+    expect(roll.lunches).toEqual({ "2026-10-26": { startTime: "11:00", endTime: "12:00" } });
   });
 
   it("lists the rolls waiting to be scanned with their item and area", async () => {
@@ -455,6 +476,32 @@ describe("Reports → Rolls and a leather item's rolls (D-008)", () => {
     expect(page).toEqual({ skip: 0, take: 15 });
     for (const key of Object.keys(result.rows[0]))
       expect(key).not.toMatch(/user|createdBy|finishedBy|cancelledBy|usedBy|email/i);
+  });
+
+  it("gives each roll its scanning time and the average over every page (D-121)", async () => {
+    // 10:40 to 12:20 Manila with lunch 11:00 to 12:00: 40 minutes.
+    const timed = {
+      ...listRow,
+      startedAt: new Date("2026-10-26T02:40:00Z"),
+      finishedAt: new Date("2026-10-26T04:20:00Z"),
+    };
+    rolls.listRolls.mockResolvedValue({ rows: [timed], total: 1 });
+    rolls.listRollTimes.mockResolvedValue([
+      { startedAt: timed.startedAt, finishedAt: timed.finishedAt },
+      { startedAt: new Date("2026-10-26T01:00:00Z"), finishedAt: new Date("2026-10-26T01:20:00Z") },
+    ]);
+    const result = await svc.listRollsForReport({ supplierId: undefined }, now);
+    expect(result.rows[0].scanningMs).toBe(40 * 60_000);
+    expect(result.scanning).toEqual({ averageMs: 30 * 60_000, count: 2 });
+
+    const csv = await svc.rollsCsv({}, now);
+    const [header, row] = csv
+      .replace(/^\uFEFF/, "")
+      .trim()
+      .split("\r\n");
+    expect(header).toContain("Scanning time,Scanning time (min)");
+    expect(row).toContain("40:00,40.00");
+    expect(header).not.toMatch(/user|by|email/i);
   });
 
   it("lists an item's rolls with the defects found, from found-at", async () => {

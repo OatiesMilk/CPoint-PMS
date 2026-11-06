@@ -52,11 +52,15 @@ phone or its stand doesn't matter.
    check bar 4.00 in; if not, print again at 100%.
 2. Cut along the dashed line, keeping the white border, and glue it to stiff card (matte, no
    glossy laminate).
-3. For every shot, lay the card **flat on the leather**, all of it in the picture. Capture reads it
-   about four times a second: "Marker card found. This shot will be measured (19.2 in across)."
-   Without it the Capture button stays off and reads "Show the marker card to capture." Space does
-   nothing but say the same.
-4. Hold the phone flat above the leather. A card that looks tilted ("Hold the phone flat above the
+3. For a roll's **first shot**, lay the card **flat on the leather**, all of it in the picture.
+   Capture reads it about four times a second: "Marker card found. This shot will be measured
+   (19.2 in across)." Without it the Capture button stays off and reads "Show the marker card to
+   capture." Space does nothing but say the same.
+4. The camera stays where it is (D-121), so the rest of the roll needs no card: "Scale set at the
+   first shot: 19.2 in across. The card can come off the leather." A card left in view is still
+   read. If the camera is moved, press **Read the card again** and show the card on the next shot.
+   A camera whose picture is a different size needs the card once.
+5. Hold the phone flat above the leather. A card that looks tilted ("Hold the phone flat above the
    leather so the marker card looks square.") or too small ("Bring the phone closer.") isn't used.
 
 The card isn't leather: a defect box whose centre is on the card is ignored, and the leather under

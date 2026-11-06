@@ -6,7 +6,8 @@
  * returns or keeps them. Several rolls may be open at once; the Capture page's Roll dropdown says
  * where each shot goes (Dylan, 24 Oct 2026). Pure, so every move and refusal is unit-tested.
  */
-import type { RollStatus } from "@/lib/domain";
+import { formatScanningTime } from "./roll-timer";
+import { ROLL_STATUS_LABELS, type RollStatus } from "@/lib/domain";
 
 export const ROLL_TAG_MAX = 40;
 export const CANCEL_REASON_MAX = 200;
@@ -231,6 +232,8 @@ export type FinishData = {
   limitPct: number;
   marked: boolean;
   notMeasured: "no-area" | "no-shots" | "unscaled" | null;
+  /** Working time from Start scanning to Finish roll, lunch left out (D-121). */
+  scanningMs?: number | null;
 };
 
 /**
@@ -238,6 +241,16 @@ export type FinishData = {
  * Returned to supplier (D-116).
  */
 export function finishedLine(
+  roll: { code: string; shots: number; item?: string | null },
+  data?: FinishData,
+): string {
+  const line = finishedShareLine(roll, data);
+  return data?.scanningMs != null
+    ? `${line} Scanning time: ${formatScanningTime(data.scanningMs)}.`
+    : line;
+}
+
+function finishedShareLine(
   roll: { code: string; shots: number; item?: string | null },
   data?: FinishData,
 ): string {
@@ -311,4 +324,10 @@ export function rollReportStatus(roll: StatusRoll): RollReportStatus | null {
   if (isReturnedToSupplier(roll)) return "RETURNED";
   if (roll.status === "FINISHED" || roll.status === "USED") return "PASSED";
   return null;
+}
+
+/** The Status column's words, as the badge shows them (the Rolls CSV, D-121). */
+export function rollStatusText(roll: StatusRoll): string {
+  const report = rollReportStatus(roll);
+  return report ? ROLL_REPORT_STATUS_LABELS[report] : ROLL_STATUS_LABELS[roll.status];
 }

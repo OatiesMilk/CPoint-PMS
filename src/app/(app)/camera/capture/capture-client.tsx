@@ -22,14 +22,17 @@ import {
 import { findMarkerQuads } from "@/lib/marker-detect";
 import { defaultRollId } from "@/lib/roll-rules";
 import {
+  CARD_NEW_SIZE,
   firstMarkedFrame,
   MARKER_MESSAGES,
   MARKER_READ_WIDTHS,
+  rollScaleFits,
   scaleFromMarkers,
   worseProblem,
   type MarkerProblem,
   type MarkerScale,
   type Quad,
+  type RollScale,
 } from "@/lib/scale-marker";
 import { FloorView, type FloorBand } from "./floor-view";
 import { LastScanSummary, type ScanSummary } from "./last-scan";
@@ -47,8 +50,13 @@ type Pending = {
   capturedAt: string;
   rollId: string;
   rollCode: string;
-  /** The marker cards on this frame, corners in fractions: the server reads the scale (D-120). */
-  markerCorners: Quad[];
+  /**
+   * The marker cards on this frame, corners in fractions: the server reads the scale (D-120). None
+   * on a later shot of a roll whose first shot set the scale (D-121).
+   */
+  markerCorners: Quad[] | null;
+  /** The scale this shot's card sets for the roll, kept once the app has the shot (D-121). */
+  setsScale: RollScale | null;
 };
 
 /** What the live picture shows of the marker card, read about 4 times a second (D-120). */
@@ -232,6 +240,10 @@ export function CaptureClient({
   const fullscreenRef = useRef(false);
   // D-120: is the marker card in the live picture? Capture stays off until it is.
   const [marker, setMarker] = useState<MarkerView>({ ok: false, problem: "none" });
+  // D-121: the live picture's size (a roll's scale fits only frames of its size), and a roll whose
+  // card is to be read again (Read the card again, after the camera moved).
+  const [frameSize, setFrameSize] = useState<{ width: number; height: number } | null>(null);
+  const [rereadRollId, setRereadRollId] = useState<string | null>(null);
 
   useEffect(() => {
     // Read after mount: localStorage isn't there on the server.
@@ -404,7 +416,11 @@ export function CaptureClient({
         form.set("capturedAt", pending.capturedAt);
         form.set("rollId", pending.rollId);
         form.set("source", phone ? "PHONE" : "WEBCAM");
-        form.set("markerCorners", JSON.stringify(pending.markerCorners));
+        // Empty without the card: a later shot takes the roll's scale (D-121).
+        form.set(
+          "markerCorners",
+          pending.markerCorners ? JSON.stringify(pending.markerCorners) : "",
+        );
         try {
           const res = await fetch("/api/v1/scans/capture", { method: "POST", body: form });
           status = res.status;
@@ -424,7 +440,15 @@ export function CaptureClient({
         if (!data.duplicate)
           setRolls((list) =>
             list.map((r) =>
-              r.id === pending.rollId ? { ...r, shots: Math.max(r.shots, data.sequence) } : r,
+              r.id === pending.rollId
+                ? {
+                    ...r,
+                    shots: Math.max(r.shots, data.sequence),
+                    scale: pending.setsScale
+                      ? { ...pending.setsScale, shot: data.sequence }
+                      : r.scale,
+                  }
+                : r,
             ),
           );
         saveRoll(pending.rollId);
@@ -455,7 +479,7 @@ export function CaptureClient({
         pending: retryable ? pending : null,
       });
     },
-    [dropRoll],
+    [dropRoll, setSend],
   );
 
   const modelReady = model.state === "ready";
@@ -464,7 +488,19 @@ export function CaptureClient({
   const waitingToResend = send.kind === "failed" && send.pending !== null;
   // Space may be pressed without the card, to be told why nothing was sent; the button waits.
   const canPress = live && modelReady && !!roll && !sending && !waitingToResend;
-  const canCapture = canPress && marker.ok;
+  // D-121: the roll's scale from its first shot's card, when it fits this camera's picture.
+  const rollScale =
+    roll && rereadRollId !== roll.id && frameSize
+      ? rollScaleFits(roll.scale, frameSize.width, frameSize.height)
+        ? roll.scale
+        : null
+      : null;
+  const canCapture = canPress && (marker.ok || !!rollScale);
+  // Without the card: the roll's first shot, a camera whose picture is another size, or Read again.
+  const cardMessage =
+    roll?.scale && rereadRollId !== roll.id && !marker.ok && marker.problem === "none" && !rollScale
+      ? CARD_NEW_SIZE
+      : MARKER_MESSAGES[marker.ok ? "none" : marker.problem];
 
   // The live check for the marker card, on a small copy of the picture (D-120).
   useEffect(() => {
@@ -475,7 +511,9 @@ export function CaptureClient({
       const video = videoRef.current;
       if (!video || video.videoWidth === 0 || document.visibilityState !== "visible") return;
       if (busyRef.current) return;
-      const read = readMarkerCard(video, video.videoWidth, video.videoHeight, canvas);
+      const { videoWidth: width, videoHeight: height } = video;
+      setFrameSize((f) => (f?.width === width && f.height === height ? f : { width, height }));
+      const read = readMarkerCard(video, width, height, canvas);
       if (!read) return;
       const now = Date.now();
       if (read.ok) {
@@ -502,32 +540,13 @@ export function CaptureClient({
       return;
     }
     busyRef.current = true; // one press, one scan
-    try {
-      // The card is read again on the frame being sent: its corners must be on this very
-      // picture. The detector finds a card on some frames, not every one, so a few frames are
-      // tried (about half a second) and the first with the card is sent (QA run 2, F1).
-      const scratch = document.createElement("canvas");
-      let capturedAt = new Date().toISOString();
-      const found = await firstMarkedFrame(
-        () => {
-          if (video.videoWidth === 0) return null;
-          capturedAt = new Date().toISOString();
-          const frame = document.createElement("canvas");
-          frame.width = video.videoWidth;
-          frame.height = video.videoHeight;
-          frame.getContext("2d")?.drawImage(video, 0, 0, frame.width, frame.height);
-          return frame;
-        },
-        (frame) => readMarkerCard(frame, frame.width, frame.height, scratch),
-        () => nextFrame(video),
-      );
-      if (!found.ok) {
-        setMarker({ ok: false, problem: found.problem });
-        setSend({ kind: "failed", message: MARKER_MESSAGES[found.problem], pending: null });
-        return;
-      }
-      const canvas = found.frame;
-      const read = found.scale;
+    let capturedAt = new Date().toISOString();
+    const sendFrame = async (
+      canvas: HTMLCanvasElement,
+      markerCorners: Quad[] | null,
+      setsScale: RollScale | null,
+    ) => {
+      if (!roll) return;
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY),
       );
@@ -540,6 +559,8 @@ export function CaptureClient({
         return;
       }
       setRollNotice(null);
+      // This shot's card sets the roll's scale again, so Read the card again is done.
+      if (setsScale) setRereadRollId(null);
       await deliver({
         blob,
         frameUrl: URL.createObjectURL(blob),
@@ -547,12 +568,56 @@ export function CaptureClient({
         capturedAt,
         rollId: roll.id,
         rollCode: roll.code,
-        markerCorners: read.quads,
+        markerCorners,
+        setsScale,
+      });
+    };
+    try {
+      // The card is read again on the frame being sent: its corners must be on this very
+      // picture. The detector finds a card on some frames, not every one, so a few frames are
+      // tried (about half a second) and the first with the card is sent (QA run 2, F1).
+      const scratch = document.createElement("canvas");
+      // D-121: a later shot of a roll uses the scale its first shot's card set; a card still in
+      // view is read once and used.
+      const fits =
+        rereadRollId !== roll.id && rollScaleFits(roll.scale, video.videoWidth, video.videoHeight);
+      const found = await firstMarkedFrame(
+        () => {
+          if (video.videoWidth === 0) return null;
+          capturedAt = new Date().toISOString();
+          const frame = document.createElement("canvas");
+          frame.width = video.videoWidth;
+          frame.height = video.videoHeight;
+          frame.getContext("2d")?.drawImage(video, 0, 0, frame.width, frame.height);
+          return frame;
+        },
+        (frame) => readMarkerCard(frame, frame.width, frame.height, scratch),
+        () => nextFrame(video),
+        fits ? 1 : undefined,
+      );
+      if (!found.ok && fits) {
+        const frame = document.createElement("canvas");
+        frame.width = video.videoWidth;
+        frame.height = video.videoHeight;
+        frame.getContext("2d")?.drawImage(video, 0, 0, frame.width, frame.height);
+        await sendFrame(frame, null, null);
+        return;
+      }
+      if (!found.ok) {
+        setMarker({ ok: false, problem: found.problem });
+        setSend({ kind: "failed", message: MARKER_MESSAGES[found.problem], pending: null });
+        return;
+      }
+      await sendFrame(found.frame, found.scale.quads, {
+        widthIn: found.scale.widthIn,
+        width: found.frame.width,
+        height: found.frame.height,
+        shot: 0,
       });
     } finally {
       busyRef.current = false;
     }
-  }, [roll, canPress, deliver, floor]);
+  }, [roll, canPress, deliver, floor, rereadRollId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -580,8 +645,8 @@ export function CaptureClient({
           ? "Capture is off until the camera shows a picture."
           : waitingToResend
             ? "Send the last capture again first, or discard it."
-            : !marker.ok
-              ? MARKER_MESSAGES[marker.problem]
+            : !marker.ok && !rollScale
+              ? cardMessage
               : null;
 
   const frozen = send.kind === "sending" || send.kind === "failed" ? send.pending : null;
@@ -618,11 +683,11 @@ export function CaptureClient({
                   }
                 : last
                   ? { kind: "result", result: { ...last.summary, repeat: last.repeat } }
-                  : !marker.ok
+                  : !marker.ok && !rollScale
                     ? {
                         kind: "problem",
                         title: "Capture is off.",
-                        fix: MARKER_MESSAGES[marker.problem],
+                        fix: cardMessage,
                       }
                     : { kind: "ready" };
     return (
@@ -754,14 +819,34 @@ export function CaptureClient({
               <Ruler aria-hidden className="size-4 text-pass" />
               Marker card found. This shot will be measured ({marker.widthIn.toFixed(1)} in across).
             </p>
+          ) : rollScale && roll ? (
+            <div
+              data-testid="marker-status"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"
+            >
+              <p className="flex items-center gap-2">
+                <Ruler aria-hidden className="size-4 text-pass" />
+                Scale set at the first shot: {rollScale.widthIn.toFixed(1)} in across. The card can
+                come off the leather.
+              </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setRereadRollId(roll.id)}
+                disabled={sending}
+              >
+                Read the card again
+              </Button>
+            </div>
           ) : (
             <div
               data-testid="marker-status"
               className="flex flex-col gap-1 rounded-md bg-caution-soft p-3 text-sm"
             >
-              <p className="font-medium">{MARKER_MESSAGES[marker.problem]}</p>
+              <p className="font-medium">{cardMessage}</p>
               <p>
-                Lay the printed marker card flat on the leather, fully in the picture.{" "}
+                Lay the printed marker card flat on the leather, fully in the picture. It’s needed
+                for the roll’s first shot only.{" "}
                 <a
                   href="/cpoint-scale-marker-2in.pdf"
                   target="_blank"

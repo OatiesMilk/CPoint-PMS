@@ -81,10 +81,16 @@ describe("POST /api/v1/scans/capture", () => {
     const badSource = await POST(request({ source: "SIMULATOR" }));
     expect((await badSource.json()).error.message).toMatch(/source must be WEBCAM or PHONE/);
 
-    // D-120: no marker card, no shot; nothing reaches the model.
-    const noCard = await POST(request({ markerCorners: "" }));
-    expect(noCard.status).toBe(422);
-    expect((await noCard.json()).error.message).toMatch(/markerCorners is required/);
     expect(capture.captureScan).not.toHaveBeenCalled();
+  });
+
+  it("passes a shot without the card on: the service takes the roll's scale (D-121)", async () => {
+    capture.captureScan.mockResolvedValueOnce({ scanId: "scan1", duplicate: false });
+    expect((await POST(request({ markerCorners: "" }))).status).toBe(201);
+    expect(capture.captureScan).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ markerCorners: undefined }),
+      expect.anything(),
+    );
   });
 });
