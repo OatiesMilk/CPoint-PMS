@@ -132,6 +132,13 @@ Inspector, Phase 27). Every other page stays desktop first.
   below in a bordered list: each roll shows only its code (it names the supplier) with the
   area at the right, and the item under it, cut short if long. The QI sees no tables there (today only);
   the Floor Manager's Recent days table is desktop.
+- **Capture (30F-3):** the order is the Roll card (or Start a roll), the live picture, the marker
+  card line, Floor view, the Camera line, then Last scan, the roll counts card and Model (on `xl`
+  the last three are the right column). Below `sm` the page description is `sr-only`, so the
+  picture is on the first screen at 390 × 844. A hint shows once: "Choose the roll this shot
+  belongs to." lives under the Capture button only.
+- **Fixed bottom bars** are `bg-card` with `shadow-2` and a top border in both themes; the batch
+  that can be finished now has a `border-ring` card.
 
 ## Batch notices (D-098)
 

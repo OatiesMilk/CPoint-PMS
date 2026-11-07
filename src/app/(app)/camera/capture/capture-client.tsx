@@ -705,13 +705,14 @@ export function CaptureClient({
 
   return (
     // Room at the bottom on a phone for the fixed Capture button.
-    <div className="grid grid-cols-1 items-start gap-6 pb-28 sm:pb-0 xl:grid-cols-3">
-      <div className="flex flex-col gap-4 xl:col-span-2">
-        <PlanCounter initial={initialPlan} refreshRef={planRefresh} />
+    <div className="grid grid-cols-1 items-start gap-4 pb-28 sm:gap-6 sm:pb-0 xl:grid-cols-3">
+      {/* The roll, the live picture and the Capture button first; on a phone the picture is on
+          the first screen (30F-3). The day's counts follow Last scan. */}
+      <div className="flex flex-col gap-3 sm:gap-4 xl:col-span-2">
         {rolls.length === 0 || startOpen ? (
           <section
             aria-labelledby="start-roll-title"
-            className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-1"
+            className="flex flex-col gap-3 rounded-lg border bg-card p-3 shadow-1 sm:p-4"
           >
             <h2 id="start-roll-title" className="text-xl font-semibold">
               Start a roll
@@ -884,7 +885,7 @@ export function CaptureClient({
           </Alert>
         )}
 
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-start">
           {/* On a phone the Capture button sits at the bottom of the screen, above the safe area. */}
           <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col gap-1 border-t bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-2 sm:static sm:z-auto sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none">
             <Button
@@ -925,13 +926,16 @@ export function CaptureClient({
               Full screen for a monitor facing the operator.
             </p>
           </div>
-          {devices.length > 0 && (
-            <div className="flex min-w-60 flex-col gap-1.5">
-              <Label htmlFor="capture-camera">Camera</Label>
+        </div>
+        {devices.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Label htmlFor="capture-camera">Camera</Label>
+            <div className="min-w-48 flex-1 sm:max-w-80">
               <Select
                 id="capture-camera"
                 value={deviceId}
                 disabled={sending}
+                className="h-11 sm:h-9"
                 onChange={(e) => {
                   setDeviceId(e.target.value);
                   void start(e.target.value);
@@ -944,8 +948,8 @@ export function CaptureClient({
                 ))}
               </Select>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-4">
@@ -964,6 +968,8 @@ export function CaptureClient({
             </CardContent>
           )}
         </Card>
+
+        <PlanCounter initial={initialPlan} refreshRef={planRefresh} />
 
         <Card>
           <CardHeader>

@@ -50,7 +50,13 @@ export default async function CapturePage() {
     <>
       <PageHeader
         title="Capture"
-        description="Choose the leather, then the roll on the table, and capture it shot by shot. The app checks each shot and gives the verdict."
+        description={
+          // Hidden from view on a phone so the live picture is on the first screen (30F-3).
+          <span className="max-sm:sr-only">
+            Choose the leather, then the roll on the table, and capture it shot by shot. The app
+            checks each shot and gives the verdict.
+          </span>
+        }
       />
       <CaptureClient
         initialRolls={rolls}

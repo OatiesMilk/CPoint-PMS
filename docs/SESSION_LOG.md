@@ -5,6 +5,57 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-07 · Phase 30F-3 run 3 PASS (R1 only)
+
+- Codex run 3 (`qa/reports/2026-11-07-phase-30f-3-run3.md`, Saturday): R1 passed, 159.2 px of the
+  picture above the Capture bar with 0 shots and the whole picture 6.9 px clear of it after a
+  shot, light and dark, 390 wide, Capture button 56 px; 1440 unchanged. Targeted e2e 22/0/2.
+- Left for a weekday with today planned: Batches on a phone and desktop (R2), the plan line (R3)
+  and the full suite. Same prompt, report as run 4.
+
+## 2026-11-07 · Phase 30F-3 run 2 FAIL (R1 by a few px), fixed
+
+- Codex run 2 (`qa/reports/2026-11-07-phase-30f-3-run2.md`, Saturday): R2 (the hint once, "Choose
+  a roll" with a QA constructor, deactivated after), the Capture screenshots and axe passed;
+  targeted e2e 22/0/2; full 70/25/3 (4 not run) on six workers, all nine failing specs passing
+  alone (71/0/2). R3 and R4 blocked (no plan on a weekend).
+- F1: the picture showed 149.2 px above the Capture bar with 0 shots (target 150) and overlapped
+  it by 3.1 px after the first shot. Below 640 px the column gap is 12 px and the Roll card's
+  inner gaps and the rule above Finish roll 10 px, about 8 to 10 px higher.
+- `npm run check` passed (708). Run 3: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` (R1 any day, Batches
+  on a weekday).
+
+## 2026-11-07 · Phase 30F-3 run 1 PASS WITH ISSUES; picture moved up again
+
+- Codex run 1 (`qa/reports/2026-11-07-phase-30f-3-run1.md`, Saturday): S1, S3, S4, S5, S8 and A1
+  passed; S2 blocked (no state with rolls open and none chosen), S6 and the plan line of S7
+  blocked (no plan on a weekend). Targeted e2e 29/0/2; full 81/17/3 (1 not run) on six workers,
+  and all nine failing specs passed alone (68/0/1).
+- S1 passed on its letter, but only about 100 of the picture's roughly 200 px showed above the
+  Capture bar (top 638, bar 739). Start another roll moved to the Roll label's line and the
+  page's gap is 16 px on a phone, about 56 px higher.
+- `npm run check` passed (708). Run 2 (weekday): `qa/CODEX_PROMPT_PHASE_30F_3_RUN2.md`, with a QA
+  constructor for the one-time hint.
+
+## 2026-11-07 · Phase 30F-3 built (Capture, Floor view, Batches)
+
+- Plan `docs/prompts/plans/phase-30f3-plan.md`; Dylan's "go" with all three recommendations.
+- Capture: the roll counts card moved below Last scan (right column on `xl`) and the page
+  description is `max-sm:sr-only`, so the live picture follows the Roll card on a 390 px phone
+  (30F-1 run 1 F1). The hint "Choose the roll this shot belongs to." shows once, under Capture;
+  the Roll dropdown's empty option reads "Choose a roll" (copy 1). Roll card: Start another roll
+  ghost, the line, timer and hint grouped, Finish and Put back under a rule, `p-3` on a phone. The
+  Camera select has its own line (`h-11` on a phone). Last scan's defects in a divided list.
+- Floor view: only the header (card surface, `px-8`, a larger Leave button); band and frame as
+  they were.
+- Batches: compact notice banners on a phone; the badge beside "Batch N"; the batch to finish now
+  has `border-ring`; the fixed bottom bar `bg-card shadow-2`. The plan line drops the short
+  interval (`describePlanShort(…, { interval: false })`), so it reads "Plan: 2 rolls · 128 pairs,
+  08:00 to 17:00, every 4 hours." (copy 3). The Finish batch sheet already matched 30F-1.
+- `npm run check` passed (708 unit tests, build OK; two plan-line assertions updated or added).
+  Not run: e2e and the screenshots (Codex, a weekday). Handoff `qa/handoffs/2026-11-07-phase-30f-3.md`,
+  prompt `qa/CODEX_PROMPT_PHASE_30F_3.md`.
+
 ## 2026-11-07 · Phase 30F-2 QA passed (run 3)
 
 - Codex run 3 **PASS**: Reports → Rolls fits (958 / 958 at 1280, 1118 / 1118 at 1440, both

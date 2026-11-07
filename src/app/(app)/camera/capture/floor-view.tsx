@@ -69,16 +69,16 @@ export function FloorView({
       aria-label="Floor view"
       className="fixed inset-0 z-50 flex flex-col bg-background outline-none"
     >
-      <header className="flex items-center justify-between gap-4 border-b px-6 py-4">
+      <header className="flex items-center justify-between gap-6 border-b bg-card px-8 py-5">
         <div className="min-w-0">
-          <p className="text-3xl font-semibold">{rollLine}</p>
+          <p className="truncate text-3xl font-semibold tracking-tight">{rollLine}</p>
           {rollNotice && (
             <p role="status" className="mt-1 text-xl text-muted-foreground">
               {rollNotice}
             </p>
           )}
         </div>
-        <Button variant="ghost" tabIndex={-1} onClick={onLeave}>
+        <Button variant="ghost" size="lg" tabIndex={-1} onClick={onLeave} className="shrink-0">
           <Minimize2 aria-hidden />
           Leave Floor view (Esc)
         </Button>

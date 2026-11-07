@@ -435,8 +435,11 @@ export async function productionToday(viewer: { role: Role }, now: Date = new Da
     schedule: rule ? describeSchedule(rule) : null,
     lunch: describeLunch(lunch),
     workingDay: batches.length > 0,
-    /** Today's plan in short ("5 rolls · 128 pairs · every 4 h"), or null (D-114). */
-    plan: rule && plan ? describePlanShort(plan) : null,
+    /**
+     * Today's plan in short ("5 rolls · 128 pairs"), or null (D-114). The interval is left out:
+     * `schedule` says it in full.
+     */
+    plan: rule && plan ? describePlanShort(plan, { interval: false }) : null,
     /** Marked Non-working / Holiday: no batches and no notice. */
     nonWorking: plan?.kind === "NON_WORKING",
     /** A weekday with no plan yet: no batches, and the Floor Manager's start-of-day notice (A-37). */

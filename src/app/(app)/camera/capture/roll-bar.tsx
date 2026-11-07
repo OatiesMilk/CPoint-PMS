@@ -161,53 +161,64 @@ export function RollBar({
   return (
     <section
       aria-label="Roll"
-      className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-1"
+      className="flex flex-col gap-2.5 rounded-lg border bg-card p-3 shadow-1 sm:gap-3 sm:p-4"
     >
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1.5">
+      {/* Start another roll sits on the label's line, so the live picture below the card stays on
+          a phone's first screen (30F-3 run 1). */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-3">
           <Label htmlFor="capture-roll">Roll</Label>
-          <Select
-            id="capture-roll"
-            value={chosen?.id ?? ""}
+          <Button
+            size="lg"
+            variant="ghost"
+            className="-my-2 -mr-2"
+            onClick={onStartAnother}
             disabled={disabled}
-            onChange={(e) => onChoose(e.target.value)}
-            className="h-11"
-            aria-describedby="capture-roll-line"
           >
-            {!chosen && <option value="">Choose the roll this shot belongs to</option>}
-            {rolls.map((r) => (
-              <option key={r.id} value={r.id}>
-                {[r.code, r.supplier, shotsText(r.shots)].filter(Boolean).join(" · ")}
-              </option>
-            ))}
-          </Select>
+            <Plus aria-hidden />
+            Start another roll
+          </Button>
         </div>
-        <Button size="lg" variant="secondary" onClick={onStartAnother} disabled={disabled}>
-          <Plus aria-hidden />
-          Start another roll
-        </Button>
+        <Select
+          id="capture-roll"
+          value={chosen?.id ?? ""}
+          disabled={disabled}
+          onChange={(e) => onChoose(e.target.value)}
+          className="h-11"
+          aria-describedby={chosen ? "capture-roll-line" : undefined}
+        >
+          {/* The hint itself shows once, under the Capture button (30F-3). */}
+          {!chosen && <option value="">Choose a roll</option>}
+          {rolls.map((r) => (
+            <option key={r.id} value={r.id}>
+              {[r.code, r.supplier, shotsText(r.shots)].filter(Boolean).join(" · ")}
+            </option>
+          ))}
+        </Select>
       </div>
 
-      {chosen ? (
-        <p id="capture-roll-line" className="text-xl font-semibold" data-testid="capture-roll-line">
-          {rollLine(chosen)}
+      <div className="flex flex-col gap-1.5">
+        {chosen && (
+          <p
+            id="capture-roll-line"
+            className="text-xl font-semibold"
+            data-testid="capture-roll-line"
+          >
+            {rollLine(chosen)}
+          </p>
+        )}
+        {chosen && <ScanningTimer roll={chosen} />}
+        <p className="text-sm text-muted-foreground">
+          Move the roll edge to edge after each shot. Finish when all of it is in.
         </p>
-      ) : (
-        <p id="capture-roll-line" className="text-lg">
-          Choose the roll this shot belongs to.
-        </p>
-      )}
-      {chosen && <ScanningTimer roll={chosen} />}
+      </div>
       {since && (
         <p role="status" className="rounded-md bg-caution-soft p-3 text-sm">
           {since}
         </p>
       )}
-      <p className="text-sm text-muted-foreground">
-        Move the roll edge to edge after each shot. Finish when all of it is in.
-      </p>
       {chosen && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 border-t pt-2.5 sm:pt-3">
           <Button
             size="lg"
             variant="secondary"
