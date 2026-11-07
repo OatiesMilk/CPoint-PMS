@@ -63,6 +63,16 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
       <PageHeader
         title="Reports"
         description="Every leather roll: when it was scanned, what passed and how much of it has defects. Never per person."
+        actions={
+          total > 0 && (
+            <Button asChild variant="secondary">
+              <a href={csvHref}>
+                <Download aria-hidden />
+                Download CSV
+              </a>
+            </Button>
+          )
+        }
       />
       <ReportTabs current="rolls" />
 
@@ -87,46 +97,42 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="flex items-center gap-2 text-sm" data-testid="average-scanning">
-              <Timer aria-hidden className="size-4 text-muted-foreground" />
-              {scanning.averageMs === null ? (
+          <p className="flex items-center gap-2 text-sm" data-testid="average-scanning">
+            <Timer aria-hidden className="size-4 text-muted-foreground" />
+            {scanning.averageMs === null ? (
+              <span className="text-muted-foreground">
+                No scanning times yet: a roll gets one when it is finished at Capture.
+              </span>
+            ) : (
+              <span>
+                Average scanning time:{" "}
+                <span className="font-semibold tabular-nums">
+                  {formatScanningTime(scanning.averageMs)}
+                </span>{" "}
+                over {scanning.count} {scanning.count === 1 ? "roll" : "rolls"}
                 <span className="text-muted-foreground">
-                  No scanning times yet: a roll gets one when it is finished at Capture.
+                  {" "}
+                  (Start scanning to Finish roll, lunch left out)
                 </span>
-              ) : (
-                <span>
-                  Average scanning time:{" "}
-                  <span className="font-semibold tabular-nums">
-                    {formatScanningTime(scanning.averageMs)}
-                  </span>{" "}
-                  over {scanning.count} {scanning.count === 1 ? "roll" : "rolls"}
-                  <span className="text-muted-foreground">
-                    {" "}
-                    (Start scanning to Finish roll, lunch left out)
-                  </span>
-                </span>
-              )}
-            </p>
-            <Button asChild variant="secondary" size="sm">
-              <a href={csvHref}>
-                <Download aria-hidden />
-                Download CSV
-              </a>
-            </Button>
-          </div>
-          <Table label="Rolls">
+              </span>
+            )}
+          </p>
+          <Table label="Rolls" dense>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Roll</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead numeric>Area</TableHead>
                 <TableHead>Scanned</TableHead>
-                <TableHead numeric>Scanning time</TableHead>
+                <TableHead numeric className="h-auto py-2 align-bottom whitespace-normal">
+                  Scanning time
+                </TableHead>
                 <TableHead numeric>Shots</TableHead>
                 <TableHead numeric>Passed</TableHead>
                 <TableHead numeric>Rejected</TableHead>
-                <TableHead numeric>Defect %</TableHead>
+                <TableHead numeric className="h-auto py-2 align-bottom whitespace-normal">
+                  Defect %
+                </TableHead>
                 <TableHead>Status</TableHead>
                 <TableActionsHead />
               </TableRow>
@@ -142,17 +148,27 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                       {r.code}
                     </Link>
                     {r.item && (
-                      <span className="block text-sm text-muted-foreground">{r.item.name}</span>
+                      <span
+                        className="block max-w-24 truncate text-sm text-muted-foreground"
+                        title={r.item.name}
+                      >
+                        {r.item.name}
+                      </span>
                     )}
                     {r.tagCode && (
-                      <span className="block font-mono text-sm text-muted-foreground">
+                      <span
+                        className="block max-w-24 truncate font-mono text-sm text-muted-foreground"
+                        title={`Tag ${r.tagCode}`}
+                      >
                         Tag {r.tagCode}
                       </span>
                     )}
                   </TableCell>
-                  <TableCell>{r.supplier?.name ?? "Not recorded"}</TableCell>
+                  <TableCell className="max-w-32 whitespace-normal">
+                    {r.supplier?.name ?? "Not recorded"}
+                  </TableCell>
                   <TableCell numeric>{formatArea(r.areaSqFt)}</TableCell>
-                  <TableCell>
+                  <TableCell className="min-w-20 whitespace-normal">
                     {r.finishedAt ? (
                       formatManilaDateTime(r.finishedAt)
                     ) : (
@@ -171,11 +187,11 @@ export default async function RollsReportPage({ searchParams }: PageProps<"/repo
                   <TableCell numeric>{r._count.scans}</TableCell>
                   <TableCell numeric>{r.passed}</TableCell>
                   <TableCell numeric>{r.rejected}</TableCell>
-                  <TableCell numeric>
+                  <TableCell numeric className="whitespace-normal">
                     <DefectShare roll={r} />
                   </TableCell>
                   <TableCell>
-                    <RollStatusBadge roll={r} />
+                    <RollStatusBadge roll={r} className="max-w-36 min-w-30 whitespace-normal" />
                   </TableCell>
                   <TableCell className="text-right">
                     <TableViewLink href={`/reports/rolls/${r.id}`} what={`roll ${r.code}`} />

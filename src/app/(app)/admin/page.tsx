@@ -78,11 +78,18 @@ export default async function AdminHome() {
           </dl>
         </CardContent>
       </Card>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] items-start gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>Users</CardTitle>
-            <CardDescription>Active accounts by role.</CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Users</CardTitle>
+                <CardDescription>Active accounts by role.</CardDescription>
+              </div>
+              <CardLink href={users.locked > 0 ? "/admin/users?status=locked" : "/admin/users"}>
+                Manage users
+              </CardLink>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <dl className="flex flex-col gap-1 text-sm">
@@ -100,15 +107,17 @@ export default async function AdminHome() {
                 {users.locked} locked out right now
               </p>
             )}
-            <CardLink href={users.locked > 0 ? "/admin/users?status=locked" : "/admin/users"}>
-              Manage users
-            </CardLink>
           </CardContent>
         </Card>
         <Card data-testid="lunch-break-card">
           <CardHeader>
-            <CardTitle>Lunch break</CardTitle>
-            <CardDescription>Pauses the batch it falls in, every working day.</CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Lunch break</CardTitle>
+                <CardDescription>Pauses the batch it falls in, every working day.</CardDescription>
+              </div>
+              <CardLink href="/admin/settings?tab=lunch">Lunch break</CardLink>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <p className="text-sm">
@@ -119,20 +128,25 @@ export default async function AdminHome() {
                 From {formatDayLabel(lunch.upcoming.from)}: {lunch.upcoming.text}
               </p>
             )}
-            <CardLink href="/admin/settings?tab=lunch">Lunch break</CardLink>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Audit log</CardTitle>
-            <CardDescription>Changes and sign-ins in the last 24 hours.</CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Audit log</CardTitle>
+                <CardDescription>Changes and sign-ins in the last 24 hours.</CardDescription>
+              </div>
+              <CardLink href="/admin/audit">Open the audit log</CardLink>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <p className="text-3xl font-semibold tabular-nums">
+            <p className="text-kpi font-semibold tracking-tight tabular-nums">
               {auditDay.toLocaleString("en-PH")}
             </p>
-            <CardLink href="/admin/audit">Open the audit log</CardLink>
-            <CardLink href="/admin/tokens">Camera API tokens</CardLink>
+            <div className="border-t pt-4">
+              <CardLink href="/admin/tokens">Camera API tokens</CardLink>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -1,3 +1,5 @@
+import { Download } from "lucide-react";
+import { Stat } from "@/components/features/kpi-tile";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDayLabel, formatPercent } from "@/lib/format";
 import { CardLink } from "@/components/ui/card-link";
@@ -40,18 +42,11 @@ export function RollsTodayCard({ totals, openRolls }: { totals: Totals; openRoll
         </div>
       </CardHeader>
       <CardContent>
-        <dl className="grid grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-3 text-sm">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
           {items.map((i) => (
-            <div key={i.key}>
-              <dt className="text-muted-foreground">{i.label}</dt>
-              <dd
-                className="text-xl font-semibold tabular-nums"
-                data-testid={`rolls-today-${i.key}`}
-              >
-                {i.value}
-              </dd>
-              <dd className="text-xs text-muted-foreground tabular-nums">{i.note}</dd>
-            </div>
+            <Stat key={i.key} label={i.label} value={i.value} valueTestId={`rolls-today-${i.key}`}>
+              <span className="tabular-nums">{i.note}</span>
+            </Stat>
           ))}
         </dl>
       </CardContent>
@@ -95,13 +90,14 @@ export function DailySummaryCard({ yesterday, today }: { yesterday: Day; today: 
             ))}
           </tbody>
         </table>
-        <div className="flex gap-4">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t pt-4">
           <CardLink href="/reports">Reports</CardLink>
           <a
             href={`/api/v1/reports/daily.csv?preset=14d`}
             download
-            className="text-sm font-medium underline-offset-4 hover:underline"
+            className="-mx-2 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-accent hover:text-foreground"
           >
+            <Download aria-hidden className="size-4" />
             Download 14-day CSV
           </a>
         </div>

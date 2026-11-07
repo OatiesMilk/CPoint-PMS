@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { VerdictTrendChart } from "@/components/features/charts/verdict-trend-chart";
+import { KpiTile } from "@/components/features/kpi-tile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -53,15 +54,9 @@ export function QualityView({ quality }: { quality: QualityReport }) {
             testid: "total-returned",
           },
         ].map((tile) => (
-          <Card key={tile.label}>
-            <CardHeader>
-              <CardDescription>{tile.label}</CardDescription>
-              <CardTitle className="text-3xl tabular-nums" data-testid={tile.testid}>
-                {tile.value}
-              </CardTitle>
-              {tile.sub && <p className="text-sm text-muted-foreground">{tile.sub}</p>}
-            </CardHeader>
-          </Card>
+          <KpiTile key={tile.label} label={tile.label} value={tile.value} valueTestId={tile.testid}>
+            {tile.sub && <p>{tile.sub}</p>}
+          </KpiTile>
         ))}
       </section>
 

@@ -46,7 +46,7 @@ export default async function FloorManagerHome() {
         title={`Good day, ${user.name.split(" ")[0]}`}
         description="Today on the production line."
       />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
         {production.planNeeded && <PlanTodayCard day={production.day} />}
         {stock.due && <StockUpdateCard reminderDays={stock.reminderDays} />}
         <TodaysBatchesCard today={production} />

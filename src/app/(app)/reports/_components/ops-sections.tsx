@@ -18,6 +18,7 @@ import { formatPercent } from "@/lib/format";
 import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
 import type { InventoryCategory } from "@/lib/domain";
 import type { OperationsReport } from "@/server/services/ops-report.service";
+import { Stat } from "@/components/features/kpi-tile";
 import { CardLink } from "@/components/ui/card-link";
 
 const STOCK_ROWS = 8;
@@ -39,26 +40,18 @@ export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <dl className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-4 text-sm">
-          <div>
-            <dt className="text-muted-foreground">Out of stock</dt>
-            <dd className="text-2xl font-semibold tabular-nums" data-testid="stock-out">
-              {stock.out}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Low (at or below reorder)</dt>
-            <dd className="text-2xl font-semibold tabular-nums" data-testid="stock-low">
-              {stock.low}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Of {stock.items} active items</dt>
-            <dd className="text-2xl font-semibold tabular-nums">
-              {stock.items - stock.out - stock.low}
-              <span className="ml-1 text-base font-normal text-muted-foreground">fine</span>
-            </dd>
-          </div>
+        <dl className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-4">
+          <Stat label="Out of stock" value={stock.out} valueTestId="stock-out" />
+          <Stat label="Low (at or below reorder)" value={stock.low} valueTestId="stock-low" />
+          <Stat
+            label={`Of ${stock.items} active items`}
+            value={
+              <>
+                {stock.items - stock.out - stock.low}
+                <span className="ml-1 text-base font-normal text-muted-foreground">fine</span>
+              </>
+            }
+          />
         </dl>
         {stock.atRisk.length === 0 ? (
           <p className="text-sm text-muted-foreground">

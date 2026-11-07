@@ -70,7 +70,19 @@ restyled with these tokens; no second component library.
 - **Card links** (`CardLink`): a card's way out ("Open", "Edit", "Inventory") is muted `text-sm`
   with an arrow, darker with a wash on hover. Never bold black: it mustn't compete with the title.
 - **Key figures** (`KpiTile`): a small muted label, the figure in `text-kpi`, then at most two
-  short muted lines; tiles in a row share one height.
+  short muted lines; tiles in a row share one height. Inside a card, the same figure without a
+  surface is a `Stat` in a `dl` (Rolls today, Materials at risk, the Audit log count).
+- **Page actions** sit at the right of the title from `lg` (the description wraps beside them);
+  a detail page (a roll, an item, a scan) uses the header's back link and puts its status badge
+  beside the title. A card's single way out goes in its header; a second one sits in a footer
+  row above a line.
+- **Wide tables at 1280 px:** cells 10 px at the sides; long text columns wrap with a width cap
+  and a code's second line truncates with a tooltip; headers of number columns may wrap onto two
+  lines. The widest tables take `Table dense` (8 px sides) and let a long status badge wrap
+  (`max-w-32 whitespace-normal`). A long sentence per row (Production's shortfall note) goes on a
+  muted line under its row, across the table, not in a column. Drop a column only when it is on
+  the detail page too and no test reads it. Never nest a block (`details`, `div`) inside a `p`:
+  React rebuilds the page on load.
 - **States** (`states.tsx`): `SkeletonHeader`, `SkeletonTable`, `SkeletonTiles`, `EmptyState`
   (icon in a muted circle, why, one next step, dashed border) and `ErrorState` (what happened,
   that nothing changed, Try again). Pages pass their own words.

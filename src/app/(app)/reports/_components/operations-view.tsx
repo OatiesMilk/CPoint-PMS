@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { BarList } from "@/components/features/charts/bar-list";
 import { ProductionChart } from "@/components/features/charts/production-chart";
 import { ProductionDaysTable } from "@/components/features/production/production-parts";
@@ -14,6 +13,8 @@ import {
 import { formatDayLabel, formatManilaDateTime, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AttentionList, KpiTile } from "./ops-parts";
+import { Stat } from "@/components/features/kpi-tile";
+import { CardLink } from "@/components/ui/card-link";
 import { StockRiskCard, SupplierQualityCard } from "./ops-sections";
 import type { OperationsReport } from "@/server/services/ops-report.service";
 import type { ReportRange } from "@/lib/report-rules";
@@ -106,12 +107,7 @@ export function OperationsView({
                 gets one sentence from the day’s numbers, never a name.
               </CardDescription>
             </div>
-            <Link
-              href="/batches"
-              className="text-sm font-medium underline-offset-4 hover:underline"
-            >
-              Today’s batches
-            </Link>
+            <CardLink href="/batches">Today’s batches</CardLink>
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
@@ -149,28 +145,14 @@ export function OperationsView({
                 the roll. The full report is in the Quality tab.
               </CardDescription>
             </div>
-            <Link
-              href="/reports?view=quality"
-              className="text-sm font-medium underline-offset-4 hover:underline"
-            >
-              Quality report
-            </Link>
+            <CardLink href="/reports?view=quality">Quality report</CardLink>
           </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_2fr]">
-          <dl className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="text-muted-foreground">Rolls scanned</dt>
-              <dd className="text-2xl font-semibold tabular-nums">{t.rolls}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Scanning passed</dt>
-              <dd className="text-2xl font-semibold tabular-nums">{t.passed}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Returned to supplier</dt>
-              <dd className="text-2xl font-semibold tabular-nums">{t.returned}</dd>
-            </div>
+          <dl className="grid grid-cols-2 content-start gap-x-4 gap-y-5">
+            <Stat label="Rolls scanned" value={t.rolls} />
+            <Stat label="Scanning passed" value={t.passed} />
+            <Stat label="Returned to supplier" value={t.returned} />
           </dl>
           <div>
             <h3 className="mb-2 text-sm font-medium">Top defects, by rolls found on</h3>

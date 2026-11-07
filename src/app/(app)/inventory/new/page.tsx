@@ -18,6 +18,7 @@ export default async function NewItemPage() {
   return (
     <>
       <PageHeader
+        back={{ href: "/inventory", label: "All items" }}
         title="Add item"
         description="A material you keep on the shelf. Opening stock is recorded as the first entry."
       />

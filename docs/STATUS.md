@@ -3,11 +3,37 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-06 (Phase 30F-1 QA passed, run 3)
-**Branch:** `main` at 120205b has D-119 (#41).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30F-1, the foundation of the polished look
-(D-122). Brief `docs/prompts/premium-ui.md`, plan `docs/prompts/plans/phase-30f1-plan.md`, handoff
-`qa/handoffs/2026-11-06-phase-30f-1.md`, prompt `qa/CODEX_PROMPT_PHASE_30F_1.md`.
+**Last updated:** 2026-11-07 (Phase 30F-2 QA passed, run 3; git commands given)
+**Branch:** `main` at da3d792 has 30F-1 (#42).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30F-2, the desktop pages (D-122). Plan
+`docs/prompts/plans/phase-30f2-plan.md`, handoff `qa/handoffs/2026-11-07-phase-30f-2.md`, prompt
+`qa/CODEX_PROMPT_PHASE_30F_2.md`.
+
+- **30F-2 Codex run 3 PASS** (`qa/reports/2026-11-07-phase-30f-2-run3.md`): Reports → Rolls 958 /
+  958 at 1280 and 1118 / 1118 at 1440, light and dark, View visible, badges at most two lines;
+  Production, Batches and the item's Rolls table 916 / 916; filtered CSV only Returned rows; axe 0;
+  rolls, returns, smoke, supplier-quality 23/0/0. The six QI Finish batch screenshots remain a
+  weekday-only check. Git commands given to Dylan.
+- **30F-2 Codex run 2 FAIL, fixed** (`qa/reports/2026-11-07-phase-30f-2-run2.md`): everything
+  passed but Reports → Rolls at 1280 (999 px in 958, a three-line status badge); now the item and
+  tag lines truncate at 96 px, Supplier and Scanned have no minimum width, Defect % wraps, the
+  badge is 120 to 144 px. The CSV name finding was the prompt's error. `npm run check` passed
+  (708). Next: `qa/CODEX_PROMPT_PHASE_30F_2_RUN3.md`.
+- **30F-2 Codex run 1 FAIL, fixed** (`qa/reports/2026-11-07-phase-30f-2-run1.md`): 6 of 11,
+  144 of 150 pairs, e2e targeted 48/1/1 and full 74/24/3. Fixed: the Materials warning was a `<p>`
+  around `<details>` (hydration error, and Find material lost its text); `KpiTile` has
+  `data-slot="card"` again for the reports tests; Rolls, Production by day and the item's Rolls
+  table fit (`Table dense`, wrapping badges and supplier, a 128 px item line, Production's note as
+  a line under its day); Rolls' Download CSV in the header. `npm run check` passed (708). Next:
+  `qa/CODEX_PROMPT_PHASE_30F_2_RUN2.md`, best on a weekday.
+- **30F-2 (built 2026-11-07, Dylan's go with both recommendations):** `KpiTile` on Operations and
+  Quality, a `Stat` for figures inside cards (Rolls today, Materials at risk, Checkpoint, the
+  Audit log count); page actions beside the title from `lg`; the roll, item and scan pages on
+  `PageHeader` (back link, badge), the roll's facts, findings and shots in cards; the Admin
+  home's links in the card headers; four wide tables fit at 1280 px (tighter cells, wrapping text
+  and headers, no column dropped); Materials' warning shows five names and Show all; Plan days
+  cells; a quiet Revoke…. No word, route, API or test changed. `npm run check` passed (708 unit
+  tests, build OK); token grep clean. Not run: e2e and the after screenshots (Codex).
 
 - **Current work (Phase 30F, D-122):** the look, not the behaviour, on the existing shadcn/ui and
   Radix components, in three parts; Phase 31 waits until 30F-3 is done (Dylan). 30F-1: tokens
@@ -32,8 +58,8 @@
 - **Codex run 3 PASS** (`qa/reports/2026-11-06-phase-30f-1-run3.md`): the arrow stays still with
   reduced motion and moves 2 px without; the three run 2 tests passed alone (3/0/0) and in smoke +
   auth (31/0/1) on a clean dev cache.
-- **Next:** Dylan commits 30F-1 with the git commands in its thread, pushes, opens the PR; then
-  30F-2 (the desktop pages), 30F-3, then Phase 31.
+- **Next:** Dylan commits 30F-2 and opens the PR; then
+  30F-3 (Capture, Floor view, Batches), then Phase 31.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
 - **Overall:** 38 phases and features built (0 to 29, 30A to 30E-2, the reports by roll, the scale
@@ -98,8 +124,8 @@
 - [x] The card once per roll and a scanning timer per roll (D-121; QA passed, run 3; merged #40)
 - [ ] The System Admin reaches only the administration modules; no Camera page (D-119; QA
       passed, run 2; uncommitted)
-- [ ] 30F. A polished look on shadcn/ui and Radix (D-122): 30F-1 QA passed (run 3, uncommitted);
-      30F-2 and 30F-3 to come
+- [ ] 30F. A polished look on shadcn/ui and Radix (D-122): 30F-1 merged (#42); 30F-2 QA passed (run 3), PR next;
+      30F-3 to come
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now

@@ -1,13 +1,6 @@
 import { CircleCheck, CircleDashed, CircleSlash, Clock, Hourglass, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatAttendanceDay } from "@/lib/attendance-rules";
 import { formatPercent } from "@/lib/format";
 import {
@@ -66,7 +59,7 @@ export function QuotaProgress({ progress }: { progress: Progress }) {
   const pct = p.share === null ? 0 : Math.min(100, Math.round(p.share * 100));
   return (
     <div className="flex flex-col gap-1.5" data-testid="quota-progress">
-      <p className="text-2xl font-semibold tabular-nums">
+      <p className="text-kpi font-semibold tracking-tight tabular-nums">
         {p.quota === null
           ? `${n(p.passed)} pairs passed`
           : `${n(p.passed)} of ${n(p.quota)} pairs passed`}
@@ -115,6 +108,9 @@ export type DayRowView = {
   shortfall: string | null;
 };
 
+// Headers of a wide table wrap onto two lines so it fits at 1280 px (Phase 30F-2).
+const wrapHead = "h-auto py-2 align-bottom whitespace-normal";
+
 /**
  * One row per working day, newest first: pairs finished, failed and passed against the quota, and
  * why it fell short. Per day only, never per person (D-008).
@@ -137,21 +133,46 @@ export function ProductionDaysTable({
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>Day</TableHead>
-          <TableHead numeric>Finished</TableHead>
-          <TableHead numeric>Failed inspection</TableHead>
-          <TableHead numeric>Passed</TableHead>
-          <TableHead numeric>Of quota</TableHead>
-          <TableHead numeric>Batches</TableHead>
-          <TableHead numeric>Rolls planned</TableHead>
-          <TableHead numeric>Rolls scanned</TableHead>
-          <TableHead numeric>Constructors present</TableHead>
-          <TableHead numeric>Pairs per constructor</TableHead>
-          <TableHead>Note</TableHead>
+          <TableHead numeric className={wrapHead}>
+            Finished
+          </TableHead>
+          <TableHead numeric className={wrapHead}>
+            Failed inspection
+          </TableHead>
+          <TableHead numeric className={wrapHead}>
+            Passed
+          </TableHead>
+          <TableHead numeric className={wrapHead}>
+            Of quota
+          </TableHead>
+          <TableHead numeric className={wrapHead}>
+            Batches
+          </TableHead>
+          <TableHead numeric className={wrapHead}>
+            Rolls planned
+          </TableHead>
+          <TableHead numeric className={wrapHead}>
+            Rolls scanned
+          </TableHead>
+          <TableHead numeric className={wrapHead}>
+            Constructors present
+          </TableHead>
+          <TableHead numeric className={wrapHead}>
+            Pairs per constructor
+          </TableHead>
         </TableRow>
       </TableHeader>
-      <TableBody>
-        {[...days].reverse().map((d) => (
-          <TableRow key={d.day} aria-label={formatAttendanceDay(d.day)}>
+      {/* One body per day: the day's figures, then its shortfall sentence across the table, so
+          the long sentence doesn't widen the table past 1280 px (Phase 30F-2). */}
+      {[...days].reverse().map((d) => (
+        <tbody
+          key={d.day}
+          className="border-b transition-colors duration-(--dur-fast) last:border-0 hover:bg-accent/50"
+        >
+          <TableRow
+            aria-label={formatAttendanceDay(d.day)}
+            className="border-0 hover:bg-transparent"
+          >
             <TableCell className="whitespace-nowrap">{formatAttendanceDay(d.day)}</TableCell>
             <TableCell numeric>{n(d.finished)}</TableCell>
             <TableCell numeric className="whitespace-nowrap">
@@ -181,12 +202,20 @@ export function ProductionDaysTable({
               )}
             </TableCell>
             <TableCell numeric>{d.pairsPerConstructor ?? "—"}</TableCell>
-            <TableCell className="max-w-96 whitespace-normal">
-              {d.shortfall ?? <span className="text-muted-foreground">—</span>}
-            </TableCell>
           </TableRow>
-        ))}
-      </TableBody>
+          {d.shortfall && (
+            <TableRow className="border-0 hover:bg-transparent">
+              <TableCell
+                colSpan={10}
+                className="h-auto pt-0 pb-3 text-sm whitespace-normal text-muted-foreground"
+              >
+                <span className="sr-only">Note for {formatAttendanceDay(d.day)}: </span>
+                {d.shortfall}
+              </TableCell>
+            </TableRow>
+          )}
+        </tbody>
+      ))}
     </Table>
   );
 }

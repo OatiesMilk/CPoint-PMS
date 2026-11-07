@@ -12,9 +12,18 @@ what each part changes: `docs/prompts/plans/phase-30f1-plan.md` §2.
   outlines under 3:1 on the page (0.64 L, 3.13:1); loading and error pages each built by hand
   (`states.tsx`); the demo sign-in panel dashed and the Reset button beside the accounts (a muted
   card, Reset apart). Token grep: clean.
-- **30F-2 (next):** headers built by hand on the roll and item pages and the Reports CSV buttons;
-  key figures in three styles (`KpiTile`); Reports → Rolls and Operations → Production wider than
-  1280 px (tighten, then drop a column also on the detail page); empty states per page.
+- **30F-2 (built):** plan `docs/prompts/plans/phase-30f2-plan.md`. Key figures in five sizes
+  (`KpiTile` and `Stat`); page actions wrapping under long descriptions (beside the title from
+  `lg`); the roll, item and scan pages' own headers (`PageHeader` with back link and badge; the
+  roll's facts, findings and shots in cards); card links at the bottom on the Admin home (in the
+  header); four tables wider than 1280 px (Reports → Rolls, Operations → Production, Materials,
+  Settings → Defect types: tighter cells, wrapping text and headers, no column dropped); the
+  Materials warning listing 50 names (five, then Show all); Plan days cells (one plan line, today
+  ringed, weekends quiet); a red Revoke… on every token row (quiet). Kept: the dashed empty
+  states (their headings are read by tests) and the charts (already on the chart tokens).
+  Token grep: clean. Run 1 fixes: Rolls, Production and the item's Rolls table still scrolled
+  inside their cards (now `dense`, wrapping badges, Production's note under its day); the Materials
+  `details` was inside a `p` (hydration error); Rolls' CSV moved into the header.
 - **30F-3:** on a phone the live picture sits under the fixed Capture bar on load (run 1 F1);
   Capture's hint "Choose the roll this shot belongs to" shown three times (once);
   Capture and Batches at 390 px.

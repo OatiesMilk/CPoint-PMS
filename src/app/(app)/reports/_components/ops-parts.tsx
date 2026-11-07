@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, CircleAlert, Info, Minus, OctagonAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { KpiTile as SharedKpiTile } from "@/components/features/kpi-tile";
 import { CardLink } from "@/components/ui/card-link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { describeChange, type AttentionItem } from "@/lib/ops-rules";
@@ -33,26 +34,20 @@ export function KpiTile({
         ? ArrowUp
         : ArrowDown;
   return (
-    <Card>
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-3xl tabular-nums" data-testid={testid}>
-          {value}
-        </CardTitle>
-        {change !== undefined && (
-          <p className="flex items-start gap-1 text-sm text-muted-foreground">
-            <Arrow aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-            <span className="flex flex-col">
-              <span className="font-medium text-foreground first-letter:uppercase">
-                {change === null ? "No earlier data" : describeChange(change)}
-              </span>
-              <span>{compareLabel}</span>
-            </span>
-          </p>
-        )}
-        {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
-      </CardHeader>
-    </Card>
+    <SharedKpiTile label={label} value={value} valueTestId={testid}>
+      {change !== undefined && (
+        <p className="flex items-start gap-1">
+          <Arrow aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            <span className="inline-block font-medium text-foreground first-letter:uppercase">
+              {change === null ? "No earlier data" : describeChange(change)}
+            </span>{" "}
+            <span>{compareLabel}</span>
+          </span>
+        </p>
+      )}
+      {sub && <p>{sub}</p>}
+    </SharedKpiTile>
   );
 }
 

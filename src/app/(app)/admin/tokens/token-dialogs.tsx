@@ -151,7 +151,12 @@ export function RevokeTokenButton({ id, name }: { id: string; name: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button size="sm" variant="destructive" onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-destructive hover:bg-reject-soft"
+        onClick={() => setOpen(true)}
+      >
         Revoke…
       </Button>
       <DialogContent>
