@@ -12,7 +12,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { ArrowLeft, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
+import { PageHeader } from "@/components/features/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RollFindings } from "@/components/features/rolls/roll-findings";
 import { RollStatusBadge } from "@/components/features/rolls/roll-status-badge";
 import { ScanThumb } from "@/components/features/scans/scan-thumb";
@@ -108,37 +110,29 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
 
   return (
     <>
-      <div>
-        <Link
-          href="/reports/rolls"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          All rolls
-        </Link>
-      </div>
-
-      <header className="flex flex-col gap-5 border-b pb-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="font-mono text-3xl font-semibold tracking-tight">{roll.code}</h1>
-              <RollStatusBadge roll={roll} />
-            </div>
-            <p className="mt-1 text-lg text-muted-foreground">
-              {shots} {shots === 1 ? "shot" : "shots"} · {roll.passed} passed · {roll.rejected}{" "}
-              rejected
-            </p>
-          </div>
-          {canClaim && (
+      <PageHeader
+        back={{ href: "/reports/rolls", label: "All rolls" }}
+        title={<span className="font-mono">{roll.code}</span>}
+        titleAddon={<RollStatusBadge roll={roll} />}
+        description={
+          <>
+            {shots} {shots === 1 ? "shot" : "shots"} · {roll.passed} passed · {roll.rejected}{" "}
+            rejected
+          </>
+        }
+        actions={
+          canClaim && (
             <Button asChild variant="secondary">
               <Link href={`/reports/claims/${roll.id}`}>
                 <FileText aria-hidden />
                 Claim sheet
               </Link>
             </Button>
-          )}
-        </div>
+          )
+        }
+      />
+
+      <div className="flex flex-col gap-4">
         {roll.status === "IN_STOCK" && (
           <p className="text-sm text-muted-foreground">
             In stock, not scanned yet. A Shoe Constructor picks it at Capture.
@@ -182,95 +176,105 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
             action={removeRollAction.bind(null, roll.id)}
           />
         )}
-        <dl className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-x-8 gap-y-4">
-          {details.map(([label, value]) => (
-            <div key={label}>
-              <dt className="text-sm text-muted-foreground">{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </header>
+      </div>
+
+      <Card aria-label="Roll details">
+        <CardContent className="pt-5">
+          <dl className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-x-8 gap-y-5">
+            {details.map(([label, value]) => (
+              <div key={label} className="flex flex-col gap-1">
+                <dt className="text-sm text-muted-foreground">{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </CardContent>
+      </Card>
 
       {fromInventory && (
-        <RollFindings roll={roll} byType={findings.byType} largest={findings.largest} />
+        <RollFindings roll={roll} byType={findings.byType} largest={findings.largest} framed />
       )}
 
-      <section aria-labelledby="shots-heading" className="flex flex-col gap-4">
-        <h2 id="shots-heading" className="text-xl font-semibold">
-          Shots
-        </h2>
-        {shots === 0 ? (
-          <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
-            No shots yet. Each shot taken at Capture for this roll is listed here.
-          </p>
-        ) : (
-          <Table label="Shots">
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Shot</TableHead>
-                <TableHead>Photo</TableHead>
-                <TableHead>Verdict</TableHead>
-                <TableHead>Defects</TableHead>
-                <TableHead>Captured</TableHead>
-                <TableActionsHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {roll.scans.map((s) => (
-                <TableRow key={s.id} data-testid="shot-row">
-                  <TableCell>
-                    <Link
-                      href={`/scans/${s.id}`}
-                      className="font-medium underline-offset-4 hover:underline"
-                    >
-                      #{s.sequence}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <ScanThumb scanId={s.id} className="h-12 w-20 object-cover" />
-                  </TableCell>
-                  <TableCell>
-                    <VerdictBadge verdict={s.finalVerdict} />
-                  </TableCell>
-                  <TableCell className="max-w-96 whitespace-normal">
-                    {s.detections.length === 0 ? (
-                      <span className="text-muted-foreground">None found</span>
-                    ) : (
-                      <ul className="flex flex-col gap-0.5 text-sm">
-                        {s.detections.map((d, i) => {
-                          const rule = readSnapshot(s.thresholdsSnapshot);
-                          const outcome = outcomeFor(
-                            rule.outcomes[d.rawClassKey] ?? d.defectType?.outcome,
-                            rule.lengthLimits?.[d.rawClassKey],
-                            d.lengthIn,
-                          );
-                          return (
-                            <li key={`${d.rawClassKey}-${i}`}>
-                              {d.defectType?.label ?? d.rawClassKey} {percent(d.confidence)}
-                              {d.lengthIn !== null && (
-                                <span className="tabular-nums"> · {d.lengthIn.toFixed(1)} in</span>
-                              )}
-                              <span className="text-muted-foreground">
-                                {" · "}
-                                {outcome ? OUTCOME_LABELS[outcome] : "Not counted"}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </TableCell>
-                  <TableCell>{formatManilaDateTime(s.capturedAt)}</TableCell>
-                  <TableCell className="text-right">
-                    <TableViewLink href={`/scans/${s.id}`} what={`shot #${s.sequence}`} />
-                  </TableCell>
+      <Card aria-labelledby="shots-heading">
+        <CardHeader>
+          <CardTitle id="shots-heading">Shots</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {shots === 0 ? (
+            <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
+              No shots yet. Each shot taken at Capture for this roll is listed here.
+            </p>
+          ) : (
+            <Table label="Shots">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Shot</TableHead>
+                  <TableHead>Photo</TableHead>
+                  <TableHead>Verdict</TableHead>
+                  <TableHead>Defects</TableHead>
+                  <TableHead>Captured</TableHead>
+                  <TableActionsHead />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </section>
+              </TableHeader>
+              <TableBody>
+                {roll.scans.map((s) => (
+                  <TableRow key={s.id} data-testid="shot-row">
+                    <TableCell>
+                      <Link
+                        href={`/scans/${s.id}`}
+                        className="font-medium underline-offset-4 hover:underline"
+                      >
+                        #{s.sequence}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <ScanThumb scanId={s.id} className="h-12 w-20 object-cover" />
+                    </TableCell>
+                    <TableCell>
+                      <VerdictBadge verdict={s.finalVerdict} />
+                    </TableCell>
+                    <TableCell className="max-w-96 whitespace-normal">
+                      {s.detections.length === 0 ? (
+                        <span className="text-muted-foreground">None found</span>
+                      ) : (
+                        <ul className="flex flex-col gap-0.5 text-sm">
+                          {s.detections.map((d, i) => {
+                            const rule = readSnapshot(s.thresholdsSnapshot);
+                            const outcome = outcomeFor(
+                              rule.outcomes[d.rawClassKey] ?? d.defectType?.outcome,
+                              rule.lengthLimits?.[d.rawClassKey],
+                              d.lengthIn,
+                            );
+                            return (
+                              <li key={`${d.rawClassKey}-${i}`}>
+                                {d.defectType?.label ?? d.rawClassKey} {percent(d.confidence)}
+                                {d.lengthIn !== null && (
+                                  <span className="tabular-nums">
+                                    {" "}
+                                    · {d.lengthIn.toFixed(1)} in
+                                  </span>
+                                )}
+                                <span className="text-muted-foreground">
+                                  {" · "}
+                                  {outcome ? OUTCOME_LABELS[outcome] : "Not counted"}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </TableCell>
+                    <TableCell>{formatManilaDateTime(s.capturedAt)}</TableCell>
+                    <TableCell className="text-right">
+                      <TableViewLink href={`/scans/${s.id}`} what={`shot #${s.sequence}`} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }

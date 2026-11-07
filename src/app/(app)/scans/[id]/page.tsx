@@ -8,7 +8,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { VerdictBadge } from "@/components/features/verdict-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,19 +41,11 @@ export default async function ScanDetailPage({ params }: PageProps<"/scans/[id]"
 
   return (
     <>
-      <div>
-        <Link
-          href={`/reports/rolls/${scan.roll.id}`}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Roll {scan.roll.code}
-        </Link>
-      </div>
       <PageHeader
+        back={{ href: `/reports/rolls/${scan.roll.id}`, label: `Roll ${scan.roll.code}` }}
         title={`Section #${scan.sequence}`}
+        titleAddon={<VerdictBadge verdict={scan.finalVerdict} />}
         description={`Roll ${scan.roll.code} · captured ${formatManilaDateTime(scan.capturedAt)}`}
-        actions={<VerdictBadge verdict={scan.finalVerdict} />}
       />
 
       <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">

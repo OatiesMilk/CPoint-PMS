@@ -15,7 +15,10 @@ const STYLE = {
  */
 export function RollStatusBadge({
   roll,
+  className,
 }: {
+  /** In a narrow table cell, `max-w-* whitespace-normal` lets the words wrap. */
+  className?: string;
   roll: {
     status: RollStatus;
     markedForReturn: boolean;
@@ -26,7 +29,7 @@ export function RollStatusBadge({
   if (report) {
     const { tone, Icon } = STYLE[report];
     return (
-      <Badge tone={tone}>
+      <Badge tone={tone} className={className}>
         <Icon aria-hidden />
         {ROLL_REPORT_STATUS_LABELS[report]}
       </Badge>
@@ -34,7 +37,7 @@ export function RollStatusBadge({
   }
   const Icon = roll.status === "OPEN" ? LoaderCircle : CircleSlash;
   return (
-    <Badge tone={roll.status === "OPEN" ? "info" : "neutral"}>
+    <Badge tone={roll.status === "OPEN" ? "info" : "neutral"} className={className}>
       <Icon aria-hidden />
       {ROLL_STATUS_LABELS[roll.status]}
     </Badge>

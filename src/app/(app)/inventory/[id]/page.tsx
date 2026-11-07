@@ -13,7 +13,7 @@ import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { ArrowLeft } from "lucide-react";
+import { PageHeader } from "@/components/features/page-header";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -92,40 +92,29 @@ export default async function InventoryItemPage({
 
   return (
     <>
-      <div>
-        <Link
-          href="/inventory"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          All items
-        </Link>
-      </div>
-
-      <header className="flex flex-col gap-5 border-b pb-6">
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-semibold tracking-tight">{item.name}</h1>
-              <StockBadge level={item.level} inactive={!item.isActive} />
-            </div>
-            <p className="mt-1 text-lg text-muted-foreground">
-              <span className="font-mono">{item.sku}</span> · {CATEGORY_LABELS[item.category]}
-              {item.supplier && <> · {item.supplier.name}</>}
-            </p>
-          </div>
-          <div className="text-right">
+      <PageHeader
+        back={{ href: "/inventory", label: "All items" }}
+        title={item.name}
+        titleAddon={<StockBadge level={item.level} inactive={!item.isActive} />}
+        description={
+          <>
+            <span className="font-mono">{item.sku}</span> · {CATEGORY_LABELS[item.category]}
+            {item.supplier && <> · {item.supplier.name}</>}
+          </>
+        }
+        actions={
+          <div className="flex flex-col gap-0.5 lg:items-end lg:text-right">
             <p className="text-sm text-muted-foreground">On hand</p>
-            <p className="text-3xl font-semibold tabular-nums" data-testid="on-hand">
+            <p className="text-kpi font-semibold tracking-tight tabular-nums" data-testid="on-hand">
               {formatQuantity(item.quantityOnHand, item.unit)}
             </p>
             <p className="text-sm text-muted-foreground">
               reorder at {formatQuantity(item.reorderLevel, item.unit)}
             </p>
           </div>
-        </div>
-        {canManage && <StockActions item={item} countedFromRolls={isLeather} />}
-      </header>
+        }
+      />
+      {canManage && <StockActions item={item} countedFromRolls={isLeather} />}
 
       {rolls && (
         <Card>
@@ -181,7 +170,7 @@ export default async function InventoryItemPage({
               </p>
             ) : (
               <>
-                <Table label="Rolls">
+                <Table label="Rolls" dense>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Roll</TableHead>
@@ -220,11 +209,11 @@ export default async function InventoryItemPage({
                           {r.receivedAt ? formatCalendarDate(r.receivedAt) : "—"}
                         </TableCell>
                         <TableCell>
-                          <RollStatusBadge roll={r} />
+                          <RollStatusBadge roll={r} className="max-w-32 whitespace-normal" />
                         </TableCell>
                         <TableCell numeric>{r._count.scans}</TableCell>
                         <TableCell numeric>{r.rejected}</TableCell>
-                        <TableCell className="max-w-64 whitespace-normal">
+                        <TableCell className="max-w-44 min-w-28 whitespace-normal">
                           {r.defectsFound || (
                             <span className="text-muted-foreground">
                               {r._count.scans > 0 ? "None" : "—"}

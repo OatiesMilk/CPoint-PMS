@@ -8,16 +8,22 @@ import { ScrollRegion } from "./scroll-region";
 // Dense data table (DESIGN.md → Hierarchy rules): one row height, numbers right-aligned via `numeric`.
 // A table wider than its card scrolls inside it, and that scroll box takes keyboard focus (axe
 // scrollable-region-focusable). `label` names it for screen readers; the default is "Table".
+// `dense` takes the cells' side padding from 10 to 8 px, for the widest tables (Phase 30F-2).
 export function Table({
   className,
   label = "Table",
+  dense = false,
   ...props
-}: React.ComponentProps<"table"> & { label?: string }) {
+}: React.ComponentProps<"table"> & { label?: string; dense?: boolean }) {
   return (
     <ScrollRegion label={label} className="rounded-lg border bg-card shadow-1">
       <table
         data-slot="table"
-        className={cn("w-full border-collapse text-sm", className)}
+        className={cn(
+          "w-full border-collapse text-sm",
+          dense && "[&_td]:px-2 [&_th]:px-2",
+          className,
+        )}
         {...props}
       />
     </ScrollRegion>
@@ -53,7 +59,7 @@ export function TableHead({
     <th
       scope="col"
       className={cn(
-        "h-9 px-3 text-left text-xs font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase",
+        "h-9 px-2.5 text-left text-xs font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase",
         numeric && "text-right",
         className,
       )}
@@ -70,7 +76,7 @@ export function TableCell({
   return (
     <td
       className={cn(
-        "h-11 px-3 align-middle whitespace-nowrap",
+        "h-11 px-2.5 align-middle whitespace-nowrap",
         numeric && "text-right tabular-nums",
         className,
       )}

@@ -12,7 +12,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { Button } from "@/components/ui/button";
 import { manilaToday } from "@/lib/format";
@@ -49,16 +49,8 @@ export default async function PlanDaysPage({ searchParams }: PageProps<"/batches
 
   return (
     <>
-      <div>
-        <Link
-          href="/batches"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Batches
-        </Link>
-      </div>
       <PageHeader
+        back={{ href: "/batches", label: "Batches" }}
         title="Plan days"
         description="Click a weekday to plan it: rolls to be used, the quota and when the Quality Inspector counts the pairs. A day without a plan has no batches."
       />

@@ -37,6 +37,9 @@ import { materialsReport, type MaterialsReport } from "@/server/services/materia
 import { ReportTabs } from "../_components/report-tabs";
 import { MaterialFilters } from "./material-filters";
 
+// The warning names the first few materials; the rest open in place (Phase 30F-2).
+const AT_RISK_SHOWN = 5;
+
 export const metadata: Metadata = { title: "Materials" };
 
 const fmt = (n: number) => new Intl.NumberFormat("en-PH", { maximumFractionDigits: 2 }).format(n);
@@ -115,16 +118,31 @@ export default async function MaterialsReportPage({
       ) : (
         <>
           {atRisk.length > 0 && (
-            <p
+            <div
               role="status"
               className="flex items-start gap-2 rounded-md border border-caution bg-caution-soft px-4 py-3"
               data-testid="may-run-out"
             >
               <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-caution" />
-              {atRisk.length === 1
-                ? `${atRisk[0].name} may run out before the next update.`
-                : `${atRisk.length} materials may run out before the next update: ${atRisk.map((r) => r.name).join(", ")}.`}
-            </p>
+              <div>
+                {atRisk.length === 1
+                  ? `${atRisk[0].name} may run out before the next update.`
+                  : atRisk.length <= AT_RISK_SHOWN
+                    ? `${atRisk.length} materials may run out before the next update: ${atRisk.map((r) => r.name).join(", ")}.`
+                    : `${atRisk.length} materials may run out before the next update: ${atRisk
+                        .slice(0, AT_RISK_SHOWN)
+                        .map((r) => r.name)
+                        .join(", ")}, …`}
+                {atRisk.length > AT_RISK_SHOWN && (
+                  <details className="group mt-1">
+                    <summary className="w-fit cursor-pointer text-sm font-medium underline underline-offset-4">
+                      Show all {atRisk.length}
+                    </summary>
+                    <p className="mt-1">{atRisk.map((r) => r.name).join(", ")}.</p>
+                  </details>
+                )}
+              </div>
+            </div>
           )}
 
           <Card>
@@ -202,7 +220,7 @@ export default async function MaterialsReportPage({
                   <TableBody>
                     {shown.map((row) => (
                       <TableRow key={row.id} aria-label={`${row.sku} ${row.name}`}>
-                        <TableCell>
+                        <TableCell className="max-w-72 whitespace-normal">
                           <Link
                             href={`/inventory/${row.id}`}
                             className="font-medium underline-offset-4 hover:underline"
@@ -235,9 +253,11 @@ export default async function MaterialsReportPage({
                           {row.daysLeft === null ? (
                             <span className="text-muted-foreground">Not used lately</span>
                           ) : (
-                            <span className="flex items-center gap-2">
-                              about {Math.floor(row.daysLeft)}{" "}
-                              {Math.floor(row.daysLeft) === 1 ? "day" : "days"}
+                            <span className="flex flex-col items-start gap-1">
+                              <span>
+                                about {Math.floor(row.daysLeft)}{" "}
+                                {Math.floor(row.daysLeft) === 1 ? "day" : "days"}
+                              </span>
                               {row.mayRunOut && (
                                 <Badge tone="warning">
                                   <TriangleAlert aria-hidden />

@@ -5,6 +5,64 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-07 · Phase 30F-2 QA passed (run 3)
+
+- Codex run 3 **PASS**: Reports → Rolls fits (958 / 958 at 1280, 1118 / 1118 at 1440, both
+  themes), badges at most two lines, item and tag titles full; the other three tables 916 / 916;
+  filtered CSV correct; axe 0; four specs 23/0/0. The six QI Finish batch screenshots stay a
+  weekday check. Git commands given to Dylan.
+
+## 2026-11-07 · Phase 30F-2 run 2 FAIL, fixed
+
+- Codex run 2 (`qa/reports/2026-11-07-phase-30f-2-run2.md`): R1 (Materials, no hydration error;
+  inventory 8/0), R2 (reports 3/0), R5, A1 (0 violations) and all 32 screenshot pairs passed;
+  Production, Batches and the item's Rolls table fit. Full e2e 75/21/3 (3 not run), all 11 specs
+  passing alone (87/0/3).
+- F1: Reports → Rolls still 999 px in 958 at 1280, and Returned to supplier on three lines. The
+  item and tag lines truncate at 96 px with a `title`, Supplier and Scanned lost their minimum
+  widths, Defect % may wrap, the Status badge is 120 to 144 px (two lines at most).
+- F2 was the prompt's mistake: the file is `cpoint-rolls-<date>.csv` since D-121.
+- `npm run check` passed (708). Prompt `qa/CODEX_PROMPT_PHASE_30F_2_RUN3.md`.
+
+## 2026-11-07 · Phase 30F-2 run 1 FAIL, fixed
+
+- Codex run 1 (`qa/reports/2026-11-07-phase-30f-2-run1.md`): 6 of 11 scenarios, 144 of 150 pairs
+  (six QI Finish batch shots impossible on a Saturday); targeted e2e 48/1/1, full 74/24/3 (1 not
+  run), most passing alone.
+- F3 and F6: the Materials warning was a `<p>` holding a `<details>`, invalid HTML, so React
+  rebuilt the page on load (a hydration error), which also dropped the text typed into Find
+  material (`inventory.spec.ts:163`). The warning is a `<div>` now.
+- F7: the shared `KpiTile` lost the `data-slot="card"` the reports tests locate tiles by; it has
+  it again.
+- F2 and F4: Rolls (176 px too wide at 1280), Production by day (187 px) and the leather item's
+  Rolls table still scrolled inside their cards. `Table` takes `dense` (8 px cell sides); Rolls'
+  item line truncates at 128 px, Supplier wraps at 128 px, the Status badge wraps when long
+  (`RollStatusBadge` takes `className`); Production's Note became a muted line under each day's
+  row, across the table, with one hover for both (no figure column dropped, no word changed); the
+  item table's Defects found wraps at 176 px.
+- F5: Rolls' Download CSV moved into the header's actions. F1 (detail-link discovery in the
+  unchanged capture script) and S9 (a native tooltip isn't in screenshots) are test-side.
+- `npm run check` passed (708); token grep clean. Prompt `qa/CODEX_PROMPT_PHASE_30F_2_RUN2.md`.
+
+## 2026-11-07 · Phase 30F-2: the desktop pages
+
+- 30F-1 merged (#42). Plan `docs/prompts/plans/phase-30f2-plan.md` from the baseline audit; Dylan
+  said Go with both recommendations (Materials warning: five names and Show all; the roll and scan
+  pages in cards).
+- Built on main da3d792 in a cloud copy: `Stat` beside `KpiTile`; Operations and Quality tiles,
+  Rolls today, Materials at risk, Checkpoint and the Audit log count share the figure style;
+  `PageHeader` puts actions beside the title from `lg` (the Reports CSV buttons and Inventory's
+  buttons no longer wrap under the description); the roll, item and scan pages on `PageHeader`;
+  `RollFindings` takes `framed`; the Admin home's links in the card headers; table cells 10 px at
+  the sides; Reports → Rolls (supplier and date wrap, the item line truncates, Scanning time head
+  wraps), Operations → Production (heads wrap, the note capped), Materials (the badge under the
+  days, the material cell wraps), Settings → Defect types (three wrapping columns); Plan days
+  cells; Revoke… as a quiet button; back links on Add item, Edit, Update stock and Plan days.
+- Kept on purpose: the empty states (dashed, with headings tests read), Attendance's buttons in
+  the roster (tied to its unsaved changes), the charts (already on the chart tokens and tooltip).
+- `npm run check` passed (708). Token grep clean. Handoff `qa/handoffs/2026-11-07-phase-30f-2.md`,
+  prompt `qa/CODEX_PROMPT_PHASE_30F_2.md`.
+
 ## 2026-11-06 · Phase 30F-1 QA passed (runs 2 and 3)
 
 - Codex run 2 FAIL: R2 (card links) passed; R1 blocked (the Windows animation setting was out of

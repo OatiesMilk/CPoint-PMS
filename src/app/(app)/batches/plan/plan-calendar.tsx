@@ -75,16 +75,19 @@ function DayContent({ d }: { d: PlanDay }) {
           Non-working / Holiday
         </span>
       ) : d.plan ? (
-        <span className="flex flex-col text-xs">
-          {d.plan.rollsPlanned !== null && (
-            <span>
-              {d.plan.rollsPlanned} roll{d.plan.rollsPlanned === 1 ? "" : "s"}
-            </span>
-          )}
-          {d.plan.quota !== null && <span>{pairsWord(d.plan.quota)}</span>}
+        <span className="flex flex-col gap-0.5 text-xs">
+          <span className="font-medium text-foreground">
+            {[
+              d.plan.rollsPlanned !== null &&
+                `${d.plan.rollsPlanned} roll${d.plan.rollsPlanned === 1 ? "" : "s"}`,
+              d.plan.quota !== null && pairsWord(d.plan.quota),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
           <span className="text-muted-foreground">{shortInterval(d.plan.intervalMinutes)}</span>
           {d.rollsScanned !== null && (
-            <span className="mt-1 text-muted-foreground">
+            <span className="mt-1 border-t pt-1 text-muted-foreground">
               {rollsScannedLine(d.rollsScanned, d.plan.rollsPlanned, d.rollsReturned ?? 0)}
             </span>
           )}
@@ -106,11 +109,14 @@ function DayContent({ d }: { d: PlanDay }) {
 
 const cellClass = (d: PlanDay) =>
   cn(
-    "flex min-h-24 min-w-0 flex-col gap-1 rounded-md border p-2 text-left",
-    d.weekend || d.past ? "bg-muted/60 text-muted-foreground" : "bg-card",
+    "flex min-h-28 min-w-0 flex-col gap-1.5 rounded-md border p-2.5 text-left transition-colors duration-(--dur-fast)",
+    d.weekend
+      ? "border-transparent bg-muted/40 text-muted-foreground"
+      : d.past
+        ? "bg-muted/40 text-muted-foreground"
+        : "bg-card shadow-1",
     d.kind === "NON_WORKING" && "border-dashed",
-    d.isToday && "border-primary",
-    d.isToday && !d.kind && "border-caution bg-caution-soft",
+    d.isToday && "border-primary ring-1 ring-primary",
   );
 
 /**

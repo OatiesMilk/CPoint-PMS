@@ -30,7 +30,11 @@ export default async function EditItemPage({ params }: PageProps<"/inventory/[id
       : active;
   return (
     <>
-      <PageHeader title={`Edit ${item.name}`} description={`Code ${item.sku}`} />
+      <PageHeader
+        back={{ href: `/inventory/${item.id}`, label: item.name }}
+        title={`Edit ${item.name}`}
+        description={`Code ${item.sku}`}
+      />
       <ItemForm
         suppliers={suppliers}
         item={{

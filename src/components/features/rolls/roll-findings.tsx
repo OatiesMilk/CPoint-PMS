@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { OUTCOME_LABELS } from "@/lib/decision-engine";
 import { formatCalendarDate } from "@/lib/format";
 import {
@@ -33,11 +34,14 @@ export function RollFindings({
   byType,
   largest,
   linkShots = true,
+  framed = false,
 }: {
   roll: FindingsRoll;
   byType: TypeFinding[];
   largest: LargeDefect[];
   linkShots?: boolean;
+  /** On a card, as on the roll's page (Phase 30F-2); the claim sheet prints it plain. */
+  framed?: boolean;
 }) {
   const measured = roll.defectSharePct !== null && roll.defectAreaSqIn !== null;
   const limit = roll.returnLimitPct;
@@ -59,8 +63,17 @@ export function RollFindings({
   if (roll.returnDecision === "KEPT") facts.push(["Decision", "Kept"]);
 
   return (
-    <section aria-labelledby="findings-heading" className="flex flex-col gap-4">
-      <h2 id="findings-heading" className="text-xl font-semibold">
+    <section
+      aria-labelledby="findings-heading"
+      className={cn(
+        "flex flex-col gap-4",
+        framed && "rounded-lg border bg-card p-5 text-card-foreground shadow-1",
+      )}
+    >
+      <h2
+        id="findings-heading"
+        className={framed ? "text-lg font-semibold tracking-tight" : "text-xl font-semibold"}
+      >
         How damaged is this roll?
       </h2>
       {!roll.finishedAt ? (

@@ -32,7 +32,14 @@ import { usePagedRows } from "@/lib/use-paged-rows";
 import { cn } from "@/lib/utils";
 import { createReferenceAction, setReferenceActiveAction, updateReferenceAction } from "./actions";
 
-export type Column = { key: string; label: string; mono?: boolean; numeric?: boolean };
+export type Column = {
+  key: string;
+  label: string;
+  mono?: boolean;
+  numeric?: boolean;
+  /** A long text column that wraps, so the table fits at 1280 px (Phase 30F-2). */
+  wrap?: boolean;
+};
 export type Field = {
   name: string;
   label: string;
@@ -168,7 +175,11 @@ export function ReferenceManager({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {columns.map((c) => (
-                  <TableHead key={c.key} numeric={c.numeric}>
+                  <TableHead
+                    key={c.key}
+                    numeric={c.numeric}
+                    className={cn(c.wrap && "h-auto py-2 whitespace-normal")}
+                  >
                     {c.label}
                   </TableHead>
                 ))}
@@ -189,7 +200,10 @@ export function ReferenceManager({
                     <TableCell
                       key={c.key}
                       numeric={c.numeric}
-                      className={cn(c.mono && "font-mono")}
+                      className={cn(
+                        c.mono && "font-mono",
+                        c.wrap && "max-w-48 min-w-28 whitespace-normal",
+                      )}
                     >
                       {row.cells[c.key] || "—"}
                     </TableCell>

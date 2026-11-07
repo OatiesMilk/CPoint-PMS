@@ -34,8 +34,8 @@ export function PageHeader({
           {back.label}
         </Link>
       )}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0">
+      <div className="flex flex-col gap-x-8 gap-y-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
             {titleAddon}
@@ -45,7 +45,11 @@ export function PageHeader({
           )}
           {meta && <p className="mt-1 text-sm text-muted-foreground">{meta}</p>}
         </div>
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {actions && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end lg:pt-1">
+            {actions}
+          </div>
+        )}
       </div>
     </header>
   );

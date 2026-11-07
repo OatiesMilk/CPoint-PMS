@@ -60,11 +60,7 @@ export function StockActions({ item, countedFromRolls = false }: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        {countedFromRolls ? (
-          <p className="text-sm text-muted-foreground">
-            Counted from its rolls. Add or remove rolls below.
-          </p>
-        ) : (
+        {!countedFromRolls && (
           <Button asChild>
             <Link href={`/inventory/update?q=${encodeURIComponent(item.sku)}`}>
               <ClipboardPen aria-hidden />
@@ -72,16 +68,21 @@ export function StockActions({ item, countedFromRolls = false }: Props) {
             </Link>
           </Button>
         )}
-        <Button asChild variant="ghost">
+        <Button asChild variant="secondary">
           <Link href={`/inventory/${item.id}/edit`}>
             <Pencil aria-hidden />
             Edit
           </Link>
         </Button>
-        <Button variant="ghost" className="ml-auto" disabled={pending} onClick={toggleActive}>
+        <Button variant="ghost" disabled={pending} onClick={toggleActive}>
           {spinner}
           Deactivate
         </Button>
+        {countedFromRolls && (
+          <p className="ml-1 text-sm text-muted-foreground">
+            Counted from its rolls. Add or remove rolls below.
+          </p>
+        )}
       </div>
       {error && <Alert tone="danger">{error}</Alert>}
     </div>

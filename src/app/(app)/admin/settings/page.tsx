@@ -128,9 +128,9 @@ async function DefectsTab({ add }: { add?: string }) {
   const columns: Column[] = [
     { key: "label", label: "Label" },
     { key: "key", label: "Class key", mono: true },
-    { key: "outcome", label: "When found" },
-    { key: "counts", label: "Counts toward the roll" },
-    { key: "description", label: "Description" },
+    { key: "outcome", label: "When found", wrap: true },
+    { key: "counts", label: "Counts toward the roll", wrap: true },
+    { key: "description", label: "Description", wrap: true },
     { key: "sortOrder", label: "Order", numeric: true },
   ];
   const fields: Field[] = [
