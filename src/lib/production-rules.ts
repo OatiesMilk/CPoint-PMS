@@ -598,16 +598,22 @@ export function shortInterval(minutes: number | null): string {
   return minutes === 60 ? "every 1 h" : `every ${minutes / 60} h`;
 }
 
-/** "5 rolls · 128 pairs · every 4 h" (a converted day has no rolls: "128 pairs · every 2 h"). */
-export function describePlanShort(p: {
-  rollsPlanned: number | null;
-  quota: number | null;
-  intervalMinutes: number | null;
-}): string {
+/**
+ * "5 rolls · 128 pairs · every 4 h" (a converted day has no rolls: "128 pairs · every 2 h").
+ * Without the interval when the line already says it in full (Batches, 30F-3).
+ */
+export function describePlanShort(
+  p: {
+    rollsPlanned: number | null;
+    quota: number | null;
+    intervalMinutes: number | null;
+  },
+  { interval = true }: { interval?: boolean } = {},
+): string {
   return [
     p.rollsPlanned === null ? null : `${p.rollsPlanned} roll${p.rollsPlanned === 1 ? "" : "s"}`,
     p.quota === null ? null : pairsWord(p.quota),
-    shortInterval(p.intervalMinutes),
+    interval ? shortInterval(p.intervalMinutes) : null,
   ]
     .filter(Boolean)
     .join(" · ");

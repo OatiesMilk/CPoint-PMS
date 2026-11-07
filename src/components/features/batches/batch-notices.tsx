@@ -116,15 +116,15 @@ export function BatchNoticeBanner() {
       aria-live="polite"
       data-testid="batch-notice"
       className={cn(
-        "flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center",
+        "flex flex-col gap-2 rounded-lg border p-3 shadow-1 sm:flex-row sm:items-center sm:gap-3 sm:p-4",
         due ? "border-info bg-info-soft" : "bg-muted/60",
       )}
     >
-      <p className="flex flex-1 items-start gap-2 text-lg font-medium">
+      <p className="flex flex-1 items-start gap-2 text-base font-medium sm:text-lg">
         {due ? (
-          <BellRing aria-hidden className="mt-1 size-5 shrink-0 text-info" />
+          <BellRing aria-hidden className="mt-0.5 size-5 shrink-0 text-info sm:mt-1" />
         ) : (
-          <Hourglass aria-hidden className="mt-1 size-5 shrink-0 text-muted-foreground" />
+          <Hourglass aria-hidden className="mt-0.5 size-5 shrink-0 text-muted-foreground sm:mt-1" />
         )}
         {shown.message}
       </p>
@@ -267,10 +267,10 @@ export function PlanNoticeBanner({ day }: { day: string }) {
     <div
       role="status"
       data-testid="plan-notice"
-      className="flex flex-col gap-3 rounded-lg border border-info bg-info-soft p-4 sm:flex-row sm:items-center"
+      className="flex flex-col gap-2 rounded-lg border border-info bg-info-soft p-3 shadow-1 sm:flex-row sm:items-center sm:gap-3 sm:p-4"
     >
-      <p className="flex flex-1 items-start gap-2 text-lg font-medium">
-        <BellRing aria-hidden className="mt-1 size-5 shrink-0 text-info" />
+      <p className="flex flex-1 items-start gap-2 text-base font-medium sm:text-lg">
+        <BellRing aria-hidden className="mt-0.5 size-5 shrink-0 text-info sm:mt-1" />
         Today has no plan yet, so there are no batches. Plan today.
       </p>
       <Button asChild size="lg" className="h-11">

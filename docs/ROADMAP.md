@@ -543,11 +543,15 @@ was never built. Each phase gets its own criteria here when its plan is approved
         shell, sign-in, 403 and 404. Built 2026-11-06, `npm run check` passed (708); Codex run 1
         FAIL (the card-link arrow moved with reduced motion, fixed); run 2 FAIL (a stale dev cache);
         **run 3 PASS** (`qa/reports/2026-11-06-phase-30f-1-run3.md`). Plan `docs/prompts/plans/phase-30f1-plan.md`
-  - [ ] 30F-2 the desktop pages: built 2026-11-07, `npm run check` passed (708); Codex run 1
+  - [x] 30F-2 the desktop pages (merged #43): built 2026-11-07, `npm run check` passed (708); Codex run 1
         FAIL (tables still too wide, the Materials hydration error, KPI tile locators, Rolls CSV
         placement), fixed; run 2 FAIL (Rolls still 41 px too wide at 1280), fixed; **run 3 PASS** (`qa/reports/2026-11-07-phase-30f-2-run3.md`). Plan `docs/prompts/plans/phase-30f2-plan.md`
   - [ ] 30F-3 Capture, Floor view and Batches (with the live picture above the Capture bar on a
-        phone, run 1 F1)
+        phone, run 1 F1): built 2026-11-07 with Dylan's go on the three copy changes, `npm run
+check` passed (708). Plan `docs/prompts/plans/phase-30f3-plan.md`, handoff
+        `qa/handoffs/2026-11-07-phase-30f-3.md`, prompt `qa/CODEX_PROMPT_PHASE_30F_3.md`; Codex run 1
+        PASS WITH ISSUES (weekday checks blocked; the picture moved up again); run 2 FAIL (the picture a few px short, fixed); run 3 PASS for Capture; the Batches checks on a
+        weekday (run 4)
 - [ ] Phase 31: the documentation and the paper's figures match the system
 
 ## Phase 24 — Remove Material Requests and Procurement

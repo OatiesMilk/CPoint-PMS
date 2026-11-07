@@ -677,7 +677,7 @@ describe("productionToday (D-008, C-28)", () => {
       finishOpensAt: "12:50",
     });
     expect(r.canEnter).toBe(true);
-    expect(r).toMatchObject({ plan: "2 rolls · every 4 h", planNeeded: false, nonWorking: false });
+    expect(r).toMatchObject({ plan: "2 rolls", planNeeded: false, nonWorking: false });
   });
 
   it("has no batches without a plan, and asks the Floor Manager to plan (D-114, A-37)", async () => {

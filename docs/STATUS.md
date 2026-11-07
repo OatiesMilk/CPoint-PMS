@@ -3,12 +3,35 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-07 (Phase 30F-2 QA passed, run 3; git commands given)
-**Branch:** `main` at da3d792 has 30F-1 (#42).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30F-2, the desktop pages (D-122). Plan
-`docs/prompts/plans/phase-30f2-plan.md`, handoff `qa/handoffs/2026-11-07-phase-30f-2.md`, prompt
-`qa/CODEX_PROMPT_PHASE_30F_2.md`.
+**Last updated:** 2026-11-07 (Phase 30F-3 run 3 PASS for Capture; Batches checks on a weekday)
+**Branch:** `main` at 3b1db85 has 30F-2 (#43); the Plan days equal cells fix is on
+`fix/plan-days-equal-cells` (PR next).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 30F-3, the phone pages and Floor view
+(D-122). Plan `docs/prompts/plans/phase-30f3-plan.md`, handoff
+`qa/handoffs/2026-11-07-phase-30f-3.md`, prompt `qa/CODEX_PROMPT_PHASE_30F_3.md` (a weekday).
 
+- **30F-3 Codex run 3 PASS (R1 only)** (`qa/reports/2026-11-07-phase-30f-3-run3.md`): 159 px of
+  the picture above the Capture bar with 0 shots, all of it (6.9 px clear) after a shot, light and
+  dark; targeted e2e 22/0/2. Left: Batches on a phone and desktop, the plan line and the full suite
+  on a weekday with today planned (`qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again, report as run 4).
+- **30F-3 Codex run 2 FAIL, fixed** (`qa/reports/2026-11-07-phase-30f-3-run2.md`, Saturday): the
+  hint once and "Choose a roll" (a QA constructor, deactivated after), Capture screenshots and axe
+  passed; e2e targeted 22/0/2, full 70/25/3 with all failing specs passing alone. R1: 149.2 px of
+  the picture above the Capture bar with 0 shots (150 wanted) and 3.1 px under it after a shot;
+  the phone gaps are 12 and 10 px now. `npm run check` passed (708). Next:
+  `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` (R1 any day; Batches on a weekday).
+- **30F-3 Codex run 1 PASS WITH ISSUES** (`qa/reports/2026-11-07-phase-30f-3-run1.md`,
+  Saturday): Capture, Floor view, the order at 1440, axe 0 passed; e2e targeted 29/0/2, full
+  81/17/3 with every failing spec passing alone. Blocked: the one-time hint (S2), Batches on a
+  phone (S6) and the plan line (S7). Only about 100 px of the picture showed above the Capture bar,
+  so Start another roll moved to the Roll label's line and the phone gap is 16 px. `npm run check`
+  passed (708). Next: `qa/CODEX_PROMPT_PHASE_30F_3_RUN2.md` on a weekday with today planned.
+- **30F-3 (built 2026-11-07, Dylan's go with all three copy changes):** Capture's live picture
+  follows the Roll card on a phone (the counts card below Last scan, the description hidden from
+  view below 640 px); "Choose the roll this shot belongs to." once, under Capture, and "Choose a
+  roll" in the dropdown; a calmer Roll card and a Camera line; Floor view's header only; Batches'
+  compact banners, the badge beside the batch title, a ring on the batch to finish, the plan line
+  says the interval once. `npm run check` passed (708). Not run: e2e and screenshots (Codex).
 - **30F-2 Codex run 3 PASS** (`qa/reports/2026-11-07-phase-30f-2-run3.md`): Reports → Rolls 958 /
   958 at 1280 and 1118 / 1118 at 1440, light and dark, View visible, badges at most two lines;
   Production, Batches and the item's Rolls table 916 / 916; filtered CSV only Returned rows; axe 0;
@@ -58,8 +81,7 @@
 - **Codex run 3 PASS** (`qa/reports/2026-11-06-phase-30f-1-run3.md`): the arrow stays still with
   reduced motion and moves 2 px without; the three run 2 tests passed alone (3/0/0) and in smoke +
   auth (31/0/1) on a clean dev cache.
-- **Next:** Dylan commits 30F-2 and opens the PR; then
-  30F-3 (Capture, Floor view, Batches), then Phase 31.
+- **Next:** on a weekday with today planned, Codex runs `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4 (Batches, plan line, full suite); then the git commands, then Phase 31.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
 - **Overall:** 38 phases and features built (0 to 29, 30A to 30E-2, the reports by roll, the scale
@@ -124,8 +146,8 @@
 - [x] The card once per roll and a scanning timer per roll (D-121; QA passed, run 3; merged #40)
 - [ ] The System Admin reaches only the administration modules; no Camera page (D-119; QA
       passed, run 2; uncommitted)
-- [ ] 30F. A polished look on shadcn/ui and Radix (D-122): 30F-1 merged (#42); 30F-2 QA passed (run 3), PR next;
-      30F-3 to come
+- [ ] 30F. A polished look on shadcn/ui and Radix (D-122): 30F-1 merged (#42); 30F-2 merged (#43);
+      30F-3 built, Codex next
 - [ ] 31. The documentation and the paper's figures match the system
 
 ## What works right now

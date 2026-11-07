@@ -478,6 +478,16 @@ describe("the planning calendar (Phase 30E-2, D-114, A-40)", () => {
     expect(describePlanShort({ rollsPlanned: 1, quota: null, intervalMinutes: null })).toBe(
       "1 roll · once a day",
     );
+    // Batches says the interval in full beside it, so the short one is left out (30F-3).
+    expect(
+      describePlanShort({ rollsPlanned: 5, quota: 128, intervalMinutes: 240 }, { interval: false }),
+    ).toBe("5 rolls · 128 pairs");
+    expect(
+      describePlanShort(
+        { rollsPlanned: null, quota: null, intervalMinutes: 240 },
+        { interval: false },
+      ),
+    ).toBe("");
     expect(rollsScannedLine(3, 5)).toBe("3 of 5 rolls scanned");
     expect(rollsScannedLine(1, null)).toBe("1 roll scanned");
     expect(rollsScannedLine(3, 5, 1)).toBe("3 of 5 rolls scanned · 1 returned");

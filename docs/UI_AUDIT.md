@@ -24,9 +24,13 @@ what each part changes: `docs/prompts/plans/phase-30f1-plan.md` §2.
   Token grep: clean. Run 1 fixes: Rolls, Production and the item's Rolls table still scrolled
   inside their cards (now `dense`, wrapping badges, Production's note under its day); the Materials
   `details` was inside a `p` (hydration error); Rolls' CSV moved into the header.
-- **30F-3:** on a phone the live picture sits under the fixed Capture bar on load (run 1 F1);
-  Capture's hint "Choose the roll this shot belongs to" shown three times (once);
-  Capture and Batches at 390 px.
+- **30F-3 (built):** plan `docs/prompts/plans/phase-30f3-plan.md`. On a phone the live picture
+  sat under the fixed Capture bar on load (30F-1 run 1 F1): the roll counts card moved below Last
+  scan and the description is hidden from view below 640 px, so the picture follows the Roll
+  card. The hint "Choose the roll this shot belongs to." shows once, under Capture (the dropdown's
+  empty option reads "Choose a roll"). The Camera select has its own line; Batches' notice banner
+  is compact on a phone, the batch to finish has a ring border and its badge beside the title, and
+  the plan line says the interval once.
 
 # UI audit — Phase 8
 

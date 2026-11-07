@@ -75,15 +75,15 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
             Today, {today.dayLabel}
           </h2>
           <p className="text-muted-foreground">
-            {today.plan && today.schedule
-              ? `Plan: ${today.plan}, ${today.schedule}. Lunch: ${today.lunch}.`
+            {today.plan !== null && today.schedule
+              ? `Plan: ${[today.plan, today.schedule].filter(Boolean).join(", ")}. Lunch: ${today.lunch}.`
               : today.nonWorking
                 ? "Today is marked Non-working / Holiday."
                 : today.planNeeded
                   ? "Today has no plan yet."
                   : "Saturdays and Sundays have no batches."}
           </p>
-          {today.plan && can(user.role, "production:plan") && (
+          {today.plan !== null && can(user.role, "production:plan") && (
             <p className="text-sm" data-testid="rolls-today">
               {rollsScannedLine(today.rollsScanned, today.rollsPlanned)} today.
             </p>
@@ -122,27 +122,34 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                   const isPrimary = primary?.slotAt === r.slotAt;
                   return (
                     <li key={r.slotAt}>
-                      <Card aria-label={`Batch ${r.number}`} data-testid={`batch-${r.number}`}>
+                      <Card
+                        aria-label={`Batch ${r.number}`}
+                        data-testid={`batch-${r.number}`}
+                        // The batch to finish now stands out from the others (30F-3).
+                        className={cn(today.canEnter && !c && r.canFinishNow && "border-ring")}
+                      >
                         <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
                           <div className="flex min-w-0 flex-col gap-1.5">
-                            <p className="text-xl font-semibold">
-                              Batch {r.number}
-                              <span className="ml-2 font-normal text-muted-foreground tabular-nums">
-                                {r.startTime}–{r.time}
-                              </span>
-                            </p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                              <p className="text-xl font-semibold tracking-tight">
+                                Batch {r.number}
+                                <span className="ml-2 font-normal text-muted-foreground tabular-nums">
+                                  {r.startTime}–{r.time}
+                                </span>
+                              </p>
+                              <BatchStateBadge
+                                state={r.state}
+                                late={c?.enteredLate}
+                                corrected={!!c?.correction}
+                                paused={r.pausedForLunch}
+                              />
+                            </div>
                             {r.lunch && (
                               <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
                                 <Coffee aria-hidden className="size-4" />
                                 Lunch {r.lunch.startTime}–{r.lunch.endTime}, not counted
                               </p>
                             )}
-                            <BatchStateBadge
-                              state={r.state}
-                              late={c?.enteredLate}
-                              corrected={!!c?.correction}
-                              paused={r.pausedForLunch}
-                            />
                             {r.lateBy && <p className="text-sm text-caution">{r.lateBy}</p>}
                             {c ? (
                               <div className="flex flex-col gap-0.5">
@@ -189,7 +196,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                               <div
                                 className={cn(
                                   isPrimary &&
-                                    "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-20 max-sm:border-t max-sm:bg-background max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+                                    "max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:z-20 max-sm:border-t max-sm:bg-card max-sm:px-4 max-sm:pt-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))] max-sm:shadow-2",
                                 )}
                               >
                                 {isPrimary && (

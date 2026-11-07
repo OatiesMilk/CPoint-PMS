@@ -39,15 +39,15 @@ export function LastScanSummary({ summary, repeat }: { summary: ScanSummary; rep
           This capture had already reached the app, so it wasn’t saved twice.
         </p>
       )}
-      <p className="text-sm">
+      <p className="text-base">
         {summary.verdict === "REJECT"
           ? "Reject: this part of the roll is not for cutting."
           : "Pass: this part of the roll can go on to cutting."}
       </p>
       {summary.defects.length > 0 ? (
-        <ul className="flex flex-col gap-1 text-sm">
+        <ul className="flex flex-col divide-y text-sm">
           {summary.defects.map((d, i) => (
-            <li key={`${d.label}-${i}`} className="flex justify-between gap-3">
+            <li key={`${d.label}-${i}`} className="flex justify-between gap-3 py-1.5">
               <span>
                 {d.label}
                 {d.lengthIn != null && (
