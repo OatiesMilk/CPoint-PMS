@@ -109,7 +109,7 @@ function DayContent({ d }: { d: PlanDay }) {
 
 const cellClass = (d: PlanDay) =>
   cn(
-    "flex min-h-28 min-w-0 flex-col gap-1.5 rounded-md border p-2.5 text-left transition-colors duration-(--dur-fast)",
+    "flex min-h-32 min-w-0 flex-1 flex-col gap-1.5 rounded-md border p-2.5 text-left transition-colors duration-(--dur-fast)",
     d.weekend
       ? "border-transparent bg-muted/40 text-muted-foreground"
       : d.past
