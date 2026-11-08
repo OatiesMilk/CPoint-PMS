@@ -17,28 +17,47 @@ project in a state the next session can't pick up from.
 **Client:** CPoint Shoe Store Corporation, a mass-production maker of leather **school shoes** and
 **topsiders**. There are no custom-made shoes; custom orders are out of scope.
 
-**Current system:** Laravel 12 + MySQL + Blade (this repo before Phase 0). It has role dashboards, a
-YOLO ingestion API (`POST /api/inspections`, Sanctum token), auto pass/reject confidence thresholds,
-a human review queue, rework tracking, and a decision-support report. The panel asked for a rebuild
-that meets industry standards. Reuse the _ideas_ that worked (listed in `docs/DECISIONS.md`), but
-none of the PHP code.
+**The line:** Preparation → Upper Making → Sole-ing → Finishing, with one computer-vision
+checkpoint at **Preparation, before cutting**: each leather roll is photographed shot by shot on a
+Shoe Constructor's phone, and the model's verdict on each shot is final.
 
-**Client research:** read `docs/client-survey.md` (Taglish interview answers). Key findings:
+**Before the rebuild:** Laravel 12 + MySQL + Blade. The panel asked for a rebuild that meets
+industry standards; the rebuild to Next.js, PostgreSQL and Docker (Phases 0 to 9) reused the ideas
+that worked (`docs/DECISIONS.md`) and none of the PHP code. Everything after Phase 9 came from
+CPoint's follow-ups, above all the factory visit of 23 October 2026 (`docs/CPOINT_VISIT_10232026.md`,
+brief `docs/prompts/factory-visit-changes.md`).
 
-- Everything is tracked today on paper and pen. The materials log book covers leather rolls, nails,
-  equipment, sales and deliveries.
-- The **bottlenecks are Upper Making and Sole-ing**. Upper Making takes the longest.
-- Defects found late waste time and materials in later stages. The client wants a **filter at
-  Preparation, before cutting**, to catch raw-material defects early.
-- **Either the Quality Inspector or the Floor Manager**, whoever is available, decides on a defect.
-- A **daily summary** is enough for production data. Real-time isn't required, except for the
-  camera feed.
-- Materials are expensive and get reused as much as possible. Leftovers go to the next production.
-- Leather rolls have arrived late before and stopped production. Inventory low-stock awareness matters.
-- **Workforce metrics are sensitive.** Past awards caused jealousy. Do **not** build per-person
-  rankings, leaderboards or individual scores.
-- ~~The client wants **per-component tracking in Upper Making** (later)~~ Out of scope since
-Phase 20 (D-071). The client also wants inventory management and batch quotas.
+**Client research:** `docs/client-survey.md` (Taglish interview answers) and the visit notes. Key
+findings that still shape the system:
+
+- Everything was tracked on paper. Stock is still **counted by hand**, so the system takes the
+  counts on one sheet with reminders (C-16, C-32), not a per-pair deduction.
+- Defects found late waste time and leather, so the client wants a **filter at Preparation**.
+- The camera's verdict is final: there is no review, override or repair (C-21, D-093, D-094).
+- A roll whose defects cover **more than 10%** of its area goes back to the supplier (C-9, D-116).
+- A **batch** is one check-in interval of the working day, lunch left out (C-2, C-3, D-097).
+- **Workforce metrics are sensitive.** Do **not** build per-person rankings, leaderboards or
+  individual scores. Attendance is a one-day log book (D-077).
+
+**Changed since the rebuild** (each D-entry in `docs/DECISIONS.md` has the reason):
+
+- Material requests and Procurement removed (Phase 24, D-091).
+- Pass or Reject only, final; the Review Queue, Repair Station, Salvage and overrides removed
+  (Phase 25, D-093, D-094). Component tracking out of scope (D-071).
+- Capture on the constructors' own phones; the old `Batch` is a `Roll` (Phase 26, D-095, D-096).
+- Batches are the check-in intervals, with lunch and one daily quota; shoe types removed (Phase 27,
+  D-097 to D-099). Stage monitoring was replaced earlier by production check-ins (Phase 23, D-082).
+- Each role sees only its modules; demo tools on the login page (Phase 28, D-100, D-101).
+- Stock updated on one sheet with reminders; Reports → Materials (Phase 29, D-102).
+- Rolls added in Inventory with their area; cuts from 3 in Not accepted; a roll over 10% defects
+  Returned to supplier; the constructor picks leather then roll (Phases 30A to 30E, D-103 to D-113,
+  D-116).
+- The Floor Manager plans each weekday on a calendar (Phase 30E-2, D-114, D-115); reports count
+  whole rolls (D-117); roll counts against the plan (Phase 30D, D-118).
+- Weekdays only, 08:00 to 17:00 (D-105). Unknown model classes are ignored (D-108).
+- A printed marker card sets the scale, read on a roll's first shot; a scanning timer per roll
+(D-120, D-121). The System Admin keeps only the administration modules (D-119). A polished look
+(Phase 30F, D-122).
 </context>
 
 <read_first>
@@ -49,19 +68,18 @@ At the start of **every** session, before doing anything else:
 3. `docs/DECISIONS.md`: settled decisions. Don't re-litigate them; add a new entry to change one.
 4. `docs/ROADMAP.md`: phase definitions and acceptance criteria.
 5. `.claude/skills/ui-craft/SKILL.md`: required for any UI work.
-6. `DESIGN.md` (exists after Phase 0): design tokens and rules. It overrides ui-craft defaults.
+6. `DESIGN.md`: design tokens and rules. It overrides ui-craft defaults.
+7. Dylan's Obsidian vault first (`CLAUDE.md` → "Roles, CI fixes and the vault").
    </read_first>
 
 <ground_rules>
 
-- **Branch:** all rebuild work happens on `system-rebuild`. In Phase 0, if `system-rebuild` doesn't
-  exist, create it from the current HEAD (the branch containing this file) and push it with
-  `git push -u origin system-rebuild`. Never push to `main`.
+- **Branch:** a new branch from the latest `main` for each phase or feature; Dylan commits, pushes
+  and opens the PR (D-032). Never push to `main`. `system-rebuild` is history.
 - **Commits:** small Conventional Commits (`feat(batches): ...`, `fix(cv): ...`, `docs(status): ...`).
   Commit at every green checkpoint, not one giant commit per phase.
-- **Scope:** desktop web only. **No mobile or responsive work yet.** Design for ≥1280px wide and
-  don't add mobile nav, breakpoints or touch layouts. The real computer-vision model, live
-  phone/webcam capture, and custom shoes are all out of scope.
+- **Scope:** desktop web first; the layout adapts to narrower windows without sideways scroll
+  (D-034). Phone layouts only for Capture and Batches (D-096). Custom shoes are out of scope.
 - **One phase per session.** Finish the phase's acceptance criteria, run the quality gates, update
   the docs (see `<documentation_protocol>`), commit, push, then **stop and report**. Don't start
   the next phase unless the user says so.
@@ -84,7 +102,7 @@ Use the current stable versions at the time you scaffold, and record the exact v
 | Validation            | **Zod**, shared between API and forms                                               | One schema = one truth                                |
 | UI                    | **Tailwind CSS + shadcn/ui (Radix)**, restyled via `DESIGN.md` tokens               | Accessible primitives, no default look                |
 | Forms                 | React Hook Form + Zod resolver                                                      |                                                       |
-| Client data / polling | TanStack Query                                                                      | Polling for the "Latest scans" widget                 |
+| Client data / polling | TanStack Query                                                                      | Batch notices and Capture counts every 60 s           |
 | Charts                | Recharts                                                                            | Follow the `dataviz` guidance if available            |
 | Tests                 | **Vitest** (unit/service), **Playwright** (e2e smoke)                               |                                                       |
 | Quality               | ESLint, Prettier, `tsc --noEmit`, Husky + lint-staged                               |                                                       |
@@ -108,8 +126,9 @@ Keep Docker simple and organized:
 - **Two documented workflows** (README + npm scripts):
   - *Dev:* `docker compose up -d db`, then `npm run dev` on the host (fast hot reload).
   - *Demo / factory:* `docker compose up --build`, which runs the whole system with one command.
-- The YOLO service (later) runs **outside** this compose file on the camera machine and talks to
-  the app over HTTP with an API token.
+- The YOLO model runs **inside** `app` (ONNX Runtime, D-064); its files are mounted read-only from
+  `cv/models` at `/app/models`. HTTPS for phones comes from a Cloudflare Tunnel on the host, not a
+  container (D-076).
 </docker>
 
 <architecture>
@@ -120,22 +139,19 @@ src/
   app/                              # VIEW layer (React Server/Client Components)
     (auth)/login/page.tsx
     (app)/layout.tsx                # sidebar shell, role-aware nav, theme toggle
-    (app)/floor-manager/...         # one folder per role, see <modules>
-    (app)/quality-inspector/...
-    (app)/admin/...
-    (app)/constructor/...
-    (app)/camera/page.tsx           # placeholder CV page (shared)
+    (app)/floor-manager/            # FM home
+    (app)/admin/...                 # Admin home, users, settings, tokens, audit
+    (app)/batches/...               # today, Plan days (FM, QI)
+    (app)/camera/capture/           # Capture and Floor view (constructors)
+    (app)/attendance/  inventory/  reports/  scans/[id]/
     api/
       health/route.ts
-      v1/                           # ROUTES: REST API, versioned
-        batches/route.ts            # GET list, POST create
-        batches/[id]/route.ts
-        batches/[id]/stages/route.ts
-        scans/route.ts              # POST = CV ingestion (token auth), GET list
-        inventory/...  users/...  defect-types/...  settings/cv/...  reports/...
+      v1/                           # ROUTES: REST API, versioned (docs/API.md lists every one)
+        rolls/...  scans/...  production/...  inventory/...  attendance/...
+        users/...  defect-types/...  suppliers/...  settings/...  reports/...  demo/...
   server/
     controllers/                    # CONTROLLER: parse+validate request → call service → shape response
-    services/                       # business rules (decision engine, batch counts, stage flow)
+    services/                       # business rules (scan ingest, rolls, batches, stock, reports)
     models/                         # MODEL: data access via Prisma, the ONLY layer that imports prisma
     validators/                     # Zod schemas (shared with forms)
     policies/                       # role → permission map; `can(user, "batch:create")`
@@ -145,7 +161,7 @@ src/
     features/<module>/              # feature components (BatchTable, ScanCard, ...)
   styles/tokens.css                 # design tokens from DESIGN.md
 prisma/  schema.prisma  migrations/  seed.ts
-scripts/ cv-simulator.ts            # posts fake scans to the API
+scripts/ cv-simulate.ts  demo-seed.ts  demo-reset.ts  …
 tests/   unit/  e2e/
 ```
 
@@ -160,58 +176,72 @@ Layer rules (enforce them in code review, and with ESLint `no-restricted-imports
 </architecture>
 
 <domain_rules>
-**Production stages** (fixed order): `PREPARATION → UPPER_MAKING → SOLEING → FINISHING`.
+**Production line:** Preparation → Upper Making → Sole-ing → Finishing. The system does not track
+stages (removed in Phase 23, D-082); it tracks rolls at Preparation and pairs at each batch's end.
 
-**Batch = one leather roll.** Fields: batch code (auto, e.g. `B-2026-0001`), roll code, supplier,
-shoe type (`School Shoe` | `Topsider`, as a table so more can be added), date received, target
-quota in pairs (optional; the client's quota isn't strict), status (`PLANNED | IN_PROGRESS |
-COMPLETED | CANCELLED`), current stage, created by.
-
-**Stage tracking:** the **Floor Manager advances a batch manually** to the next stage. Each stage
-transition writes a `BatchStageLog` (stage, startedAt, endedAt, by whom, optional notes). Stage
-durations feed the bottleneck report. Stages can't be skipped. Going backwards needs a reason and
-is audited.
+**Roll = one leather roll from a supplier** (`Roll` in the code, table `batches`, D-095). The Floor
+Manager adds rolls to a Leather roll item in Inventory with the day they arrived, each roll's
+**area** in sq ft (0.1 to 200) and the supplier's tag (D-103). Codes `LR-<supplier code>-001`;
+older rolls keep `R-`/`B-`. Statuses: **Not scanned** (`IN_STOCK`, +1 on its item) → **Being
+scanned** (`OPEN`, picked at Capture) → **Scanned** (`FINISHED`, Finish roll, −1 off stock,
+D-112); **Removed** (`CANCELLED`) by the Floor Manager with a reason. `USED` and `RETURNED` are
+history from Phases 30A and 30C. An empty roll picked by mistake is put back.
 
 **Computer vision (Preparation only, before cutting):**
 
-- One **scan = one leather section** of the batch's roll, captured before the cutting guides are applied.
-- A scan has 0..n **detections** (defect type, confidence 0–1, bounding box as fractions 0–1).
-- **Defect types are configurable data, not code.** Each has `key`, `label`, `isActive`,
-  `sortOrder` and an **outcome**, Usable or Not accepted (Phase 25, D-093). A new database gets
-  crease and scratch Usable, cut, hole, abrasion and dirt Not accepted. The YOLO class list will
-  change after the new training photos, so unknown class keys from the CV service must be stored
-  and flagged, not dropped.
-- **Decision engine** (`src/lib/decision-engine.ts`, pure function, fully unit-tested). Every
-  section is **PASS** or **REJECT**, and the camera's verdict is final (D-093, replacing D-011's two
-  thresholds and D-028's review):
-  1. A detection of an active, known type at or above **A defect counts as found at** (admin-
-     editable `CvSettings.foundAtOrAbove`, 0.5, D-053) gives its type's outcome; below it, it
-     counts for nothing. Inactive types are ignored.
-  2. Any Not accepted → **REJECT**; otherwise, or with no detections → **PASS**.
-  3. Any detection with an **unknown class key** → **REJECT** (A-12); the class is listed under
-     Settings → Unknown classes until the admin sets it up.
-     Store the rule used on each scan (`thresholdsSnapshot`: found-at and the outcomes) so old
-     decisions stay explainable after the settings change.
-- **No human override** (C-21): nobody changes a verdict afterwards. `aiVerdict` and
-  `finalVerdict` are both kept and always equal.
-- **Outcomes:** PASS → the section continues to cutting. REJECT → set aside and reported **for
-  salvage** (A-11); the system moves no leather. The Review Queue, the Repair Station and Salvage
-  were removed in Phase 25 (D-094).
-- **Batch counts** (derived in a service, never stored redundantly): total scanned, passed,
-  rejected (for salvage).
+- One **scan = one shot** of the roll (a section; roll sizes vary, C-33). A scan has 0..n
+  **detections** (defect type, confidence 0–1, box as fractions 0–1, length and area in inches when
+  measured).
+- **Defect types are data, not code.** Each has `key`, `label`, `isActive`, `sortOrder`, an
+  **outcome** (Usable or Not accepted, D-093), and optionally **Not accepted from N in** (a length
+  limit, C-37) and a **flat share** of the roll (%). A new database gets crease and scratch Usable;
+  cut Not accepted from 3 in with a 1% flat share; hole, abrasion and dirt Not accepted.
+- **Decision engine** (`src/lib/decision-engine.ts`, pure, unit-tested). Every shot is **PASS** or
+  **REJECT**, final at once (C-21):
+  1. A detection of an active type at or above **A defect counts as found at** (`CvSettings.foundAtOrAbove`,
+     default 0.5, D-053) gives its type's outcome; with a length limit, Not accepted at or above it
+     and Usable below; unmeasured counts as Not accepted. Below found-at it counts for nothing.
+  2. Any Not accepted → **REJECT**; otherwise → **PASS**.
+  3. Inactive types are ignored. A class key with **no defect type is dropped** before anything is
+     stored (D-108): the Admin adds a retrained model's new classes under Settings.
+  4. Each scan stores the rule used (`thresholdsSnapshot`), so old verdicts stay explainable.
+- **Scale (D-120, D-121):** a printed ArUco card (4x4_50 id 0, 2.00 in) on the leather gives the
+  inches across the photo. Capture reads it on a roll's **first shot**; later shots of the same
+  picture size use that scale, and **Read the card again** replaces it (A-50). Boxes on the card
+  are ignored (A-46). Without a scale on the first shot, Capture is off.
+- **Roll share (D-106, D-110, D-116):** at Finish roll, the union of each shot's defect boxes over
+  the roll's area, plus the flat shares. More than `CvSettings.returnSharePct` (default 10, strict)
+  marks the roll **Returned to supplier**; otherwise **Scanning passed**. A roll that couldn't be
+  measured reads Scanning passed (A-42). Reports count whole rolls, not shots (D-117).
+- **Scanning time (D-121):** from Start scanning to Finish roll, the lunch break and nights left out.
+- A rejected shot is not cut; the system moves no leather.
 
-**Inventory (basic):** items with category (`LEATHER_ROLL | NAILS | ADHESIVE | THREAD | EQUIPMENT |
-OTHER`), unit, quantity on hand, reorder level. Changes happen only through `InventoryMovement`
-(IN / OUT / ADJUST, with reason, optional batch, user). Show a low-stock alert when quantity ≤
-reorder level. Creating a batch can optionally consume one leather roll from inventory.
+**Batches (D-097 to D-099, D-114, D-115):** the Floor Manager plans each weekday on a calendar:
+rolls to be used (an estimate), the quota of **passed** pairs, the check-in interval (every 4 hours
+or once at the end of the day) and the shift (inside 08:00 to 17:00, Monday to Friday, D-105), or
+marks it **Non-working / Holiday**. A day with no plan has no batches. Each interval is a batch;
+working time leaves out lunch (the System Admin's setting, default 11:00 to 12:00, from tomorrow),
+so the defaults give 08:00–13:00 and 13:00–17:00. Status is worked out from the clock: Upcoming,
+In progress (Paused for lunch), Due, Late after 30 minutes, Finished, Missed at midnight. The
+Quality Inspector finishes each batch from 10 minutes before its end with the pairs finished and,
+of these, the pairs that failed inspection; the Floor Manager only on a day attendance shows no QI
+present (D-088). A same-day Correct needs a reason. On-screen notices only (banner, bell, tab
+title), nothing reaches a closed app.
 
-**Component tracking (Upper Making):** out of scope since Phase 20 (D-071); what follows is
-history. Placeholder only. Add a `ComponentType` table and a
-"Coming soon" page. Don't build the workflow.
+**Inventory:** items with category (`LEATHER_ROLL | NAILS | ADHESIVE | THREAD | EQUIPMENT | OTHER`),
+unit, quantity on hand and reorder level; a leather item has a supplier and counts its rolls.
+Quantities change only through `InventoryMovement` (IN / OUT / ADJUST, with a reason), never edited
+or deleted. The Floor Manager saves **Added**, **Used** and **Correction** (with a reason) for any
+items on the **Update stock** sheet in one transaction; reminders on the chosen days (Wednesday and
+Friday by default) until a save that day. Low stock when quantity ≤ reorder level.
 
-**Workforce:** no per-person metrics anywhere in the UI. Aggregates are per stage, per batch or per day only.
+**Attendance:** the Floor Manager ticks who is present, today and 7 days back; the only worker
+count is constructors present over the roster, which explains a short day. No per-person history.
 
-**Time:** store in UTC, display in `Asia/Manila`. Daily summaries are bucketed by Manila calendar day.
+**Workforce:** no per-person metrics anywhere. Aggregates are per batch, day, roll, material or
+supplier only. A scan never names who captured it (the audit log does).
+
+**Time:** store in UTC, display in `Asia/Manila`. Daily figures are bucketed by Manila calendar day.
 </domain_rules>
 
 <roles_and_modules>
@@ -219,56 +249,57 @@ Seed one demo account per role (password from `.env`, documented in README).
 
 Each role sees only its modules (Phase 28, D-100, C-18). Sidebars, in order: Shoe Constructor
 **Capture**; Quality Inspector **Batches**; Floor Manager **Overview, Batches, Attendance, Reports,
-Inventory**; System Admin **Overview, Users, Settings, API tokens, Audit log** (no Camera page since
-D-119). Everything else answers 403.
+Inventory**; System Admin **Overview, Users, Settings, API tokens, Audit log** (D-119). Everything
+else answers 403; removed pages answer 404. The matrix is `src/server/policies/permissions.ts`.
 
-| Module                                                      | Floor Manager | Quality Inspector | System Admin       | Shoe Constructor   |
-| ----------------------------------------------------------- | ------------- | ----------------- | ------------------ | ------------------ |
-| Overview (role-specific)                                    | ✅            | — (Batches)       | ✅ (system health) | — (Capture)        |
-| Rolls: start, capture, finish, cancel an empty roll (D-095) | —             | —                 | —                  | if allowed (D-075) |
-| Reports → Rolls: read, cancel an open roll with a reason    | ✅            | —                 | —                  | —                  |
-| A section's page (from its roll)                            | ✅            | —                 | —                  | —                  |
-| Batches: today (QI's home), recent days (FM) (D-098)        | ✅            | ✅ today only     | —                  | —                  |
-| Batches: finish and correct a batch (D-098, D-088)          | no QI present | ✅                | —                  | —                  |
-| Batches: how often and the one daily quota (D-097, D-099)   | ✅            | —                 | —                  | —                  |
-| Settings → Lunch break (D-097)                              | —             | —                 | ✅                 | —                  |
-| Capture page and Floor view (constructors only)             | —             | —                 | —                  | if allowed (D-075) |
-| Attendance: one day at a time (D-077 to D-079)              | ✅            | —                 | —                  | —                  |
-| Inventory + movements                                       | ✅            | —                 | —                  | —                  |
-| Reports: Operations, Quality, Rolls, CSV                    | ✅            | —                 | —                  | —                  |
-| Users (CRUD, deactivate, reset password, camera access)     | —             | —                 | ✅                 | —                  |
-| Defect types, the CV rule, suppliers                        | —             | —                 | ✅                 | —                  |
-| CV device API tokens (create / revoke, shown once)          | —             | —                 | ✅                 | —                  |
-| Audit log (filterable)                                      | —             | —                 | ✅                 | —                  |
+| Module                                                                   | Floor Manager              | Quality Inspector | System Admin | Shoe Constructor   |
+| ------------------------------------------------------------------------ | -------------------------- | ----------------- | ------------ | ------------------ |
+| Overview (role home)                                                     | ✅                         | — (Batches)       | ✅           | — (Capture)        |
+| Capture and Floor view: pick leather and roll, capture, finish, put back | —                          | —                 | —            | if allowed (D-075) |
+| Reports → Rolls, a roll's page and its shots, the claim sheet, Remove    | ✅ (`roll:*`, `scan:read`) | —                 | —            | —                  |
+| Batches: today                                                           | ✅                         | ✅ (home)         | —            | —                  |
+| Batches: finish and correct a batch                                      | no QI present (D-088)      | ✅                | —            | —                  |
+| Batches: Plan days calendar, quota, Recent days                          | ✅                         | —                 | —            | —                  |
+| Attendance                                                               | ✅                         | —                 | —            | —                  |
+| Inventory, Add rolls, Update stock, reminder days                        | ✅                         | —                 | —            | —                  |
+| Reports: Operations, Quality, Rolls, Materials, CSV                      | ✅                         | —                 | —            | —                  |
+| Users (add, edit, deactivate, reset password, unlock, camera access)     | —                          | —                 | ✅           | —                  |
+| Settings: defect types, thresholds, suppliers, lunch break               | —                          | —                 | ✅           | —                  |
+| API tokens (create, revoke; shown once)                                  | —                          | —                 | ✅           | —                  |
+| Audit log                                                                | —                          | —                 | ✅           | —                  |
 
 **Floor Manager overview:** today's batches against the quota, today's attendance, Rolls today
-(sections checked, rejected for salvage, rolls still open), low-stock alerts and the daily summary.
-**System Admin overview:** system health, users, the lunch break and the audit log (no camera
-status, D-119).
-**Demo tools (D-101):** with `DEMO_LOGIN_TOOLS=true` the login page has a demo sign-in per role and
-Reset demo data, and every page shows a Demo mode band.
-
-**Camera page:** removed (D-119). Capture is the constructors' page; the System Admin keeps only
-the camera's administration: Users → May capture, Settings (defect types, the CV rule, the
-early-model notice) and API tokens.
+(rolls scanned, returned to supplier, open), low stock, the stock update reminder and the daily
+summary. **System Admin overview:** system health, users, the lunch break, the audit log and the
+camera API tokens.
+**Demo tools (D-101):** with `DEMO_LOGIN_TOOLS=true` and `SEED_DEMO_USERS=true` the login page has
+a demo sign-in per role and Reset demo data, and every page shows a Demo mode band.
+**Camera administration (D-119):** there is no Camera page. The System Admin gives camera access
+(Users → More actions), sets defect types, thresholds and the early-model notice (Settings), and
+manages device tokens (API tokens).
 </roles_and_modules>
 
 <cv_integration_contract>
-This contract is what the real YOLO service will call later, so keep it stable and document it in
-`docs/API.md`.
+The model runs **inside the app** (ONNX Runtime on the CPU, D-064); there is no separate camera
+service (the station app was retired in Phase 20, D-069). Two entry points share one `ingestScan`
+and the decision engine. Full shapes in `docs/API.md`.
 
-- `POST /api/v1/scans`: `Authorization: Bearer <device token>` (hashed in DB, `scans:create` scope,
-  revocable, `lastUsedAt` tracked). Request is `multipart/form-data`: `rollId` (optional; defaults
-  to the roll open the longest; it was `batchId` before Phase 26, D-095), `image` (≤10 MB, jpeg/png/webp), and `detections` (JSON array of
-  `{ classKey, confidence, box: { x, y, width, height } }`), plus `modelVersion` and `source`
-  (`SIMULATOR | PHONE | WEBCAM | DEDICATED_CAMERA`).
-  Response is `201` with `{ scanId, verdict, status }`.
-- `GET /api/v1/rolls/current`: lets a device find the roll its next scan goes to (Phase 26).
-- `scripts/cv-simulator.ts` (`npm run cv:simulate -- --count 20 --interval 3`): posts realistic
-  fake scans with generated placeholder images and a mix of outcomes, so the dashboards can be
-  demoed with no camera.
-- Defect class keys, thresholds and source type are all data/config. Plugging in the real model
-  must need **zero code changes** to the app.
+- `POST /api/v1/scans/capture`: the Capture page, with the signed-in session of a Shoe Constructor
+  the System Admin allowed. `multipart/form-data`: `image` (≤10 MB, jpeg/png/webp), `captureId`
+  (UUID, a retry returns the first scan), `rollId` (required, must be open), `source`
+  (`PHONE | WEBCAM`), `capturedAt`, `markerCorners` (the card's corners in fractions; required on a
+  roll's first shot of a picture size, D-121). The server runs the model and answers `201` with the
+  verdict and the defects; `409 ROLL_CLOSED`/`NO_ROLL_CHOSEN`, `422 MARKER_REQUIRED`/`MARKER_UNREADABLE`
+  and `503 MODEL_UNAVAILABLE` are checked before or instead of the model.
+- `POST /api/v1/scans`: a device token (`Authorization: Bearer cpt_…`, hashed, `scans:create`,
+  revocable, `lastUsedAt` tracked), for `npm run cv:simulate` and test devices. Adds `detections`
+  (`[{ classKey, confidence, box: { x, y, width, height } }]`), `modelVersion`, `source`
+  (`SIMULATOR | PHONE | WEBCAM | DEDICATED_CAMERA`), and `widthIn` or `markerCorners` for the
+  scale; without `rollId` the scan goes to the roll open the longest. `GET /api/v1/rolls/current`
+  names that roll.
+- Defect class keys, found-at, length limits, flat shares and the return limit are data. A
+  retrained model needs **zero code changes**: export it with `cv/` (`export-onnx`), put the files
+  in `cv/models/`, and add its new classes under Settings → Defect types.
   </cv_integration_contract>
 
 <ui>
@@ -285,27 +316,34 @@ This contract is what the real YOLO service will call later, so keep it stable a
     are no other verdicts). Never rely on color alone; always pair it with a label or icon.
 - Density: these are desk users working all day, so use compact tables, right-aligned numbers and
   sortable columns.
-- Destructive actions (cancel a batch, deactivate user, revoke token) need a
+- Destructive actions (remove a roll, deactivate a user, revoke a token) need a
   confirmation that names the item. Reversible actions use an undo toast.
 - Accessibility: keyboard reachable, visible focus, contrast ≥ 4.5:1, honors `prefers-reduced-motion`.
 - Language: English UI.
 </ui>
 
 <data_model_outline>
-Prisma models (refine as needed and record changes in DECISIONS):
-`User(role enum, isActive)`, `ShoeType`, `Supplier`, `Batch`, `BatchStageLog`,
-`Scan(batchId, sequence, imagePath, source, modelVersion, aiVerdict, finalVerdict,
-maxConfidence, thresholdsSnapshot Json)` (verdicts PASS or REJECT, Phase 25),
-`Detection(scanId, defectTypeId?, rawClassKey, confidence, x, y, width, height)`,
-`DefectType(key unique, label, isActive, sortOrder, outcome)`, `CvSettings(foundAtOrAbove, earlyModelNotice)` (singleton),
-`InventoryItem`, `InventoryMovement`, `ComponentType` (placeholder),
-`ApiToken(name, tokenHash, scopes, lastUsedAt, revokedAt)`,
-`AuditLog(actorId?, actorType USER|DEVICE|SYSTEM, action, entity, entityId, before Json?, after Json?, createdAt)`.
-Add indexes for every foreign key and for `Scan(createdAt)`, `Scan(status)`, `AuditLog(createdAt)`.
+Prisma models (`prisma/schema.prisma` has every field and index; ids are UUIDv7, D-018):
+`User(role, isActive, canCapture)`, `SessionRevocation`, `ApiToken(name, tokenHash, scopes, lastUsedAt, revokedAt)`,
+`AuditLog(actorId?, actorType USER|DEVICE|SYSTEM, action, entity, entityId, before?, after?)`,
+`Supplier(name, code)`, `DefectType(key, label, isActive, sortOrder, outcome, notAcceptedFromIn?, flatSharePct?)`,
+`CvSettings(foundAtOrAbove, earlyModelNotice, returnSharePct)` (singleton),
+`Roll(code, tagCode, itemId, supplierId, areaSqFt, receivedAt, status, startedAt, finishedAt, defectSharePct, returnLimitPct, markedForReturn, …)` (table `batches`),
+`Scan(rollId, sequence, imagePath, source, modelVersion, captureId, aiVerdict, finalVerdict, widthIn, defectAreaSqIn, flatSharePct, thresholdsSnapshot)`,
+`Detection(scanId, defectTypeId?, rawClassKey, confidence, x, y, width, height, lengthIn?, areaSqIn?)`,
+`InventoryItem(sku, name, category, unit, quantityOnHand, reorderLevel, supplierId?)`,
+`InventoryMovement(itemId, type, quantityDelta, reason, rollId?, updateId?)`, `StockUpdate`, `InventorySettings(reminderDays)`,
+`AttendanceDay`, `AttendanceMark(present)`, `LunchBreak(startTime, endTime, effectiveFrom)`,
+`DayPlan(day, kind PLANNED|NON_WORKING, rollsPlanned, quota, intervalMinutes, shiftStart, shiftEnd)`,
+`ProductionCheckIn(day, slotAt, pairs, failedPairs, constructorsPresent, correction fields)` (a finished batch),
+and the code sequences `RollSequence`, `RollCodeSequence`. Removed tables (procurement, review,
+repair, salvage, stages, shoe types, components) are listed in their D-entries.
 </data_model_outline>
 
 <phases>
-The authoritative list with acceptance criteria is `docs/ROADMAP.md`. Summary:
+The authoritative list with acceptance criteria is `docs/ROADMAP.md`; Phases 9 to 31 and the
+follow-ups are there. The rebuild's first phases, as history (several were removed later, see
+"Changed since the rebuild"):
 0. **Foundation:** branch, DESIGN.md from the legacy identity, remove Laravel, scaffold Next.js +
    tooling + Docker + CI, `/api/health`, docs updated.
 1. **Data & auth:** Prisma schema, migrations, seed, Auth.js login, role policies, app shell with
@@ -327,12 +365,13 @@ A phase isn't done until **all** of these pass, and you've pasted the actual out
 your final report:
 
 - `npm run lint` · `npm run typecheck` · `npm run test` (unit) · `npm run build`
-- Phase-relevant Playwright smoke test passes (from Phase 1 on).
+- Phase-relevant Playwright tests pass (written by Claude, run by Codex, D-092).
 - `docker compose up --build` starts cleanly and `/api/health` returns 200 (check in Phase 0 and
   Phase 8, and whenever Docker files change).
-- The decision engine, batch counts and stage transitions have unit tests covering edge cases:
-  no detections, exactly 0.60, 0.5999, exactly 0.90, 0.8999, several detections (highest wins), inactive
-  defect type ignored, unknown class key, invalid thresholds, skipped stage.
+- The decision engine, scan ingest, roll share and batch rules have unit tests covering edge cases:
+  no detections, exactly at found-at and just below, a length exactly at the limit and just below,
+  unmeasured shots, inactive and unknown class keys, a share exactly at the return limit, lunch and
+  the last batch of the day.
 - The ui-craft "Definition of done" checklist is satisfied for every screen touched.
 - If a gate can't run (e.g. no Docker in the environment), say so explicitly. Never claim it passed.
   </quality_gates>
@@ -350,7 +389,7 @@ At the **end of every session** (use the `/wrap-up` skill):
    decision made or changed.
 4. **`docs/ROADMAP.md`**: tick the acceptance criteria that are done.
 5. `README.md`, `docs/API.md`, `DESIGN.md`: update them when setup, endpoints or design change.
-6. Commit the docs with the code (`docs(status): ...`) and push.
+6. Leave the changes uncommitted and give Dylan the git commands (project rules).
    </documentation_protocol>
 
 <final_report_format>

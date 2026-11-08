@@ -65,24 +65,26 @@ would be PASS or REJECT (D-093). `--json` prints one JSON line per photo instead
 (what `npm run cv:parity` compares). Keep photos and `out/` out of git (`out/` is ignored).
 
 The preview copies the app's rule using the found-at value, the defect types and their outcomes
-under `[preview]` and `[preview.outcomes]` in the config: a found Not accepted type, or a class
-the app doesn't know, rejects the section; otherwise it passes. Copy them from Admin → Settings
+under `[preview]` and `[preview.outcomes]` in the config: a found Not accepted type rejects the
+section; otherwise it passes. A class with no defect type is ignored, as in the app (D-108). Copy them from Admin → Settings
 to match the app. The app decides the real verdict. A config from before Phase 25 with
 `reject_at_or_above`, `rework_at_or_above` or `[preview.actions]` still loads, with a warning that
 names each one; replace them with `[preview.outcomes]`.
 
 ## Defect types for yolo-v1 (D-052, D-053, D-093)
 
-The model reports `crease`, `cut`, `hole` and `scratch`. On the demo database `npm run demo:reset`
-sets the defect types for it. On any other database, do it by hand once, signed in as the System
-Admin, in **Admin → Settings → Defect types**:
+The model reports `crease`, `cut`, `hole` and `scratch`. A new database already has all four with
+CPoint's outcomes (DQ-7), and `npm run demo:reset` sets them on the demo database. Only an older
+database needs this by hand once, signed in as the System Admin, in **Admin → Settings → Defect
+types**:
 
 1. **Add** `crease` (label `Crease`, "Fold or crease line in the leather") and `scratch` (label
    `Scratch`, "Scratch on the grain"), with the keys exactly as the model reports them.
 2. **Turn off** `abrasion` and `dirt` (the model never reports them). Past scans are kept.
 3. Leave `cut` and `hole` on.
 4. Set **When found**: `cut` and `hole` → **Not accepted (Reject)**, `crease` and `scratch` →
-   **Usable (Pass)**. Keep **A defect counts as found at** at 50% under **Thresholds**.
+   **Usable (Pass)**; on `cut`, **Not accepted from 3 in** and a **flat share** of 1% (Phase 30C).
+   Keep **A defect counts as found at** at 50% under **Thresholds**.
 
 Until step 1, every `crease` or `scratch` is ignored: since D-108 the app drops a class with no
 defect type, so **add each new class when the model changes**. Then copy the same lists,
@@ -167,7 +169,7 @@ diagonal and a roll's defect area is each shot's union of boxes. The outline is 
 comparison only.
 
 1. **The scale.** Photograph a sheet of known size from the stand (`docs/STATION_SETUP.md`,
-   "Calibrate your phone"), then:
+   "The toolkit's sheet calibration"), then:
 
    ```bash
    .venv/Scripts/python -m cpoint_cv calibrate sheet.jpg --size letter --save-overlay out/sheet
@@ -223,14 +225,14 @@ No app code changes. For example, for `yolo-v2.pt`:
    (`certutil -hashfile models\yolo-v2.pt SHA256`). Record them in `MODEL_CARD.md`.
 3. Run `predict photos --config config-v2.toml`: it lists the model's classes. For any class the
    app doesn't know, add a defect type under **Admin → Settings → Defect types** with that exact
-   key and its **When found** action, and turn off types the new model never reports. Until then
-   its detections go to the Quality Inspector's review queue.
+   key and its **When found** outcome, and turn off types the new model never reports. Until then
+   the app ignores its detections (D-108).
 4. Run `evaluate` for both models on the same labelled photos (`--config config-v2.toml --out
 reports/<date>-yolo-v2.md`) and compare the two reports.
 5. To switch, run `export-onnx --config config-v2.toml`, set `CV_MODEL_PATH` to
    `cv/models/yolo-v2.onnx` (Docker: `/app/models/yolo-v2.onnx`), restart the app and run
    `npm run cv:parity` on a few photos. Make `config-v2.toml` your `config.toml`. Every scan
-   records its `modelVersion`, so the Camera page and each scan show which model judged it.
+   records its `modelVersion`, so each scan's page shows which model judged it.
    Switching back is the same steps with the old file.
 
 ## Checks

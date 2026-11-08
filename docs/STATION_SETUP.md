@@ -21,10 +21,11 @@ Keep the lighting even and the table plain, so the camera sees the leather the s
 | Bin colour | Label on the bin | What goes in it                           | Who takes it from there |
 | ---------- | ---------------- | ----------------------------------------- | ----------------------- |
 | Green      | **Pass**         | Parts with no defect, or only usable ones | On to cutting           |
-| Red        | **Reject**       | Parts with a defect that isn't accepted   | Set aside for salvage   |
+| Red        | **Reject**       | Parts with a defect that isn't accepted   | Set aside, not cut      |
 
 Every shot is Pass or Reject, and the camera's verdict is final (D-093): nobody changes it
-afterwards. A shot with a defect class the system doesn't know yet is a Reject too.
+afterwards. A defect class the system doesn't know is ignored until the System Admin adds it
+(D-108).
 
 Put the word on every bin as well as the colour: some people can't tell red from green.
 
@@ -54,10 +55,11 @@ phone or its stand doesn't matter.
    glossy laminate).
 3. For a roll's **first shot**, lay the card **flat on the leather**, all of it in the picture.
    Capture reads it about four times a second: "Marker card found. This shot will be measured
-   (19.2 in across)." Without it the Capture button stays off and reads "Show the marker card to
+   (N in across)." N is the width the camera sees, so it depends on the phone's height (the
+   e2e fake camera gives 16.0 in). Without it the Capture button stays off and reads "Show the marker card to
    capture." Space does nothing but say the same.
 4. The camera stays where it is (D-121), so the rest of the roll needs no card: "Scale set at the
-   first shot: 19.2 in across. The card can come off the leather." A card left in view is still
+   first shot: N in across. The card can come off the leather." A card left in view is still
    read. If the camera is moved, press **Read the card again** and show the card on the next shot.
    A camera whose picture is a different size needs the card once.
 5. Hold the phone flat above the leather. A card that looks tilted ("Hold the phone flat above the
@@ -92,8 +94,8 @@ no longer uses it.
 
 ## Measuring defects (Phase 30B)
 
-Since Phase 30C the app measures every shot itself (since D-120 from the marker card on it) (a cut from 3 in is
-Not accepted; a roll over 10% defects reads Too many defects). The toolkit check below stays
+Since Phase 30C the app measures every shot itself, since D-120 from the marker card (a cut from
+3 in is Not accepted; a roll over 10% defects is Returned to supplier, D-116). The toolkit check below stays
 for comparing figures: can the camera measure a defect in inches? Photograph a piece of
 known area with marks or cuts of known length, then:
 
@@ -123,14 +125,14 @@ area; its code is on the list, like `LR-MLT-001` (write it on the roll's label).
 4. Move the roll on, edge to edge, and capture again until all of it is in.
 5. **Finish roll.** The app asks "Is all of LR-MLT-001 scanned?" with the number of shots. A
    finished roll can't take more shots, and it comes off the leather stock (Phase 30E). The app
-   then says how much of the roll has defects; if it has too many, the Floor Manager sees it on
-   Reports → Rolls. Nothing to set aside.
+   then says how much of the roll has defects against the 10% limit. Over it, the roll is
+   **Returned to supplier**: set it aside for the Floor Manager.
 
 Picked the wrong roll? While it has no shots, **Put roll back** at Capture: it waits on the list
 again. A roll with shots is removed only by the Floor Manager, with a reason. Nothing is deleted.
 
 The Floor Manager reads every roll, its shots, its rejects and its defect share in **Reports →
-Rolls**; a roll over the limit reads **Too many defects**, and its claim sheet carries the
+Rolls**; a roll over the limit reads **Returned to supplier**, and its claim sheet carries the
 findings for the supplier.
 
 ## Floor view (a station PC)
