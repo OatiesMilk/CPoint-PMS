@@ -5,7 +5,9 @@ leather-shoe production line (Preparation → Upper Making → Sole-ing → Fini
 computer-vision checkpoint at Preparation, before cutting.
 
 The rebuild from Laravel/MySQL to Next.js/PostgreSQL/Docker is complete (roadmap Phases 0–9) and
-lives on `main`. New work is client follow-ups and new features, each added as a roadmap phase.
+lives on `main`, and so are CPoint's follow-ups through Phase 31 (the factory visit's changes, the
+polished look, the docs). The master spec's `<context>` lists what changed since the rebuild. New
+work is client follow-ups and new features, each added as a roadmap phase.
 
 Next.js 16 and Prisma 7 have breaking changes from older versions. Read the bundled docs before
 writing framework code:
@@ -84,7 +86,7 @@ fails, fix it (above).
 - E2E: `npm run build && npm run test:e2e`. Needs the DB up. Set `PLAYWRIGHT_CHROMIUM_PATH` if
   browsers can't be downloaded.
 - After editing `prisma/schema.prisma`: `npm run db:migrate -- --name <change>`, then `npm run db:generate`
-- Camera simulator: `npm run cv:token` once (put the token in `.env` as `CV_DEVICE_TOKEN`), start a
-  batch, then `npm run cv:simulate -- --count 20 --interval 3`
+- Camera simulator: `npm run cv:token` once (put the token in `.env` as `CV_DEVICE_TOKEN`), start
+  scanning a roll at Capture, then `npm run cv:simulate -- --count 20 --interval 3`
 - Demo week (empty DB only): `npm run demo:seed`, or `SEED_DEMO_WEEK=true` in `.env` for Docker
 - A pre-commit hook (husky + lint-staged) runs ESLint and Prettier on staged files.

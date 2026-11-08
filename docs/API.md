@@ -120,7 +120,7 @@ to start the dropdown on their own roll. `/current` leaves it out.
   shares (a cut from 3 in counts 1%). More than `returnSharePct` (Settings, default 10, strict) sets
   `markedForReturn` (`marked: true`): the roll is **Returned to supplier** (D-116; Reports →
   Rolls' status, Materials' Leather rolls, Supplier quality). `sharePct` is null and `notMeasured` says why (`no-area`, `no-shots`,
-  `unscaled`: a shot came from a phone that wasn't calibrated) when it can't be worked out (A-28);
+  `unscaled`: a shot had no scale, from a marker card or an older calibration) when it can't be worked out (A-28);
   such a roll isn't marked. **Cancel** at Capture only for a roll with no shots.
 - **Remove:** a roll from Inventory still in stock or being scanned (`OUT` −1); a scanned roll is
   already off stock (`409` "LR-… is already scanned."); a roll from before Phase 30A only while it
@@ -327,13 +327,13 @@ duplicate email is `422` on `email`.
 
 **Settings**
 
-| Method & path                      | Body                                                                                                                                                                                                                                                                          |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET / PUT /api/v1/settings/cv`    | `{ foundPercent, earlyModelNotice?, returnPercent? }`, e.g. `50` (1 to 100, one decimal); `returnPercent` the supplier limit (1 to 100, one decimal, default 10, Phase 30C). `rejectPercent` or `reworkPercent` is refused with a named message (D-093)                       |
-| `GET / POST /api/v1/defect-types`  | `{ key, label, outcome, description?, sortOrder?, notAcceptedFromIn?, flatSharePct? }` (key fixed; `outcome` `USABLE` or `NOT_ACCEPTED`, required, D-093; `notAcceptedFromIn` 0.1 to 100 in and `flatSharePct` 0.1 to 100, blank or `null` clears, left out keeps, Phase 30C) |
-| `GET / POST /api/v1/suppliers`     | `{ name, code?, contactPerson?, phone?, notes? }` (`code`: 2 to 6 capital letters or digits, unique; from the initials when left out, D-104)                                                                                                                                  |
-| `PUT /api/v1/settings/lunch-break` | `{ startTime, endTime }` (`HH:mm`, inside tomorrow's shift, end after start) or `{ none: true }`; applies from tomorrow (D-097)                                                                                                                                               |
-| `PATCH /api/v1/<list>/{id}`        | the same fields, or `{ isActive }`. There are no deletes.                                                                                                                                                                                                                     |
+| Method & path                                                     | Body                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET / PUT /api/v1/settings/cv`                                   | `{ foundPercent, earlyModelNotice?, returnPercent? }`, e.g. `50` (1 to 100, one decimal); `returnPercent` the supplier limit (1 to 100, one decimal, default 10, Phase 30C). `rejectPercent` or `reworkPercent` is refused with a named message (D-093)                       |
+| `GET / POST /api/v1/defect-types`                                 | `{ key, label, outcome, description?, sortOrder?, notAcceptedFromIn?, flatSharePct? }` (key fixed; `outcome` `USABLE` or `NOT_ACCEPTED`, required, D-093; `notAcceptedFromIn` 0.1 to 100 in and `flatSharePct` 0.1 to 100, blank or `null` clears, left out keeps, Phase 30C) |
+| `GET / POST /api/v1/suppliers`                                    | `{ name, code?, contactPerson?, phone?, notes? }` (`code`: 2 to 6 capital letters or digits, unique; from the initials when left out, D-104)                                                                                                                                  |
+| `PUT /api/v1/settings/lunch-break`                                | `{ startTime, endTime }` (`HH:mm`, inside tomorrow's shift, end after start) or `{ none: true }`; applies from tomorrow (D-097)                                                                                                                                               |
+| `PATCH /api/v1/defect-types/{id}`, `PATCH /api/v1/suppliers/{id}` | the same fields, or `{ isActive }`. There are no deletes.                                                                                                                                                                                                                     |
 
 A new found-at value or outcome applies to new scans only; each scan keeps its `thresholdsSnapshot`.
 Shoe types and `/api/v1/shoe-types/**` were removed in Phase 27 (D-099, `404`).
@@ -485,14 +485,16 @@ only routes without `requireApiPermission`.
 | `POST /api/v1/demo/sign-in` | `{ role }` (one of the four roles) | signs in as that role's demo account with the server's `DEMO_USER_PASSWORD`; `200 { data: { redirectTo } }`. `409 DEMO_ACCOUNT_MISSING` or `DEMO_PASSWORD_MISSING`; `401 SIGN_IN_FAILED` (locked, inactive) |
 | `POST /api/v1/demo/reset`   | `{ confirm: "RESET" }`             | the `demo:reset` plus a fresh demo week (about a minute); `200 { data: { removed, demoWeek } }`; `409 RESET_RUNNING` while one runs; `422` for any other word                                               |
 
-## Coming next
+## Scanning time (D-121)
 
-No endpoints are planned beyond the roadmap. Component tracking waits on CPoint's answers.
-
-The Phase 3 CV ingestion contract is specified in `docs/prompts/system-rebuild.md` →
-`<cv_integration_contract>`. Keep it stable once published, because the YOLO service depends on it.
-
-**Scanning time (D-121):** a roll's `scanningMs` (finish, `GET /api/v1/rolls`, `GET /api/v1/rolls/{id}`)
+A roll's `scanningMs` (finish, `GET /api/v1/rolls`, `GET /api/v1/rolls/{id}`)
 is the working time from Start scanning to Finish roll: the day's lunch break and, for a roll left
 open overnight, the night (17:00, or its start if later, to 08:00 Manila) are left out. `null` while being scanned or for a roll never started.
 `GET /api/v1/rolls` adds `meta.scanning: { averageMs, count }` for the rolls the filters show.
+
+## Coming next
+
+No endpoints are planned. This file lists every route in `src/app/api` (Phase 31 checked it
+against the code); a route not listed here was removed and answers `404` or `405`, as noted in its
+section. The capture contract is summarised in `docs/prompts/system-rebuild.md` →
+`<cv_integration_contract>`.

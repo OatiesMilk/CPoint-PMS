@@ -59,19 +59,21 @@ about **255 ms on the GPU** and **780 ms on the CPU**. Both are fine for one cap
 ## Intended use
 
 Finds surface defects on one leather section at a time at Preparation, before cutting (D-005).
-The model reports what it saw; the app decides the verdict (D-011), and the Quality
-Inspector decides every flagged section (D-028).
+The model reports what it saw; the app decides the verdict, **Pass or Reject, and it is final**:
+nobody reviews or overrides it (D-093, C-21). Each defect type is Usable or Not accepted, a cut is
+Not accepted from 3 in (C-37), and a roll whose defects cover more than 10% of its area is
+Returned to supplier (D-116). The model runs inside the app on the CPU (ONNX Runtime, D-064).
 
 ## Known limits
 
 - **Early model, not fine-tuned.** About one detection in three is wrong (precision 0.62) and about
   one defect in three is missed (recall 0.69). Mask outlines are rougher still (mask mAP50-95 0.32).
-- **Confidence is not severity.** The app reads the highest confidence as how bad a defect is
-  (D-011). For this model it means how sure it is that a defect is there. See the baseline numbers
-  before setting thresholds in Settings.
-- **Class keys differ from the app's.** The app knows `cut`, `hole`, `abrasion` and `dirt`, so
-  `crease` and `scratch` send a scan to review until they're added under Settings → Defect types
-  (Phase 15).
+- **Confidence is not severity.** For this model a confidence says how sure it is that a defect is
+  there, not how bad it is, so the app uses one "counts as found at" value (50%) and lets each
+  defect type say Usable or Not accepted (D-053, D-093).
+- **Class keys.** A new database has the model's four classes (DQ-7). A class with no defect type
+  is ignored (D-108), so a retrained model's new classes must be added under Settings → Defect
+  types.
 - Trained on the team's own photos. Different lighting, leather colours or camera distance may
   lower accuracy.
 - **Measuring (Phase 30B).** `measure` uses each detection's mask outline (its area and longest
@@ -81,7 +83,8 @@ Inspector decides every flagged section (D-028).
   lines aren't the cuts it was trained on: real knife cuts on scrap leather are the next check.
   A slanted line's box counts about 19 times the outline's area, so the box overstates the 10%
   share (`cv/reports/2026-11-02-LETTER-TEST-measure.md`).
-- Stretch marks are not a class (C-22).
+- **Stretch marks are not a class** (C-22). They aren't caught until the model is fine-tuned with
+  them; the new class then comes in through Settings → Defect types.
 
 ## Baseline (2026-10-19)
 

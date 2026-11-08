@@ -6,8 +6,8 @@ when the scan arrives. Keep this in step with ``decide()``: ``tests/test_preview
 unit tests.
 
 The rule: a detection of an active, known type at or above "counts as found at" gives its type's
-outcome, Usable or Not accepted; below it, it counts for nothing. Any Not accepted, or any class
-the app doesn't know, makes the section REJECT; otherwise PASS. Inactive types are ignored.
+outcome, Usable or Not accepted; below it, it counts for nothing. Any Not accepted makes the
+section REJECT; otherwise PASS. Inactive types and classes with no defect type are ignored (D-108).
 """
 
 from __future__ import annotations

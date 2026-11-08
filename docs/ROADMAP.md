@@ -29,6 +29,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 
 ## Phase 2 — Batches & stages
 
+> Removed later: stages and stage moves (Phase 23, D-082); a batch became a roll (Phase 26, D-095).
+
 - [x] Batch list (filter by status/stage/shoe type), create, edit, cancel (the stage filter became
       a status filter in Phase 23)
 - [x] Advance stage (no skipping; going backwards needs a reason) with `BatchStageLog`
@@ -37,6 +39,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 - [x] Unit tests for stage transitions
 
 ## Phase 3 — CV skeleton
+
+> Removed later: REWORK and NEEDS_REVIEW, overrides and the review queue (Phase 25, D-093); unknown classes (D-108); the Latest scans widget (Phase 28, D-100); the Camera page (D-119).
 
 - [x] Device API tokens (hashed, scoped, revocable)
 - [x] `POST /api/v1/scans` + `GET /api/v1/batches/current` documented in `docs/API.md`
@@ -51,6 +55,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 
 ## Phase 4 — Rework & salvage
 
+> Removed later: rework tickets and salvage (Phase 25, D-094).
+
 - [x] Rework tickets created automatically from REWORK (**done in Phase 3**); board OPEN → IN_PROGRESS → DONE
 - [x] Salvage items created automatically from REJECT (**done in Phase 3**); assign to a later batch or discard
 - [x] Batch counts service (usable = passed + rework done) shown on batch detail
@@ -64,6 +70,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 - [x] Optionally consume a leather roll when creating a batch
 
 ## Phase 6 — Admin
+
+> Removed later: shoe types (Phase 27, D-099), component types (Phase 20, D-071), the unknown classes panel (D-108).
 
 - [x] Users CRUD, deactivate, reset password (temporary password, forced change, sessions ended)
 - [x] Defect types, CV thresholds, shoe types, suppliers management (+ unknown classes panel)
@@ -90,6 +98,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 
 ## Phase 9 — Procurement & review access
 
+> Removed later: procurement (Phase 24, D-091) and review access (Phase 25, D-093).
+
 > Procurement was **removed in Phase 24 (D-091)**. The review access (D-028) stays.
 
 - [x] Review access: only the Quality Inspector decides flagged scans, enforced in the service
@@ -109,6 +119,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
 
 ## Phase 10 — Operations reports
 
+> Changed later: `/reports/repairs` removed (Phase 25); reports count whole rolls (D-117).
+
 - [x] Floor Manager's Reports lands on **Operations**: key figures vs the previous period, "what
       needs attention", the line by stage with late batches, flow, time in each stage, repair
       station, materials at risk, purchasing, suppliers, and the checkpoint before cutting in brief
@@ -122,6 +134,8 @@ branch, which the team merges into `main` by pull request (D-032). Phases 0–8 
       button groups, tables scroll in their card
 
 ## Phase 11 — Material requests: naming, remarks, urgency, specific messages
+
+> Removed later: material requests (Phase 24, D-091).
 
 > **Removed in Phase 24 (D-091).** Kept here as history.
 
@@ -148,6 +162,8 @@ Brief: `docs/prompts/material-requests.md`, Phase 11. Phases 12 and 13 are in th
 - [ ] Docker demo-week check not run in this session
 
 ## Phase 12 — Item-level decisions guided by stock
+
+> Removed later: material requests (Phase 24, D-091).
 
 > **Removed in Phase 24 (D-091).** Kept here as history.
 
@@ -179,6 +195,8 @@ Brief: `docs/prompts/material-requests.md`, Phase 12.
       decided item by item)
 
 ## Phase 13 — Ordering, delivery with proof, and the remaining gaps
+
+> Removed later: material requests, ordering and deliveries (Phase 24, D-091).
 
 > **Removed in Phase 24 (D-091).** Kept here as history.
 
@@ -250,6 +268,8 @@ Brief: `docs/prompts/camera-yolo-integration.md`, Phase 14. No app behaviour cha
 
 ## Phase 15 — Camera station: capture, send, recover
 
+> Removed later: the station app (Phase 20, D-069).
+
 Brief: `docs/prompts/camera-yolo-integration.md`, Phase 15. One additive contract field.
 
 - [x] Frame sources (D-050): `run webcam` (one frame per Space press, Q stops), `run folder <dir>`
@@ -272,6 +292,8 @@ Brief: `docs/prompts/camera-yolo-integration.md`, Phase 15. One additive contrac
       (runs 1 and 2, `qa/reports/2026-10-19-phase-15-camera-station*.md`)
 
 ## Phase 16 — Camera page, a small model check, clean data and the demo
+
+> Removed later: the Camera page (D-119).
 
 Brief: `docs/prompts/camera-yolo-integration.md`, Phase 16, plus Dylan's clean-data request.
 Plan: `docs/prompts/plans/phase-16-plan.md`; Dylan took every recommended option.
@@ -299,6 +321,8 @@ Plan: `docs/prompts/plans/phase-16-plan.md`; Dylan took every recommended option
       state)
 
 ## Phase 17 — The camera station window
+
+> Removed later: the station window (Phase 20, D-069).
 
 > **Retired by Phase 20 (D-069).** Capture happens on the website; the window, its launcher and
 > the station runtime were removed. Kept here as history.
@@ -397,6 +421,8 @@ took every recommended option and no "Ready to capture" line (D-069 to D-072).
 
 ## Phase 21 — Repair Station, Floor view, constructor capture, no mkcert
 
+> Removed later: the Repair Station (Phase 25, D-094). Floor view and constructor capture stay.
+
 Asked by Dylan on 2026-10-20 after Phase 20 passed QA. Plan: `docs/prompts/plans/phase-21-plan.md`
 (A, B and C as recommended; D-073 to D-076).
 
@@ -437,6 +463,8 @@ Asked by Dylan on 2026-10-21 (brief `docs/prompts/production-progression.md`). P
       mistakes), all fixed; run 2 PASS (e2e 94 passed, 0 failed, 1 skipped)
 
 ## Phase 23 — Production progression in place of stage monitoring
+
+> Changed later: check-ins became batches (Phase 27, D-097) planned per day (Phase 30E-2, D-114).
 
 Asked by Dylan on 2026-10-21 (brief `docs/prompts/production-progression.md`). Plan:
 `docs/prompts/plans/phase-23-plan.md` (1A Finish roll, **2B every 4 hours**, **3B the QI only**,
@@ -495,11 +523,10 @@ was never built. Each phase gets its own criteria here when its plan is approved
       schedule and reminder days refuse weekends and hours outside it; migration `weekdays_only`.
       `npm run check` passed (615); Codex run 1 FAIL (S8 query, `demo:reset` kept Mon–Sat; fixed),
       run 2 **PASS** (e2e 88/0/2); merged #32
-- [ ] Follow-up (D-107, 2026-11-02, team QA): a schedule or lunch break equal to tomorrow's is not
-      saved again; Codex run 1 FAIL on axe only (fixed)
-- [ ] Follow-up (D-108, 2026-11-02, Dylan): no unknown defect classes (migration
-      `no_unknown_classes`); Materials reads "Week 1: Nov. 2"; `npm run check` passed (622); Codex
-      run 1 next
+- [x] Follow-up (D-107, 2026-11-02, team QA): a schedule or lunch break equal to tomorrow's is not
+      saved again; Codex run 1 FAIL on axe only (fixed); merged #33
+- [x] Follow-up (D-108, 2026-11-02, Dylan): no unknown defect classes (migration
+      `no_unknown_classes`); Materials reads "Week 1: Nov. 2"; `npm run check` passed (622); merged #33
 - [x] Phase 30C: cuts from 3 inches Not accepted; a roll over 10% defects (of its entered area)
       marked Return to supplier, the FM decides (D-110; QA run 3 passed; merged #34)
 - [x] Phase 30E-1: the constructor picks the leather, then the roll, at Capture; each roll keeps
@@ -534,8 +561,8 @@ was never built. Each phase gets its own criteria here when its plan is approved
       and the Admin's access to scan photos, so the Admin keeps Overview, Users, Settings, API
       tokens and Audit log (D-119). Built 2026-11-06, `npm run check` passed (704); Codex run 1
       FAIL (a photo cached by the FM showed to the Admin in the same browser; the image route now
-      revalidates every load), fixed; run 2 **PASS** (2026-11-06)
-- [ ] Phase 30F: a polished, premium look on the existing shadcn/ui and Radix components; copy,
+      revalidates every load), fixed; run 2 **PASS** (2026-11-06); merged #41
+- [x] Phase 30F: a polished, premium look on the existing shadcn/ui and Radix components; copy,
       behaviour and tests unchanged; three parts (30F-1 foundation, 30F-2 desktop pages, 30F-3
       Capture, Floor view and Batches). Brief `docs/prompts/premium-ui.md` (D-122)
   - [x] Baseline: Codex's 150 before screenshots (`qa/reports/2026-11-06-phase-30f-baseline.md`)
@@ -546,13 +573,19 @@ was never built. Each phase gets its own criteria here when its plan is approved
   - [x] 30F-2 the desktop pages (merged #43): built 2026-11-07, `npm run check` passed (708); Codex run 1
         FAIL (tables still too wide, the Materials hydration error, KPI tile locators, Rolls CSV
         placement), fixed; run 2 FAIL (Rolls still 41 px too wide at 1280), fixed; **run 3 PASS** (`qa/reports/2026-11-07-phase-30f-2-run3.md`). Plan `docs/prompts/plans/phase-30f2-plan.md`
-  - [ ] 30F-3 Capture, Floor view and Batches (with the live picture above the Capture bar on a
+  - [x] 30F-3 Capture, Floor view and Batches (merged #45; the Plan days equal cells follow-up
+        merged #44) (with the live picture above the Capture bar on a
         phone, run 1 F1): built 2026-11-07 with Dylan's go on the three copy changes, `npm run
 check` passed (708). Plan `docs/prompts/plans/phase-30f3-plan.md`, handoff
         `qa/handoffs/2026-11-07-phase-30f-3.md`, prompt `qa/CODEX_PROMPT_PHASE_30F_3.md`; Codex run 1
-        PASS WITH ISSUES (weekday checks blocked; the picture moved up again); run 2 FAIL (the picture a few px short, fixed); run 3 PASS for Capture; the Batches checks on a
-        weekday (run 4)
-- [ ] Phase 31: the documentation and the paper's figures match the system
+        PASS WITH ISSUES (weekday checks blocked; the picture moved up again); run 2 FAIL (the picture a few px short, fixed); run 3 PASS for Capture. **Still to do:** run 4, the Batches checks, the
+        plan line and the full suite on a weekday with today planned (Plan days #44 included)
+- [ ] Phase 31: the documentation and the paper's figures match the system. Built 2026-11-07
+      (docs only; plan `docs/prompts/plans/phase-31-plan.md`): the master spec's context, rules,
+      roles, data model and CV contract; README, `docs/API.md` (every route, checked against
+      `src/app/api`), DESIGN, STATION_SETUP, `cv/` docs, CLAUDE.md, removed phases marked here;
+      the figures' facts in `docs/prompts/paper-figures.md`. `npm run check` passed (708). Codex
+      runs 1 to 3 FAIL (README wording, fixed); run 4 PASS WITH ISSUES; D4 on a weekday next
 
 ## Phase 24 — Remove Material Requests and Procurement
 

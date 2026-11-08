@@ -5,6 +5,71 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-08 · Phase 31 run 4 PASS WITH ISSUES
+
+- Codex run 4 (`qa/reports/2026-11-08-phase-31-run4.md`, headless, Sunday): D2 step 2 passed (Nov
+  1 reads "2 of 3 rolls scanned · 1 returned"); D4 blocked (no weekend batches). Only D4 is left,
+  on a weekday.
+
+## 2026-11-08 · Phase 31 run 3 FAIL (one example count), fixed
+
+- Codex run 3 (`qa/reports/2026-11-07-phase-31-run3.md`, headless, Sunday): D5 and D6 passed; D2
+  failed on Plan days' "3 of 5 rolls scanned", which no demo day shows; D4 blocked.
+- Fix: README's Plan days line gives "a count such as "2 of 3 rolls scanned · 1 returned"".
+- Next: `qa/CODEX_PROMPT_PHASE_31_RUN4.md` on a weekday (D2 step 2 and D4).
+
+## 2026-11-07 · Phase 31 run 2 FAIL (README wording), fixed
+
+- Codex run 2 (`qa/reports/2026-11-07-phase-31-run2.md`, headless Playwright): 5 passed (D1, D3,
+  D7, D8, D9), 3 failed (D2, D5, D6), 1 blocked (D4, Saturday). Codex added and finished
+  LR-MT-010 (20 sq ft, one Pass shot) and saved Saturday's attendance (11 of 13).
+- Fixes, docs only: README's Floor Manager steps quote "Not taken yet today.", the five roll
+  statuses, "N of M Shoe Constructors present" and when High shows (5 rolls, 10 points above the
+  line, `src/lib/ops-rules.ts`); the cut row "OK under 3 in, rejected from 3 in" and "1% each,
+  from 3 in"; STATION_SETUP's steps 3 and 4 say "N in across".
+- Next: `qa/CODEX_PROMPT_PHASE_31_RUN3.md`.
+
+## 2026-11-07 · Phase 31 run 1 FAIL (blocked browser, one example number), fixed
+
+- Codex run 1 (`qa/reports/2026-11-07-phase-31-run1.md`): 0 passed, 1 failed, 8 blocked; the
+  in-app browser and computer-use bridge were unavailable. D3 (headless, fake camera) read
+  "16.0 in across" where README said 19.2 in.
+- F1: 19.2 in was an example; the width depends on the camera's height. README now reads
+  "(N in across)" and names the fake camera's 16.0 in; STATION_SETUP says the number depends on
+  the phone's height. Docs only, so no check rerun.
+- Run 2 (`qa/CODEX_PROMPT_PHASE_31_RUN2.md`): every scenario headless when the in-app browser is
+  unavailable, one test roll for D3, Mermaid rendered on a local page for D9.
+
+## 2026-11-07 · Phase 31 built: the documentation and the paper's figures match the system
+
+- Review first (Dylan asked): the laptop's `main` is `c5b1848` (30F-1 to 30F-3 and Plan days #44
+  merged), clean but for `qa/uat/`; `npm run check` passed (708) on that commit; the 30F diff (97
+  files) changed no guard and added no raw colour outside the tokens. Open: 30F-3 Codex run 4 on a
+  weekday.
+- Plan `docs/prompts/plans/phase-31-plan.md` (Dylan's go with both recommendations: the UAT lists
+  in the commit; Phase 31 now, run 4 on Monday).
+- Master spec: `<context>` (with "Changed since the rebuild"), `<domain_rules>`,
+  `<roles_and_modules>`, `<data_model_outline>`, `<cv_integration_contract>` to the system as
+  built; the ground rules' branch and scope lines, the tech stack, Docker and architecture tree
+  brought up to date. Gates and protocols kept.
+- README: features, accounts (QI lands on `/batches`; the real demo constructor names), the demo
+  script by role (FM, constructor, QI, Admin), talking points, architecture and data diagrams,
+  reference data and the demo week; stale screenshots no longer embedded. `docs/API.md`: every
+  route in `src/app/api` matched by method; `PATCH` on defect types and suppliers named; Scanning
+  time under its own heading. DESIGN (Intent, component rows), STATION_SETUP (Reject not cut,
+  Returned to supplier, D-108), `cv/README.md`, `cv/MODEL_CARD.md` (Pass or Reject final, stretch
+  marks), CLAUDE.md, AGENTIC_WORKFLOW, UI_AUDIT (history note), ROADMAP (removed phases marked,
+  D-107, D-108, D-119 and 30F ticked), STATUS shortened (its old "What works right now" is in git
+  at c5b1848). `cv/cpoint_cv/preview.py`'s docstring now says unknown classes are ignored (D-108).
+- The paper's figures dated 2026-11-07 (conceptual framework 1 and 2, system architecture) were
+  checked against the code and match; `docs/prompts/paper-figures.md` lists the facts. The 14 Oct
+  `paper/` files are history.
+- UAT lists: the System Admin one's Build line updated; the Floor Manager one marked partly out of
+  date (FM-42 to FM-46, FM-60 to FM-64).
+- Checks: `npm run check` passed (708, build OK); `cv/` ruff, format, mypy, pytest (102) passed.
+  The sweep's remaining hits are history. No browser or e2e test run (Codex).
+- Next: `qa/CODEX_PROMPT_PHASE_31.md`; 30F-3 run 4 on a weekday; then the git commands.
+
 ## 2026-11-07 · Phase 30F-3 run 3 PASS (R1 only)
 
 - Codex run 3 (`qa/reports/2026-11-07-phase-30f-3-run3.md`, Saturday): R1 passed, 159.2 px of the

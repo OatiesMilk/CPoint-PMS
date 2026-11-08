@@ -1,25 +1,25 @@
 # CPoint Product Monitoring System
 
 Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe production line
-(school shoes and topsiders, counted together). It replaces paper tally sheets with one shared view of the line:
+(school shoes and topsiders, counted together): Preparation, Upper Making, Sole-ing and Finishing,
+with one camera checkpoint at Preparation, before cutting. It replaces paper tally sheets with one
+shared view of the line:
 
-- **Rolls at Capture:** a Shoe Constructor with camera access starts each leather roll on their
-  own phone, captures it shot by shot and finishes it once all of it is in (Phase 26). The Floor
-  Manager reads every roll in **Reports → Rolls**.
-- **Camera checkpoint:** the app's model checks each shot before cutting and calls it **Pass** or
-  **Reject**; the verdict is final (D-093). Rejected parts are reported for salvage.
-- **Inventory:** leather rolls and supplies are tracked through an audited ledger, with low-stock
-  alerts.
-- **Batches:** the working day is split into batches, one per check-in interval (every 4 hours by
-  default, with lunch left out: 08:00–13:00 and 13:00–17:00). The Quality Inspector finishes each
-  batch on a phone with the pairs finished and how many failed inspection, prompted by an
-  on-screen notice. The Floor Manager sets how often and one daily quota (with a suggestion from
-  recent days) and sees each day's passed pairs against it, with the Shoe Constructors present
-  from attendance and one sentence for every short day. The System Admin sets the lunch break.
-- **Reports:** production against the quota, daily totals, defects by type, how often people kept
-  the camera's call, supplier quality, with CSV for Excel. Nothing is ranked per person.
-
-![Floor Manager home with a demo week loaded](docs/screenshots/floor-manager-home.png)
+- **Capture on the constructors' phones:** a Shoe Constructor the System Admin allows picks the
+  leather, then the roll on the table, and photographs it shot by shot. A printed marker card on
+  the first shot gives the scale in inches. The model in the app calls each shot **Pass** or
+  **Reject**, and the verdict is final (D-093).
+- **Rolls:** the Floor Manager adds each leather roll in Inventory with its area. At Finish roll
+  the roll leaves stock; if its defects cover more than 10% of its area it is **Returned to
+  supplier**, otherwise **Scanning passed** (D-116). Each roll's scanning time is recorded (D-121).
+- **Batches:** the Floor Manager plans each weekday on a calendar (rolls to be used, the quota of
+  passed pairs, every 4 hours or once a day, the shift). Each check-in interval is a batch, lunch
+  left out. The Quality Inspector finishes each batch on a phone with the pairs finished and how
+  many failed inspection, prompted by an on-screen notice.
+- **Attendance and stock:** the Floor Manager marks who is present each day and updates stock on
+  one sheet (Added, Used, Correction), with reminders on Wednesdays and Fridays.
+- **Reports:** Operations, Quality, Rolls (with the claim sheet for a supplier) and Materials, with
+  CSV for Excel. Figures are by batch, day, roll, material or supplier, never per person.
 
 > BS-IT capstone project. Progress is in [`docs/STATUS.md`](docs/STATUS.md), the plan in
 > [`docs/ROADMAP.md`](docs/ROADMAP.md), and every design decision with its reason in
@@ -98,143 +98,124 @@ Cloudflare Tunnel (same section).
 `DEMO_USER_PASSWORD`, including `admin@cpoint.local`. `BOOTSTRAP_ADMIN_PASSWORD` is used only
 when there is no admin account yet, as on a real install with demo users off.
 
-| Role              | Email                      | Lands on             | Does                                                                                     |
-| ----------------- | -------------------------- | -------------------- | ---------------------------------------------------------------------------------------- |
-| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`     | Batch plan and quota, attendance, inventory, reports (Rolls: read, cancel with a reason) |
-| Quality Inspector | `inspector@cpoint.local`   | `/quality-inspector` | Finishes each batch (pairs finished and failed), follows the scans                       |
-| System Admin      | `admin@cpoint.local`       | `/admin`             | Users (camera access), found-at value, defect types, lunch break, tokens, audit          |
-| Shoe Constructor  | `constructor@cpoint.local` | `/camera/capture`    | Starts, captures and finishes rolls on their phone once given camera access (D-095)      |
+| Role              | Email                      | Lands on          | Does                                                                                  |
+| ----------------- | -------------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| Floor Manager     | `manager@cpoint.local`     | `/floor-manager`  | Plans the days, attendance, inventory and rolls, reports                              |
+| Quality Inspector | `inspector@cpoint.local`   | `/batches`        | Finishes each batch (pairs finished and failed)                                       |
+| System Admin      | `admin@cpoint.local`       | `/admin`          | Users (camera access), defect types and limits, suppliers, lunch break, tokens, audit |
+| Shoe Constructor  | `constructor@cpoint.local` | `/camera/capture` | Picks a roll, captures it and finishes it on their phone once given camera access     |
 
-Twelve more **demo Shoe Constructors** (Ana Cruz, Ben Santos and others, `@cpoint.local`) are
-created with them so Attendance has a believable roster. They have random passwords and never sign
-in (D-081). The demo week gives camera access to Noel Manalo (`constructor@`) and three of them,
-who capture its rolls.
+Twelve more **demo Shoe Constructors** (Arnel Bautista, Jocelyn Reyes and others, `@cpoint.local`)
+are created with them so Attendance has a believable roster. They have random passwords and never
+sign in (D-081). The demo week gives camera access to Noel Manalo (`constructor@`) and three of
+them, who capture its rolls.
 
 ## Demo script
 
-About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows
-(or one normal and one private) to show two roles side by side. Each role sees only its own pages
-(D-100): the FM Overview, Batches, Attendance, Reports and Inventory; the QI Batches; the Admin the
-administration pages and Camera; a constructor Capture.
+About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows (or
+one normal and one private) to show two roles side by side, and a phone-sized window for Capture
+and Batches. Each role sees only its own pages (D-100, D-119): the Floor Manager Overview, Batches,
+Attendance, Reports and Inventory; the Quality Inspector Batches; the System Admin Overview, Users,
+Settings, API tokens and Audit log; a constructor Capture.
 
 **Demo tools (optional, D-101):** with `DEMO_LOGIN_TOOLS=true` (and `SEED_DEMO_USERS=true`) the
 login page has **Demo sign-in**, one button per role, and **Reset demo data** (type RESET; about a
 minute; "Fresh demo week loaded."). A **Demo mode** band shows on every page. Never turn it on for
 real use.
 
+The batch steps need a weekday with today planned; the demo week plans its own days, so plan today
+first on **Batches → Plan days** if it isn't.
+
 ### 1. Floor Manager (4 min)
 
-1. **Home** (`manager@cpoint.local`): **Today's batches** (passed pairs against the daily quota,
-   the batch under way), the **Attendance** card (today is "Not taken yet"), **Rolls today**
-   (sections checked, rejected for salvage, rolls still open), low stock (Contact cement), the
+1. **Home** (`manager@cpoint.local`): **Today's batches** (passed pairs against the quota), the
+   **Attendance** card ("Not taken yet today."), **Rolls today** (rolls scanned, returned to the
+   supplier, still open), low stock, the stock update reminder on Wednesdays and Fridays, and the
    daily summary.
-2. **Batches:** today's two batches (08:00–13:00 with lunch 11:00–12:00, and 13:00–17:00) and the
-   **Recent days** chart and table: three days fell short on passed pairs, each with its sentence,
-   "Below quota by 18 pairs. 3 of 12 Shoe Constructors were absent." Nothing names a person.
-   **Plan days** is a month calendar (Phase 30E-2, D-114): each past day shows its plan and "2 of
-   3 rolls scanned"; click a weekday, today or later, to set the rolls to be used, the quota
-   (**Use suggestion** fills it in), the check-in interval (every 4 hours or once at the end of the
-   day) and the shift, with the batches previewed. Next week's Wednesday is marked **Non-working /
-   Holiday**. A weekday with no plan has no batches and the Floor Manager sees **Plan today**.
-3. **Inventory → Black cowhide (school shoes):** the item's **Rolls**, each with its own code
-   (`LR-MT-001`), area, status (Not scanned, Being scanned, Scanned, Fully used, Removed), shots
-   and defects found. **Add rolls**: the day they arrived, then each roll's area. The count on hand
-   follows the rolls (Phase 30A, D-103, D-104).
-   **Reports → Rolls:** every roll, newest first, with its supplier, area, shots, passed and
-   rejected (for salvage). The newest scan is still **Being scanned**; one shelf roll was
-   **Removed** by the Floor Manager with a reason. Open a finished roll: each shot with its photo, verdict and
-   defects, and a **Claim sheet**. No constructor is named.
+2. **Batches → Plan days:** a month calendar (D-114). A past day shows its plan and a count such as
+   "2 of 3 rolls scanned · 1 returned"; click a weekday, today or later, to set the rolls to be
+   used, the quota (**Use suggestion** fills it in), the check-in interval (every 4 hours or once at
+   the end of the day) and the shift, with the batches previewed. A weekday can be marked
+   **Non-working / Holiday**. **Recent days** shows the days that fell short on passed pairs, each
+   with one sentence, for example "Below quota by 18 pairs. 3 of 12 Shoe Constructors were absent."
+   Nothing names a person.
+3. **Inventory → Black cowhide (school shoes):** the item's **Rolls**, each with its code
+   (`LR-MT-001`), area, status (Not yet scanned, Being scanned, Scanning passed, Returned to
+   supplier, Removed), shots and Defect %. **Add rolls**: the day they arrived, then each roll's
+   area. The count on hand follows the rolls (D-103). **Update stock** opens the one sheet for every
+   other item (Added, Used, Correction with a reason).
+4. **Reports → Rolls:** every roll with its supplier, area, shots, Defect %, scanning time and
+   status: **Scanning passed** or **Returned to supplier**. Three demo rolls have a long cut on
+   every shot and are over the 10% limit. Open one: each shot with its photo, verdict and defects,
+   "Returned to supplier: defects cover N% of this roll, over the 10% limit.", and a **Claim
+   sheet** to **Save as PDF** for the supplier. No constructor is named.
+5. **Attendance:** **Mark everyone present**, untick two people, **Save attendance**. The summary
+   reads "N of M Shoe Constructors present" (the demo roster has 13). It is a one-day log book: no
+   per-person history or counts anywhere (D-008, D-077).
+6. **Reports → Operations, Quality, Materials:** pairs finished, failed inspection and the share of
+   the quota; rolls scanned per day and defects by type; supplier quality, worst first, with
+   **High** on a supplier with at least 5 rolls whose returned share is at least 10 points above the
+   whole line's (the demo week has fewer, so none shows it); each material's use per week and the
+   leather rolls used and returned. Download a CSV and open it in Excel.
 
-4. **Attendance** (Production → Attendance): **Mark everyone present**, untick two people, and
-   **Save attendance**. The summary reads "10 of 12 Shoe Constructors present"; the home card
-   follows. **Previous day** shows the demo week's days, a few with absences. It is a one-day log
-   book: no per-person history or counts anywhere (D-008, D-077).
-5. **Capture on a phone** (`constructor@cpoint.local`, in a phone-sized window): Capture is the
-   only page. **Scan this roll** on a roll from Inventory, then **Capture**: green Pass or red
-   Reject for each shot, each defect Usable or Not accepted. **Finish roll** once all of it is in.
-6. To show live scans without a phone, run the simulator from a development checkout (see
-   [Camera and simulator](#camera-and-simulator)); the System Admin's **Camera** page shows them.
-7. **Repair Station:** To handle → Being handled → Done, usable. Each card says what the
-   section needs (Clean before cutting, or Cut around the marked area). Each step is one click,
-   with undo.
-8. **Salvage:** rejected sections are kept. **Use in batch** assigns one to another open batch;
-   **Discard** needs a reason.
-9. **Inventory → Contact cement:** the ledger. Stock changes only through recorded movements
-   (deliveries, use, counts), and undo is a reversal entry, never an edit.
-10. **Reports → Operations:** pairs finished, failed inspection and the share of quota, the
-    **Production** section with
-    the same short days, and "3 of the last 5 working days were below quota" under what needs
-    attention. Download **Production CSV** and open it in Excel.
-11. **Reports → Operations → Supplier quality:** each supplier's rolls, Fixable % and Reject %, with
-    **High** on the worst. Under **Rolls with the most rejects**, open a **Claim sheet** and
-    **Save as PDF** to show the evidence for a supplier claim (D-072).
+### 2. Shoe Constructor (2 min)
 
-### 2. Quality Inspector (3 min)
+1. **Capture on a phone** (`constructor@cpoint.local`, phone-sized window, or a real phone through
+   the tunnel): **Leather**, then **Roll on the table**, then **Start scanning**. Lay the printed
+   marker card ([`public/cpoint-scale-marker-2in.pdf`](public/cpoint-scale-marker-2in.pdf)) on
+   the leather: "Marker card found. This shot will be measured (N in across).", where N is the
+   width the camera sees and depends on how high the phone is (the e2e fake camera gives 16.0
+   in). Capture is off until the first shot has the card (D-120); later shots use that scale
+   (D-121).
+2. **Capture**: green Pass or red Reject for each shot, each defect Usable or Not accepted with its
+   length. A cut from 3 in is Not accepted (C-37). The card above the roll shows today's rolls
+   scanned against the plan, and the timer runs while the roll is being scanned.
+3. **Finish roll**: the roll leaves stock, and the constructor reads its Defect % against the limit.
+   **Floor view** shows the same with a coloured band for a monitor at a fixed station.
 
-1. **Batches on a phone** (`inspector@cpoint.local`, in a phone-sized window): near a batch's end
-   a banner reads "Batch 2 ends at 17:00. Get ready to count the finished pairs.", and at the end
-   "Batch 2 is due. Finish it now." with the bell and a "(1)" in the tab title. **Finish batch 2**:
-   the pairs finished and, of these, the pairs that failed inspection, and tick any scanned roll
-   that is **Fully used** (it leaves stock then). A second finish is refused; **Correct** needs a
-   reason and can untick a roll.
-2. **Review queue** (`inspector@cpoint.local`): two scans with an unknown defect class
-   ("scratch") wait for a person. Decide one: **Pass / Fixable / Reject**.
+### 3. Quality Inspector (2 min)
 
-   ![Review queue](docs/screenshots/review-queue.png)
+1. **Batches on a phone** (`inspector@cpoint.local`): ten minutes before a batch's end a banner
+   reads "Batch 2 ends at 17:00. Get ready to count the finished pairs.", and at the end "Batch 2
+   is due. Finish it now." with the bell and a "(1)" in the tab title.
+2. **Finish batch**: the pairs finished and, of these, the pairs that failed inspection. A second
+   finish is refused; **Correct** the same day needs a reason, and the audit keeps both counts.
 
-   Only the Quality Inspector decides these (D-028). The Floor Manager sees the same queue, but
-   read-only: "Waiting for a Quality Inspector".
+### 4. System Admin (2 min)
 
-3. Open one of **today's automatic Fixable and Reject** calls. The image shows the camera's box
-   and confidence. **Override decision…** asks for a reason, and the scan then shows both calls
-   (the camera's is struck through).
-
-   ![Scan detail](docs/screenshots/scan-detail.png)
-
-4. **Reports → Camera call vs final verdict:** the off-diagonal numbers are overrides. A high
-   agreement (about 95% in the demo week) means the thresholds suit the line.
-
-### 3. System Admin (2 min)
-
-0. **Overview** (`admin@cpoint.local`): system health, users, the camera and the
-   lunch break. **Camera:** the model, the last capture and how many rolls are open.
-1. **Settings → Lunch break**: 11:00 to 12:00, applying from tomorrow, with
-   its history. Lunch pauses the batch it falls in.
-
-2. **Settings → Thresholds** (`admin@cpoint.local`): Reject at 90% or above, Fixable from 60%,
-   with a preview of what the camera will decide. Changes apply to new scans only. Old scans keep
-   the thresholds they were decided with.
-
-   ![Settings](docs/screenshots/admin-settings.png)
-
-3. **Settings → Defect types:** each class the model sends, Usable or Not accepted. A class with
-   no defect type is ignored (D-108), so a retrained model's new classes are added here: a data
-   change, not a code change.
-4. **Users:** add a person, who gets a one-time temporary password. **API tokens:** each camera
-   machine has its own token, which can only send scans.
+1. **Overview** (`admin@cpoint.local`): system health, users, the lunch break, the audit log and the
+   camera API tokens. There is no Camera page (D-119).
+2. **Settings → Defect types:** each class the model sends, Usable or Not accepted, and the cut's
+   row reads "OK under 3 in, rejected from 3 in" and "1% each, from 3 in". A class with no defect
+   type is ignored (D-108), so a retrained model's new classes are added here: a data change, not a
+   code change.
+3. **Settings → Thresholds:** "A defect counts as found at 50%" and "Mark a roll Returned to
+   supplier when defects cover more than 10%". Changes apply to new scans only; each scan keeps the
+   rule it was decided with. **Settings → Lunch break**: 11:00 to 12:00, from tomorrow.
+4. **Users:** add a person, who gets a one-time temporary password; **More actions → Give camera
+   access** for a Shoe Constructor. **API tokens:** a token can only send scans (the simulator).
 5. **Audit log:** every change above, plus every sign-in, with before/after values.
 
 ### Talking points
 
-- **The decision rule (D-011):** the highest confidence among known defects decides. ≥ 90% →
-  Reject, 60–89% → Fixable, below 60% → Pass. A class with no defect type is ignored (D-108). The
-  thresholds are data the admin can change.
-- **People stay in charge:** the camera's calls can be overridden with a reason, and the reports
-  show how often that happens. Flagged scans are the Quality Inspector's to decide (D-028).
-- **No per-person rankings or scores** anywhere (from the client survey). Reports aggregate by
-  day, batch and defect only; a short day is explained by how many were absent, never who.
-- **Nothing is deleted:** stock moves through a ledger, rejected leather becomes salvage, and
-  every change is in the audit log.
-
-![Reports](docs/screenshots/reports.png)
+- **The decision rule (D-093, C-37):** a defect counts once the model is at least 50% sure; its
+  type says Usable or Not accepted; a cut is Not accepted from 3 inches. Any Not accepted rejects
+  the shot. The verdict is final: nobody overrides it (C-21). The rules are data the Admin changes.
+- **Whole rolls:** a roll whose defects cover more than 10% of its area goes back to the supplier,
+  with a claim sheet as evidence (C-9, D-116, D-117).
+- **No per-person rankings or scores** anywhere (from the client survey). A short day is explained
+  by how many were absent, never who.
+- **Nothing is deleted:** stock moves through a ledger, a removed roll keeps its shots, and every
+  change is in the audit log.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   subgraph Clients
-    B["Browser<br/>(FM, QI, Admin, Constructor)"]
-    C["Camera device<br/>(YOLO / simulator)"]
+    B["Browser<br/>(FM, QI, Admin)"]
+    PH["Constructor's phone<br/>Capture + marker card"]
+    SIM["Simulator<br/>(device token)"]
   end
 
   subgraph app["Docker service: app (Next.js 16)"]
@@ -243,17 +224,21 @@ flowchart LR
     R["api/v1/**/route.ts<br/>(one-line routes)"]
     CT["controllers<br/>parse · validate · shape"]
     S["services<br/>business rules, guards,<br/>transactions + audit"]
+    ML["model inference<br/>ONNX Runtime, CPU"]
     M["models<br/>(only layer that imports Prisma)"]
   end
 
   DB[("Docker service: db<br/>PostgreSQL 18<br/>volume: pgdata")]
   U[["volume: uploads<br/>scan images"]]
+  MF[["cv/models<br/>read-only"]]
 
   B -->|session cookie| P --> V
-  B --> R
-  C -->|"POST /api/v1/scans<br/>device token"| R
+  PH -->|"HTTPS (Cloudflare Tunnel)<br/>POST /api/v1/scans/capture"| R
+  SIM -->|"POST /api/v1/scans"| R
   V --> S
   R --> CT --> S --> M --> DB
+  S --> ML
+  MF --> ML
   S --> U
 ```
 
@@ -272,49 +257,55 @@ The core tables (`prisma/schema.prisma` has all of them, with indexes). Ids are 
 
 ```mermaid
 erDiagram
-  User ||--o{ Roll : "starts (camera access)"
-  User ||--o{ InventoryMovement : records
-  User ||--o{ ApiToken : creates
-  User ||--o{ AuditLog : "acts in"
-  Supplier |o--o{ Roll : supplies
+  Supplier |o--o{ InventoryItem : "supplies (leather)"
+  InventoryItem ||--o{ Roll : "has rolls"
+  InventoryItem ||--o{ InventoryMovement : "ledger of"
+  StockUpdate ||--o{ InventoryMovement : groups
   Roll ||--o{ Scan : "is captured as"
   ApiToken |o--o{ Scan : sends
   Scan ||--o{ Detection : contains
   DefectType |o--o{ Detection : classifies
-  InventoryItem ||--o{ InventoryMovement : "ledger of"
+  DayPlan ||--o{ ProductionCheckIn : "batches of the day"
+  AttendanceDay ||--o{ AttendanceMark : marks
+  User ||--o{ AuditLog : "acts in"
 
   Roll {
-    string code "R-2026-0001 (older rolls B-)"
-    string tagCode "the supplier's tag, optional"
-    enum status "OPEN, FINISHED, CANCELLED"
-    datetime startedAt
-    datetime finishedAt
-    string cancelledReason
+    string code "LR-MLT-001 (older R-, B-)"
+    decimal areaSqFt "entered by the FM"
+    enum status "IN_STOCK, OPEN, FINISHED, CANCELLED"
+    float defectSharePct "worked out at Finish roll"
+    bool markedForReturn "over the limit: Returned to supplier"
   }
   Scan {
     int sequence "shot number in the roll"
     enum aiVerdict "PASS, REJECT"
     enum finalVerdict "always equal to aiVerdict (D-093)"
+    float widthIn "inches across, from the marker card"
     json thresholdsSnapshot "the rule used"
   }
   Detection {
     string rawClassKey "what the model sent"
     float confidence
-    float x_y_width_height "box, 0-1"
+    float lengthIn "box diagonal"
   }
-  InventoryItem {
-    string sku
-    decimal quantityOnHand "changes only via movements"
-    decimal reorderLevel
+  DefectType {
+    enum outcome "USABLE, NOT_ACCEPTED"
+    float notAcceptedFromIn "cut: 3"
+    float flatSharePct "cut: 1"
   }
-  InventoryMovement {
-    enum type "IN, OUT, ADJUST"
-    decimal quantityDelta
-    string reason
+  DayPlan {
+    int rollsPlanned
+    int quota "passed pairs"
+    int intervalMinutes "240 or null (once a day)"
+  }
+  ProductionCheckIn {
+    datetime slotAt "the batch's end"
+    int pairs
+    int failedPairs
   }
   CvSettings {
-    float rejectAtOrAbove "0.9"
-    float reworkAtOrAbove "0.6"
+    float foundAtOrAbove "0.5"
+    float returnSharePct "10"
   }
 ```
 
@@ -426,7 +417,8 @@ Refresh after about a minute. It only seeds when there are no rolls. Alternative
 ### 6. The camera (optional)
 
 To scan leather from the browser, follow [Capture from the website](#capture-from-the-website):
-the model files, the defect types, and (to use a phone) an HTTPS certificate. Without them the
+the model files, the defect types, the printed marker card, and (to use a phone) a Cloudflare
+Tunnel. Without them the
 rest of the system works, and `npm run cv:simulate` sends test scans ([Camera and
 simulator](#camera-and-simulator)).
 
@@ -462,27 +454,29 @@ starting the app.
 | `DEMO_LOGIN_TOOLS`         | `true` for the demo sign-in and Reset demo data on the login page, with a Demo mode band (D-101). Needs `SEED_DEMO_USERS=true`. Never for real use. Default off.                           |
 | `SEED_DEMO_WEEK`           | `true` to create a past week of production on first start (panel demo). Default off.                                                                                                       |
 
-On every start the app makes sure the reference data exists: defect types, the lunch break (the
-Floor Manager plans each day's batches on Batches → Plan days), CV
-thresholds 90% / 60%, and a sample supplier. It never overwrites values an admin has changed.
-With demo users on, it also adds five demo inventory items the first time.
-`npm run db:seed` runs the same steps by hand.
+On every start the app makes sure the reference data exists: defect types (crease and scratch
+Usable; cut Not accepted from 3 in; hole, abrasion and dirt Not accepted), found at 50%, the 10%
+return limit, the lunch break (11:00 to 12:00), the stock reminder days (Wednesday and Friday) and
+a sample supplier. It never overwrites values an admin has changed. With demo users on, it also
+adds the demo inventory items the first time. `npm run db:seed` runs the same steps by hand.
 
-**The demo week** (`SEED_DEMO_WEEK=true` or `npm run demo:seed`) replays the last six working
-days through the real services:
+**The demo week** (`SEED_DEMO_WEEK=true` or `npm run demo:seed`) replays the last working days,
+Monday to Friday, through the real services:
 
-- 14 rolls, each started at Preparation, scanned and finished (the newest is still at
-  Preparation for the camera);
-- about 290 scans with images;
-- overrides, repairs, salvage, deliveries and stock use, plus two scans left for review;
-- attendance for the working days before today, taken by the Floor Manager, with a few
-  constructors absent on some days (today is left for you to take);
-- one daily quota and the Quality Inspector finishing both batches a day (08:00–13:00 and
-  13:00–17:00) with a pair or two failing inspection (one late, one missed); the three days with
-  two or more absent end below quota on passed pairs.
+- day plans with one quota of 128 passed pairs; the Quality Inspector finishes both batches a day
+  (08:00–13:00 and 13:00–17:00) with a pair or two failing inspection, one late and one missed; on
+  one day the QI is absent and the Floor Manager finishes them (D-088);
+- leather rolls added in Inventory with their areas, picked and scanned at Capture by four
+  constructors with camera access, about ten shots each, each shot measured (a fixed demo scale); three rolls with
+  a long cut on every shot are Returned to supplier; the newest roll is still being scanned; one
+  shelf roll is removed for water damage;
+- stock updates on each past Wednesday and Friday;
+- attendance for the working days before today, a few constructors absent on some days (today is
+  left for you to take); the days with two or more absent end below quota.
 
 It uses a fixed random seed, so it shows the same shape every time. It never runs on a database
-that already has rolls.
+that already has rolls. `npm run demo:reset -- --yes` (PowerShell: `'--'`) removes test data and
+seeds a fresh week; back up first.
 
 **Sign-in rules:**
 
@@ -498,10 +492,9 @@ sign-in.
 
 ## Camera and simulator
 
-The Preparation camera (later the YOLO service on a phone, webcam or dedicated camera) sends each
-capture to `POST /api/v1/scans` with a **device token** (contract in [`docs/API.md`](docs/API.md)).
-Without a camera, the simulator sends realistic scans through the same API from a development
-checkout:
+Real shots come from the Capture page (next section). For tests without a camera, the simulator
+sends realistic scans to `POST /api/v1/scans` with a **device token** (contract in
+[`docs/API.md`](docs/API.md)) from a development checkout:
 
 ```bash
 npm run cv:token -- --name "Simulator"   # prints a token once; put it in .env as CV_DEVICE_TOKEN
@@ -512,14 +505,14 @@ npm run cv:simulate -- --count 20 --interval 3
 The simulator can also point at the Docker stack (`CV_BASE_URL=http://localhost:3000`). Create the
 token there under **Admin → API tokens**.
 
-Scans go to the roll given with `--roll <rollId>`, or to the roll open the longest. They show up
-live on the Floor Manager and Quality Inspector homes.
+Scans go to the roll given with `--roll <rollId>`, or to the roll open the longest. They show on
+that roll in Reports → Rolls.
 
 The real model runs in the app itself, on the **Capture** page (see
 [Capture from the website](#capture-from-the-website)). The camera station app and its `run` and
 `doctor` commands were retired in Phase 20 (D-069). [`cv/`](cv/README.md) is now the model
 toolkit: `predict` and `evaluate` try the model on photos, and `export-onnx` makes the files the
-app runs. For yolo-v1, add the `crease` and `scratch` defect types in Settings first (D-052).
+app runs. A new database already has yolo-v1's four classes (`crease`, `cut`, `hole`, `scratch`).
 The model file lives in `cv/models/` and is never committed (D-049); see
 [`cv/MODEL_CARD.md`](cv/MODEL_CARD.md).
 
@@ -553,17 +546,20 @@ The model is never in Git (D-049). The app needs two files in `cv/models/`:
 Restart the app after the files change. Without them the Capture page says "The camera model
 isn't installed on the server" and Capture stays off; everything else works.
 
-### 2. Set the defect types for the model
+### 2. The defect types and the marker card
 
-The model reports `crease`, `cut`, `hole` and `scratch`. A fresh database knows `cut`, `hole`,
-`abrasion` and `dirt`, so `crease` and `scratch` would be rejected as unknown. Either
-run `npm run demo:reset -- --yes` (**it deletes test data**: rolls and scans; the
-accounts stay) or add the two types by hand under Admin → Settings → Defect types
-([`cv/README.md`](cv/README.md), "Defect types for yolo-v1").
+The model reports `crease`, `cut`, `hole` and `scratch`; a new database already has all four
+(DQ-7). An older database may lack `crease` and `scratch`, whose detections are then ignored
+(D-108): add them under Admin → Settings → Defect types, or run `npm run demo:reset -- --yes`
+(**it deletes test data**: rolls and scans; the accounts stay).
+
+Print the marker card ([`public/cpoint-scale-marker-2in.pdf`](public/cpoint-scale-marker-2in.pdf),
+or **Print the marker card** on Capture) at 100% scale and keep it at the station. It lies flat on
+the leather for a roll's first shot; without it Capture stays off for that roll (D-120, D-121).
 
 Now the page works on this machine: sign in as `constructor@cpoint.local` (the demo week gives
-them camera access), open `http://localhost:3000/camera/capture` and **Scan this roll** on a roll the Floor Manager
-added in Inventory.
+them camera access), open `http://localhost:3000/camera/capture`, choose the leather and a roll the
+Floor Manager added in Inventory, and **Start scanning**.
 
 ### 3. Floor view at the station
 
@@ -572,10 +568,10 @@ monitor. **Floor view** (the button next to Capture, D-074) fills the screen wit
 and the chosen roll. After each capture a thick coloured frame and a large band show the verdict,
 the shot number and where the part goes:
 
-| Verdict | Colour | Where it goes         |
-| ------- | ------ | --------------------- |
-| Pass    | Green  | On to cutting         |
-| Reject  | Red    | Set aside for salvage |
+| Verdict | Colour | Where it goes      |
+| ------- | ------ | ------------------ |
+| Pass    | Green  | On to cutting      |
+| Reject  | Red    | Set aside, not cut |
 
 It stays until the next capture. Esc leaves; the browser remembers the choice, so the station PC
 opens straight into it (press F11 for full screen then). **Space** captures. The full setup
@@ -626,8 +622,9 @@ itself keeps working at `http://localhost:3000`.
 | "The camera model isn't installed on the server."               | Step 1: both files in `cv/models/`, then restart the app                                    |
 | "This browser isn't allowed to use the camera."                 | Click the camera icon in the address bar → Allow, then Try again                            |
 | "Another app is using this camera."                             | Close DroidCam or a video call, then Try again                                              |
-| Capture is off: "until a batch is at Preparation"               | The Floor Manager starts a batch                                                            |
-| A constructor sees "You don’t have access to that page"         | The Floor Manager allows them under Camera → Camera operators                               |
+| Capture is off: "Show the marker card to capture."              | Lay the printed card flat on the leather, fully in the picture                              |
+| No roll to pick                                                 | The Floor Manager adds rolls in Inventory (Add rolls on a leather item)                     |
+| A constructor sees "You don’t have access to that page"         | The System Admin gives camera access under Users → More actions                             |
 
 ## Scripts
 

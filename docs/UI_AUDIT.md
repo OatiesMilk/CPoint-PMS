@@ -34,6 +34,10 @@ what each part changes: `docs/prompts/plans/phase-30f1-plan.md` §2.
 
 # UI audit — Phase 8
 
+> History. Several screens below (the review queue, the Repair Station, salvage, procurement,
+> stages) were removed in Phases 23 to 25 (D-082, D-091, D-093, D-094). The current audit is the
+> Phase 30F section above.
+
 The ui-craft audit (`.claude/skills/ui-craft/SKILL.md`) across every screen, plus an automated axe
 pass. It was run on 2026-10-03 against the demo week (`npm run demo:seed`), so every list holds
 realistic volumes.

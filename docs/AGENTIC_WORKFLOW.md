@@ -83,12 +83,12 @@ STATUS.md is more reliable.
 - Always `git pull` before starting a session. STATUS.md is only as fresh as your checkout.
 - Write your name in the "Who" line of the session log. Your panel may ask who built what.
 
-## When the real camera module is ready
+## The camera model
 
-Point the YOLO script at `POST /api/v1/scans` with a device token from Admin → API tokens, and add
-the new defect classes in Admin → Defect types. No app code should need to change (D-011). Scans
-with a class the system doesn't know yet wait in the Quality Inspector's review queue (D-028). Then ask
-Claude to "replace the Camera placeholder with live phone/webcam capture" as a new roadmap phase.
+The model runs in the app on the Capture page (Phase 18, D-064). To swap in a retrained model,
+follow `cv/README.md` → "Swap in a new model": export it, put the files in `cv/models/`, and add
+its new classes under Admin → Settings → Defect types. No app code changes; a class with no defect
+type is ignored until it is added (D-108).
 
 ## Troubleshooting Claude sessions
 
