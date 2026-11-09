@@ -9,6 +9,7 @@
  *        per day, batch, roll, item, supplier or defect type, never per person (D-008, D-033).
  *        Rolls (Phase 26) has its own page, /reports/rolls.
  */
+import { appNow } from "@/lib/clock";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
@@ -35,7 +36,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
   const range = parseRange(query);
   // The Floor Manager lands on Operations; Quality is the other tab.
   const view = query.view === "quality" ? "quality" : "operations";
-  const now = new Date();
+  const now = appNow();
 
   const [operations, quality] = await Promise.all([
     view === "operations" ? operationsReport(range, now) : null,

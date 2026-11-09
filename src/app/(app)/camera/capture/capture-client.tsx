@@ -1,5 +1,6 @@
 "use client";
 
+import { appNow } from "@/lib/clock";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, LoaderCircle, Maximize2, RefreshCw, Ruler, Send } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
@@ -540,7 +541,7 @@ export function CaptureClient({
       return;
     }
     busyRef.current = true; // one press, one scan
-    let capturedAt = new Date().toISOString();
+    let capturedAt = appNow().toISOString();
     const sendFrame = async (
       canvas: HTMLCanvasElement,
       markerCorners: Quad[] | null,
@@ -584,7 +585,7 @@ export function CaptureClient({
       const found = await firstMarkedFrame(
         () => {
           if (video.videoWidth === 0) return null;
-          capturedAt = new Date().toISOString();
+          capturedAt = appNow().toISOString();
           const frame = document.createElement("canvas");
           frame.width = video.videoWidth;
           frame.height = video.videoHeight;

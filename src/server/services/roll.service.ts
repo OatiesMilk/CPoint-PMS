@@ -7,6 +7,7 @@
  * roll still in stock or being scanned, with a reason (−1). Every stock change is a ledger movement
  * with the roll's id (D-023). No person is named on a roll (D-008).
  */
+import { appNow } from "@/lib/clock";
 import type { Prisma } from "@/generated/prisma/client";
 import type { RollStatus } from "@/lib/domain";
 import { formatManilaDateTime, manilaToday } from "@/lib/format";
@@ -134,7 +135,7 @@ async function averageScanning(query: RollListQuery, now: Date) {
 
 export async function listRollsForReport(
   query: RollListQuery,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): Promise<{
   rows: RollListItem[];
   total: number;
@@ -163,7 +164,7 @@ const CSV_MAX_ROLLS = 5_000;
  * GET /api/v1/reports/rolls.csv: the rolls the Reports → Rolls filters show, every page, with
  * each roll's scanning time (D-121) for comparing with the manual check. No person named.
  */
-export async function rollsCsv(query: RollListQuery, now: Date = new Date()): Promise<string> {
+export async function rollsCsv(query: RollListQuery, now: Date = appNow()): Promise<string> {
   const { rows } = await listRolls(reportFilters(query, now), { skip: 0, take: CSV_MAX_ROLLS });
   const items = await withVerdicts(rows);
   const when = (d: Date | null) => (d ? formatManilaDateTime(d) : "");
@@ -292,7 +293,7 @@ const toOpenRoll = (
   r: OpenRollRow,
   viewerId?: string,
   lunchOn?: LunchOn,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): OpenRoll => ({
   id: r.id,
   code: r.code,
@@ -316,7 +317,7 @@ async function loadLunchOn(): Promise<LunchOn> {
 /** Every open roll, for the Capture page's Roll dropdown (newest first). */
 export async function openRollsForCapture(
   viewer: Actor,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): Promise<OpenRoll[]> {
   const [rows, lunchOn] = await Promise.all([listOpenRolls(), loadLunchOn()]);
   return rows.map((r) => toOpenRoll(r, viewer.id, lunchOn, now));
@@ -361,7 +362,7 @@ export async function addRolls(
   itemId: string,
   values: AddRollsValues,
   actor: Actor,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ) {
   if (values.receivedOn > manilaToday(now))
     throw Errors.validation([{ path: ["receivedOn"], message: ROLL_MESSAGES.receivedInFuture }]);
@@ -432,7 +433,7 @@ export async function addRolls(
 }
 
 /** Pick a roll at Capture (Phase 30A): a roll in stock, not scanned yet, becomes Being scanned. */
-export async function startRoll(id: string, actor: Actor, now: Date = new Date()) {
+export async function startRoll(id: string, actor: Actor, now: Date = appNow()) {
   const roll = await loadRoll(id);
   refuse(planStart(stateOf(roll)));
   return runInTransaction(async (tx) => {
@@ -484,7 +485,7 @@ export type FinishResult = {
 export async function finishRoll(
   id: string,
   actor: Actor,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): Promise<FinishResult> {
   const roll = await loadRoll(id);
   refuse(planFinish(stateOf(roll)));
@@ -550,7 +551,7 @@ export async function finishRoll(
  * Put back at Capture: a roll picked by mistake, with no shots. A roll from Inventory waits to be
  * scanned again; one from before Phase 30A is cancelled, as it was then.
  */
-export async function putBackRoll(id: string, actor: Actor, now: Date = new Date()) {
+export async function putBackRoll(id: string, actor: Actor, now: Date = appNow()) {
   const roll = await loadRoll(id);
   const state = stateOf(roll);
   refuse(planPutBack(state));
@@ -583,7 +584,7 @@ export async function putBackRoll(id: string, actor: Actor, now: Date = new Date
  * A roll from before Phase 30A can be removed only while open, as the old Cancel. Nothing is
  * deleted: its shots stay, out of the reports.
  */
-export async function removeRoll(id: string, reason: string, actor: Actor, now: Date = new Date()) {
+export async function removeRoll(id: string, reason: string, actor: Actor, now: Date = appNow()) {
   const roll = await loadRoll(id);
   const state = stateOf(roll);
   refuse(planRemove(state));

@@ -4,6 +4,7 @@
  * A log book, never a score (D-008). Every read here is one day; nothing returns a person's
  * history, absence count or streak. `workforceFor` (attendance-rules) is the only worker count.
  */
+import { appNow } from "@/lib/clock";
 import type { Role } from "@/generated/prisma/enums";
 import {
   attendanceSummary,
@@ -66,7 +67,7 @@ async function loadDay(day: string) {
 export async function getAttendanceDay(
   day: string | undefined,
   viewer: { role: Role },
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): Promise<AttendanceView> {
   const today = manilaToday(now);
   const target = day ?? today;
@@ -95,7 +96,7 @@ export async function getAttendanceDay(
 }
 
 /** Today's worker count: the FM home card now, production progression in Phase 23. */
-export async function todayWorkforce(now: Date = new Date()) {
+export async function todayWorkforce(now: Date = appNow()) {
   const day = manilaToday(now);
   const { marks, roster } = await loadDay(day);
   const workforce = workforceFor(roster, marks);
@@ -141,7 +142,7 @@ export async function saveAttendanceDay(
   day: string,
   input: SaveAttendanceInput,
   actor: { id: string; role: Role },
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): Promise<AttendanceView> {
   if (!can(actor.role, "attendance:manage"))
     throw Errors.forbidden("Only the Floor Manager takes attendance.");

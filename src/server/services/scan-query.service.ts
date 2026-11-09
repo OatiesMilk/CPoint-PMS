@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import type { Verdict } from "@/lib/domain";
 import { manilaToday } from "@/lib/format";
 import {
@@ -7,7 +8,7 @@ import {
 } from "@/server/models/scan.model";
 
 /** Start of today in Manila (UTC+8, no daylight saving) as a UTC instant. */
-export function startOfManilaDay(now: Date = new Date()): Date {
+export function startOfManilaDay(now: Date = appNow()): Date {
   const [y, m, d] = manilaToday(now).split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d) - 8 * 3_600_000);
 }

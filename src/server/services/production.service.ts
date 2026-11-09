@@ -11,6 +11,7 @@
  * totalled (D-086). Worker counts
  * come from attendance's `workforceFor` (D-080), never counted here.
  */
+import { appNow } from "@/lib/clock";
 import type { Role } from "@/lib/domain";
 import { formatAttendanceDay } from "@/lib/attendance-rules";
 import { formatManilaDateTime, manilaToday } from "@/lib/format";
@@ -159,7 +160,7 @@ export const DEFAULT_LUNCH_FROM = "2000-01-01";
  * with no finished batches it is in force from the start; otherwise from tomorrow, so past days keep
  * the batch times they were counted at and still match their rows.
  */
-export async function ensureDefaultLunchBreak(db: Tx, now: Date = new Date()) {
+export async function ensureDefaultLunchBreak(db: Tx, now: Date = appNow()) {
   if ((await countLunchBreaks(db)) > 0) return false;
   const effectiveFrom = (await firstCheckInDay(db))
     ? addDays(manilaToday(now), 1)
@@ -235,7 +236,7 @@ const rollsPlannedOn = (plans: Plans["plans"], day: string) =>
 export async function productionDays(
   from: string,
   to: string,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): Promise<{ days: DayRow[] }> {
   const [data, first] = await Promise.all([load(from, to), firstCheckInDay()]);
   // Days before the first batch ever finished weren't counted yet, so they aren't "missed".
@@ -290,7 +291,7 @@ export async function productionDays(
 }
 
 /** The last `count` working days before today, oldest first. */
-export async function recentProductionDays(count: number, now: Date = new Date()) {
+export async function recentProductionDays(count: number, now: Date = appNow()) {
   const today = manilaToday(now);
   // Enough calendar days to hold `count` working days with a day off a week, and some slack.
   const from = addDays(today, -Math.ceil(count * 1.5) - 7);
@@ -391,7 +392,7 @@ function batchView(
 }
 
 /** Today on the line: each batch, passed pairs against the quota, the next batch to finish. */
-export async function productionToday(viewer: { role: Role }, now: Date = new Date()) {
+export async function productionToday(viewer: { role: Role }, now: Date = appNow()) {
   const day = manilaToday(now);
   const [data, workforce, qiPresent] = await Promise.all([
     load(day, day),
@@ -495,7 +496,7 @@ function changedBy(row: DayPlanRow): string {
  * Non-working / Holiday or not planned, whether the Floor Manager may change it now, and, for
  * today and past days, the rolls scanned against the rolls planned.
  */
-export async function planMonth(month: string, now: Date = new Date()) {
+export async function planMonth(month: string, now: Date = appNow()) {
   const today = manilaToday(now);
   const from = `${month}-01`;
   const to = lastDayOf(month);
@@ -571,7 +572,7 @@ const CAPTURE_LOOKAHEAD_DAYS = 100;
  * the rolls the Floor Manager planned and the rolls scanned so far, so a constructor sees
  * "Leather rolls scanned 3/15". Line totals only, never per person (D-008).
  */
-export async function capturePlan(now: Date = new Date()) {
+export async function capturePlan(now: Date = appNow()) {
   const today = manilaToday(now);
   const [plans, rolls] = await Promise.all([
     listDayPlans(today, addDays(today, CAPTURE_LOOKAHEAD_DAYS)),
@@ -680,7 +681,7 @@ export async function saveDayPlan(
   day: string,
   input: DayPlanInput,
   actor: Actor,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ) {
   const row = await openDay(day, now);
   assertUnchanged(row, input.expectedUpdatedAt);
@@ -702,7 +703,7 @@ export async function markNonWorking(
   day: string,
   input: DayMarkInput,
   actor: Actor,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ) {
   const row = await openDay(day, now);
   assertUnchanged(row, input.expectedUpdatedAt);
@@ -724,7 +725,7 @@ export async function clearNonWorking(
   day: string,
   input: DayMarkInput,
   actor: Actor,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ) {
   const row = await openDay(day, now);
   assertUnchanged(row, input.expectedUpdatedAt);
@@ -748,14 +749,14 @@ export async function clearNonWorking(
  * The Floor Manager's start-of-day notice (A-37): from 00:00 on a weekday that has no plan and
  * isn't marked Non-working / Holiday, until the plan is saved.
  */
-export async function planNoticeDue(now: Date = new Date()): Promise<boolean> {
+export async function planNoticeDue(now: Date = appNow()): Promise<boolean> {
   const today = manilaToday(now);
   if (isWeekend(today)) return false;
   return (await findDayPlan(today)) === null;
 }
 
 /** Settings → Lunch break (C-3): tomorrow's lunch, the shift it must sit in, and the history. */
-export async function lunchBreakSettings(now: Date = new Date()) {
+export async function lunchBreakSettings(now: Date = appNow()) {
   const today = manilaToday(now);
   const tomorrow = addDays(today, 1);
   const lunches = await listLunchBreaks();
@@ -789,7 +790,7 @@ export type LunchBreakSettings = Awaited<ReturnType<typeof lunchBreakSettings>>;
  * hours (D-105), applying from tomorrow. A day planned with a shorter shift that leaves it out
  * ignores it (the day dialog says so).
  */
-export async function saveLunchBreak(input: LunchBreakInput, actor: Actor, now: Date = new Date()) {
+export async function saveLunchBreak(input: LunchBreakInput, actor: Actor, now: Date = appNow()) {
   const effectiveFrom = addDays(manilaToday(now), 1);
   if (input.startTime && input.endTime) {
     const problem = lunchProblem(
@@ -854,11 +855,7 @@ async function assertMayEnter(actor: CheckInActor, day: string): Promise<{ cover
  * Finish a batch (C-5, C-7, C-27): the pairs finished and, of these, the pairs that failed
  * inspection. From 10 minutes before its end (C-28) until midnight; one finish per batch.
  */
-export async function saveCheckIn(
-  input: CheckInInput,
-  actor: CheckInActor,
-  now: Date = new Date(),
-) {
+export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now: Date = appNow()) {
   const slotAt = new Date(input.slotAt);
   const day = manilaDayOf(slotAt);
   const { covering } = await assertMayEnter(actor, day);
@@ -929,7 +926,7 @@ export async function correctCheckIn(
   id: string,
   input: CorrectionInput,
   actor: CheckInActor,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ) {
   const row = await findCheckIn(id);
   if (!row) throw Errors.notFound("This batch");
@@ -979,7 +976,7 @@ export async function correctCheckIn(
 // ───────────── reports ─────────────
 
 /** Reports → Operations: per day the pairs finished, failed and passed against the quota. */
-export async function productionReport(range: ReportRange, now: Date = new Date()) {
+export async function productionReport(range: ReportRange, now: Date = appNow()) {
   const { days } = await productionDays(range.from, range.to, now);
   const finished = days.reduce((s, d) => s + d.finished, 0);
   const failed = days.reduce((s, d) => s + d.failed, 0);
@@ -1006,7 +1003,7 @@ export type ProductionReport = Awaited<ReturnType<typeof productionReport>>;
 const pct = (v: number | null) => (v === null ? "" : (Math.round(v * 1000) / 10).toFixed(1));
 
 /** `production.csv`: one row a day (Phase 27; per day only, never per person, D-008). */
-export async function productionCsv(range: ReportRange, now: Date = new Date()) {
+export async function productionCsv(range: ReportRange, now: Date = appNow()) {
   const { days } = await productionDays(range.from, range.to, now);
   return toCsv(days, [
     { header: "Date (Manila)", value: (d) => d.day },

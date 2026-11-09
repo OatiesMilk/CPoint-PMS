@@ -7,6 +7,7 @@ import { AppError, Errors } from "@/server/lib/errors";
 import type { DeviceScope } from "@/server/lib/device-token";
 import { authenticateDevice, type DeviceIdentity } from "@/server/services/api-token.service";
 import { checkSession, type SessionState, type SessionUser } from "@/server/services/auth.service";
+import { syncDemoClock } from "@/server/services/demo-clock.service";
 import { can, canCaptureFor, type Permission } from "./permissions";
 
 /**
@@ -18,6 +19,9 @@ const getSession = cache(() => auth());
 
 const getSessionState = cache(async (): Promise<SessionState | null> => {
   const user = (await getSession())?.user;
+  // The demo clock (D-125), loaded once per process; a no-op with the demo tools off. After the
+  // session, so a page is known to be dynamic before the settings are read.
+  await syncDemoClock();
   return user?.id ? checkSession(user.id, user.authAt, user.sid) : null;
 });
 
@@ -95,6 +99,7 @@ export async function requireApiUser(): Promise<SessionUser> {
 }
 
 /** Device (camera) requests: a Bearer device token with the given scope. Throws 401/403. */
-export function requireDevice(request: Request, scope: DeviceScope): Promise<DeviceIdentity> {
+export async function requireDevice(request: Request, scope: DeviceScope): Promise<DeviceIdentity> {
+  await syncDemoClock();
   return authenticateDevice(request.headers.get("authorization"), scope);
 }

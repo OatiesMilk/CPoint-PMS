@@ -3,6 +3,7 @@
  * photo and the roll chosen in the Roll dropdown (Phase 26); the app runs the model and then the
  * same `ingestScan` and decision engine as every scan. Nothing here decides a verdict.
  */
+import { appNow } from "@/lib/clock";
 import { imageSize, type ImageType } from "@/server/lib/image-type";
 import type { MappedDetection } from "@/server/lib/cv/mapper";
 import { getModelRunner, modelUnavailable, type ModelRunner } from "@/server/lib/cv/model-runner";
@@ -22,7 +23,7 @@ export async function captureScan(
   fields: CaptureFields,
   user: { id: string },
   runner: ModelRunner = getModelRunner(),
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): Promise<CaptureResult> {
   const origin = { kind: "website", userId: user.id } as const;
 

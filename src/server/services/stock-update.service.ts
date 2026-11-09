@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import { manilaToday } from "@/lib/format";
 import { planStockLine, stockLevel } from "@/lib/inventory-rules";
 import { DEFAULT_REMINDER_DAYS, stockUpdateDue } from "@/lib/stock-rules";
@@ -33,7 +34,7 @@ export async function reminderDays(): Promise<number[]> {
 }
 
 /** Everything the sheet shows: the active items with their last update, and the reminder days. */
-export async function stockSheet(now = new Date()) {
+export async function stockSheet(now = appNow()) {
   const rows = await listSheetItems();
   const [last, days, recent, savedToday] = await Promise.all([
     lastUpdatedAt(rows.map((r) => r.id)),
@@ -70,7 +71,7 @@ export async function stockSheet(now = new Date()) {
 }
 
 /** For the FM home and the bell: is today a reminder day with no update saved yet? */
-export async function stockUpdateReminder(now = new Date()) {
+export async function stockUpdateReminder(now = appNow()) {
   const today = manilaToday(now);
   const [days, savedToday, plan] = await Promise.all([
     reminderDays(),
@@ -97,7 +98,7 @@ export async function recentStockUpdates(take = 10) {
  * own fields (`lines.<itemId>.added`, `.used`, `.correction` or `.reason`). Nothing is saved
  * unless every line is fine.
  */
-export async function saveStockUpdate(body: StockUpdateBody, actor: Actor, now = new Date()) {
+export async function saveStockUpdate(body: StockUpdateBody, actor: Actor, now = appNow()) {
   return runInTransaction(async (tx) => {
     const items = new Map(
       (

@@ -124,8 +124,12 @@ Settings, API tokens and Audit log; a constructor Capture.
 
 **Demo tools (optional, D-101):** with `DEMO_LOGIN_TOOLS=true` (and `SEED_DEMO_USERS=true`) the
 login page has **Demo sign-in**, one button per role, and **Reset demo data** (type RESET; about a
-minute; "Fresh demo week loaded."). A **Demo mode** band shows on every page. Never turn it on for
-real use.
+minute; "Fresh demo week loaded."). A **Demo mode** band shows on every page, with the **demo
+clock** (D-125): **Change time** sets the Manila date and time the whole app runs at (batches, notices,
+the scanning timer, reminders, Reset's demo week), and it keeps ticking from there; **Back to real
+time** undoes it. Every role and device sees the same time. Sign-in and sessions keep real time.
+Anything recorded while the clock is moved keeps that date, so finish with Back to real time and
+Reset. Never turn the demo tools on for real use.
 
 The batch steps need a weekday with today planned; the demo week plans its own days, so plan today
 first on **Batches → Plan days** if it isn't.

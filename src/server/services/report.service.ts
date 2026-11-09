@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import { fillDays, parseRange, toCsv, type ReportRange } from "@/lib/report-rules";
 import { getCvSettings } from "@/server/models/cv-settings.model";
 import {
@@ -59,13 +60,13 @@ export async function rollFlow(range: ReportRange) {
 // ───────────── home cards ─────────────
 
 /** Today's rolls, passed or returned (the FM home's Rolls today). */
-export async function todaySplit(now: Date = new Date()) {
+export async function todaySplit(now: Date = appNow()) {
   const report = await qualityReport(parseRange({ preset: "today" }, now));
   return report.totals;
 }
 
 /** Yesterday and today side by side (FM home "Daily summary"). */
-export async function recentDays(now: Date = new Date()) {
+export async function recentDays(now: Date = appNow()) {
   const report = await qualityReport(parseRange({ preset: "7d" }, now));
   const [yesterday, today] = report.days.slice(-2);
   return { yesterday, today };

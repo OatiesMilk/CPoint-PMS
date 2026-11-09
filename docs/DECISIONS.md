@@ -2454,3 +2454,20 @@ damaged roll gets a random mix of found holes, scratches, creases and long cuts 
 11% and 16%. One more roll (the week's fifth) stays just under the limit, 7% to 9%, so the demo
 shows a roll with many defects that still passes. The other rolls keep the simulator's random mix.
 Demo data only. `src/server/services/demo-seed.service.ts` (`damageRoll`, `demoRollShare`).
+
+### D-125 · 2026-11-09 · Accepted — A demo clock: the app's time can be moved during a demo
+
+**Context:** the panel demo happens at whatever hour the defence is, but the story needs a batch
+about to close, a Wednesday reminder or a roll mid-scan. **Decision (Dylan, 2026-11-09):** while the
+demo tools are on (`DEMO_LOGIN_TOOLS` with `SEED_DEMO_USERS`, D-101), the Demo mode band on every
+page (the login page too) shows the app's time and **Change time** (a Manila date and time) and
+**Back to real time**. The clock **keeps running** from the time set (Claude's recommendation; the
+alternative, a frozen minute, was not chosen). It is stored as one offset from the real time
+(`demo_clock`, migration `20261109090000_demo_clock`), so every role and device sees the same time
+and it survives a restart; `src/lib/clock.ts` (`appNow`) is the one "now" for pages, rules,
+services and the browser's timers, loaded once per process by the guard (`syncDemoClock`). Up to a
+year either way. With the flag off the offset is always 0. **Real time on purpose:** sign-in
+lockout, the 12-hour session, API tokens, user accounts, health, and the database's own created-at
+stamps (the audit log), so security never depends on the demo clock. Each change is audited
+(`demo_clock.set`, the user, or System from the login page). Records made while the clock is moved
+keep that date; Back to real time and Reset clean up.

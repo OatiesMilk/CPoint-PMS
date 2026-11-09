@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import {
   ATTENTION,
   buildAttention,
@@ -33,7 +34,7 @@ const ROLLS_CSV = 100;
 
 // ───────────── operations ─────────────
 
-export async function operationsReport(range: ReportRange, now: Date = new Date()) {
+export async function operationsReport(range: ReportRange, now: Date = appNow()) {
   const prev = previousRange(range, now);
   const found = await foundAt();
   const [

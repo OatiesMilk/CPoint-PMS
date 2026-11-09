@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import logo from "../../../../public/images/cpoint-logo.jpg";
 import { DemoBand } from "@/components/features/demo-band";
 import { DEMO_SIGN_INS, demoToolsEnabled } from "@/server/services/demo-tools.service";
+import { demoClockView } from "@/server/services/demo-clock.service";
 import { DemoTools } from "./demo-tools";
 import { LoginForm } from "./login-form";
 
@@ -37,7 +38,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
   return (
     <>
-      <DemoBand on={demo} />
+      <DemoBand clock={demo ? await demoClockView() : null} />
       <div className="relative flex min-h-screen items-center justify-center bg-background p-10">
         <div className="absolute top-6 right-6">
           <ThemeToggle />

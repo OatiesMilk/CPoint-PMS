@@ -1,3 +1,4 @@
+import { appNowMs } from "@/lib/clock";
 import { z } from "zod";
 import { ScanSource } from "@/lib/domain";
 import { WIDTH_IN_MAX, WIDTH_IN_MIN } from "@/lib/measure";
@@ -127,7 +128,7 @@ export const ingestFieldsSchema = z.object({
     })
     .transform((v) => new Date(v))
     .refine(
-      (d) => d.getTime() <= Date.now() + 5 * 60_000,
+      (d) => d.getTime() <= appNowMs() + 5 * 60_000,
       "capturedAt can't be in the future. Check the device clock.",
     )
     .optional(),

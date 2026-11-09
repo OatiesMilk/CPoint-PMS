@@ -5,6 +5,9 @@ export async function register() {
   const { bootstrap } = await import("@/server/services/bootstrap.service");
   const { logger } = await import("@/server/lib/logger");
   try {
+    // The demo clock first (D-125), so a demo week seeded now follows it.
+    const { syncDemoClock } = await import("@/server/services/demo-clock.service");
+    await syncDemoClock();
     await bootstrap({ demoWeekInBackground: true });
     logger.info("Bootstrap complete");
   } catch (error) {

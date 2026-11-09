@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import { manilaToday } from "@/lib/format";
 import { DEFAULT_LUNCH, DEFAULT_SCHEDULE, batchesFor, isoWeekday } from "@/lib/production-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
@@ -320,7 +321,7 @@ export async function seedDemoWeek(
   options: { now?: Date; seed?: number; imageSize?: number } = {},
 ): Promise<DemoSeedResult> {
   const started = Date.now();
-  const now = options.now ?? new Date();
+  const now = options.now ?? appNow();
   const random = mulberry32(options.seed ?? 20261003);
   const between = (lo: number, hi: number) => lo + random() * (hi - lo);
   const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)];
