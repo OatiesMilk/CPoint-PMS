@@ -81,8 +81,8 @@ Compose v2) and this folder. No Node.js needed.
 4. Open <http://localhost:3000> (or `http://<this-machine's-LAN-IP>:3000` from another PC on the
    network) and sign in with one of the demo accounts below.
 
-   With `SEED_DEMO_WEEK=true`, the demo week is written in the background during the first
-   minute. Refresh the home page after about 30 seconds. It runs only while the database has no
+   With `SEED_DEMO_WEEK=true`, the demo data is written in the background during the first
+   2 to 3 minutes. Refresh the home page after that. It runs only while the database has no
    rolls, so restarts never add a second week.
 
 The Capture page (scanning from the browser) also needs the model files in `cv/models/`: see
@@ -123,8 +123,8 @@ Attendance, Reports and Inventory; the Quality Inspector Batches; the System Adm
 Settings, API tokens and Audit log; a constructor Capture.
 
 **Demo tools (optional, D-101):** with `DEMO_LOGIN_TOOLS=true` (and `SEED_DEMO_USERS=true`) the
-login page has **Demo sign-in**, one button per role, and **Reset demo data** (type RESET; about a
-minute; "Fresh demo week loaded."). A **Demo mode** band shows on every page, with the **demo
+login page has **Demo sign-in**, one button per role, and **Reset demo data** (type RESET; 2 to 3
+minutes; "Fresh demo week loaded."). A **Demo mode** band shows on every page, with the **demo
 clock** (D-125): **Change time** sets the Manila date and time the whole app runs at (batches, notices,
 the scanning timer, reminders, Reset's demo week), and it keeps ticking from there; **Back to real
 time** undoes it. Every role and device sees the same time. Sign-in and sessions keep real time.
@@ -163,7 +163,7 @@ first on **Batches → Plan days** if it isn't.
 6. **Reports → Operations, Quality, Materials:** pairs finished, failed inspection and the share of
    the quota; rolls scanned per day and defects by type; supplier quality, worst first, with
    **High** on a supplier with at least 5 rolls whose returned share is at least 10 points above the
-   whole line's (the demo data's Marikina Supplier A, with its three returned rolls, can show
+   whole line's (the demo data's Marikina Supplier A, with its returned rolls, shows
    it); each material's use per week and the leather rolls used and returned. Download a CSV and
    open it in Excel.
 
@@ -420,7 +420,7 @@ you saved in `.env`. The other accounts are `inspector@cpoint.local`, `admin@cpo
 `constructor@cpoint.local`; all use that same demo password.
 
 With `SEED_DEMO_WEEK=true`, sample production data loads in the background on first startup.
-Refresh after about a minute. It only seeds when there are no rolls. Alternatively, run
+Refresh after 2 to 3 minutes. It only seeds when there are no rolls. Alternatively, run
 `npm run demo:seed` in a second terminal after startup.
 
 ### 6. The camera (optional)
@@ -472,15 +472,16 @@ adds the demo inventory items the first time. `npm run db:seed` runs the same st
 **The demo week** (`SEED_DEMO_WEEK=true` or `npm run demo:seed`) replays the last 14 days
 (today included, D-126), Monday to Friday only, through the real services:
 
-- day plans with one quota of 128 passed pairs; the Quality Inspector finishes both batches a day
-  (08:00–13:00 and 13:00–17:00) with a pair or two failing inspection, one late and one missed; on
-  one day the QI is absent and the Floor Manager finishes them (D-088);
-- leather rolls added in Inventory with their areas, picked and scanned at Capture by four
-  constructors with camera access; each roll is 4 to 7 sq ft and takes 1 to 3 minutes to scan, in 3
-  to 6 shots of 16 × 12 in (a fixed demo scale, 16.0 in across); three rolls with a random mix of holes,
-  scratches, creases and long cuts are over 10% (11% to 16%) and Returned to supplier, and one with
-  many defects stays just under (7% to 9%); the newest roll is still being scanned; one shelf roll
-  is removed for water damage;
+- day plans with one quota of 300 passed pairs (about 25 rolls a day, 12 pairs a roll, D-127);
+  the Quality Inspector finishes both batches a day (08:00–13:00 and 13:00–17:00) with a pair or
+  two failing inspection, one late and one missed; on one day the QI is absent and the Floor
+  Manager finishes them (D-088);
+- 25 leather rolls a working day, added in Inventory with their areas, picked and scanned at
+  Capture by four constructors with camera access; each roll is 4 to 7 sq ft and takes 1 to 3
+  minutes to scan, in 3 to 6 shots of 16 × 12 in (a fixed demo scale, 16.0 in across); 14 rolls
+  with a random mix of holes, scratches, creases and long cuts are over 10% (11% to 16%) and
+  Returned to supplier, all Marikina Supplier A's, and two with many defects stay just under (7%
+  to 9%); the newest roll is still being scanned; one shelf roll is removed for water damage;
 - stock updates on each past Wednesday and Friday (four in the two weeks);
 - attendance for the working days before today, a few constructors absent on some days (today is
   left for you to take); the days with two or more absent end below quota.

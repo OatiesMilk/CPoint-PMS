@@ -48,9 +48,13 @@ include them).
   with the app's own measuring code), and one roll stays just under at 7% to 9%. `npm run check`
   passed. Handoff `qa/handoffs/2026-11-09-small-demo-rolls.md` (S7), prompt
   `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
-- **Two weeks of demo data (D-126, built 2026-11-09, uncommitted):** the seed fills today and the 13
+- **Two weeks of demo data (D-126, merged #49):** the seed fills today and the 13
   days before (10 working days); four short days, four stock updates, three returned rolls spread
   over both weeks. `npm run check` passed (725 unit tests).
+- **Demo output (D-127, built 2026-11-09, uncommitted):** quota 300 pairs, 25 rolls a working
+  day, about 12 pairs a roll; a reset takes 2 to 3 minutes.
+- **A tidier claim sheet (built 2026-11-09, uncommitted):** key figures in a card, two tables,
+  a Claim details card; the roll page shares the tables. `npm run check` passed.
 - **Demo clock (D-125, merged #48):** Change time in the Demo mode band moves the
   whole app to a Manila date and time and keeps ticking; Back to real time. One migration
   (`demo_clock`). `npm run check` passed. Handoff `qa/handoffs/2026-11-09-demo-clock.md`.

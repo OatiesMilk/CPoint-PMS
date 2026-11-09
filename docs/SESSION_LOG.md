@@ -5,6 +5,29 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-09 · Demo output: 300 pairs a day from 25 rolls (D-127)
+
+- Dylan: the factory finishes about 300 pairs for every 25 leather rolls, and the quota is 300.
+  `DEMO_QUOTA` 300, `DEMO_ROLL_SLOTS` 25 a day, 14 damaged rolls and 2 near the limit, more
+  leather on the shelf, consumables per day. Reset copy on the login page: 2 to 3 minutes.
+- `tests/unit/demo-seed.test.ts`: 249 finished rolls, 11 to 13 pairs a roll, 14 over, 2 near.
+  A real seed on a local database: 250 rolls, 1,141 scans, 2,897 pairs, 100 s; Marikina Supplier
+  A 13 of 80 returned. `npm run check` (below).
+
+## 2026-11-09 · A tidier claim sheet
+
+- Dylan: the claim sheet's text looked scattered (go, without a "how it's worked out" line). Audit
+  (ui-craft §7): the three top facts spread over the full width with no card, 15.2% twice and
+  never the key figure, Defects found and Largest defects as ragged inline lists, no cards.
+- `roll-findings.tsx` (claim sheet and roll page): the defect share and defect area as `Stat`s in
+  a card ("Over the 10% limit" / "Within the 10% limit"), Defects found (Type, Found, Rejected,
+  Longest) and Largest defects (Shot, Type, Length, Area, Outcome) as tables, side by side on
+  `xl`. The claim page: a Claim details card, a "Rejected sections" heading, photo cards with
+  `shadow-1`. `returns.spec.ts` now reads `defect-share` and "Over the 10% limit" instead of the
+  old sentence.
+- `npm run check` passed (725). Looked at the claim sheet at 1600 and 800 px and its print (2 A4
+  pages) against a local database with the two-week demo data.
+
 ## 2026-11-09 · Two weeks of demo data (D-126)
 
 - Dylan: the seed should fill at least 14 days. `DEMO_DAYS = 14` in `demo-seed.service.ts`: 10
