@@ -53,8 +53,9 @@ Compose v2) and this folder. No Node.js needed.
    ```
 
    (Windows PowerShell: `Copy-Item .env.example .env`.)
+   (Windows PowerShell: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`)
 
-2. Open `.env` in a text editor and fill in:
+3. Open `.env` in a text editor and fill in:
 
    | Line                        | Put                                                                                       |
    | --------------------------- | ----------------------------------------------------------------------------------------- |
@@ -65,7 +66,7 @@ Compose v2) and this folder. No Node.js needed.
 
    For real use, also change `POSTGRES_PASSWORD` and set `SEED_DEMO_USERS=false`.
 
-3. Build and start:
+4. Build and start:
 
    ```bash
    docker compose up --build -d
@@ -74,7 +75,7 @@ Compose v2) and this folder. No Node.js needed.
    The first build takes a few minutes. On start, the app container applies database migrations,
    seeds the reference data and accounts, then starts the server.
 
-4. Open <http://localhost:3000> (or `http://<this-machine's-LAN-IP>:3000` from another PC on the
+5. Open <http://localhost:3000> (or `http://<this-machine's-LAN-IP>:3000` from another PC on the
    network) and sign in with one of the demo accounts below.
 
    With `SEED_DEMO_WEEK=true`, the demo week is written in the background during the first
