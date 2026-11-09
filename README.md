@@ -51,9 +51,11 @@ Compose v2) and this folder. No Node.js needed.
    ```bash
    cp .env.example .env
    ```
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   ```
 
    (Windows PowerShell: `Copy-Item .env.example .env`.)
-   (Windows PowerShell: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`)
 
 3. Open `.env` in a text editor and fill in:
 
