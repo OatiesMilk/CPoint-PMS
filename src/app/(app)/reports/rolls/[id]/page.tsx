@@ -192,7 +192,7 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
       </Card>
 
       {fromInventory && (
-        <RollFindings roll={roll} byType={findings.byType} largest={findings.largest} framed />
+        <RollFindings roll={roll} byType={findings.byType} largest={findings.largest} />
       )}
 
       <Card aria-labelledby="shots-heading">
