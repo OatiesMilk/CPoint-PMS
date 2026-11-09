@@ -3,7 +3,7 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-09 (demo clock, D-125; demo data D-123, D-124; Phase 31 still waits for D4)
+**Last updated:** 2026-11-09 (two weeks of demo data, D-126; demo clock, D-125 merged #48; demo data D-123, D-124; Phase 31 still waits for D4)
 **Branch:** `main` at c5b1848 has everything through Phase 30F (#41 to #45).
 **Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 31, the documentation and the paper's
 figures. Plan `docs/prompts/plans/phase-31-plan.md`, handoff `qa/handoffs/2026-11-07-phase-31-docs.md`,
@@ -48,7 +48,10 @@ include them).
   with the app's own measuring code), and one roll stays just under at 7% to 9%. `npm run check`
   passed. Handoff `qa/handoffs/2026-11-09-small-demo-rolls.md` (S7), prompt
   `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
-- **Demo clock (D-125, built 2026-11-09, uncommitted):** Change time in the Demo mode band moves the
+- **Two weeks of demo data (D-126, built 2026-11-09, uncommitted):** the seed fills today and the 13
+  days before (10 working days); four short days, four stock updates, three returned rolls spread
+  over both weeks. `npm run check` passed (725 unit tests).
+- **Demo clock (D-125, merged #48):** Change time in the Demo mode band moves the
   whole app to a Manila date and time and keeps ticking; Back to real time. One migration
   (`demo_clock`). `npm run check` passed. Handoff `qa/handoffs/2026-11-09-demo-clock.md`.
   Codex run 1 FAIL (the migration wasn't applied on the PC; setup, not code). Run 2 **PASS WITH

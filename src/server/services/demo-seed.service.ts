@@ -75,15 +75,18 @@ export const DEMO_SHOT_SQ_FT = (DEMO_WIDTH_IN * DEMO_WIDTH_IN * DEMO_ASPECT) / 1
 export function sectionsFor(areaSqFt: number): number {
   return Math.max(1, Math.ceil(areaSqFt / DEMO_SHOT_SQ_FT - 1e-9));
 }
+/** How many days back the demo data reaches, today included: two working weeks (D-126). */
+export const DEMO_DAYS = 14;
 /**
- * The rolls (by their place in the week) whose leather is badly damaged: a random mix of holes,
- * scratches, creases and long cuts until each reaches its own share between 11% and 16%, so they
- * go over the 10% limit and are Returned to supplier (D-112, D-116, D-124). All three are Marikina
- * Supplier A's, the leather with more defects.
+ * The rolls (by their place in the two weeks, two a working day) whose leather is badly damaged: a
+ * random mix of holes, scratches, creases and long cuts until each reaches its own share between
+ * 11% and 16%, so they go over the 10% limit and are Returned to supplier (D-112, D-116, D-124).
+ * Two in the first week, one in the second; all three are Marikina Supplier A's, the leather with
+ * more defects.
  */
-export const DEMO_DAMAGED_ROLLS = [2, 4, 8];
-/** The roll with many defects that still passes: between 7% and 9% (D-124). */
-export const DEMO_NEAR_LIMIT_ROLL = 5;
+export const DEMO_DAMAGED_ROLLS = [4, 10, 16];
+/** The roll with many defects that still passes, in the second week: 7% to 9% (D-124). */
+export const DEMO_NEAR_LIMIT_ROLL = 13;
 /** The return limit the demo aims around (Settings' default, C-9). */
 export const DEMO_LIMIT_PCT = 10;
 export const DEMO_DAMAGED_SHARE: [number, number] = [11, 16];
@@ -212,12 +215,12 @@ export const DEMO_CAPTURERS = [
 export const DEMO_MODEL_VERSION = "yolo-v1-1d729fb0";
 
 /**
- * Constructors absent on the demo week's working days before today, oldest first (D-081). On the
- * fourth day (none absent) the Quality Inspector is absent instead, so the Floor Manager enters that
- * day's check-ins (D-088).
+ * Constructors absent on the demo's working days before today, oldest first (D-081, D-126). On
+ * the eighth day (none absent) the Quality Inspector is absent instead, so the Floor Manager
+ * enters that day's check-ins (D-088).
  */
-const ABSENT = [0, 1, 5, 0, 3, 2];
-const QI_ABSENT_INDEX = 3;
+const ABSENT = [0, 1, 0, 4, 0, 1, 5, 0, 3, 2];
+const QI_ABSENT_INDEX = 7;
 
 export function preparationMs(random: Random): number {
   const [lo, hi] = PREPARATION_MINUTES;
@@ -372,7 +375,7 @@ export async function seedDemoWeek(
 
   const today = manilaToday(now);
   const at = (day: string, hour: number) => new Date(manilaDayStart(day).getTime() + hour * HOUR);
-  const firstDay = addDays(today, -6);
+  const firstDay = addDays(today, -(DEMO_DAYS - 1));
 
   // ── inventory: the shelf at the start of the week. What came in and what the line used is
   //    noted as it happens, and the Floor Manager enters it on the Update stock sheet on the
@@ -398,6 +401,9 @@ export async function seedDemoWeek(
   await stock("NL-001", "IN", 10, "Delivery received", at(addDays(firstDay, 3), 10));
   await stock("TH-001", "IN", 10, "Delivery received", at(addDays(firstDay, 2), 14));
   await stock("AD-001", "IN", 3, "Delivery received", at(addDays(firstDay, 3), 14));
+  // The second week's deliveries (D-126).
+  await stock("TH-001", "IN", 6, "Delivery received", at(addDays(firstDay, 9), 14));
+  await stock("AD-001", "IN", 3, "Delivery received", at(addDays(firstDay, 10), 14));
 
   // ── leather rolls (Phase 30A, D-103, D-104): the Floor Manager adds each roll to its item with
   //    its own area, the evening before the week and when a delivery comes in. A constructor picks
@@ -437,6 +443,10 @@ export async function seedDemoWeek(
   await addDemoRolls("LR-003", 2, at(addDays(firstDay, -1), 16.2));
   await addDemoRolls("LR-001", 4, at(addDays(firstDay, 2), 9));
   await addDemoRolls("LR-002", 3, at(addDays(firstDay, 3), 11));
+  // The second week's leather (D-126).
+  await addDemoRolls("LR-001", 5, at(addDays(firstDay, 9), 9));
+  await addDemoRolls("LR-002", 3, at(addDays(firstDay, 10), 11));
+  await addDemoRolls("LR-003", 2, at(addDays(firstDay, 10), 11.1));
   /** The oldest roll of the item on the shelf at `t`, taken off the list. */
   const pickRoll = (sku: string, t: Date) => {
     const list = shelfRolls.get(sku) ?? [];
@@ -626,10 +636,10 @@ export async function seedDemoWeek(
   }
 
   /**
-   * A week of attendance through the real service (D-077, D-081): the demo week's working days
-   * before today (up to six),
+   * Attendance through the real service (D-077, D-081): the demo's working days before today (up
+   * to ten, D-126),
    * saved by the Floor Manager at 07:50 that morning, with a few constructors absent on some days
-   * (none, 1, 5, none, 3, 2, oldest first) so Phase 23's shortfalls have something to line up
+   * (none, 1, none, 4, none, 1, 5, none, 3, 2, oldest first) so Phase 23's shortfalls have something to line up
    * with. Today is left "Not taken" so the demo starts with Take attendance. The office roles are
    * marked present, except the Quality Inspector on one day (D-088). Who is absent is drawn from
    * the seed, never the same person every time.
@@ -679,7 +689,7 @@ export async function seedDemoWeek(
    *    missed on the shortest-handed day, so it adds no short day of its own; on the day attendance
    *    shows the QI absent, the Floor Manager finishes them (D-088);
    *  - pairs follow the constructors present and the working hours (demoRate, from the roster),
-   *    so the days with 2, 3 and 5 absent end below quota on passed pairs and the others meet it. A day without
+   *    so the days with 2, 3, 4 and 5 absent end below quota on passed pairs and the others meet it. A day without
    *    attendance counts everyone on the roster.
    * Today: batches finished more than 30 minutes ago are saved; a newer one is left Due.
    */

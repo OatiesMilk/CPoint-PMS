@@ -5,6 +5,16 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-09 · Two weeks of demo data (D-126)
+
+- Dylan: the seed should fill at least 14 days. `DEMO_DAYS = 14` in `demo-seed.service.ts`: 10
+  working days, attendance pattern of 10, QI away on the eighth, damaged rolls 4, 10, 16 and the
+  near-limit roll 13, a second week of leather and supplies. README and D-126.
+- `tests/unit/demo-seed.test.ts` updated (10 attendance days, 19 batches, four short days, four
+  stock updates). `npm run check` passed (725 unit tests), in the cloud copy from `main` at c7e9a5e
+  (#48).
+- Next: Dylan resets on the PC and checks the calendar and Reports; then git commands.
+
 ## 2026-11-09 · Demo clock (D-125)
 
 - Dylan's go: a demo tool to set the date and time the app runs at. Running clock (recommended).
