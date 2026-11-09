@@ -43,11 +43,12 @@ npm run dev
 
 ## 4. Scenarios
 
-| #   | Role          | Steps                                    | Expected                                                                                                            |
-| --- | ------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| S1  | Floor Manager | Reports → Rolls, the demo week's range   | Every roll's area 4 to 7 sq ft; every finished roll's Scanning time 1 to 3 min; 3 to 6 shots                        |
-| S2  | Floor Manager | Same list                                | Exactly three rolls Returned to supplier (Too many defects); the others Scanning passed                             |
-| S3  | Floor Manager | Inventory → each leather item            | Rolls in stock 4 to 7 sq ft; one roll removed for water damage                                                      |
-| S4  | Constructor   | Capture → Leather → Roll on the table    | The newest roll is still being scanned; the picker lists rolls of 4 to 7 sq ft                                      |
-| S5  | All           | `npx playwright test` (full suite)       | Passes as before (the e2e tests don't use the demo week)                                                            |
-| S6  | Floor Manager | Reports → Rolls and Settings → Suppliers | The demo suppliers are Marikina Supplier A and B, Bulacan Supplier A and B (codes MSA, MSB, BSA, BSB); no old names |
+| #   | Role          | Steps                                                                     | Expected                                                                                                                                               |
+| --- | ------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| S1  | Floor Manager | Reports → Rolls, the demo week's range                                    | Every roll's area 4 to 7 sq ft; every finished roll's Scanning time 1 to 3 min; 3 to 6 shots                                                           |
+| S2  | Floor Manager | Same list                                                                 | Exactly three rolls Returned to supplier (Too many defects); the others Scanning passed                                                                |
+| S3  | Floor Manager | Inventory → each leather item                                             | Rolls in stock 4 to 7 sq ft; one roll removed for water damage                                                                                         |
+| S4  | Constructor   | Capture → Leather → Roll on the table                                     | The newest roll is still being scanned; the picker lists rolls of 4 to 7 sq ft                                                                         |
+| S5  | All           | `npx playwright test` (full suite)                                        | Passes as before (the e2e tests don't use the demo week)                                                                                               |
+| S6  | Floor Manager | Reports → Rolls and Settings → Suppliers                                  | The demo suppliers are Marikina Supplier A and B, Bulacan Supplier A and B (codes MSA, MSB, BSA, BSB); no old names                                    |
+| S7  | Floor Manager | Reports → Rolls → each Returned to supplier roll, and the one at 7% to 9% | Three rolls over 10% (11% to 16%), each with a mix of holes, scratches, creases and cuts (not mostly cuts); one roll at 7% to 9% reads Scanning passed |

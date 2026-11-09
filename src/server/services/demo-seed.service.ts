@@ -1,11 +1,13 @@
 import { manilaToday } from "@/lib/format";
 import { DEFAULT_LUNCH, DEFAULT_SCHEDULE, batchesFor, isoWeekday } from "@/lib/production-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
+import { measureShot, rollShare, type CountRule } from "@/lib/measure";
 import {
   renderLeatherImage,
   scenario,
   type Detection,
   type Random,
+  type SceneClass,
 } from "@/server/lib/leather-scan";
 import { DEMO_SUPPLIERS } from "@/server/lib/demo-suppliers";
 import { logger } from "@/server/lib/logger";
@@ -73,15 +75,126 @@ export function sectionsFor(areaSqFt: number): number {
   return Math.max(1, Math.ceil(areaSqFt / DEMO_SHOT_SQ_FT - 1e-9));
 }
 /**
- * The rolls (by their place in the week) whose leather is badly cut: long cuts on every shot, so
- * they go over the 10% limit and show Too many defects (for the Floor Manager's information since
- * Phase 30E, D-112). Each cut from 3 in counts a flat 1% (D-110), so a roll gets at least
- * `DEMO_CUTS_PER_ROLL` cuts, spread over its few shots.
+ * The rolls (by their place in the week) whose leather is badly damaged: a random mix of holes,
+ * scratches, creases and long cuts until each reaches its own share between 11% and 16%, so they
+ * go over the 10% limit and are Returned to supplier (D-112, D-116, D-124). All three are Marikina
+ * Supplier A's, the leather with more defects.
  */
-export const DEMO_CUT_ROLLS = [2, 4, 8];
-export const DEMO_CUTS_PER_ROLL = 12;
-/** A long cut's box: 4.0 × 1.8 in at the demo scale, about 4.4 in by its diagonal. */
-const CUT_BOX = { width: 0.25, height: 0.15 };
+export const DEMO_DAMAGED_ROLLS = [2, 4, 8];
+/** The roll with many defects that still passes: between 7% and 9% (D-124). */
+export const DEMO_NEAR_LIMIT_ROLL = 5;
+/** The return limit the demo aims around (Settings' default, C-9). */
+export const DEMO_LIMIT_PCT = 10;
+export const DEMO_DAMAGED_SHARE: [number, number] = [11, 16];
+export const DEMO_NEAR_LIMIT_SHARE: [number, number] = [7, 9];
+/** At most this many defects on one shot of a damaged roll. */
+const MAX_DEFECTS_PER_SHOT = 6;
+const DEMO_SCALE = { widthIn: DEMO_WIDTH_IN, aspect: DEMO_ASPECT };
+
+/** A defect type as the demo week reads it: its outcome and how it counts (D-110). */
+export type DemoClass = SceneClass & CountRule;
+
+/**
+ * Box sizes per defect, in fractions of the 16 × 12 in photo: a hole is small, a scratch long
+ * and thin, a crease wide, and a long cut always reaches 3 in by its diagonal (3.2 × 1.2 in at
+ * least). Other types take the simulator's sizes.
+ */
+const SHAPES: Record<string, { w: [number, number]; h: [number, number] }> = {
+  hole: { w: [0.05, 0.12], h: [0.06, 0.15] },
+  scratch: { w: [0.2, 0.45], h: [0.08, 0.22] },
+  crease: { w: [0.15, 0.35], h: [0.1, 0.22] },
+  cut: { w: [0.2, 0.3], h: [0.1, 0.2] },
+};
+const OTHER_SHAPE = { w: [0.06, 0.2] as [number, number], h: [0.05, 0.18] as [number, number] };
+/** How often each type is drawn on a damaged roll: holes and scratches most, a few cuts. */
+const DAMAGE_WEIGHTS: Record<string, number> = { hole: 3, scratch: 3, crease: 2, cut: 1.5 };
+
+/**
+ * A roll's defect share as the app works it out (D-103, D-110): the found defects' box area over
+ * the roll's area, plus 1% per cut from 3 in, at the demo scale. Found means 50% or more.
+ */
+export function demoRollShare(
+  shots: readonly Detection[][],
+  areaSqFt: number,
+  classes: readonly DemoClass[],
+): number {
+  const rules = new Map(classes.map((c) => [c.key, c] as const));
+  const measured = shots.map((detections) =>
+    measureShot(
+      detections.map((d) => {
+        const c = rules.get(d.classKey);
+        return {
+          box: d.box,
+          found: d.confidence >= 0.5,
+          rule: c ? { notAcceptedFromIn: c.notAcceptedFromIn, flatSharePct: c.flatSharePct } : null,
+        };
+      }),
+      DEMO_SCALE,
+    ),
+  );
+  const share = rollShare(areaSqFt, measured, DEMO_LIMIT_PCT);
+  return share.measured ? share.sharePct : 0;
+}
+
+/**
+ * Adds random found defects (holes, scratches, creases, long cuts) to a roll's shots until its
+ * share reaches a random target in `range`, never going above the range's top (D-124). Each
+ * damaged roll ends with its own mix.
+ */
+export function damageRoll(
+  random: Random,
+  shots: readonly Detection[][],
+  areaSqFt: number,
+  classes: readonly DemoClass[],
+  range: [number, number],
+): Detection[][] {
+  const rand = (lo: number, hi: number) => lo + random() * (hi - lo);
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  const out = shots.map((s) => [...s]);
+  if (out.length === 0) return out;
+  const pool = classes.filter((c) => DAMAGE_WEIGHTS[c.key]);
+  const weighted = (pool.length > 0 ? pool : classes).map((c) => ({
+    key: c.key,
+    weight: DAMAGE_WEIGHTS[c.key] ?? 1,
+  }));
+  const total = weighted.reduce((t, w) => t + w.weight, 0);
+  const draw = () => {
+    let r = random() * total;
+    for (const w of weighted) if ((r -= w.weight) < 0) return w.key;
+    return weighted[weighted.length - 1].key;
+  };
+  const [lo, hi] = range;
+  const goal = rand(lo, hi);
+  let share = demoRollShare(out, areaSqFt, classes);
+  for (let tries = 0; share < goal && tries < 400; tries++) {
+    const key = draw();
+    const shape = SHAPES[key] ?? OTHER_SHAPE;
+    const width = rand(...shape.w);
+    const height = rand(...shape.h);
+    const open = out.filter(
+      (s) => s.filter((d) => d.confidence >= 0.5).length < MAX_DEFECTS_PER_SHOT,
+    );
+    if (open.length === 0) break;
+    const shot = open[Math.floor(random() * open.length)];
+    shot.push({
+      classKey: key,
+      confidence: round(rand(0.7, 0.98)),
+      box: {
+        x: round(rand(0.02, 0.98 - width)),
+        y: round(rand(0.02, 0.98 - height)),
+        width: round(width),
+        height: round(height),
+      },
+    });
+    const next = demoRollShare(out, areaSqFt, classes);
+    if (next > hi) {
+      shot.pop();
+      continue;
+    }
+    share = next;
+  }
+  return out;
+}
 
 /**
  * The demo constructors who capture (Phase 26): Noel Manalo and three of the twelve, given camera
@@ -248,7 +361,12 @@ export async function seedDemoWeek(
   // The week's scans show the defect types active in Settings, as the camera's model would.
   const classes = defectTypes
     .filter((t) => t.isActive)
-    .map((t) => ({ key: t.key, outcome: t.outcome }));
+    .map((t): DemoClass => ({
+      key: t.key,
+      outcome: t.outcome,
+      notAcceptedFromIn: t.notAcceptedFromIn == null ? null : Number(t.notAcceptedFromIn),
+      flatSharePct: t.flatSharePct == null ? null : Number(t.flatSharePct),
+    }));
   if (classes.length === 0) return { seeded: false, reason: "no active defect types" };
 
   const today = manilaToday(now);
@@ -325,7 +443,6 @@ export async function seedDemoWeek(
     return i === -1 ? null : list.splice(i, 1)[0];
   };
   let marked = 0;
-  const hasCut = classes.some((c) => c.key === "cut");
 
   // ── rolls: two a working day (Mon–Fri, D-105), each picked, captured shot by shot and finished at
   //    Capture by a demo constructor (Phase 26, 30A) ──
@@ -369,31 +486,23 @@ export async function seedDemoWeek(
       // Shot by shot from the Capture page, edge to edge.
       const prep = preparationMs(random);
       const sections = sectionsFor(picked.areaSqFt);
-      const badlyCut = hasCut && DEMO_CUT_ROLLS.includes(index);
-      const cutsPerShot = Math.ceil(DEMO_CUTS_PER_ROLL / sections);
+      // Each shot's defects, drawn up front so a damaged roll's mix can be aimed at its share.
+      let plan: Detection[][] = Array.from({ length: sections }, () => {
+        const detections = scenario(random, classes);
+        // Worse leather: a clean section gets a second chance to show a defect.
+        return worseLeather && detections.length === 0 ? scenario(random, classes) : detections;
+      });
+      if (DEMO_DAMAGED_ROLLS.includes(index))
+        plan = damageRoll(random, plan, picked.areaSqFt, classes, DEMO_DAMAGED_SHARE);
+      else if (index === DEMO_NEAR_LIMIT_ROLL)
+        plan = damageRoll(random, plan, picked.areaSqFt, classes, DEMO_NEAR_LIMIT_SHARE);
       const sectionAt = (i: number) => plus(t, ((i + 0.5) * prep) / sections);
       let captured = 0;
       while (captured < sections && past(sectionAt(captured))) captured += 1;
       for (let i = 0; i < sections; i++) {
         const ts = sectionAt(i);
         if (!past(ts)) break;
-        let detections: Detection[] = scenario(random, classes);
-        // Worse leather: a clean section gets a second chance to show a defect.
-        if (worseLeather && detections.length === 0) detections = scenario(random, classes);
-        // A badly cut roll: long cuts (about 4.4 in by their box) on every shot (Phase 30C).
-        if (badlyCut)
-          detections = [
-            ...detections,
-            ...Array.from({ length: cutsPerShot }, (_, k) => ({
-              classKey: "cut",
-              confidence: Math.round(between(0.9, 0.99) * 1000) / 1000,
-              box: {
-                x: k % 2 === 0 ? 0.1 : 0.6,
-                y: Math.round((0.05 + 0.8 * (k / cutsPerShot)) * 1000) / 1000,
-                ...CUT_BOX,
-              },
-            })),
-          ];
+        const detections = plan[i];
         const image = await renderLeatherImage(detections, {
           width: options.imageSize ?? 480,
           height: Math.round((options.imageSize ?? 480) * DEMO_ASPECT),

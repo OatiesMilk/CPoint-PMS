@@ -2443,3 +2443,14 @@ fallback store, was JM Leather Supply) and Marikina Supplier B (thread, tacks, c
 Shoe Supplies); codes MSA, BSA, BSB, MSB. A reset removes the old names. Demo data only; no rule of
 the app changes.
 `src/server/services/demo-seed.service.ts`.
+
+### D-124 · 2026-11-09 · Accepted — The damaged demo rolls get a random mix of defects
+
+**Context:** after D-123 the three demo rolls over the 10% limit got there almost only through
+long cuts (about 3 a shot at 1% each), which looked made up. **Decision (Dylan, 2026-11-09):** each
+damaged roll gets a random mix of found holes, scratches, creases and long cuts (drawn 3 : 3 : 2 :
+1.5, random sizes and places, at most 6 a shot) until its share, worked out as the app does
+(box area over the roll's area plus 1% per cut from 3 in), reaches its own random target between
+11% and 16%. One more roll (the week's fifth) stays just under the limit, 7% to 9%, so the demo
+shows a roll with many defects that still passes. The other rolls keep the simulator's random mix.
+Demo data only. `src/server/services/demo-seed.service.ts` (`damageRoll`, `demoRollShare`).

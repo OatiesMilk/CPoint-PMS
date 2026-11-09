@@ -40,11 +40,14 @@ include them).
 - **Codex run 4 PASS WITH ISSUES** (`qa/reports/2026-11-08-phase-31-run4.md`, Sunday): D2's Plan
   days example matches the calendar exactly; D4 blocked (weekends have no batches). Every scenario
   but D4 has now passed.
-- **Small demo rolls (D-123, built 2026-11-09 on the PC, uncommitted):** the demo week's rolls are
-  4 to 7 sq ft, scanned in 1 to 3 minutes, 3 to 6 shots of 16 × 12 in; the three badly cut rolls
-  still go over 10%; the demo suppliers are Marikina Supplier A and B, Bulacan Supplier A and B.
-  `npm run check` passed (710 unit tests). Handoff
-  `qa/handoffs/2026-11-09-small-demo-rolls.md`, prompt `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
+- **Small demo rolls (D-123, merged #47):** the demo week's rolls are 4 to 7 sq ft, scanned in 1
+  to 3 minutes, 3 to 6 shots of 16 × 12 in; the demo suppliers are Marikina Supplier A and B,
+  Bulacan Supplier A and B.
+- **Varied damage on the demo rolls (D-124, built 2026-11-09, uncommitted):** the three damaged
+  rolls get a random mix of holes, scratches, creases and long cuts up to 11% to 16% (worked out
+  with the app's own measuring code), and one roll stays just under at 7% to 9%. `npm run check`
+  passed. Handoff `qa/handoffs/2026-11-09-small-demo-rolls.md` (S7), prompt
+  `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
 - **Next:** Codex D4 only (README "3. Quality Inspector") on a weekday, with 30F-3 run 4; Codex run 4 for 30F-3 on a weekday with today
   planned; then git commands for Phase 31.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
