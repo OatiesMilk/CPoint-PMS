@@ -143,7 +143,7 @@ first on **Batches → Plan days** if it isn't.
    with one sentence, for example "Below quota by 18 pairs. 3 of 12 Shoe Constructors were absent."
    Nothing names a person.
 3. **Inventory → Black cowhide (school shoes):** the item's **Rolls**, each with its code
-   (`LR-MT-001`), area, status (Not yet scanned, Being scanned, Scanning passed, Returned to
+   (`LR-BSA-001`), area, status (Not yet scanned, Being scanned, Scanning passed, Returned to
    supplier, Removed), shots and Defect %. **Add rolls**: the day they arrived, then each roll's
    area. The count on hand follows the rolls (D-103). **Update stock** opens the one sheet for every
    other item (Added, Used, Correction with a reason).
@@ -470,8 +470,9 @@ Monday to Friday, through the real services:
   (08:00–13:00 and 13:00–17:00) with a pair or two failing inspection, one late and one missed; on
   one day the QI is absent and the Floor Manager finishes them (D-088);
 - leather rolls added in Inventory with their areas, picked and scanned at Capture by four
-  constructors with camera access, about ten shots each, each shot measured (a fixed demo scale); three rolls with
-  a long cut on every shot are Returned to supplier; the newest roll is still being scanned; one
+  constructors with camera access; each roll is 4 to 7 sq ft and takes 1 to 3 minutes to scan, in 3
+  to 6 shots of 16 × 12 in (a fixed demo scale, 16.0 in across); three rolls with long cuts on every
+  shot are Returned to supplier; the newest roll is still being scanned; one
   shelf roll is removed for water damage;
 - stock updates on each past Wednesday and Friday;
 - attendance for the working days before today, a few constructors absent on some days (today is

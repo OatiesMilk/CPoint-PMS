@@ -46,22 +46,42 @@ export function mulberry32(seed: number): Random {
 const HOUR = 3_600_000;
 const MINUTE = 60_000;
 
-/** Hours a roll is captured for, from Start roll to Finish roll. */
-export const PREPARATION_HOURS: [number, number] = [2, 3];
-
-/** Shots per demo roll (D-090). Real rolls vary: a constructor finishes when all of it is in. */
-export const SECTIONS_PER_ROLL = 10;
 /**
- * The demo phones' calibration (Phase 30C, A-18): the inches a demo photo covers across. Every demo
- * shot is measured with it, so each finished roll has a Defect %.
+ * Minutes a roll is scanned for, from Start scanning to Finish roll (D-123): small rolls, like the
+ * 4.75 sq ft pieces used for the live demo, take a few minutes.
  */
-export const DEMO_WIDTH_IN = 24;
+export const PREPARATION_MINUTES: [number, number] = [1, 3];
+
+/** The area of each demo roll, in sq ft (D-123): small pieces, 4 to 7 sq ft. */
+export const DEMO_ROLL_AREA_SQ_FT: [number, number] = [4, 7];
 /**
- * The rolls (by their place in the week) whose leather is badly cut: a long cut on every shot, so
+ * The demo phones' scale (Phase 30C, D-120): the inches a demo photo covers across, as the fake
+ * camera reads the card (16.0 in). Every demo shot is measured with it, so each finished roll has
+ * a Defect %.
+ */
+export const DEMO_WIDTH_IN = 16;
+/** The demo photo's height ÷ width (480 × 360). */
+const DEMO_ASPECT = 0.75;
+/** The sq ft one demo shot covers: 16 × 12 in. */
+export const DEMO_SHOT_SQ_FT = (DEMO_WIDTH_IN * DEMO_WIDTH_IN * DEMO_ASPECT) / 144;
+
+/**
+ * Shots per demo roll (D-090, D-123): enough to cover its area edge to edge (3 for 4 sq ft, 6 for
+ * 7 sq ft). Real rolls vary: a constructor finishes when all of it is in.
+ */
+export function sectionsFor(areaSqFt: number): number {
+  return Math.max(1, Math.ceil(areaSqFt / DEMO_SHOT_SQ_FT - 1e-9));
+}
+/**
+ * The rolls (by their place in the week) whose leather is badly cut: long cuts on every shot, so
  * they go over the 10% limit and show Too many defects (for the Floor Manager's information since
- * Phase 30E, D-112).
+ * Phase 30E, D-112). Each cut from 3 in counts a flat 1% (D-110), so a roll gets at least
+ * `DEMO_CUTS_PER_ROLL` cuts, spread over its few shots.
  */
 export const DEMO_CUT_ROLLS = [2, 4, 8];
+export const DEMO_CUTS_PER_ROLL = 12;
+/** A long cut's box: 4.0 × 1.8 in at the demo scale, about 4.4 in by its diagonal. */
+const CUT_BOX = { width: 0.25, height: 0.15 };
 
 /**
  * The demo constructors who capture (Phase 26): Noel Manalo and three of the twelve, given camera
@@ -86,8 +106,8 @@ const ABSENT = [0, 1, 5, 0, 3, 2];
 const QI_ABSENT_INDEX = 3;
 
 export function preparationMs(random: Random): number {
-  const [lo, hi] = PREPARATION_HOURS;
-  return (lo + random() * (hi - lo)) * HOUR;
+  const [lo, hi] = PREPARATION_MINUTES;
+  return (lo + random() * (hi - lo)) * MINUTE;
 }
 
 /** The one daily quota of passed pairs in the demo week (Phase 27, C-30, C-41). */
@@ -116,7 +136,7 @@ export const DEMO_INVENTORY = [
     unit: "roll",
     reorderLevel: 3,
     openingStock: 0,
-    supplier: "Meycauayan Tannery",
+    supplier: "Bulacan Supplier A",
   },
   {
     sku: "LR-002",
@@ -125,7 +145,7 @@ export const DEMO_INVENTORY = [
     unit: "roll",
     reorderLevel: 2,
     openingStock: 0,
-    supplier: "Marikina Leather Trading",
+    supplier: "Marikina Supplier A",
   },
   {
     sku: "LR-003",
@@ -134,7 +154,7 @@ export const DEMO_INVENTORY = [
     unit: "roll",
     reorderLevel: 1,
     openingStock: 0,
-    supplier: "JM Leather Supply (Divisoria)",
+    supplier: "Bulacan Supplier B",
   },
   {
     sku: "NL-001",
@@ -263,15 +283,23 @@ export async function seedDemoWeek(
   // ── leather rolls (Phase 30A, D-103, D-104): the Floor Manager adds each roll to its item with
   //    its own area, the evening before the week and when a delivery comes in. A constructor picks
   //    the oldest roll of the item at Capture. ──
-  const shelfRolls = new Map<string, { id: string; code: string; addedAt: Date }[]>();
+  const shelfRolls = new Map<
+    string,
+    { id: string; code: string; addedAt: Date; areaSqFt: number }[]
+  >();
   const addDemoRolls = async (sku: string, count: number, t: Date) => {
     if (!past(t)) return;
+    const [minArea, maxArea] = DEMO_ROLL_AREA_SQ_FT;
+    const areas = Array.from(
+      { length: count },
+      () => Math.round(between(minArea, maxArea) * 4) / 4,
+    );
     const result = await addRolls(
       itemIds.get(sku)!,
       {
         receivedOn: manilaToday(t),
-        rolls: Array.from({ length: count }, (_, i) => ({
-          areaSqFt: Math.round(between(18, 42) * 4) / 4,
+        rolls: areas.map((areaSqFt, i) => ({
+          areaSqFt,
           tagCode:
             i % 2 === 0 ? `T${manilaToday(t).slice(5).replace("-", "")}-${i + 1}` : undefined,
         })),
@@ -280,7 +308,9 @@ export async function seedDemoWeek(
       t,
     );
     const list = shelfRolls.get(sku) ?? [];
-    for (const r of result.added) list.push({ id: r.id, code: r.code, addedAt: t });
+    result.added.forEach((r, i) =>
+      list.push({ id: r.id, code: r.code, addedAt: t, areaSqFt: areas[i] }),
+    );
     shelfRolls.set(sku, list);
   };
   await addDemoRolls("LR-001", 5, at(addDays(firstDay, -1), 16));
@@ -327,7 +357,7 @@ export async function seedDemoWeek(
       const created = at(day, startHour + between(0, 0.3));
       if (!past(created)) continue;
       // Rolls alternate between the two tanneries' items; every sixth comes from the fallback
-      // store. Marikina's leather (the first demo supplier) has more defects.
+      // store. Marikina Supplier A's leather (the first demo supplier) has more defects.
       const sku = index % 6 === 0 ? "LR-003" : index % 2 === 0 ? "LR-002" : "LR-001";
       const picked = pickRoll(sku, created) ?? pickRoll("LR-001", created);
       if (!picked) continue;
@@ -338,7 +368,9 @@ export async function seedDemoWeek(
 
       // Shot by shot from the Capture page, edge to edge.
       const prep = preparationMs(random);
-      const sections = SECTIONS_PER_ROLL;
+      const sections = sectionsFor(picked.areaSqFt);
+      const badlyCut = hasCut && DEMO_CUT_ROLLS.includes(index);
+      const cutsPerShot = Math.ceil(DEMO_CUTS_PER_ROLL / sections);
       const sectionAt = (i: number) => plus(t, ((i + 0.5) * prep) / sections);
       let captured = 0;
       while (captured < sections && past(sectionAt(captured))) captured += 1;
@@ -348,19 +380,23 @@ export async function seedDemoWeek(
         let detections: Detection[] = scenario(random, classes);
         // Worse leather: a clean section gets a second chance to show a defect.
         if (worseLeather && detections.length === 0) detections = scenario(random, classes);
-        // A badly cut roll: a long cut (about 4 to 6 in by its box) on every shot (Phase 30C).
-        if (hasCut && DEMO_CUT_ROLLS.includes(index))
+        // A badly cut roll: long cuts (about 4.4 in by their box) on every shot (Phase 30C).
+        if (badlyCut)
           detections = [
             ...detections,
-            {
+            ...Array.from({ length: cutsPerShot }, (_, k) => ({
               classKey: "cut",
               confidence: Math.round(between(0.9, 0.99) * 1000) / 1000,
-              box: { x: 0.3, y: 0.3, width: 0.16, height: 0.12 },
-            },
+              box: {
+                x: k % 2 === 0 ? 0.1 : 0.6,
+                y: Math.round((0.05 + 0.8 * (k / cutsPerShot)) * 1000) / 1000,
+                ...CUT_BOX,
+              },
+            })),
           ];
         const image = await renderLeatherImage(detections, {
           width: options.imageSize ?? 480,
-          height: Math.round((options.imageSize ?? 480) * 0.75),
+          height: Math.round((options.imageSize ?? 480) * DEMO_ASPECT),
           random,
         });
         await ingestScan(

@@ -3,7 +3,7 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-07 (Phase 31: all scenarios passed but D4, the QI check, on a weekday)
+**Last updated:** 2026-11-09 (small demo rolls, D-123; Phase 31 still waits for D4 on a weekday)
 **Branch:** `main` at c5b1848 has everything through Phase 30F (#41 to #45).
 **Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 31, the documentation and the paper's
 figures. Plan `docs/prompts/plans/phase-31-plan.md`, handoff `qa/handoffs/2026-11-07-phase-31-docs.md`,
@@ -40,6 +40,11 @@ include them).
 - **Codex run 4 PASS WITH ISSUES** (`qa/reports/2026-11-08-phase-31-run4.md`, Sunday): D2's Plan
   days example matches the calendar exactly; D4 blocked (weekends have no batches). Every scenario
   but D4 has now passed.
+- **Small demo rolls (D-123, built 2026-11-09 on the PC, uncommitted):** the demo week's rolls are
+  4 to 7 sq ft, scanned in 1 to 3 minutes, 3 to 6 shots of 16 × 12 in; the three badly cut rolls
+  still go over 10%; the demo suppliers are Marikina Supplier A and B, Bulacan Supplier A and B.
+  `npm run check` passed (710 unit tests). Handoff
+  `qa/handoffs/2026-11-09-small-demo-rolls.md`, prompt `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
 - **Next:** Codex D4 only (README "3. Quality Inspector") on a weekday, with 30F-3 run 4; Codex run 4 for 30F-3 on a weekday with today
   planned; then git commands for Phase 31.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks

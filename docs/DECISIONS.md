@@ -2424,3 +2424,22 @@ would change their role). **Answers (Dylan, 2026-11-06):** a table wider than 12
 tightened first, and a column is dropped only if it is also on the detail page (30F-2); the rule
 under page titles goes; Capture's repeated hint is shown once (30F-3, a wording change).
 Brief: `docs/prompts/premium-ui.md`.
+
+### D-123 · 2026-11-09 · Accepted — Small demo rolls: 4 to 7 sq ft, 1 to 3 minutes a roll
+
+**Context:** the live demo uses Dylan's two leather pieces of 4.75 sq ft each, but the demo week
+(D-090) seeded rolls of 18 to 42 sq ft scanned for 2 to 3 hours in ten 24 in shots, so Reports →
+Rolls didn't look like the rolls on the table. **Decision (Dylan, 2026-11-09):** the demo week's
+rolls are 4 to 7 sq ft (rounded to 0.25) and each takes 1 to 3 minutes from Start scanning to
+Finish roll. Each shot covers 16 × 12 in (the fake camera's 16.0 in across, 480 × 360 photos), so
+a roll gets the shots its area needs: `ceil(area ÷ 1.33 sq ft)`, 3 for 4 sq ft and 6 for 7 sq ft.
+The same three rolls (DEMO_CUT_ROLLS) still go over the 10% limit: since a cut from 3 in counts a
+flat 1% (D-110), they get at least 12 cuts of about 4.4 in spread over their shots (12% to 16%);
+the others stay near 1%. Unchanged: the quota of 128 passed pairs, the thread, cement and tack use,
+two rolls a day, the removed roll and the plans. **Suppliers (Dylan, 2026-11-09):** the demo
+suppliers are named by place only: Marikina Supplier A (the leather with more defects, was
+Marikina Leather Trading), Bulacan Supplier A (was Meycauayan Tannery), Bulacan Supplier B (the
+fallback store, was JM Leather Supply) and Marikina Supplier B (thread, tacks, cement, was San Roque
+Shoe Supplies); codes MSA, BSA, BSB, MSB. A reset removes the old names. Demo data only; no rule of
+the app changes.
+`src/server/services/demo-seed.service.ts`.
