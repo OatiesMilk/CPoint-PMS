@@ -65,7 +65,7 @@ Compose v2) and this folder. No Node.js needed.
    | `AUTH_SECRET=`              | A long random string. `openssl rand -base64 32` makes one, or type 40+ random characters. |
    | `BOOTSTRAP_ADMIN_PASSWORD=` | 12+ characters. Used only when no System Admin exists yet (demo off).                     |
    | `DEMO_USER_PASSWORD=`       | 8+ characters. The password for all four demo accounts.                                   |
-   | `SEED_DEMO_WEEK=false`      | Change to `true` for a panel demo: a past week of production is created on first start.   |
+   | `SEED_DEMO_WEEK=false`      | Change to `true` for a panel demo: two weeks of production are created on first start.    |
 
    For real use, also change `POSTGRES_PASSWORD` and set `SEED_DEMO_USERS=false`.
 
@@ -163,8 +163,9 @@ first on **Batches → Plan days** if it isn't.
 6. **Reports → Operations, Quality, Materials:** pairs finished, failed inspection and the share of
    the quota; rolls scanned per day and defects by type; supplier quality, worst first, with
    **High** on a supplier with at least 5 rolls whose returned share is at least 10 points above the
-   whole line's (the demo week has fewer, so none shows it); each material's use per week and the
-   leather rolls used and returned. Download a CSV and open it in Excel.
+   whole line's (the demo data's Marikina Supplier A, with its three returned rolls, can show
+   it); each material's use per week and the leather rolls used and returned. Download a CSV and
+   open it in Excel.
 
 ### 2. Shoe Constructor (2 min)
 
@@ -460,7 +461,7 @@ starting the app.
 | `BOOTSTRAP_ADMIN_PASSWORD` | 12+ characters. Creates the first System Admin (`BOOTSTRAP_ADMIN_EMAIL`) if no active admin exists. With demo users on, `admin@cpoint.local` already exists and uses `DEMO_USER_PASSWORD`. |
 | `DEMO_USER_PASSWORD`       | 8+ characters. Password for the demo accounts (when `SEED_DEMO_USERS=true`).                                                                                                               |
 | `DEMO_LOGIN_TOOLS`         | `true` for the demo sign-in and Reset demo data on the login page, with a Demo mode band (D-101). Needs `SEED_DEMO_USERS=true`. Never for real use. Default off.                           |
-| `SEED_DEMO_WEEK`           | `true` to create a past week of production on first start (panel demo). Default off.                                                                                                       |
+| `SEED_DEMO_WEEK`           | `true` to create two past weeks of production on first start (panel demo). Default off.                                                                                                    |
 
 On every start the app makes sure the reference data exists: defect types (crease and scratch
 Usable; cut Not accepted from 3 in; hole, abrasion and dirt Not accepted), found at 50%, the 10%
@@ -468,8 +469,8 @@ return limit, the lunch break (11:00 to 12:00), the stock reminder days (Wednesd
 a sample supplier. It never overwrites values an admin has changed. With demo users on, it also
 adds the demo inventory items the first time. `npm run db:seed` runs the same steps by hand.
 
-**The demo week** (`SEED_DEMO_WEEK=true` or `npm run demo:seed`) replays the last working days,
-Monday to Friday, through the real services:
+**The demo week** (`SEED_DEMO_WEEK=true` or `npm run demo:seed`) replays the last 14 days
+(today included, D-126), Monday to Friday only, through the real services:
 
 - day plans with one quota of 128 passed pairs; the Quality Inspector finishes both batches a day
   (08:00–13:00 and 13:00–17:00) with a pair or two failing inspection, one late and one missed; on
@@ -480,7 +481,7 @@ Monday to Friday, through the real services:
   scratches, creases and long cuts are over 10% (11% to 16%) and Returned to supplier, and one with
   many defects stays just under (7% to 9%); the newest roll is still being scanned; one shelf roll
   is removed for water damage;
-- stock updates on each past Wednesday and Friday;
+- stock updates on each past Wednesday and Friday (four in the two weeks);
 - attendance for the working days before today, a few constructors absent on some days (today is
   left for you to take); the days with two or more absent end below quota.
 
@@ -652,7 +653,7 @@ itself keeps working at `http://localhost:3000`.
 | `npm run db:migrate`        | Create + apply a migration after editing `prisma/schema.prisma`             |
 | `npm run db:deploy`         | Apply pending migrations                                                    |
 | `npm run db:seed`           | Seed reference data, demo users and the bootstrap admin (idempotent)        |
-| `npm run demo:seed`         | Seed a past week of production (only when there are no rolls)               |
+| `npm run demo:seed`         | Seed two past weeks of production (only when there are no rolls)            |
 | `npm run cv:token`          | Create a camera device token (printed once)                                 |
 | `npm run cv:simulate`       | Send simulated camera scans (`--count`, `--interval`, `--batch`)            |
 | `npm run cv:parity`         | Run the app's ONNX model on photos; `--compare` checks it against `predict` |

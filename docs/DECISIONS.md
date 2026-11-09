@@ -2471,3 +2471,16 @@ lockout, the 12-hour session, API tokens, user accounts, health, and the databas
 stamps (the audit log), so security never depends on the demo clock. Each change is audited
 (`demo_clock.set`, the user, or System from the login page). Records made while the clock is moved
 keep that date; Back to real time and Reset clean up.
+
+### D-126 · 2026-11-09 · Accepted — The demo data covers two weeks
+
+**Context:** the demo week reached only today and the 6 days before (5 working days), so the
+calendar, Recent days and the 14-day reports looked thin at the panel demo. **Decision (Dylan,
+2026-11-09):** the seed reaches 14 days back, today included (`DEMO_DAYS`): 10 working days, two
+rolls a day, attendance on every working day before today (absences none, 1, none, 4, none, 1, 5,
+none, 3, 2, oldest first; the QI away on the eighth), four stock updates (each Wednesday and
+Friday), and a second week's leather, thread and cement deliveries. The damaged rolls move to the
+4th, 10th and 16th (still Marikina Supplier A's, so its returned share is well above the line's and
+it can read **High**), the near-limit roll to the 13th. Short days: 4 absent or more, plus 3 and
+2 on the last days, as before. A reset takes about twice as long. Demo data only;
+`src/server/services/demo-seed.service.ts`.

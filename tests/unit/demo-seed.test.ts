@@ -372,16 +372,28 @@ describe("seedDemoWeek", () => {
 
   it("takes attendance for the working days before today, never today, with a few absences (D-081)", async () => {
     const result = await seedDemoWeek({ now, seed: 1 });
-    // Saturday 3 Oct: the demo week's days before it (Sunday skipped), oldest first.
+    // Saturday 3 Oct: the two weeks' working days before it (weekends skipped), oldest first
+    // (D-126).
     const days = attendance.saveAttendanceDay.mock.calls.map(([day]) => day);
-    expect(days).toEqual(["2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02"]);
-    expect(result).toMatchObject({ attendanceDays: 5 });
+    expect(days).toEqual([
+      "2026-09-21",
+      "2026-09-22",
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-25",
+      "2026-09-28",
+      "2026-09-29",
+      "2026-09-30",
+      "2026-10-01",
+      "2026-10-02",
+    ]);
+    expect(result).toMatchObject({ attendanceDays: 10 });
     const absent = attendance.saveAttendanceDay.mock.calls.map(
       ([, input]) =>
         (input as { marks: { present: boolean }[] }).marks.filter((m) => !m.present).length,
     );
-    // The newest days of the pattern: none, 1, 5, none, 3, 2 (oldest first).
-    expect(absent).toEqual([1, 5, 0, 3, 2]);
+    // The whole pattern, oldest first.
+    expect(absent).toEqual([0, 1, 0, 4, 0, 1, 5, 0, 3, 2]);
     for (const [, , actor, when] of attendance.saveAttendanceDay.mock.calls) {
       expect(actor).toMatchObject({ role: "FLOOR_MANAGER" });
       expect((when as Date).getTime()).toBeLessThanOrEqual(now.getTime());
@@ -490,7 +502,7 @@ describe("seedDemoWeek", () => {
       expect(input).not.toHaveProperty("usedRollIds");
   });
 
-  it("finishes the batches as the QI, with one late and one missed, and three short days that line up with the absences", async () => {
+  it("finishes the batches as the QI, with one late and one missed, and four short days that line up with the absences", async () => {
     const result = await seedDemoWeek({ now, seed: 1 });
     // The Floor Manager plans every working day that morning, with the one quota (D-114).
     const plans = production.saveDayPlan.mock.calls as unknown as [
@@ -534,16 +546,16 @@ describe("seedDemoWeek", () => {
       d.slots += 1;
       byDay.set(day, d);
     }
-    // Five past working days of two batches each (08:00–13:00 with lunch, 13:00–17:00), one
-    // missed: 9.
+    // Ten past working days of two batches each (08:00–13:00 with lunch, 13:00–17:00), one
+    // missed: 19.
     const past = [...byDay].filter(([day]) => day < "2026-10-03");
-    expect(past.reduce((t, [, d]) => t + d.slots, 0)).toBe(9);
+    expect(past.reduce((t, [, d]) => t + d.slots, 0)).toBe(19);
     const below = past.filter(([, d]) => d.passed < DEMO_QUOTA).map(([day]) => day);
-    // 29 Sep (5 absent), 1 Oct (3 absent) and 2 Oct (2 absent).
-    expect(below).toEqual(["2026-09-29", "2026-10-01", "2026-10-02"]);
+    // 24 Sep (4 absent), 29 Sep (5 absent), 1 Oct (3 absent) and 2 Oct (2 absent).
+    expect(below).toEqual(["2026-09-24", "2026-09-29", "2026-10-01", "2026-10-02"]);
   });
 
-  it("keeps the same three short days with a 13th constructor on the roster (dev databases)", async () => {
+  it("keeps the same four short days with a 13th constructor on the roster (dev databases)", async () => {
     roster.unshift({ id: "c13", role: "SHOE_CONSTRUCTOR" });
     try {
       await seedDemoWeek({ now, seed: 1 });
@@ -563,7 +575,7 @@ describe("seedDemoWeek", () => {
     const below = [...passed]
       .filter(([day, p]) => day < "2026-10-03" && p < DEMO_QUOTA)
       .map(([day]) => day);
-    expect(below).toEqual(["2026-09-29", "2026-10-01", "2026-10-02"]);
+    expect(below).toEqual(["2026-09-24", "2026-09-29", "2026-10-01", "2026-10-02"]);
   });
 
   it("enters the week's stock on Wednesday and Friday through Update stock (Phase 29, D-102)", async () => {
@@ -591,9 +603,11 @@ describe("seedDemoWeek", () => {
       { id: string },
       Date,
     ][];
-    expect(result).toMatchObject({ stockUpdates: 2 });
-    // Wednesday 30 Sep and Friday 2 Oct, 16:30 Manila, by the Floor Manager.
+    expect(result).toMatchObject({ stockUpdates: 4 });
+    // Each Wednesday and Friday of the two weeks, 16:30 Manila, by the Floor Manager (D-126).
     expect(saves.map(([, actor, when]) => [actor.id, when.toISOString()])).toEqual([
+      ["manager@cpoint.local", "2026-09-23T08:30:00.000Z"],
+      ["manager@cpoint.local", "2026-09-25T08:30:00.000Z"],
       ["manager@cpoint.local", "2026-09-30T08:30:00.000Z"],
       ["manager@cpoint.local", "2026-10-02T08:30:00.000Z"],
     ]);
