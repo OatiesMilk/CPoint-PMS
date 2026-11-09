@@ -1,3 +1,4 @@
+import { appNow } from "./clock";
 import { manilaToday } from "./format";
 
 /**
@@ -44,7 +45,7 @@ export type ReportRange = {
  */
 export function parseRange(
   params: { preset?: unknown; from?: unknown; to?: unknown },
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): ReportRange {
   const today = manilaToday(now);
   const preset = PRESETS.find((p) => p.id === params.preset);
@@ -117,6 +118,6 @@ export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
 }
 
 /** The range just before this one, of the same length, for "vs previous period" comparisons. */
-export function previousRange(range: ReportRange, now: Date = new Date()): ReportRange {
+export function previousRange(range: ReportRange, now: Date = appNow()): ReportRange {
   return parseRange({ from: addDays(range.from, -range.days), to: addDays(range.from, -1) }, now);
 }

@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getStorage } from "@/server/lib/storage";
@@ -62,7 +63,7 @@ export function shotsCsv(shots: ExportedShot[]): string {
 export async function exportRollPhotos(
   code: string,
   folder: string,
-  now: Date = new Date(),
+  now: Date = appNow(),
 ): Promise<{ roll: string; shots: ExportedShot[]; missing: number[]; folder: string }> {
   const roll = await findRollPhotos(code.trim());
   if (!roll)

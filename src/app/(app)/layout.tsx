@@ -2,6 +2,7 @@ import { ROLE_LABELS } from "@/lib/domain";
 import { Sidebar } from "@/components/features/app-shell/sidebar";
 import { DemoBand } from "@/components/features/demo-band";
 import { demoToolsEnabled } from "@/server/services/demo-tools.service";
+import { demoClockView } from "@/server/services/demo-clock.service";
 import { BatchNoticeBanner, PlanNoticeBanner } from "@/components/features/batches/batch-notices";
 import { manilaToday } from "@/lib/format";
 import { QueryProvider } from "@/components/providers/query-provider";
@@ -26,7 +27,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <QueryProvider>
-      <DemoBand on={demoToolsEnabled()} />
+      <DemoBand clock={demoToolsEnabled() ? await demoClockView() : null} />
       <div className="flex min-h-screen flex-col sm:flex-row">
         {/* Printing (a claim sheet, Phase 20) leaves the navigation out. */}
         <div className="contents print:hidden">

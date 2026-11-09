@@ -8,6 +8,7 @@
 import type { Metadata } from "next";
 import { DemoBand } from "@/components/features/demo-band";
 import { demoToolsEnabled } from "@/server/services/demo-tools.service";
+import { demoClockView } from "@/server/services/demo-clock.service";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -28,7 +29,7 @@ export default async function ChangePasswordPage() {
 
   return (
     <>
-      <DemoBand on={demoToolsEnabled()} />
+      <DemoBand clock={demoToolsEnabled() ? await demoClockView() : null} />
       <div className="relative flex min-h-screen items-center justify-center bg-background p-10">
         <div className="absolute top-6 right-6">
           <ThemeToggle />

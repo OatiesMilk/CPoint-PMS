@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import { manilaToday } from "@/lib/format";
 import { CATEGORY_LABELS } from "@/lib/inventory-rules";
 import {
@@ -58,7 +59,7 @@ export function normaliseQuery(q: unknown): string {
 export const matchesQuery = (item: { name: string; sku: string }, q: string) =>
   q === "" || item.name.toLowerCase().includes(q) || item.sku.toLowerCase().includes(q);
 
-export async function materialsReport(options: MaterialsOptions = {}, now = new Date()) {
+export async function materialsReport(options: MaterialsOptions = {}, now = appNow()) {
   const today = manilaToday(now);
   const selected = resolveWeek(options, today);
   const weeks = weeksEndingWith(selected, TREND_WEEKS);
@@ -165,7 +166,7 @@ export async function materialsReport(options: MaterialsOptions = {}, now = new 
  * materials-used.csv: one row per item (those the search kept) and week, for the eight weeks
  * ending with the selected one, oldest first (D-109).
  */
-export async function materialsCsv(options: MaterialsOptions = {}, now = new Date()) {
+export async function materialsCsv(options: MaterialsOptions = {}, now = appNow()) {
   const report = await materialsReport(options, now);
   const rows = report.weeks.flatMap((week, i) =>
     report.rows.map((item) => ({

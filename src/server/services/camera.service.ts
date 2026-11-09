@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import { Errors } from "@/server/lib/errors";
 import { countOpenRolls } from "@/server/models/roll.model";
 import { getCvSettings } from "@/server/models/cv-settings.model";
@@ -60,7 +61,7 @@ export type CameraStatus = {
 
 const ACTIVE_WINDOW_MS = 60_000;
 
-export async function cameraStatus(now: Date = new Date()): Promise<CameraStatus> {
+export async function cameraStatus(now: Date = appNow()): Promise<CameraStatus> {
   const [latest, openRolls, settings] = await Promise.all([
     findLatestScan(),
     countOpenRolls(),

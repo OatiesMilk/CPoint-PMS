@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import type { Prisma } from "@/generated/prisma/client";
 import { PAGE_SIZE } from "@/lib/pagination";
 import type { InventoryCategory, MovementType } from "@/lib/domain";
@@ -165,7 +166,7 @@ export const LEATHER_OPENING_STOCK =
 export async function createItem(
   values: Omit<InventoryItemFormValues, "supplierId"> & { supplierId?: string | null },
   actor: Actor,
-  now = new Date(),
+  now = appNow(),
 ) {
   await assertCodeFree(values.sku);
   await assertSupplier(values.supplierId ?? null);

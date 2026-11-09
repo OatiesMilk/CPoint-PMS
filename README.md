@@ -51,13 +51,14 @@ Compose v2) and this folder. No Node.js needed.
    ```bash
    cp .env.example .env
    ```
+
    ```bash
    node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    ```
 
    (Windows PowerShell: `Copy-Item .env.example .env`.)
 
-3. Open `.env` in a text editor and fill in:
+2. Open `.env` in a text editor and fill in:
 
    | Line                        | Put                                                                                       |
    | --------------------------- | ----------------------------------------------------------------------------------------- |
@@ -68,7 +69,7 @@ Compose v2) and this folder. No Node.js needed.
 
    For real use, also change `POSTGRES_PASSWORD` and set `SEED_DEMO_USERS=false`.
 
-4. Build and start:
+3. Build and start:
 
    ```bash
    docker compose up --build -d
@@ -77,7 +78,7 @@ Compose v2) and this folder. No Node.js needed.
    The first build takes a few minutes. On start, the app container applies database migrations,
    seeds the reference data and accounts, then starts the server.
 
-5. Open <http://localhost:3000> (or `http://<this-machine's-LAN-IP>:3000` from another PC on the
+4. Open <http://localhost:3000> (or `http://<this-machine's-LAN-IP>:3000` from another PC on the
    network) and sign in with one of the demo accounts below.
 
    With `SEED_DEMO_WEEK=true`, the demo week is written in the background during the first
@@ -123,8 +124,12 @@ Settings, API tokens and Audit log; a constructor Capture.
 
 **Demo tools (optional, D-101):** with `DEMO_LOGIN_TOOLS=true` (and `SEED_DEMO_USERS=true`) the
 login page has **Demo sign-in**, one button per role, and **Reset demo data** (type RESET; about a
-minute; "Fresh demo week loaded."). A **Demo mode** band shows on every page. Never turn it on for
-real use.
+minute; "Fresh demo week loaded."). A **Demo mode** band shows on every page, with the **demo
+clock** (D-125): **Change time** sets the Manila date and time the whole app runs at (batches, notices,
+the scanning timer, reminders, Reset's demo week), and it keeps ticking from there; **Back to real
+time** undoes it. Every role and device sees the same time. Sign-in and sessions keep real time.
+Anything recorded while the clock is moved keeps that date, so finish with Back to real time and
+Reset. Never turn the demo tools on for real use.
 
 The batch steps need a weekday with today planned; the demo week plans its own days, so plan today
 first on **Batches → Plan days** if it isn't.
@@ -471,9 +476,10 @@ Monday to Friday, through the real services:
   one day the QI is absent and the Floor Manager finishes them (D-088);
 - leather rolls added in Inventory with their areas, picked and scanned at Capture by four
   constructors with camera access; each roll is 4 to 7 sq ft and takes 1 to 3 minutes to scan, in 3
-  to 6 shots of 16 × 12 in (a fixed demo scale, 16.0 in across); three rolls with long cuts on every
-  shot are Returned to supplier; the newest roll is still being scanned; one
-  shelf roll is removed for water damage;
+  to 6 shots of 16 × 12 in (a fixed demo scale, 16.0 in across); three rolls with a random mix of holes,
+  scratches, creases and long cuts are over 10% (11% to 16%) and Returned to supplier, and one with
+  many defects stays just under (7% to 9%); the newest roll is still being scanned; one shelf roll
+  is removed for water damage;
 - stock updates on each past Wednesday and Friday;
 - attendance for the working days before today, a few constructors absent on some days (today is
   left for you to take); the days with two or more absent end below quota.

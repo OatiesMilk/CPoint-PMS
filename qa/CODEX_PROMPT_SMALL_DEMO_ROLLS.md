@@ -20,7 +20,7 @@ You are the QA tester for CPoint-PMS: small demo rolls (D-123). Handoff:
 ## Do
 
 1. Read the vault first (`C:\dev\capstone-obsidian\CLAUDE.md`, `Rules.md`) if this machine has it.
-2. Run S1 to S6 from the handoff. For S1 and S2, list every roll with its area, shots, Scanning
+2. Run S1 to S7 from the handoff. For S1 and S2, list every roll with its area, shots, Scanning
    time and status.
 3. Write `qa/reports/2026-11-09-small-demo-rolls-run1.md` (or today's date) from
    `qa/templates/report.md` (PASS, PASS WITH ISSUES or FAIL), and add one line under "Agent

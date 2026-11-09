@@ -3,7 +3,7 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-09 (small demo rolls, D-123; Phase 31 still waits for D4 on a weekday)
+**Last updated:** 2026-11-09 (demo clock, D-125; demo data D-123, D-124; Phase 31 still waits for D4)
 **Branch:** `main` at c5b1848 has everything through Phase 30F (#41 to #45).
 **Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 31, the documentation and the paper's
 figures. Plan `docs/prompts/plans/phase-31-plan.md`, handoff `qa/handoffs/2026-11-07-phase-31-docs.md`,
@@ -40,11 +40,22 @@ include them).
 - **Codex run 4 PASS WITH ISSUES** (`qa/reports/2026-11-08-phase-31-run4.md`, Sunday): D2's Plan
   days example matches the calendar exactly; D4 blocked (weekends have no batches). Every scenario
   but D4 has now passed.
-- **Small demo rolls (D-123, built 2026-11-09 on the PC, uncommitted):** the demo week's rolls are
-  4 to 7 sq ft, scanned in 1 to 3 minutes, 3 to 6 shots of 16 × 12 in; the three badly cut rolls
-  still go over 10%; the demo suppliers are Marikina Supplier A and B, Bulacan Supplier A and B.
-  `npm run check` passed (710 unit tests). Handoff
-  `qa/handoffs/2026-11-09-small-demo-rolls.md`, prompt `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
+- **Small demo rolls (D-123, merged #47):** the demo week's rolls are 4 to 7 sq ft, scanned in 1
+  to 3 minutes, 3 to 6 shots of 16 × 12 in; the demo suppliers are Marikina Supplier A and B,
+  Bulacan Supplier A and B.
+- **Varied damage on the demo rolls (D-124, built 2026-11-09, uncommitted):** the three damaged
+  rolls get a random mix of holes, scratches, creases and long cuts up to 11% to 16% (worked out
+  with the app's own measuring code), and one roll stays just under at 7% to 9%. `npm run check`
+  passed. Handoff `qa/handoffs/2026-11-09-small-demo-rolls.md` (S7), prompt
+  `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
+- **Demo clock (D-125, built 2026-11-09, uncommitted):** Change time in the Demo mode band moves the
+  whole app to a Manila date and time and keeps ticking; Back to real time. One migration
+  (`demo_clock`). `npm run check` passed. Handoff `qa/handoffs/2026-11-09-demo-clock.md`.
+  Codex run 1 FAIL (the migration wasn't applied on the PC; setup, not code). Run 2 **PASS WITH
+  ISSUES** (`qa/reports/2026-11-09-demo-clock-run2.md`): C4, C5, C7 to C10 passed; C6's shot
+  blocked (no camera in the in-app browser; the timer followed the clock); the full e2e run had 8
+  dev-server time-outs, each spec passed alone. Next: Dylan takes one shot on his phone with the
+  clock moved, then the git commands.
 - **Next:** Codex D4 only (README "3. Quality Inspector") on a weekday, with 30F-3 run 4; Codex run 4 for 30F-3 on a weekday with today
   planned; then git commands for Phase 31.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
@@ -144,7 +155,7 @@ D-entries.
   suppliers with codes, the lunch break; API tokens for the simulator; the audit log.
 - **Look (Phase 30F, D-122):** tokens, shared page header, KPI tiles, states, phone layouts for
   Capture and Batches.
-- **Database:** the latest migration is `day_plans` (Phase 30E-2); `prisma/migrations/` lists them all.
+- **Database:** the latest migration is `demo_clock` (D-125); `prisma/migrations/` lists them all.
   UUIDv7 ids (D-018).
 
 ## Next step (exact)

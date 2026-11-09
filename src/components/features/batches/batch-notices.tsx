@@ -1,5 +1,6 @@
 "use client";
 
+import { appNow, appNowMs } from "@/lib/clock";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -45,7 +46,7 @@ function useToday() {
 /** The notices now, re-worked out at the next notice time (and every 30 s as a backstop). */
 function useNotices(): Notice[] {
   const { data } = useToday();
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => appNow());
   const result = useMemo(() => {
     if (!data?.canEnter) return { current: [] as Notice[], nextAt: null as Date | null };
     const batches = data.rows.map((r) => ({
@@ -59,10 +60,10 @@ function useNotices(): Notice[] {
 
   useEffect(() => {
     const wait = result.nextAt
-      ? Math.max(500, Math.min(30_000, result.nextAt.getTime() - Date.now() + 250))
+      ? Math.max(500, Math.min(30_000, result.nextAt.getTime() - appNowMs() + 250))
       : 30_000;
-    const timer = setTimeout(() => setNow(new Date()), wait);
-    const onVisible = () => document.visibilityState === "visible" && setNow(new Date());
+    const timer = setTimeout(() => setNow(appNow()), wait);
+    const onVisible = () => document.visibilityState === "visible" && setNow(appNow());
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearTimeout(timer);

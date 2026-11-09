@@ -1,4 +1,5 @@
 // Display helpers. Storage is UTC; the factory reads Manila time (DESIGN.md → Patterns).
+import { appNow } from "./clock";
 export const APP_TIME_ZONE = "Asia/Manila";
 
 const MINUTE = 60_000;
@@ -35,11 +36,11 @@ export function formatCalendarDate(value: Date | string): string {
 }
 
 /** Today's date in Manila as YYYY-MM-DD (for date inputs and "not in the future" checks). */
-export function manilaToday(now: Date = new Date()): string {
+export function manilaToday(now: Date = appNow()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIME_ZONE }).format(now);
 }
 
-export function manilaYear(now: Date = new Date()): number {
+export function manilaYear(now: Date = appNow()): number {
   return Number(manilaToday(now).slice(0, 4));
 }
 

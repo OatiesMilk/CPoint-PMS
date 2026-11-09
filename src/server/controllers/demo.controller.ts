@@ -10,7 +10,13 @@ import {
   demoToolsEnabled,
   demoToolsOff,
 } from "@/server/services/demo-tools.service";
-import { demoResetSchema, demoSignInSchema } from "@/server/validators/demo.validator";
+import { setDemoClock } from "@/server/services/demo-clock.service";
+import { getCurrentUser } from "@/server/policies/guard";
+import {
+  demoClockSchema,
+  demoResetSchema,
+  demoSignInSchema,
+} from "@/server/validators/demo.validator";
 
 /**
  * The demo tools on the login page (D-101). The only API routes without requireApiPermission:
@@ -49,5 +55,18 @@ export const demoController = {
         demoWeek: result.demoWeek,
       },
     });
+  }),
+
+  /**
+   * POST /api/v1/demo/clock  { date, time } (Manila) or { realTime: true }: moves the demo clock
+   * (D-125). From the band (signed in) or the login page (nobody signed in yet).
+   */
+  clock: handle(async (request: Request) => {
+    if (!demoToolsEnabled()) throw demoToolsOff();
+    const input = demoClockSchema.parse(await readJsonBody(request));
+    const user = await getCurrentUser();
+    const at = "realTime" in input ? null : new Date(`${input.date}T${input.time}:00+08:00`);
+    const view = await setDemoClock(at, user ? { id: user.id } : null);
+    return json({ data: view });
   }),
 };

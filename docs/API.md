@@ -480,10 +480,11 @@ default is the last 14 days, at most 92, and never past today.
 Only while `DEMO_LOGIN_TOOLS=true` and `SEED_DEMO_USERS=true`; otherwise both answer `404`. The
 only routes without `requireApiPermission`.
 
-| Method & path               | Body                               | Notes                                                                                                                                                                                                       |
-| --------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/demo/sign-in` | `{ role }` (one of the four roles) | signs in as that role's demo account with the server's `DEMO_USER_PASSWORD`; `200 { data: { redirectTo } }`. `409 DEMO_ACCOUNT_MISSING` or `DEMO_PASSWORD_MISSING`; `401 SIGN_IN_FAILED` (locked, inactive) |
-| `POST /api/v1/demo/reset`   | `{ confirm: "RESET" }`             | the `demo:reset` plus a fresh demo week (about a minute); `200 { data: { removed, demoWeek } }`; `409 RESET_RUNNING` while one runs; `422` for any other word                                               |
+| Method & path               | Body                                                                     | Notes                                                                                                                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/demo/sign-in` | `{ role }` (one of the four roles)                                       | signs in as that role's demo account with the server's `DEMO_USER_PASSWORD`; `200 { data: { redirectTo } }`. `409 DEMO_ACCOUNT_MISSING` or `DEMO_PASSWORD_MISSING`; `401 SIGN_IN_FAILED` (locked, inactive)      |
+| `POST /api/v1/demo/reset`   | `{ confirm: "RESET" }`                                                   | the `demo:reset` plus a fresh demo week (about a minute); `200 { data: { removed, demoWeek } }`; `409 RESET_RUNNING` while one runs; `422` for any other word                                                    |
+| `POST /api/v1/demo/clock`   | `{ date: "YYYY-MM-DD", time: "HH:MM" }` (Manila) or `{ realTime: true }` | moves the demo clock (D-125): the whole app runs from that time and keeps ticking; `200 { data: { on, offsetMs, now } }`; `422` for a date more than a year away or an unreadable date or time. Signed in or not |
 
 ## Scanning time (D-121)
 

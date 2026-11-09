@@ -5,6 +5,35 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-09 · Demo clock (D-125)
+
+- Dylan's go: a demo tool to set the date and time the app runs at. Running clock (recommended).
+- `src/lib/clock.ts` (`appNow`, the offset on `globalThis`), `demo_clock` table and migration,
+  `demo-clock.model.ts`, `demo-clock.service.ts` (`syncDemoClock`, `setDemoClock`,
+  `demoClockView`), `POST /api/v1/demo/clock`, the guard and `instrumentation.ts` load it; the
+  Demo mode band gets `DemoClockControl` (Change time, Back to real time). Every service default,
+  `manilaToday`, the report ranges, the scan capture-time check, Reports, the batch notices,
+  Capture's timer, roll bar and capture time use `appNow`. Auth, sessions, API tokens, users,
+  health, bootstrap stamps and the audit count stay on real time.
+- `tests/unit/demo-clock.test.ts` (14). `npm run check` passed, in the cloud copy from `main` at
+  615e088 plus D-124.
+- Codex run 1 FAIL: the `demo_clock` migration wasn't applied and the client not regenerated on
+  the PC (setup, not code). Run 2 (`qa/CODEX_PROMPT_DEMO_CLOCK_RUN2.md`) PASS WITH ISSUES: C4, C5,
+  C7 to C10 passed; C6's shot blocked (no camera in the in-app browser); 8 full-run e2e time-outs
+  under `next dev`, every spec passed alone. No code change.
+- Next: one phone shot with the clock moved, then git commands.
+
+## 2026-11-09 · Varied damage on the demo rolls (D-124)
+
+- Dylan: most defects on the damaged demo rolls were long cuts added until they passed 10%; mix in
+  holes and scratches. `damageRoll` in `demo-seed.service.ts` now draws found holes, scratches,
+  creases and long cuts (weights 3, 3, 2, 1.5; at most 6 per shot) until the roll's share, worked
+  out with `measureShot`/`rollShare` as the app does, reaches a random target: 11% to 16% for
+  rolls 2, 4 and 8 (Marikina Supplier A), 7% to 9% for roll 5. With the default seed: 15.4%,
+  12.9%, 14.1% over; 8.4% under; the rest 0.5% to 1.3%.
+- `npm run check` passed, in the cloud copy from `main` at 615e088 (#47).
+- Next: Dylan's git commands for `feature/varied-demo-defects`, then a reset to see it.
+
 ## 2026-11-09 · Small demo rolls (D-123)
 
 - Dylan's go on the PC copy (`D:\…\CPoint-PMS`, clean at c7d404f, the same as GitHub `main`; the

@@ -250,6 +250,17 @@ model CvSettings {
   @@map("cv_settings")
 }
 
+/// The demo clock (D-125): while the demo tools are on, the app's "now" is the real time plus
+/// this offset, so a demo can be shown at any day and hour. One row; 0 is real time. Ignored when
+/// DEMO_LOGIN_TOOLS is off.
+model DemoClock {
+  id        Int      @id @default(1)
+  offsetMs  BigInt   @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("demo_clock")
+}
+
 // ───────────── production ─────────────
 /// The yearly R-YYYY-NNNN numbers of Phases 26 to 29 (history; no new codes since Phase 30A).
 model RollSequence {

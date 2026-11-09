@@ -1,5 +1,6 @@
 "use client";
 
+import { appNow } from "@/lib/clock";
 import { useEffect, useState } from "react";
 import { CircleCheck, LoaderCircle, Plus, Timer, X } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
@@ -48,7 +49,7 @@ export function ScanningTimer({ roll }: { roll: OpenRollView }) {
   // Set after the page loads, so the server's render and the browser's agree.
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
-    const tick = () => setNow(new Date());
+    const tick = () => setNow(appNow());
     const first = setTimeout(tick, 0);
     const timer = setInterval(tick, 1000);
     return () => {
@@ -88,7 +89,7 @@ export function rollLine(roll: OpenRollView): string {
 }
 
 /** "Open since Tue, 22 Oct. Finish it or keep capturing." for a roll from an earlier day. */
-export function openSince(roll: OpenRollView, now = new Date()): string | null {
+export function openSince(roll: OpenRollView, now = appNow()): string | null {
   return openSinceLine(
     manilaToday(new Date(roll.startedAt)),
     manilaToday(now),

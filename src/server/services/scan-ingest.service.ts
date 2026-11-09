@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import { randomUUID } from "node:crypto";
 import {
   decide,
@@ -144,7 +145,7 @@ function storageKey(now: Date, ext: string): string {
 export async function ingestScan(
   input: IngestInput,
   origin: ScanOrigin,
-  now: Date = new Date(),
+  now: Date = appNow(),
   storage: StorageService = getStorage(),
 ): Promise<IngestResult> {
   if (input.captureId) {

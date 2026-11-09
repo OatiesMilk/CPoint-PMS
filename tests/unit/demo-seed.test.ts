@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Detection } from "@/server/lib/leather-scan";
 
 const calls: {
   fn: string;
@@ -7,7 +8,10 @@ const calls: {
   classKeys?: string[];
   by?: string;
   areaSqFt?: number;
+  detections?: Detection[];
 }[] = [];
+/** The roll's share as the app works it out, set once the service is imported. */
+let shareOf: (rollId: string) => number = () => 0;
 let nextRoll = 0;
 const svc = {
   addRolls: vi.fn(
@@ -32,19 +36,15 @@ const svc = {
   }),
   finishRoll: vi.fn(async (rollId: string, actor: { id: string }, now: Date) => {
     calls.push({ fn: "finishRoll", rollId, now, by: actor.id });
-    // Phase 30C: a roll with a long cut on every shot goes over the limit.
-    const cuts = calls.filter(
-      (c) => c.fn === "scan" && c.rollId === rollId && c.classKeys?.includes("cut"),
-    ).length;
-    const shots = calls.filter((c) => c.fn === "scan" && c.rollId === rollId).length;
-    return { marked: shots > 0 && cuts === shots };
+    // Phase 30C: a roll over 10% of its area is marked (D-116).
+    return { marked: shareOf(rollId) > 10 };
   }),
   removeRoll: vi.fn(async (rollId: string, _reason: string, actor: { id: string }, now: Date) => {
     calls.push({ fn: "removeRoll", rollId, now, by: actor.id });
   }),
   ingestScan: vi.fn(
     async (
-      input: { rollId: string; detections: { classKey: string }[] },
+      input: { rollId: string; detections: Detection[] },
       origin: { kind?: string; userId?: string },
       now: Date,
     ) => {
@@ -54,6 +54,7 @@ const svc = {
         rollId: input.rollId,
         now,
         classKeys: input.detections.map((d) => d.classKey),
+        detections: input.detections,
       });
       return {
         scanId: `s${calls.length}`,
@@ -70,7 +71,17 @@ const mocks = {
   listActiveSuppliers: vi.fn(async () => [{ id: "sp1", name: "Supplier" }]),
   listDefectTypes: vi.fn(async () => [
     { id: "d1", key: "crease", label: "Crease", isActive: true, outcome: "USABLE" },
-    { id: "d2", key: "cut", label: "Cut", isActive: true, outcome: "NOT_ACCEPTED" },
+    {
+      id: "d2",
+      key: "cut",
+      label: "Cut",
+      isActive: true,
+      outcome: "NOT_ACCEPTED",
+      notAcceptedFromIn: 3,
+      flatSharePct: 1,
+    },
+    { id: "d4", key: "hole", label: "Hole", isActive: true, outcome: "NOT_ACCEPTED" },
+    { id: "d5", key: "scratch", label: "Scratch", isActive: true, outcome: "USABLE" },
     { id: "d3", key: "dirt", label: "Dirt", isActive: false, outcome: "NOT_ACCEPTED" },
   ]),
   findUserByEmail: vi.fn(async (email: string) => ({
@@ -162,8 +173,21 @@ const {
   sectionsFor,
   PREPARATION_MINUTES,
   DEMO_QUOTA,
-  DEMO_CUTS_PER_ROLL,
+  demoRollShare,
+  damageRoll,
 } = await import("@/server/services/demo-seed.service");
+
+const CLASSES = [
+  { key: "crease", outcome: "USABLE" as const, notAcceptedFromIn: null, flatSharePct: null },
+  { key: "cut", outcome: "NOT_ACCEPTED" as const, notAcceptedFromIn: 3, flatSharePct: 1 },
+  { key: "hole", outcome: "NOT_ACCEPTED" as const, notAcceptedFromIn: null, flatSharePct: null },
+  { key: "scratch", outcome: "USABLE" as const, notAcceptedFromIn: null, flatSharePct: null },
+];
+const shotsOf = (rollId: string) =>
+  calls.filter((c) => c.fn === "scan" && c.rollId === rollId).map((c) => c.detections ?? []);
+const areaOf = (rollId: string) =>
+  calls.find((c) => c.fn === "addRoll" && c.rollId === rollId)?.areaSqFt ?? 0;
+shareOf = (rollId) => demoRollShare(shotsOf(rollId), areaOf(rollId), CLASSES);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -192,6 +216,30 @@ describe("scanning times (D-082, D-123)", () => {
       const ms = preparationMs(random);
       expect(ms).toBeGreaterThanOrEqual(lo * 60_000);
       expect(ms).toBeLessThanOrEqual(hi * 60_000);
+    }
+  });
+});
+
+describe("damageRoll (D-124)", () => {
+  it("adds a random mix until the roll reaches its target, never above the range", () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const random = mulberry32(seed);
+      for (const [area, range] of [
+        [4, [11, 16]],
+        [7, [11, 16]],
+        [5.5, [7, 9]],
+      ] as [number, [number, number]][]) {
+        const shots = Array.from({ length: sectionsFor(area) }, () => []);
+        const out = damageRoll(random, shots, area, CLASSES, range);
+        const share = demoRollShare(out, area, CLASSES);
+        expect(share).toBeGreaterThanOrEqual(range[0]);
+        expect(share).toBeLessThanOrEqual(range[1]);
+        for (const d of out.flat()) {
+          expect(d.box.x).toBeGreaterThanOrEqual(0);
+          expect(d.box.x + d.box.width).toBeLessThanOrEqual(1);
+          expect(d.box.y + d.box.height).toBeLessThanOrEqual(1);
+        }
+      }
     }
   });
 });
@@ -243,7 +291,8 @@ describe("seedDemoWeek", () => {
       // 3 to 6 shots a roll (D-123): small, but every finished roll has a full set.
       expect(scans.length).toBeGreaterThanOrEqual(30);
       for (const s of scans)
-        for (const k of s.classKeys ?? []) expect(["crease", "cut"]).toContain(k);
+        for (const k of s.classKeys ?? [])
+          expect(["crease", "cut", "hole", "scratch"]).toContain(k);
     },
   );
 
@@ -310,7 +359,7 @@ describe("seedDemoWeek", () => {
   it("draws defects from the active defect types only", async () => {
     await seedDemoWeek({ now, seed: 1 });
     const keys = new Set(calls.filter((c) => c.fn === "scan").flatMap((c) => c.classKeys ?? []));
-    expect([...keys].sort()).toEqual(["crease", "cut"]);
+    expect([...keys].sort()).toEqual(["crease", "cut", "hole", "scratch"]);
   });
 
   it("seeds nothing when no defect type is active", async () => {
@@ -389,7 +438,7 @@ describe("seedDemoWeek", () => {
     expect(sheetItems.some((id) => id.startsWith("LR-"))).toBe(false);
   });
 
-  it("puts enough long cuts on the badly cut rolls to go over 10%, and a few minutes on each roll (D-110, D-123)", async () => {
+  it("damages three rolls past 10% with a mix of defects, one just under, a few minutes each (D-110, D-123, D-124)", async () => {
     await seedDemoWeek({ now, seed: 1 });
     const inputs = svc.ingestScan.mock.calls.map(
       (c) =>
@@ -404,14 +453,28 @@ describe("seedDemoWeek", () => {
         },
     );
     expect(new Set(inputs.map((i) => i.widthIn))).toEqual(new Set([16]));
-    const longCuts = new Map<string, number>();
-    for (const i of inputs)
-      for (const d of i.detections)
-        // A cut from 3 in by its box diagonal (16 × 12 in a shot) counts 1% (D-110).
-        if (d.classKey === "cut" && Math.hypot(d.box.width * 16, d.box.height * 12) >= 3)
-          longCuts.set(i.rollId, (longCuts.get(i.rollId) ?? 0) + 1);
-    const badlyCut = [...longCuts].filter(([, n]) => n >= DEMO_CUTS_PER_ROLL);
-    expect(badlyCut).toHaveLength(3);
+    // Three rolls over 10% (11% to 16%), one just under (7% to 9%), the rest well under.
+    const finished = calls.filter((c) => c.fn === "finishRoll").map((c) => c.rollId!);
+    const shares = finished.map((id) => shareOf(id));
+    const over = finished.filter((id) => shareOf(id) > 10);
+    expect(over).toHaveLength(3);
+    for (const id of over) {
+      expect(shareOf(id)).toBeGreaterThanOrEqual(11);
+      expect(shareOf(id)).toBeLessThanOrEqual(16);
+      // A mix, not just cuts: found holes and scratches outnumber the long cuts.
+      const found = shotsOf(id)
+        .flat()
+        .filter((d) => d.confidence >= 0.5);
+      const kinds = new Set(found.map((d) => d.classKey));
+      expect(kinds.size).toBeGreaterThanOrEqual(3);
+      const cuts = found.filter((d) => d.classKey === "cut").length;
+      expect(found.length - cuts).toBeGreaterThan(cuts);
+      expect(
+        Math.max(...shotsOf(id).map((s) => s.filter((d) => d.confidence >= 0.5).length)),
+      ).toBeLessThanOrEqual(6);
+    }
+    expect(shares.filter((p) => p >= 7 && p <= 9)).toHaveLength(1);
+    expect(shares.filter((p) => p > 9 && p <= 10)).toHaveLength(0);
     // Start scanning to Finish roll: 1 to 3 minutes.
     for (const f of calls.filter((c) => c.fn === "finishRoll")) {
       const start = calls.find((c) => c.fn === "startRoll" && c.rollId === f.rollId)!;
