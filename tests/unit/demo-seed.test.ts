@@ -1,14 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const calls: { fn: string; rollId?: string; now: Date; classKeys?: string[]; by?: string }[] = [];
+const calls: {
+  fn: string;
+  rollId?: string;
+  now: Date;
+  classKeys?: string[];
+  by?: string;
+  areaSqFt?: number;
+}[] = [];
 let nextRoll = 0;
 const svc = {
   addRolls: vi.fn(
-    async (itemId: string, values: { rolls: unknown[] }, actor: { id: string }, now: Date) => {
-      const added = values.rolls.map(() => {
+    async (
+      itemId: string,
+      values: { rolls: { areaSqFt: number }[] },
+      actor: { id: string },
+      now: Date,
+    ) => {
+      const added = values.rolls.map((r) => {
         nextRoll += 1;
         const id = `r${nextRoll}`;
-        calls.push({ fn: "addRoll", rollId: id, now, by: actor.id });
+        calls.push({ fn: "addRoll", rollId: id, now, by: actor.id, areaSqFt: r.areaSqFt });
         return { id, code: `LR-${itemId}-${String(nextRoll).padStart(3, "0")}` };
       });
       return { added, quantityOnHand: added.length };
@@ -143,8 +155,15 @@ vi.mock("@/server/services/production.service", () => production);
 vi.mock("@/server/services/attendance.service", () => attendance);
 vi.mock("@/server/services/scan-ingest.service", () => ({ ingestScan: svc.ingestScan }));
 
-const { mulberry32, seedDemoWeek, preparationMs, PREPARATION_HOURS, DEMO_QUOTA } =
-  await import("@/server/services/demo-seed.service");
+const {
+  mulberry32,
+  seedDemoWeek,
+  preparationMs,
+  sectionsFor,
+  PREPARATION_MINUTES,
+  DEMO_QUOTA,
+  DEMO_CUTS_PER_ROLL,
+} = await import("@/server/services/demo-seed.service");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -164,15 +183,25 @@ describe("mulberry32", () => {
   });
 });
 
-describe("preparation times (D-082)", () => {
-  it("stay in range", () => {
+describe("scanning times (D-082, D-123)", () => {
+  it("stay between 1 and 3 minutes a roll", () => {
     const random = mulberry32(7);
-    const [lo, hi] = PREPARATION_HOURS;
+    expect(PREPARATION_MINUTES).toEqual([1, 3]);
+    const [lo, hi] = PREPARATION_MINUTES;
     for (let i = 0; i < 200; i++) {
       const ms = preparationMs(random);
-      expect(ms).toBeGreaterThanOrEqual(lo * 3_600_000);
-      expect(ms).toBeLessThanOrEqual(hi * 3_600_000);
+      expect(ms).toBeGreaterThanOrEqual(lo * 60_000);
+      expect(ms).toBeLessThanOrEqual(hi * 60_000);
     }
+  });
+});
+
+describe("shots per roll (D-123)", () => {
+  it("cover the roll's area at 16 × 12 in a shot", () => {
+    expect(sectionsFor(4)).toBe(3);
+    expect(sectionsFor(4.75)).toBe(4);
+    expect(sectionsFor(5.25)).toBe(4);
+    expect(sectionsFor(7)).toBe(6);
   });
 });
 
@@ -211,14 +240,14 @@ describe("seedDemoWeek", () => {
     async (_label, at) => {
       await seedDemoWeek({ now: at, seed: 1 });
       const scans = calls.filter((c) => c.fn === "scan");
-      // Ten sections a roll (D-082): small, but every roll has a full set.
-      expect(scans.length).toBeGreaterThanOrEqual(80);
+      // 3 to 6 shots a roll (D-123): small, but every finished roll has a full set.
+      expect(scans.length).toBeGreaterThanOrEqual(30);
       for (const s of scans)
         for (const k of s.classKeys ?? []) expect(["crease", "cut"]).toContain(k);
     },
   );
 
-  it("captures every section on a constructor's phone with the real model, ten a roll (Phase 26)", async () => {
+  it("captures every section on a constructor's phone with the real model, enough for its area (Phase 26, D-123)", async () => {
     await seedDemoWeek({ now, seed: 1 });
     const inputs = svc.ingestScan.mock.calls.map(
       (c) => c[0] as unknown as { source: string; modelVersion: string; rollId: string },
@@ -227,7 +256,14 @@ describe("seedDemoWeek", () => {
     expect(new Set(inputs.map((i) => i.modelVersion))).toEqual(new Set(["yolo-v1-1d729fb0"]));
     const perRoll = new Map<string, number>();
     for (const i of inputs) perRoll.set(i.rollId, (perRoll.get(i.rollId) ?? 0) + 1);
-    expect(Math.max(...perRoll.values())).toBe(10);
+    // Each finished roll has the shots its area needs (3 for 4 sq ft, 6 for 7 sq ft).
+    const areas = new Map(
+      calls.filter((c) => c.fn === "addRoll").map((c) => [c.rollId!, c.areaSqFt!]),
+    );
+    const finished = new Set(calls.filter((c) => c.fn === "finishRoll").map((c) => c.rollId));
+    expect(finished.size).toBeGreaterThan(5);
+    for (const id of finished) expect(perRoll.get(id!)).toBe(sectionsFor(areas.get(id!)!));
+    for (const n of perRoll.values()) expect(n).toBeLessThanOrEqual(6);
     for (const [, origin] of svc.ingestScan.mock.calls)
       expect(origin).toMatchObject({ kind: "website" });
     // The System Admin gives the four demo capturers camera access (D-075, Phase 26).
@@ -317,8 +353,8 @@ describe("seedDemoWeek", () => {
       expect(actor.id).toBe("manager@cpoint.local");
       expect(when.getTime()).toBeLessThanOrEqual(now.getTime());
       for (const r of values.rolls) {
-        expect(r.areaSqFt).toBeGreaterThanOrEqual(18);
-        expect(r.areaSqFt).toBeLessThanOrEqual(42);
+        expect(r.areaSqFt).toBeGreaterThanOrEqual(4);
+        expect(r.areaSqFt).toBeLessThanOrEqual(7);
       }
     }
     const added = calls.filter((c) => c.fn === "addRoll");
@@ -351,6 +387,38 @@ describe("seedDemoWeek", () => {
       stockUpdates.saveStockUpdate.mock.calls as unknown as [{ lines: { itemId: string }[] }][]
     ).flatMap(([b]) => b.lines.map((l) => l.itemId));
     expect(sheetItems.some((id) => id.startsWith("LR-"))).toBe(false);
+  });
+
+  it("puts enough long cuts on the badly cut rolls to go over 10%, and a few minutes on each roll (D-110, D-123)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    const inputs = svc.ingestScan.mock.calls.map(
+      (c) =>
+        c[0] as unknown as {
+          rollId: string;
+          widthIn: number;
+          detections: {
+            classKey: string;
+            confidence: number;
+            box: { width: number; height: number };
+          }[];
+        },
+    );
+    expect(new Set(inputs.map((i) => i.widthIn))).toEqual(new Set([16]));
+    const longCuts = new Map<string, number>();
+    for (const i of inputs)
+      for (const d of i.detections)
+        // A cut from 3 in by its box diagonal (16 × 12 in a shot) counts 1% (D-110).
+        if (d.classKey === "cut" && Math.hypot(d.box.width * 16, d.box.height * 12) >= 3)
+          longCuts.set(i.rollId, (longCuts.get(i.rollId) ?? 0) + 1);
+    const badlyCut = [...longCuts].filter(([, n]) => n >= DEMO_CUTS_PER_ROLL);
+    expect(badlyCut).toHaveLength(3);
+    // Start scanning to Finish roll: 1 to 3 minutes.
+    for (const f of calls.filter((c) => c.fn === "finishRoll")) {
+      const start = calls.find((c) => c.fn === "startRoll" && c.rollId === f.rollId)!;
+      const minutes = (f.now.getTime() - start.now.getTime()) / 60_000;
+      expect(minutes).toBeGreaterThanOrEqual(1);
+      expect(minutes).toBeLessThanOrEqual(3);
+    }
   });
 
   it("asks the QI for pairs only, never rolls (Phase 30E, D-111)", async () => {

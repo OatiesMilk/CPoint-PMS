@@ -5,6 +5,20 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-09 · Small demo rolls (D-123)
+
+- Dylan's go on the PC copy (`D:\…\CPoint-PMS`, clean at c7d404f, the same as GitHub `main`; the
+  laptop wasn't reachable to compare). The demo week's rolls are 4 to 7 sq ft and scan in 1 to 3
+  minutes; shots follow the area (16 × 12 in each, 3 to 6 a roll); the three badly cut rolls get 12
+  or more long cuts so they stay over 10%. Checked with the real `measureShot`/`rollShare` on the
+  seed: exactly those three over (12.0%, 15.3%, 16.1%), the rest 0.0% to 1.3%.
+- `npm run check` passed (710 unit tests, build OK), run in the cloud copy with the same two files,
+  since the PC's `node_modules` are for Windows.
+- Handoff `qa/handoffs/2026-11-09-small-demo-rolls.md`, prompt `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
+- Dylan, same day: the demo suppliers renamed Marikina Supplier A and B, Bulacan Supplier A and B
+  (`src/server/lib/demo-suppliers.ts`, the demo items; README's example code `LR-BSA-001`).
+- Next: Dylan reseeds (`npm run demo:reset '--' --yes`), Codex checks Reports → Rolls.
+
 ## 2026-11-08 · Phase 31 run 4 PASS WITH ISSUES
 
 - Codex run 4 (`qa/reports/2026-11-08-phase-31-run4.md`, headless, Sunday): D2 step 2 passed (Nov
