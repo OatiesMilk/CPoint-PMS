@@ -5,6 +5,20 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-14 · User manual, and the Inventory roll wording
+
+- New `docs/USER_MANUAL.md`: a plain-language manual for CPoint staff, by role (sign-in, Capture,
+  Batches, Plan days, Attendance, Inventory, Reports and the claim sheet, Users, Settings, API
+  tokens, Audit log), checked against the UI text on main (#51). Screenshots are placeholders.
+- Fixed stale app copy found while writing it (D-112: a roll leaves stock at Finish roll, nobody
+  ticks Fully used): the Inventory item's Rolls card now reads "A roll leaves stock when it is
+  finished at Capture (Finish roll), or removed." and the Add item hint reads "Add rolls, Finish
+  roll at Capture or Remove." (`src/app/(app)/inventory/[id]/page.tsx`, `item-form.tsx`).
+- Checks on the PC's Linux shell: ESLint and Prettier on both files passed; `tsc --noEmit` shows
+  only 4 errors from stale `.next/types` (removed routes), none in `src`. `next typegen`, unit
+  tests and build couldn't run there (Windows-only SWC binary): run `npm run check` on Windows.
+- Next: `npm run check` on Windows, then Dylan's go for the git commands.
+
 ## 2026-11-14 · Codex re-check of the PR #50 CI fix: PASS
 
 - Codex reran the `docker` job locally on `feature/claim-sheet-and-demo-output` with the

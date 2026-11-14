@@ -68,6 +68,9 @@ include them).
   blocked (no camera in the in-app browser; the timer followed the clock); the full e2e run had 8
   dev-server time-outs, each spec passed alone. Next: Dylan takes one shot on his phone with the
   clock moved, then the git commands.
+- **User manual + Inventory wording (2026-11-14, uncommitted):** `docs/USER_MANUAL.md` for CPoint
+  staff, by role; the Inventory roll card and Add item hint now say a roll leaves stock at Finish
+  roll (D-112). ESLint and Prettier passed; `npm run check` still to run on Windows.
 - **Next:** Codex D4 only (README "3. Quality Inspector") on a weekday, with 30F-3 run 4; Codex run 4 for 30F-3 on a weekday with today
   planned; then git commands for Phase 31.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks

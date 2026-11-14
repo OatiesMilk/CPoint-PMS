@@ -282,7 +282,7 @@ export function ItemForm({ suppliers, suggestedCode = "", item }: Props) {
         {item && (
           <p className="text-sm text-muted-foreground">
             {item.values.category === "LEATHER_ROLL"
-              ? "The quantity on hand follows the item’s rolls: Add rolls, Fully used or Remove."
+              ? "The quantity on hand follows the item’s rolls: Add rolls, Finish roll at Capture or Remove."
               : "The quantity on hand changes only on the Update stock sheet: what was added, used or corrected."}
           </p>
         )}
