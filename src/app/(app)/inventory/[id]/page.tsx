@@ -6,7 +6,7 @@
  * Worst: stock drifts from the shelf without anyone noticing. On hand is the hero number, every
  *        change is an entry with who and why, and corrections say why.
  * Leather (Phase 30A, D-104): the item lists its rolls, each with its own area; the count follows
- *        them (Add rolls +1, Fully used or Remove −1), so its stock isn't on the Update stock sheet.
+ *        them (Add rolls +1, Finish roll at Capture or Remove −1), so its stock isn't on the Update stock sheet.
  */
 import type { Metadata } from "next";
 import { TablePager } from "@/components/features/table-pager";
@@ -122,8 +122,8 @@ export default async function InventoryItemPage({
             <div className="flex flex-col gap-1.5">
               <CardTitle>Rolls</CardTitle>
               <CardDescription>
-                Each roll with its own area. A roll leaves stock when it is ticked Fully used at
-                Finish batch, or removed. Never who scanned it.
+                Each roll with its own area. A roll leaves stock when it is finished at Capture
+                (Finish roll), or removed. Never who scanned it.
               </CardDescription>
             </div>
             {canManage && item.isActive && (
