@@ -136,10 +136,6 @@ export function RollFindings({
           {largest.length > 0 && (
             <div className="flex min-w-0 flex-col gap-2">
               <h3 className="font-medium">Largest defects</h3>
-              <p className="text-sm text-muted-foreground">
-                Check these photos before you decide. A long, slanted cut can look bigger here than
-                it really is.
-              </p>
               <Table label="Largest defects">
                 <TableHeader>
                   <TableRow>
