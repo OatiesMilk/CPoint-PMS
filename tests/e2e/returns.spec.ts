@@ -178,7 +178,8 @@ test.describe("Returned to supplier (D-116)", () => {
     // The claim sheet still carries the findings.
     await page.getByRole("link", { name: "Claim sheet" }).click();
     await expect(page.getByRole("heading", { name: "How damaged is this roll?" })).toBeVisible();
-    await expect(page.getByText(/16\.7% of this roll has defects/)).toBeVisible();
+    await expect(page.getByTestId("defect-share")).toHaveText("16.7%");
+    await expect(page.getByText("Over the 10% limit")).toBeVisible();
   });
 
   test("the Floor Manager's old decision route is gone", async ({ browser }) => {

@@ -78,15 +78,25 @@ export function sectionsFor(areaSqFt: number): number {
 /** How many days back the demo data reaches, today included: two working weeks (D-126). */
 export const DEMO_DAYS = 14;
 /**
- * The rolls (by their place in the two weeks, two a working day) whose leather is badly damaged: a
+ * When each working day's rolls are laid out (Manila hours), lunch left out: 25 a day, every 17
+ * minutes or so, so the line finishes about 300 pairs a day, 12 pairs a leather roll (D-127).
+ */
+export const DEMO_ROLL_SLOTS = [
+  ...Array.from({ length: 10 }, (_, i) => 8 + i * 0.28),
+  ...Array.from({ length: 15 }, (_, i) => 12 + i * 0.28),
+];
+/** Pairs finished per leather roll that the demo aims at: 300 for every 25 rolls (D-127). */
+export const DEMO_PAIRS_PER_ROLL = 12;
+/**
+ * The rolls (by their place in the two weeks, 25 a working day) whose leather is badly damaged: a
  * random mix of holes, scratches, creases and long cuts until each reaches its own share between
  * 11% and 16%, so they go over the 10% limit and are Returned to supplier (D-112, D-116, D-124).
- * Two in the first week, one in the second; all three are Marikina Supplier A's, the leather with
- * more defects.
+ * Spread over both weeks; all are Marikina Supplier A's, the leather with more defects, so its
+ * returned share is well above the line's and it reads High (D-127).
  */
-export const DEMO_DAMAGED_ROLLS = [4, 10, 16];
-/** The roll with many defects that still passes, in the second week: 7% to 9% (D-124). */
-export const DEMO_NEAR_LIMIT_ROLL = 13;
+export const DEMO_DAMAGED_ROLLS = [8, 26, 40, 56, 70, 88, 104, 118, 134, 148, 164, 178, 196, 214];
+/** The rolls with many defects that still pass, one each week: 7% to 9% (D-124, D-127). */
+export const DEMO_NEAR_LIMIT_ROLLS = [63, 187];
 /** The return limit the demo aims around (Settings' default, C-9). */
 export const DEMO_LIMIT_PCT = 10;
 export const DEMO_DAMAGED_SHARE: [number, number] = [11, 16];
@@ -228,7 +238,7 @@ export function preparationMs(random: Random): number {
 }
 
 /** The one daily quota of passed pairs in the demo week (Phase 27, C-30, C-41). */
-export const DEMO_QUOTA = 128;
+export const DEMO_QUOTA = 300;
 
 /**
  * Demo output per Shoe Constructor present per working hour. It follows the roster, so a day with
@@ -438,15 +448,16 @@ export async function seedDemoWeek(
     );
     shelfRolls.set(sku, list);
   };
-  await addDemoRolls("LR-001", 5, at(addDays(firstDay, -1), 16));
-  await addDemoRolls("LR-002", 5, at(addDays(firstDay, -1), 16.1));
-  await addDemoRolls("LR-003", 2, at(addDays(firstDay, -1), 16.2));
-  await addDemoRolls("LR-001", 4, at(addDays(firstDay, 2), 9));
-  await addDemoRolls("LR-002", 3, at(addDays(firstDay, 3), 11));
+  // Enough for 25 rolls a working day, with a few left on the shelf (D-127).
+  await addDemoRolls("LR-001", 60, at(addDays(firstDay, -1), 16));
+  await addDemoRolls("LR-002", 40, at(addDays(firstDay, -1), 16.1));
+  await addDemoRolls("LR-003", 30, at(addDays(firstDay, -1), 16.2));
+  await addDemoRolls("LR-001", 35, at(addDays(firstDay, 2), 9));
+  await addDemoRolls("LR-002", 25, at(addDays(firstDay, 3), 11));
   // The second week's leather (D-126).
-  await addDemoRolls("LR-001", 5, at(addDays(firstDay, 9), 9));
-  await addDemoRolls("LR-002", 3, at(addDays(firstDay, 10), 11));
-  await addDemoRolls("LR-003", 2, at(addDays(firstDay, 10), 11.1));
+  await addDemoRolls("LR-001", 40, at(addDays(firstDay, 9), 9));
+  await addDemoRolls("LR-002", 25, at(addDays(firstDay, 10), 11));
+  await addDemoRolls("LR-003", 20, at(addDays(firstDay, 10), 11.1));
   /** The oldest roll of the item on the shelf at `t`, taken off the list. */
   const pickRoll = (sku: string, t: Date) => {
     const list = shelfRolls.get(sku) ?? [];
@@ -470,7 +481,7 @@ export async function seedDemoWeek(
   let scans = 0;
   let index = 0;
 
-  const SLOTS = [8, 10.5];
+  const SLOTS = DEMO_ROLL_SLOTS;
   // The last slot whose roll has surely started (a start lands up to 0.3 h after the slot).
   const newestSlot = workingDays
     .flatMap((day) => SLOTS.map((startHour) => ({ day, startHour })))
@@ -505,7 +516,7 @@ export async function seedDemoWeek(
       });
       if (DEMO_DAMAGED_ROLLS.includes(index))
         plan = damageRoll(random, plan, picked.areaSqFt, classes, DEMO_DAMAGED_SHARE);
-      else if (index === DEMO_NEAR_LIMIT_ROLL)
+      else if (DEMO_NEAR_LIMIT_ROLLS.includes(index))
         plan = damageRoll(random, plan, picked.areaSqFt, classes, DEMO_NEAR_LIMIT_SHARE);
       const sectionAt = (i: number) => plus(t, ((i + 0.5) * prep) / sections);
       let captured = 0;
@@ -536,17 +547,18 @@ export async function seedDemoWeek(
       }
       t = plus(t, prep);
 
-      // All of it is in: Finish roll at Capture. What the line used (thread, cement, nails) goes
-      // on the next stock update. The newest roll stays open, so Capture opens on a roll.
+      // All of it is in: Finish roll at Capture. The newest roll stays open, so Capture opens on
+      // a roll.
       if (past(t) && !newest && captured > 0) {
         const finished = await finishRoll(roll.id, capturer, t);
         if (finished.marked) marked += 1;
-        await stock("TH-001", "OUT", 1, "Stitching uppers", plus(t, 10 * MINUTE));
-        await stock("AD-001", "OUT", 0.5, "Soling", plus(t, 20 * MINUTE));
-        await stock("NL-001", "OUT", 1, "Soling", plus(t, 25 * MINUTE));
       }
       logger.info({ roll: roll.code }, "Demo week: roll replayed");
     }
+    // What the line used that day (thread, cement, tacks) goes on the next stock update.
+    await stock("TH-001", "OUT", 2, "Stitching uppers", at(day, 16.75));
+    await stock("AD-001", "OUT", 1, "Soling", at(day, 16.75));
+    await stock("NL-001", "OUT", 2, "Soling", at(day, 16.75));
   }
 
   // ── one roll on the shelf found water-damaged: the Floor Manager removes it with a reason
@@ -679,9 +691,9 @@ export async function seedDemoWeek(
 
   /**
    * Batches through the real services (Phase 27, D-097 to D-099):
-   *  - the Floor Manager plans each working day that morning on the calendar (D-114): two rolls,
-   *    the one quota, every 4 hours, 08:00 to 17:00; the first day plans three rolls and the second
-   *    one, so planned against scanned shows a day under and a day over; a weekday next week is
+   *  - the Floor Manager plans each working day that morning on the calendar (D-114): 25 rolls
+   *    (D-127), the one quota, every 4 hours, 08:00 to 17:00; the first day plans two more and the
+   *    second two fewer, so planned against scanned shows a day under and a day over; a weekday next week is
    *    marked Non-working / Holiday;
    *  - the QI finishes every batch of the default schedule and lunch (08:00–13:00 with lunch
    *    11:00–12:00, and 13:00–17:00) a few minutes after its end, with a pair or two failing
@@ -699,7 +711,7 @@ export async function seedDemoWeek(
       await saveDayPlan(
         day,
         {
-          rollsPlanned: i === 0 ? 3 : i === 1 ? 1 : SLOTS.length,
+          rollsPlanned: i === 0 ? SLOTS.length + 2 : i === 1 ? SLOTS.length - 2 : SLOTS.length,
           quota: DEMO_QUOTA,
           suggestedQuota: null,
           intervalMinutes: DEFAULT_SCHEDULE.intervalMinutes,

@@ -177,7 +177,9 @@ function ResetDemoData({ disabled }: { disabled: boolean }) {
                 </ul>
               </div>
             </div>
-            <p className="text-sm">Then it loads a fresh demo week. It takes about a minute.</p>
+            <p className="text-sm">
+              Then it loads two fresh weeks of demo data. It takes 2 to 3 minutes.
+            </p>
             {error && <Alert tone="danger">{error}</Alert>}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="demo-reset-word">Type RESET to confirm</Label>
@@ -199,7 +201,7 @@ function ResetDemoData({ disabled }: { disabled: boolean }) {
             {running && (
               <p role="status" className="flex items-center gap-2 text-sm">
                 <LoaderCircle aria-hidden className="size-4 animate-spin" />
-                Resetting… {seconds} s (about a minute). Keep this page open.
+                Resetting… {seconds} s (2 to 3 minutes). Keep this page open.
               </p>
             )}
             <DialogFooter>

@@ -173,6 +173,8 @@ const {
   sectionsFor,
   PREPARATION_MINUTES,
   DEMO_QUOTA,
+  DEMO_ROLL_SLOTS,
+  DEMO_PAIRS_PER_ROLL,
   demoRollShare,
   damageRoll,
 } = await import("@/server/services/demo-seed.service");
@@ -450,7 +452,7 @@ describe("seedDemoWeek", () => {
     expect(sheetItems.some((id) => id.startsWith("LR-"))).toBe(false);
   });
 
-  it("damages three rolls past 10% with a mix of defects, one just under, a few minutes each (D-110, D-123, D-124)", async () => {
+  it("damages fourteen rolls past 10% with a mix of defects, two just under, a few minutes each (D-110, D-123, D-124)", async () => {
     await seedDemoWeek({ now, seed: 1 });
     const inputs = svc.ingestScan.mock.calls.map(
       (c) =>
@@ -465,11 +467,11 @@ describe("seedDemoWeek", () => {
         },
     );
     expect(new Set(inputs.map((i) => i.widthIn))).toEqual(new Set([16]));
-    // Three rolls over 10% (11% to 16%), one just under (7% to 9%), the rest well under.
+    // Fourteen rolls over 10% (11% to 16%), two just under (7% to 9%), the rest well under (D-127).
     const finished = calls.filter((c) => c.fn === "finishRoll").map((c) => c.rollId!);
     const shares = finished.map((id) => shareOf(id));
     const over = finished.filter((id) => shareOf(id) > 10);
-    expect(over).toHaveLength(3);
+    expect(over).toHaveLength(14);
     for (const id of over) {
       expect(shareOf(id)).toBeGreaterThanOrEqual(11);
       expect(shareOf(id)).toBeLessThanOrEqual(16);
@@ -485,7 +487,7 @@ describe("seedDemoWeek", () => {
         Math.max(...shotsOf(id).map((s) => s.filter((d) => d.confidence >= 0.5).length)),
       ).toBeLessThanOrEqual(6);
     }
-    expect(shares.filter((p) => p >= 7 && p <= 9)).toHaveLength(1);
+    expect(shares.filter((p) => p >= 7 && p <= 9)).toHaveLength(2);
     expect(shares.filter((p) => p > 9 && p <= 10)).toHaveLength(0);
     // Start scanning to Finish roll: 1 to 3 minutes.
     for (const f of calls.filter((c) => c.fn === "finishRoll")) {
@@ -494,6 +496,19 @@ describe("seedDemoWeek", () => {
       expect(minutes).toBeGreaterThanOrEqual(1);
       expect(minutes).toBeLessThanOrEqual(3);
     }
+  });
+
+  it("finishes about 12 pairs a leather roll, 300 for every 25 rolls (D-127)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    const rolls = calls.filter((c) => c.fn === "finishRoll").length;
+    // Two weeks of 25 rolls a working day, the newest still open.
+    expect(rolls).toBe(DEMO_ROLL_SLOTS.length * 10 - 1);
+    const pairs = (production.saveCheckIn.mock.calls as unknown as [{ pairs: number }][]).reduce(
+      (t, [input]) => t + input.pairs,
+      0,
+    );
+    expect(pairs / rolls).toBeGreaterThanOrEqual(DEMO_PAIRS_PER_ROLL - 1);
+    expect(pairs / rolls).toBeLessThanOrEqual(DEMO_PAIRS_PER_ROLL + 1);
   });
 
   it("asks the QI for pairs only, never rolls (Phase 30E, D-111)", async () => {
@@ -516,7 +531,7 @@ describe("seedDemoWeek", () => {
       expect(plan).toMatchObject({ quota: DEMO_QUOTA, intervalMinutes: 240 });
       expect(at.toISOString().slice(0, 10) <= day).toBe(true);
     }
-    expect(plans.map(([, p]) => p.rollsPlanned).slice(0, 3)).toEqual([3, 1, 2]);
+    expect(plans.map(([, p]) => p.rollsPlanned).slice(0, 3)).toEqual([27, 23, 25]);
     expect(production.markNonWorking).toHaveBeenCalledTimes(1);
     const calls = production.saveCheckIn.mock.calls as unknown as [
       { slotAt: string; pairs: number; failedPairs: number; notes?: string },

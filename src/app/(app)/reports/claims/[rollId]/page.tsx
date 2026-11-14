@@ -15,6 +15,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/features/page-header";
 import { RollFindings } from "@/components/features/rolls/roll-findings";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { formatDayLabel, formatManilaDateTime, formatPercent } from "@/lib/format";
 import { rollFindings } from "@/lib/roll-findings";
 import { formatArea } from "@/lib/roll-rules";
@@ -55,42 +56,49 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
         }
       />
 
-      <dl
-        className="grid grid-cols-1 gap-x-8 gap-y-3 text-sm sm:grid-cols-2 xl:grid-cols-3"
-        data-testid="claim-summary"
-      >
-        <div>
-          <dt className="text-muted-foreground">Supplier</dt>
-          <dd className="font-medium">{sheet.supplier?.name ?? "No supplier recorded"}</dd>
-          {sheet.supplier?.contactPerson && (
-            <dd>
-              {sheet.supplier.contactPerson}
-              {sheet.supplier.phone ? ` · ${sheet.supplier.phone}` : ""}
-            </dd>
-          )}
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Roll</dt>
-          <dd className="font-mono font-medium">
-            {sheet.rollCode}
-            {sheet.tagCode ? ` · tag ${sheet.tagCode}` : ""}
-          </dd>
-          {sheet.areaSqFt !== null && <dd>Area {formatArea(sheet.areaSqFt)}</dd>}
-          <dd>
-            {sheet.receivedAt
-              ? `Received ${formatDayLabel(sheet.receivedAt)}`
-              : `Captured from ${formatManilaDateTime(sheet.startedAt)}`}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">Sections scanned</dt>
-          <dd className="font-medium">
-            {t.reject} of {t.sections} rejected
-            {t.sections > 0 && ` (${formatPercent(t.reject / t.sections)})`}
-          </dd>
-          <dd>{t.pass} passed. The camera’s verdict is final; rejected sections are not cut.</dd>
-        </div>
-      </dl>
+      <Card aria-label="Claim details">
+        <CardContent className="pt-5">
+          <dl
+            className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-x-8 gap-y-5"
+            data-testid="claim-summary"
+          >
+            <Detail label="Supplier">
+              <span className="font-medium">{sheet.supplier?.name ?? "No supplier recorded"}</span>
+              {sheet.supplier?.contactPerson && (
+                <span className="text-sm text-muted-foreground">
+                  {sheet.supplier.contactPerson}
+                  {sheet.supplier.phone ? ` · ${sheet.supplier.phone}` : ""}
+                </span>
+              )}
+            </Detail>
+            <Detail label="Roll">
+              <span className="font-mono font-medium">{sheet.rollCode}</span>
+              {sheet.tagCode && (
+                <span className="text-sm text-muted-foreground">
+                  Tag <span className="font-mono">{sheet.tagCode}</span>
+                </span>
+              )}
+            </Detail>
+            {sheet.areaSqFt !== null && (
+              <Detail label="Area">
+                <span className="tabular-nums">{formatArea(sheet.areaSqFt)}</span>
+              </Detail>
+            )}
+            <Detail label={sheet.receivedAt ? "Received" : "Captured from"}>
+              {sheet.receivedAt
+                ? formatDayLabel(sheet.receivedAt)
+                : formatManilaDateTime(sheet.startedAt)}
+            </Detail>
+            <Detail label="Sections scanned">
+              <span className="font-medium tabular-nums">
+                {t.reject} of {t.sections} rejected
+                {t.sections > 0 && ` (${formatPercent(t.reject / t.sections)})`}
+              </span>
+              <span className="text-sm text-muted-foreground">{t.pass} passed</span>
+            </Detail>
+          </dl>
+        </CardContent>
+      </Card>
 
       {roll.item && (
         <RollFindings
@@ -106,53 +114,69 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
           This roll has no rejected sections, so there is nothing to claim.
         </p>
       ) : (
-        <ol
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-          data-testid="claim-sections"
-        >
-          {sheet.rejected.map((s) => (
-            <li
-              key={s.scanId}
-              className="flex break-inside-avoid flex-col gap-2 rounded-md border bg-card p-3"
-            >
-              {s.hasImage ? (
-                // eslint-disable-next-line @next/next/no-img-element -- authenticated per-scan image
-                <img
-                  src={`/api/v1/scans/${s.scanId}/image`}
-                  alt={`Section #${s.sequence} of roll ${sheet.rollCode}`}
-                  className="aspect-[4/3] w-full rounded-sm bg-muted object-cover"
-                />
-              ) : (
-                <span className="flex aspect-[4/3] items-center justify-center rounded-sm bg-muted text-sm text-muted-foreground">
-                  No photo saved for this section
-                </span>
-              )}
-              <p className="font-medium">
-                Section #{s.sequence}
-                <span className="font-normal text-muted-foreground">
-                  {" "}
-                  · {formatManilaDateTime(s.capturedAt)}
-                </span>
-              </p>
-              <p className="text-sm">
-                {s.defects.length > 0
-                  ? s.defects
-                      .map(
-                        (d) =>
-                          `${d.label}${d.lengthIn !== null ? ` ${d.lengthIn.toFixed(1)} in` : ""} ${formatPercent(d.confidence)}`,
-                      )
-                      .join(", ")
-                  : "No defect marked by the camera"}
-              </p>
-            </li>
-          ))}
-        </ol>
+        <section aria-labelledby="sections-heading" className="flex flex-col gap-4">
+          <h2 id="sections-heading" className="text-xl font-semibold">
+            Rejected sections
+          </h2>
+          <ol
+            className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-4"
+            data-testid="claim-sections"
+          >
+            {sheet.rejected.map((s) => (
+              <li
+                key={s.scanId}
+                className="flex break-inside-avoid flex-col gap-2 rounded-lg border bg-card p-3 shadow-1"
+              >
+                {s.hasImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- authenticated per-scan image
+                  <img
+                    src={`/api/v1/scans/${s.scanId}/image`}
+                    alt={`Section #${s.sequence} of roll ${sheet.rollCode}`}
+                    className="aspect-[4/3] w-full rounded-sm bg-muted object-cover"
+                  />
+                ) : (
+                  <span className="flex aspect-[4/3] items-center justify-center rounded-sm bg-muted text-sm text-muted-foreground">
+                    No photo saved for this section
+                  </span>
+                )}
+                <p className="font-medium">
+                  Section #{s.sequence}
+                  <span className="font-normal text-muted-foreground">
+                    {" "}
+                    · {formatManilaDateTime(s.capturedAt)}
+                  </span>
+                </p>
+                <p className="text-sm">
+                  {s.defects.length > 0
+                    ? s.defects
+                        .map(
+                          (d) =>
+                            `${d.label}${d.lengthIn !== null ? ` ${d.lengthIn.toFixed(1)} in` : ""} ${formatPercent(d.confidence)}`,
+                        )
+                        .join(", ")
+                    : "No defect marked by the camera"}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
       )}
 
       <p className="text-sm text-muted-foreground">
-        Per roll only, never per person. Percentages beside a defect are the camera model’s
-        confidence that it is there; lengths are its box diagonal.
+        The camera’s verdict is final; rejected sections are not cut. Per roll only, never per
+        person. Percentages beside a defect are the camera model’s confidence that it is there;
+        lengths are its box diagonal.
       </p>
     </>
+  );
+}
+
+/** One fact on the claim: a muted label over its value and at most one muted line. */
+function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="flex flex-col gap-0.5">{children}</dd>
+    </div>
   );
 }

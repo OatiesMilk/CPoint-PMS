@@ -2484,3 +2484,15 @@ Friday), and a second week's leather, thread and cement deliveries. The damaged 
 it can read **High**), the near-limit roll to the 13th. Short days: 4 absent or more, plus 3 and
 2 on the last days, as before. A reset takes about twice as long. Demo data only;
 `src/server/services/demo-seed.service.ts`.
+
+### D-127 · 2026-11-09 · Accepted — Demo output: 300 pairs a day from 25 leather rolls
+
+**Context:** the demo line scanned 2 rolls a day against a quota of 128 pairs, about 64 pairs a
+roll. **Decision (Dylan, 2026-11-09):** the factory finishes about 300 pairs for every 25 leather
+rolls, and the quota follows: the demo quota is 300 passed pairs (`DEMO_QUOTA`), the line lays out
+25 rolls a working day (`DEMO_ROLL_SLOTS`, every 17 minutes from 08:00 and from 12:00), so each roll
+gives about 12 pairs (`DEMO_PAIRS_PER_ROLL`). Two weeks are about 250 rolls and 1,100 shots, so a
+reset takes 2 to 3 minutes (100 s on the cloud copy); the login page says so. Fourteen damaged rolls
+(all Marikina Supplier A's) go over 10%, so that supplier reads High, and two stay at 7% to 9%.
+Thread, cement and tacks are used per day (2, 1, 2), not per roll, so the shelf doesn't run dry.
+Demo data only; `src/server/services/demo-seed.service.ts`.
