@@ -5,6 +5,21 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-14 · Codex re-check of the PR #50 CI fix: PASS
+
+- Codex reran the `docker` job locally on `feature/claim-sheet-and-demo-output` with the
+  `quota=300` fix: all 28 checks passed, the restart check included
+  (`qa/reports/2026-11-14-ci-recheck-pr50-run1.md`). The vault was unreachable from the PC, so its
+  Daily note wasn't updated. Next: Dylan pushes the fix to PR #50.
+
+## 2026-11-09 · CI fix for PR #50: the demo quota check
+
+- PR #50's `docker` job failed on its day_plans check, which still looked for a quota of 128;
+  D-127 seeds 300. `.github/workflows/ci.yml` now checks `quota=300`. `check`, `station` and `e2e`
+  passed on the PR. The job's SQL checks were run against a locally seeded database: all pass
+  with 300, and the old line fails. Codex re-check prompt:
+  `qa/CODEX_PROMPT_CI_RECHECK_feature-claim-sheet-and-demo-output.md`.
+
 ## 2026-11-09 · Demo output: 300 pairs a day from 25 rolls (D-127)
 
 - Dylan: the factory finishes about 300 pairs for every 25 leather rolls, and the quota is 300.

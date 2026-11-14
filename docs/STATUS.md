@@ -55,6 +55,11 @@ include them).
   day, about 12 pairs a roll; a reset takes 2 to 3 minutes.
 - **A tidier claim sheet (built 2026-11-09, uncommitted):** key figures in a card, two tables,
   a Claim details card; the roll page shares the tables. `npm run check` passed.
+- **PR #50 (claim sheet + D-127):** CI `docker` failed on its day_plans check (quota 128); now
+  checks 300 in `.github/workflows/ci.yml`. `check`, `station`, `e2e` passed. Codex re-check:
+  `qa/CODEX_PROMPT_CI_RECHECK_feature-claim-sheet-and-demo-output.md`. **Codex re-check run 1
+  PASS** (`qa/reports/2026-11-14-ci-recheck-pr50-run1.md`): the local `docker` job passed all 28
+  checks, the quota-300 check and the restart included. Next: push the fix to PR #50 and merge.
 - **Demo clock (D-125, merged #48):** Change time in the Demo mode band moves the
   whole app to a Manila date and time and keeps ticking; Back to real time. One migration
   (`demo_clock`). `npm run check` passed. Handoff `qa/handoffs/2026-11-09-demo-clock.md`.

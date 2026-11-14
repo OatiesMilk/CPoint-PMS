@@ -138,7 +138,7 @@ jobs:
           # the one quota, one weekday marked Non-working, finished batches with failed pairs, and
           # no shoe types or old schedule tables (D-114).
           test "$(q "select count(*) from lunch_breaks where \"startTime\"='11:00' and \"endTime\"='12:00'")" -eq 1
-          test "$(q "select count(*) from day_plans where kind='PLANNED' and quota=128 and \"intervalMinutes\"=240")" -ge 1
+          test "$(q "select count(*) from day_plans where kind='PLANNED' and quota=300 and \"intervalMinutes\"=240")" -ge 1
           test "$(q "select count(*) from day_plans where kind='NON_WORKING'")" -eq 1
           q "select count(*) from production_check_ins c where not exists (select 1 from day_plans p where p.day = c.day and p.kind='PLANNED')" | grep -qx 0
           test "$(q "select count(*) from information_schema.tables where table_name in ('production_schedules','daily_quotas')")" -eq 0
