@@ -6,8 +6,6 @@ Inspectors, the Floor Manager and the System Admin.
 This manual explains how to do your daily tasks, step by step. You only need to read the part for
 your own role. Words in **bold** are the exact buttons and labels you see on the screen.
 
-> **About the pictures.** Places marked `[Screenshot: …]` are where a picture of that screen goes.
-
 ---
 
 ## Contents
@@ -83,7 +81,7 @@ address; the camera only works on a secure address.
 | Floor Manager     | **Overview**                   |
 | System Admin      | **Overview** (System overview) |
 
-`[Screenshot: Sign in page]`
+![The Sign in page. The Demo sign-in buttons show only in demo mode.](screenshots/manual/01-sign-in.png)
 
 **If you type the wrong password 5 times**, the account is locked for 15 minutes. The message says
 how many minutes are left. A System Admin can unlock it sooner.
@@ -100,7 +98,7 @@ you do. Other devices signed in to your account are signed out.
 - Click **your name** at the bottom of the menu to **Change password** or **Sign out**.
 - You stay signed in for up to 12 hours. Sign out when you leave a shared computer.
 
-`[Screenshot: Menu with the name button open]`
+![The menu on the left, with the name button open (Change password, Sign out).](screenshots/manual/02-menu.png)
 
 > **Demo mode.** During a demonstration, a **Demo mode** band shows at the top of every page, and the
 > sign-in page has one **Demo sign-in** button per role. This is only for demos; it is never turned
@@ -128,7 +126,7 @@ Your only page is **Capture**. You use it on your phone to photograph each roll 
 2. Under **Roll on the table**, pick the roll. Match the code on the roll's label.
 3. Tap **Start scanning**.
 
-`[Screenshot: Capture, choosing the leather and the roll]`
+![Capture on a phone, with a roll being scanned. Before a roll is started, this card shows the leather and roll pickers.](screenshots/manual/03-capture-start.png)
 
 If the list says "No rolls are waiting to be scanned", ask the Floor Manager to add the rolls in
 Inventory.
@@ -148,7 +146,7 @@ Inventory.
 
 A **Scanning time** timer runs while the roll is open. It pauses during the lunch break.
 
-`[Screenshot: Capture showing a Pass result]`
+![One shot and its result, with each defect marked on the photo. This one is a Reject because of a long cut.](screenshots/manual/04-shot-result.png)
 
 If a photo didn't reach the server (for example the Wi-Fi dropped), tap **Send again**, or
 **Discard this capture** and take it again.
@@ -196,7 +194,7 @@ Your only page is **Batches**. You can use it on a phone.
   out of the batch it falls in.
 - **Recent days**: earlier days, with a short reason for any day that fell short.
 
-`[Screenshot: Batches page with today's batches]`
+![The Batches page on a phone: the plan, each batch and its counts.](screenshots/manual/05-batches.png)
 
 If there are no batches, the page tells you why, for example "No batches yet today. The Floor
 Manager plans them first." Saturdays, Sundays and days marked Non-working / Holiday have no batches.
@@ -244,7 +242,7 @@ A summary of today on the line:
 - **Stock update today**: shows on your reminder days (Wednesday and Friday unless you change them).
 - **Daily summary**: yesterday and today so far, with **Download 14-day CSV**.
 
-`[Screenshot: Floor Manager Overview]`
+![The Floor Manager Overview.](screenshots/manual/06-overview.png)
 
 ### 6.2 Plan the days (Batches → Plan days)
 
@@ -270,7 +268,7 @@ Good to know:
 - Past days show what happened, for example "2 of 3 rolls scanned · 1 returned".
 - The lunch break is set by the System Admin.
 
-`[Screenshot: Plan days calendar with a day open]`
+![Plan days, with a weekday open for planning.](screenshots/manual/07-plan-days.png)
 
 ### 6.3 Batches
 
@@ -291,7 +289,7 @@ Use **Previous day** and **Next day** to fix an earlier day, and **Back to today
 Shoe Constructors count toward the line's worker count. Attendance is a one-day log book: there is
 no history or count per person.
 
-`[Screenshot: Attendance list]`
+![Attendance for one day.](screenshots/manual/08-attendance.png)
 
 ### 6.5 Inventory
 
@@ -314,6 +312,8 @@ others. Use the filters to find an item or to see only **Low or out** of stock.
 3. Enter each roll's area in **sq ft**. Tap **Add another roll** for each extra roll.
 4. Tap **Save** (for example **Save 3 rolls**). Each roll gets its code when you save.
 
+![A leather item with its rolls, each with its status and Defect %.](screenshots/manual/14-inventory-rolls.png)
+
 The leather item's count follows its rolls. A roll leaves stock when a Shoe Constructor finishes it at
 Capture, or when you remove it.
 
@@ -333,7 +333,7 @@ Under **Reminder days** you can choose the days the stock update reminder shows 
 
 Mistakes are never edited away. Fix them with a Correction; every change stays in **Stock history**.
 
-`[Screenshot: Update stock sheet]`
+![The Update stock sheet.](screenshots/manual/09-update-stock.png)
 
 ### 6.6 Reports
 
@@ -353,7 +353,7 @@ least 5 rolls and its share of returned rolls is at least 10 points above the wh
 **Download for Excel:** tap any **CSV** button (for example **Operations CSV**, **Rolls CSV** or
 **Materials CSV**) and open the file in Excel.
 
-`[Screenshot: Reports, Operations tab]`
+![Reports, Operations tab.](screenshots/manual/10-reports.png)
 
 ### 6.7 Send a bad roll back: the claim sheet
 
@@ -363,7 +363,7 @@ least 5 rolls and its share of returned rolls is at least 10 points above the wh
 3. Tap **Claim sheet**. It lists the roll, its rejected sections and their photos.
 4. Tap **Save as PDF** and send it to the supplier.
 
-`[Screenshot: Claim sheet]`
+![A claim sheet for a returned roll, ready to save as PDF.](screenshots/manual/11-claim-sheet.png)
 
 ---
 
@@ -399,7 +399,7 @@ Open **More actions** (the menu on the person's row) and choose **Give camera ac
 - **Edit** (the pencil): change the name, email or role. A role change applies the next time they
   open a page.
 
-`[Screenshot: Users list with More actions open]`
+![Users, with More actions open on a Shoe Constructor.](screenshots/manual/12-users.png)
 
 ### 7.3 Settings
 
@@ -437,7 +437,7 @@ applies from the date shown in the message. It pauses the batch it falls in, eve
 Add the leather suppliers CPoint buys from, with a **Name**, **Code**, and optional **Contact person**,
 **Phone** and **Notes**. The Floor Manager picks from this list when adding a leather item.
 
-`[Screenshot: Settings, Defect types tab]`
+![Settings, Defect types tab.](screenshots/manual/13-settings-defects.png)
 
 ### 7.4 Audit log
 
