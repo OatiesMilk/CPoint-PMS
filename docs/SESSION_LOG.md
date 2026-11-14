@@ -17,7 +17,10 @@ Template:
 - Checks on the PC's Linux shell: ESLint and Prettier on both files passed; `tsc --noEmit` shows
   only 4 errors from stale `.next/types` (removed routes), none in `src`. `next typegen`, unit
   tests and build couldn't run there (Windows-only SWC binary): run `npm run check` on Windows.
-- Next: `npm run check` on Windows, then Dylan's go for the git commands.
+- Update stock sheet: every cell is now vertically centred (`align-middle` in place of
+  `align-top` in `update-sheet.tsx`), so names, quantities, inputs and "After" line up on one row.
+  ESLint and Prettier passed.
+- Manual: real screenshots in `docs/screenshots/manual/`, `docs/USER_MANUAL.pdf`; API tokens left out.
 
 ## 2026-11-14 · Codex re-check of the PR #50 CI fix: PASS
 

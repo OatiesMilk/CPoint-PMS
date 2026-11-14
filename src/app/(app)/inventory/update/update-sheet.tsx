@@ -291,7 +291,7 @@ export function UpdateSheet({ sheet, initialQuery }: { sheet: Sheet; initialQuer
                       const id = fieldId(field, item.id);
                       const error = errors[`lines.${item.id}.${field}`];
                       return (
-                        <TableCell className="align-top">
+                        <TableCell className="align-middle">
                           <Label htmlFor={id} className="sr-only">
                             {label} {item.name}
                           </Label>
@@ -324,7 +324,7 @@ export function UpdateSheet({ sheet, initialQuery }: { sheet: Sheet; initialQuer
                     const reasonField = fieldId("reason", item.id);
                     return (
                       <TableRow key={item.id} aria-label={`${item.sku} ${item.name}`}>
-                        <TableCell className="align-top">
+                        <TableCell className="align-middle">
                           <span className="font-medium">{item.name}</span>
                           <span className="block text-sm text-muted-foreground">
                             <span className="font-mono">{item.sku}</span>
@@ -335,11 +335,11 @@ export function UpdateSheet({ sheet, initialQuery }: { sheet: Sheet; initialQuer
                               : "not updated yet"}
                           </span>
                         </TableCell>
-                        <TableCell numeric className="align-top whitespace-nowrap">
+                        <TableCell numeric className="align-middle whitespace-nowrap">
                           {formatQuantity(item.quantityOnHand, item.unit)}
                         </TableCell>
                         {item.category === "LEATHER_ROLL" ? (
-                          <TableCell colSpan={5} className="align-top text-muted-foreground">
+                          <TableCell colSpan={5} className="align-middle text-muted-foreground">
                             Counted from its rolls.{" "}
                             <Link
                               href={`/inventory/${item.id}`}
@@ -354,7 +354,7 @@ export function UpdateSheet({ sheet, initialQuery }: { sheet: Sheet; initialQuer
                             {numberCell("added", "Added to", "e.g. 6")}
                             {numberCell("used", "Used of", "e.g. 3")}
                             {numberCell("correction", "Correction for", "e.g. −2")}
-                            <TableCell className="align-top">
+                            <TableCell className="align-middle">
                               <Label htmlFor={reasonField} className="sr-only">
                                 Reason for the {item.name} correction
                               </Label>
@@ -379,7 +379,7 @@ export function UpdateSheet({ sheet, initialQuery }: { sheet: Sheet; initialQuer
                             </TableCell>
                             <TableCell
                               numeric
-                              className="align-top whitespace-nowrap"
+                              className="align-middle whitespace-nowrap"
                               data-testid="on-hand-after"
                             >
                               {after === null ? (
