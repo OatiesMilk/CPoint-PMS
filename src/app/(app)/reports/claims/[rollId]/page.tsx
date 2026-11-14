@@ -161,12 +161,6 @@ export default async function ClaimSheetPage({ params }: PageProps<"/reports/cla
           </ol>
         </section>
       )}
-
-      <p className="text-sm text-muted-foreground">
-        The camera’s verdict is final; rejected sections are not cut. Per roll only, never per
-        person. Percentages beside a defect are the camera model’s confidence that it is there;
-        lengths are its box diagonal.
-      </p>
     </>
   );
 }
