@@ -8,6 +8,8 @@ import { FieldError } from "@/components/ui/field-error";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { formatArea, ROLL_MESSAGES } from "@/lib/roll-rules";
+import { QrScanner } from "@/components/features/rolls/qr-scanner";
+import { parseScannedCode } from "@/lib/location-rules";
 import type { OpenRollView } from "./roll-bar";
 
 /** A roll in stock, not scanned yet, as GET /api/v1/rolls/ready sends it (Phase 30A). */
@@ -18,6 +20,8 @@ export type ReadyRollView = {
   supplier: string | null;
   item: string | null;
   areaSqFt: number | null;
+  /** Where it is kept (Phase 32), or null when not placed. */
+  location?: { code: string; name: string | null } | null;
 };
 
 type ApiError = { error?: { message?: string } };
@@ -53,9 +57,14 @@ export function leatherOption(l: Leather): string {
   return [l.name, l.supplier, `${n} ${n === 1 ? "roll" : "rolls"}`].filter(Boolean).join(" · ");
 }
 
-/** "LR-MLT-012 · 24.5 sq ft · tag 88-14" */
+/** "LR-MLT-012 · 24.5 sq ft · tag 88-14 · R1-B3" (where it is kept, Phase 32) */
 export function rollOption(r: ReadyRollView): string {
-  return [r.code, formatArea(r.areaSqFt), r.tagCode ? `tag ${r.tagCode}` : null]
+  return [
+    r.code,
+    formatArea(r.areaSqFt),
+    r.tagCode ? `tag ${r.tagCode}` : null,
+    r.location?.code ?? null,
+  ]
     .filter(Boolean)
     .join(" · ");
 }
@@ -106,6 +115,28 @@ export function PickRollForm({
       live = false;
     };
   }, []);
+
+  /** Scan label (Phase 32): the roll's QR picks its leather and the roll itself. */
+  async function pickByLabel(text: string) {
+    setError(null);
+    setErrors({});
+    const scanned = parseScannedCode(text);
+    if (!scanned || scanned.kind !== "roll") {
+      setError("That label is a storage location, not a roll. Scan the label on the roll itself.");
+      return;
+    }
+    const list = (await fetchReady()) ?? ready;
+    setReady(list);
+    const found = list.find((r) => r.code === scanned.code);
+    if (!found) {
+      setError(
+        `${scanned.code} isn’t waiting to be scanned. It may be scanned already or being scanned on another phone. Check the code, or choose the roll below.`,
+      );
+      return;
+    }
+    setLeatherName(found.item ?? "Other rolls");
+    setRollId(found.id);
+  }
 
   async function start() {
     setError(null);
@@ -160,6 +191,11 @@ export function PickRollForm({
         void start();
       }}
     >
+      <QrScanner
+        label="Scan the roll’s label"
+        className="max-sm:w-full sm:self-start"
+        onCode={(text) => void pickByLabel(text)}
+      />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="start-leather" className="text-base">
           Leather

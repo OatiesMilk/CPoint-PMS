@@ -2496,3 +2496,46 @@ reset takes 2 to 3 minutes (100 s on the cloud copy); the login page says so. Fo
 (all Marikina Supplier A's) go over 10%, so that supplier reads High, and two stay at 7% to 9%.
 Thread, cement and tacks are used per day (2, 1, 2), not per roll, so the shelf doesn't run dry.
 Demo data only; `src/server/services/demo-seed.service.ts`.
+
+### D-128 · 2026-11-17 · Accepted — Storage locations, QR labels and Find roll (Phase 32, the panel's revision 4)
+
+**Context:** the defense panel asked that "unique leather roll identifiers and storage locations
+can be physically traced so that users can locate specific rolls for use or return, rather than
+only tracking quantities in the system". Each roll already had a unique code (`LR-<supplier>-NNN`,
+Phase 30A), but nothing said where it was. Plan: `docs/prompts/plans/phase-32-roll-locations-plan.md`.
+**Decision (Dylan's go, 2026-11-17, with the plan's four recommendations):**
+
+- **Storage locations are data** (`storage_locations`): a code (2 to 20 letters, numbers or
+  dashes, unique, e.g. `R1-B3`), an optional name, a kind (Rack, Bin, Area), notes and an active
+  flag. CPoint hasn't confirmed its rack layout (A-53), so the codes are theirs to choose; the demo
+  uses placeholders. A location is never deleted; an empty one can be deactivated; its code is
+  fixed once rolls have been kept there (A-79).
+- **(1) The Floor Manager manages them**, under Inventory → Storage locations (`location:manage`),
+  because the FM is on the floor, adds the rolls and prints the labels, and the System Admin has no
+  Inventory access (D-119).
+- **Each roll in storage is in at most one location** (`batches.locationId`): a roll in stock, or
+  one Returned to supplier that the supplier hasn't picked up. A roll picked at Capture leaves its
+  location (A-55). Every change is one row in `roll_moves` (Placed, Moved, Taken for scanning, Put
+  back, Removed, Set aside for return, Picked up by supplier), with who did it kept for the audit
+  only: the history shows no names (D-008, A-78). Stock counts don't change.
+- **(2) The QR holds the plain code:** a roll's label holds its code (`LR-MLT-004`), a location's
+  `LOC:R1-B3` (A-80), read by the app's own scanner (Find roll and Capture's Scan the roll's label;
+  the browser's BarcodeDetector where it exists, `jsqr` elsewhere). Not a URL: the quick tunnel's
+  address changes every run (D-076), so a printed link would break. Labels are A4 sheets of 3 × 7
+  stickers drawn on the server with `qrcode` (A-54). Both packages are Dylan's OK (2026-11-17).
+- **(3) Returned rolls are tracked until the supplier takes them** (A-77): after Finish roll marks
+  a roll Returned to supplier (D-116), the constructor (or later the FM) sets it aside in a place,
+  and the FM marks **Picked up by supplier**, which frees its place (`batches.pickedUpAt`). The
+  status stays Finished; this replaces the parent plan's "marking Returned", which doesn't exist
+  since D-112.
+- **(4) Put back at Capture asks where the roll went**, prefilled with where it was taken from;
+  without locations it works as before.
+- **Find roll** (`/find`) for the Floor Manager and constructors with camera access, a phone page
+  like Capture (A-71): a code, part of one, a supplier tag or a location label; the roll's place in
+  large text and its history; the FM can move it or mark it picked up there.
+
+**Where:** `prisma/migrations/20261117090000_roll_locations`, `src/lib/location-rules.ts`,
+`src/server/{models,services,controllers,validators}/location.*`, `src/server/services/label.service.ts`,
+`roll.service.ts`, `src/app/(app)/{find,inventory/locations,inventory/labels}`,
+`src/components/features/rolls/{qr-scanner,move-rolls-dialog,location-history,picked-up-button}.tsx`,
+`src/server/policies/{permissions,navigation}.ts`, `docs/API.md` → Storage locations.

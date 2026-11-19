@@ -20,6 +20,12 @@ export const PERMISSIONS = {
   // A section's page, reached from its roll in Reports → Rolls (A-26). There is no Scans list.
   "scan:read": ["FLOOR_MANAGER"],
   "inventory:read": ["FLOOR_MANAGER"],
+  // Storage locations (Phase 32, D-128): the Floor Manager adds them, prints their labels and
+  // places and moves rolls (A-56); a constructor with camera access finds rolls and puts one back
+  // where it was (canFindRolls).
+  "location:read": ["FLOOR_MANAGER", "SHOE_CONSTRUCTOR"],
+  "location:manage": ["FLOOR_MANAGER"],
+  "roll:move": ["FLOOR_MANAGER"],
   "inventory:manage": ["FLOOR_MANAGER"],
   "report:production": ["FLOOR_MANAGER"],
   "report:quality": ["FLOOR_MANAGER"],
@@ -52,6 +58,15 @@ export function can(role: Role, permission: Permission): boolean {
  */
 export function canCaptureFor(user: { role: Role; canCapture: boolean }): boolean {
   return can(user.role, "camera:capture") && user.canCapture;
+}
+
+/**
+ * May this person use Find roll and read the storage locations (Phase 32, D-128)? The Floor
+ * Manager, and a Shoe Constructor the System Admin has allowed to capture.
+ */
+export function canFindRolls(user: { role: Role; canCapture: boolean }): boolean {
+  if (!can(user.role, "location:read")) return false;
+  return user.role !== "SHOE_CONSTRUCTOR" || canCaptureFor(user);
 }
 
 /**

@@ -59,7 +59,15 @@ import {
   listRolls,
   listRollTimes,
   listRollsUsedIn,
+  findRollsByCodeOrTag,
+  findRollsByIds,
+  insertRollMove,
+  lastTakenFrom,
+  listRollMoves,
+  listRollsInLocation,
   moveRoll,
+  setRollLocation,
+  type RollMoveRow,
   nextRollCodeNumber,
   rollCodeTaken,
   saveRollMeasure,
@@ -68,7 +76,23 @@ import {
   type RollListRow,
 } from "@/server/models/roll.model";
 import type { AddRollsValues, RollListQuery } from "@/server/validators/roll.validator";
+import {
+  awaitsPickup,
+  locationText,
+  mayHoldLocation,
+  MOVE_REASON_LABELS,
+  noMatchMessage,
+  parseScannedCode,
+  planMove,
+  planPickedUp,
+  planSetAside,
+  whereText,
+  LOCATION_MESSAGES,
+} from "@/lib/location-rules";
+import { findLocation, findLocationByCode } from "@/server/models/location.model";
+import type { MoveRollsValues } from "@/server/validators/location.validator";
 import { recordAudit } from "./audit.service";
+import { toLocation, type Location } from "./location.service";
 import { postMovement } from "./inventory.service";
 
 type Actor = { id: string };
@@ -196,6 +220,10 @@ export type ItemRoll = RollListItem & {
   /** "cut 2, hole 1": the defects the camera found on this roll, most first. */
   defectsFound: string;
   canRemove: boolean;
+  /** Where it is kept, in one line (Phase 32). */
+  where: string;
+  /** In storage, so the Floor Manager may place or move it. */
+  canMove: boolean;
 };
 
 /**
@@ -225,6 +253,8 @@ export async function listItemRolls(
         .map((d) => `${d.label} ${Number(d.detections)}`)
         .join(", "),
       canRemove: planRemove({ status: r.status, fromInventory: true }).ok,
+      where: whereOf(r),
+      canMove: mayHoldLocation(storageOf(r)),
     })),
     total,
     page,
@@ -242,6 +272,11 @@ export type RollDetail = Omit<RollDetailRow, "areaSqFt" | "returnedOn"> & {
   canRemove: boolean;
   /** Working time from Start scanning to Finish roll, lunch left out (D-121). */
   scanningMs: number | null;
+  /** Where it is kept, in one line, and its location history (Phase 32). */
+  where: string;
+  canMove: boolean;
+  awaitsPickup: boolean;
+  history: RollHistoryEntry[];
 };
 
 export async function getRollDetail(id: string): Promise<RollDetail | null> {
@@ -249,6 +284,7 @@ export async function getRollDetail(id: string): Promise<RollDetail | null> {
   if (!roll) return null;
   const passed = roll.scans.filter((s) => s.finalVerdict === "PASS").length;
   const state = { status: roll.status, fromInventory: !!roll.item };
+  const [lunchOn, history] = await Promise.all([loadLunchOn(), rollHistory(roll.id)]);
   return {
     ...roll,
     areaSqFt: area(roll.areaSqFt),
@@ -256,7 +292,11 @@ export async function getRollDetail(id: string): Promise<RollDetail | null> {
     passed,
     rejected: roll.scans.length - passed,
     canRemove: planRemove(state).ok,
-    scanningMs: timeOf(roll, await loadLunchOn()),
+    scanningMs: timeOf(roll, lunchOn),
+    where: whereOf(roll),
+    canMove: mayHoldLocation(storageOf(roll)),
+    awaitsPickup: awaitsPickup(storageOf(roll)),
+    history,
   };
 }
 
@@ -280,6 +320,10 @@ export type OpenRoll = {
   scale: RollScale | null;
   /** The lunch break of each day since it started, so Capture's timer leaves lunch out (D-121). */
   lunches: Record<string, BreakRule | null>;
+  /** Where it is kept (Phase 32): a roll waiting at Capture; null once picked. */
+  location: { code: string; name: string | null } | null;
+  /** Where it was taken from when picked, to prefill Put back (Phase 32). */
+  takenFromId: string | null;
 };
 
 const scaleOfRoll = (r: OpenRollRow): RollScale | null => {
@@ -307,6 +351,8 @@ const toOpenRoll = (
   fromInventory: r.itemId !== null,
   scale: scaleOfRoll(r),
   lunches: r.startedAt && lunchOn ? lunchDays(r.startedAt, now, lunchOn) : {},
+  location: r.location ? { code: r.location.code, name: r.location.name } : null,
+  takenFromId: null,
 });
 
 /** Settings → Lunch break's rows as a lookup by day, for the scanning timer (D-121). */
@@ -320,19 +366,23 @@ export async function openRollsForCapture(
   now: Date = appNow(),
 ): Promise<OpenRoll[]> {
   const [rows, lunchOn] = await Promise.all([listOpenRolls(), loadLunchOn()]);
-  return rows.map((r) => toOpenRoll(r, viewer.id, lunchOn, now));
+  const takenFrom = await lastTakenFrom(rows.map((r) => r.id));
+  return rows.map((r) => ({
+    ...toOpenRoll(r, viewer.id, lunchOn, now),
+    takenFromId: takenFrom.get(r.id) ?? null,
+  }));
 }
 
 export type ReadyRoll = Pick<
   OpenRoll,
-  "id" | "code" | "tagCode" | "supplier" | "item" | "areaSqFt"
+  "id" | "code" | "tagCode" | "supplier" | "item" | "areaSqFt" | "location"
 >;
 
 /** Rolls in stock and not scanned yet, oldest first, for Capture's Scan a roll (Phase 30A). */
 export async function readyRollsForCapture(): Promise<ReadyRoll[]> {
   return (await listReadyRolls()).map((r) => {
-    const { id, code, tagCode, supplier, item, areaSqFt } = toOpenRoll(r);
-    return { id, code, tagCode, supplier, item, areaSqFt };
+    const { id, code, tagCode, supplier, item, areaSqFt, location } = toOpenRoll(r);
+    return { id, code, tagCode, supplier, item, areaSqFt, location };
   });
 }
 
@@ -360,7 +410,7 @@ const stateOf = (r: OpenRollRow) => ({
  */
 export async function addRolls(
   itemId: string,
-  values: AddRollsValues,
+  values: Omit<AddRollsValues, "locationId"> & { locationId?: string | null },
   actor: Actor,
   now: Date = appNow(),
 ) {
@@ -379,6 +429,7 @@ export async function addRolls(
     throw Errors.conflict(
       `${supplier.name} is no longer an active supplier. Choose another supplier for ${item.name} first.`,
     );
+  const location = values.locationId ? await activeLocation(values.locationId) : null;
 
   return runInTransaction(async (tx) => {
     const added = [];
@@ -402,9 +453,23 @@ export async function addRolls(
           status: "IN_STOCK",
           createdById: actor.id,
           createdAt: now,
+          locationId: location?.id ?? null,
+          locatedAt: location ? now : null,
         },
         tx,
       );
+      if (location)
+        await insertRollMove(
+          {
+            rollId: row.id,
+            fromLocationId: null,
+            toLocationId: location.id,
+            reason: "PLACED",
+            byId: actor.id,
+            at: now,
+          },
+          tx,
+        );
       const moved = await postMovement(
         tx,
         { id: item.id, sku: item.sku, name: item.name, unit: item.unit, quantityOnHand: onHand },
@@ -424,6 +489,7 @@ export async function addRolls(
         item: `${item.sku} · ${item.name}`,
         supplier: supplier.name,
         receivedOn: values.receivedOn,
+        location: location?.code ?? null,
         rolls: added.map(({ code, areaSqFt, tagCode }) => ({ code, areaSqFt, tagCode })),
         quantityOnHand: onHand,
       },
@@ -440,24 +506,40 @@ export async function startRoll(id: string, actor: Actor, now: Date = appNow()) 
     const done = await moveRoll(
       id,
       "IN_STOCK",
-      { status: "OPEN", startedAt: now, startedById: actor.id },
+      { status: "OPEN", startedAt: now, startedById: actor.id, locationId: null, locatedAt: null },
       tx,
     );
     if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
+    // It leaves its place in storage for the table (Phase 32).
+    if (roll.locationId)
+      await insertRollMove(
+        {
+          rollId: id,
+          fromLocationId: roll.locationId,
+          toLocationId: null,
+          reason: "TAKEN_FOR_USE",
+          byId: actor.id,
+          at: now,
+        },
+        tx,
+      );
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "roll.start",
       entity: "Roll",
       entityId: id,
-      before: { status: "IN_STOCK" },
-      after: { status: "OPEN", code: roll.code },
+      before: { status: "IN_STOCK", location: roll.location?.code ?? null },
+      after: { status: "OPEN", code: roll.code, location: null },
     });
-    return toOpenRoll(
-      { ...roll, status: "OPEN", startedAt: now, startedById: actor.id },
-      actor.id,
-      await loadLunchOn(),
-      now,
-    );
+    return {
+      ...toOpenRoll(
+        { ...roll, status: "OPEN", startedAt: now, startedById: actor.id, location: null },
+        actor.id,
+        await loadLunchOn(),
+        now,
+      ),
+      takenFromId: roll.locationId,
+    };
   });
 }
 
@@ -551,20 +633,45 @@ export async function finishRoll(
  * Put back at Capture: a roll picked by mistake, with no shots. A roll from Inventory waits to be
  * scanned again; one from before Phase 30A is cancelled, as it was then.
  */
-export async function putBackRoll(id: string, actor: Actor, now: Date = appNow()) {
+export async function putBackRoll(
+  id: string,
+  actor: Actor,
+  now: Date = appNow(),
+  locationId: string | null = null,
+) {
   const roll = await loadRoll(id);
   const state = stateOf(roll);
   refuse(planPutBack(state));
+  // Where it went (Phase 32): only a roll from Inventory goes back into storage.
+  const location = locationId && state.fromInventory ? await activeLocation(locationId) : null;
   return runInTransaction(async (tx) => {
     const done = await moveRoll(
       id,
       "OPEN",
       state.fromInventory
-        ? { status: "IN_STOCK", startedAt: null, startedById: null }
+        ? {
+            status: "IN_STOCK",
+            startedAt: null,
+            startedById: null,
+            locationId: location?.id ?? null,
+            locatedAt: location ? now : null,
+          }
         : { status: "CANCELLED", cancelledAt: now, cancelledById: actor.id, cancelledReason: null },
       tx,
     );
     if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
+    if (location)
+      await insertRollMove(
+        {
+          rollId: id,
+          fromLocationId: null,
+          toLocationId: location.id,
+          reason: "PUT_BACK",
+          byId: actor.id,
+          at: now,
+        },
+        tx,
+      );
     const status = state.fromInventory ? ("IN_STOCK" as const) : ("CANCELLED" as const);
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
@@ -572,9 +679,9 @@ export async function putBackRoll(id: string, actor: Actor, now: Date = appNow()
       entity: "Roll",
       entityId: id,
       before: { status: "OPEN" },
-      after: { status, code: roll.code },
+      after: { status, code: roll.code, location: location?.code ?? null },
     });
-    return { id, code: roll.code, status };
+    return { id, code: roll.code, status, location: location?.code ?? null };
   });
 }
 
@@ -592,10 +699,30 @@ export async function removeRoll(id: string, reason: string, actor: Actor, now: 
     const done = await moveRoll(
       id,
       roll.status,
-      { status: "CANCELLED", cancelledAt: now, cancelledById: actor.id, cancelledReason: reason },
+      {
+        status: "CANCELLED",
+        cancelledAt: now,
+        cancelledById: actor.id,
+        cancelledReason: reason,
+        locationId: null,
+        locatedAt: null,
+      },
       tx,
     );
     if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
+    if (roll.locationId)
+      await insertRollMove(
+        {
+          rollId: id,
+          fromLocationId: roll.locationId,
+          toLocationId: null,
+          reason: "REMOVED",
+          note: reason,
+          byId: actor.id,
+          at: now,
+        },
+        tx,
+      );
     if (state.fromInventory)
       await takeFromStock(tx, roll, `Roll ${roll.code} removed: ${reason}`, actor, now);
     await recordAudit(tx, {
@@ -603,8 +730,14 @@ export async function removeRoll(id: string, reason: string, actor: Actor, now: 
       action: "roll.remove",
       entity: "Roll",
       entityId: id,
-      before: { status: roll.status },
-      after: { status: "CANCELLED", code: roll.code, shots: roll._count.scans, reason },
+      before: { status: roll.status, location: roll.location?.code ?? null },
+      after: {
+        status: "CANCELLED",
+        code: roll.code,
+        shots: roll._count.scans,
+        reason,
+        location: null,
+      },
     });
     return { id, code: roll.code, status: "CANCELLED" as const };
   });
@@ -717,4 +850,274 @@ export async function deviceTargetRoll(): Promise<OpenRoll | null> {
 /** Rolls open now, being captured (the FM home's Rolls today, Phase 28). */
 export function openRollCount(): Promise<number> {
   return countOpenRolls();
+}
+
+// ───────────── Where a roll is kept (Phase 32, D-128) ─────────────
+
+/** A location that may take rolls, or a 404 / 409 that names the fix. */
+async function activeLocation(id: string, tx?: Tx) {
+  const location = await findLocation(id, tx);
+  if (!location) throw Errors.notFound("This location");
+  if (!location.isActive) throw Errors.conflict(LOCATION_MESSAGES.notActive);
+  return location;
+}
+
+type StorageFields = Pick<
+  RollListRow,
+  "code" | "status" | "markedForReturn" | "returnDecision" | "pickedUpAt" | "locationId"
+>;
+
+const storageOf = (r: StorageFields) => ({
+  code: r.code,
+  status: r.status,
+  markedForReturn: r.markedForReturn,
+  returnDecision: r.returnDecision,
+  pickedUpAt: r.pickedUpAt,
+  locationId: r.locationId,
+});
+
+/**
+ * The Floor Manager places or moves rolls (A-56), up to 50 at a time: all or nothing. Each roll
+ * gets one history row (Placed when it had no place, else Moved); one audit row lists them.
+ */
+export async function moveRolls(values: MoveRollsValues, actor: Actor, now: Date = appNow()) {
+  const target = await activeLocation(values.toLocationId);
+  const rolls = await findRollsByIds(values.rollIds);
+  if (rolls.length !== values.rollIds.length) throw Errors.notFound("One of these rolls");
+  const plans = rolls.map((roll) => ({ roll, plan: planMove(storageOf(roll), target) }));
+  const refused = plans.find((p) => !p.plan.ok);
+  if (refused && !refused.plan.ok) throw Errors.conflict(refused.plan.reason);
+
+  return runInTransaction(async (tx) => {
+    // Checked again inside, so a location deactivated meanwhile takes no rolls.
+    await activeLocation(target.id, tx);
+    const moved = [];
+    for (const { roll, plan } of plans) {
+      if (!plan.ok) continue;
+      const done = await setRollLocation(
+        roll.id,
+        { status: roll.status, locationId: roll.locationId },
+        { locationId: target.id, locatedAt: now },
+        tx,
+      );
+      if (!done) throw Errors.stale(LOCATION_MESSAGES.stale);
+      await insertRollMove(
+        {
+          rollId: roll.id,
+          fromLocationId: roll.locationId,
+          toLocationId: target.id,
+          reason: plan.reason,
+          note: values.note,
+          byId: actor.id,
+          at: now,
+        },
+        tx,
+      );
+      moved.push({
+        id: roll.id,
+        code: roll.code,
+        from: roll.location?.code ?? null,
+        to: target.code,
+      });
+    }
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: "roll.move",
+      entity: "StorageLocation",
+      entityId: target.id,
+      // Where each roll was before (run 1 F2), and where they all went.
+      before: { rolls: moved.map(({ code, from }) => ({ code, location: from })) },
+      after: {
+        to: target.code,
+        note: values.note,
+        rolls: moved.map(({ code, from }) => ({ code, from })),
+      },
+    });
+    return { moved };
+  });
+}
+
+/**
+ * Set a roll that finished Returned to supplier aside for the supplier, e.g. in the return area
+ * (A-77): the constructor right after Finish roll, or the Floor Manager later.
+ */
+export async function setAsideRoll(
+  id: string,
+  locationId: string,
+  actor: Actor,
+  now: Date = appNow(),
+) {
+  const roll = await loadRoll(id);
+  const target = await activeLocation(locationId);
+  refuse(planSetAside(storageOf(roll), target));
+  return runInTransaction(async (tx) => {
+    const done = await setRollLocation(
+      id,
+      { status: roll.status, locationId: roll.locationId },
+      { locationId: target.id, locatedAt: now },
+      tx,
+    );
+    if (!done) throw Errors.stale(LOCATION_MESSAGES.stale);
+    await insertRollMove(
+      {
+        rollId: id,
+        fromLocationId: roll.locationId,
+        toLocationId: target.id,
+        reason: "SET_ASIDE_FOR_RETURN",
+        byId: actor.id,
+        at: now,
+      },
+      tx,
+    );
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: "roll.set_aside",
+      entity: "Roll",
+      entityId: id,
+      before: { location: roll.location?.code ?? null },
+      after: { code: roll.code, location: target.code },
+    });
+    return { id, code: roll.code, location: { code: target.code, name: target.name } };
+  });
+}
+
+/** The supplier took a Returned to supplier roll (A-77): it leaves storage for good. */
+export async function markPickedUp(id: string, actor: Actor, now: Date = appNow()) {
+  const roll = await loadRoll(id);
+  refuse(planPickedUp(storageOf(roll)));
+  return runInTransaction(async (tx) => {
+    const done = await setRollLocation(
+      id,
+      { status: roll.status, locationId: roll.locationId },
+      { locationId: null, locatedAt: null, pickedUpAt: now },
+      tx,
+    );
+    if (!done) throw Errors.stale(LOCATION_MESSAGES.stale);
+    await insertRollMove(
+      {
+        rollId: id,
+        fromLocationId: roll.locationId,
+        toLocationId: null,
+        reason: "PICKED_UP_BY_SUPPLIER",
+        byId: actor.id,
+        at: now,
+      },
+      tx,
+    );
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: "roll.picked_up",
+      entity: "Roll",
+      entityId: id,
+      before: { location: roll.location?.code ?? null, pickedUpAt: null },
+      after: { code: roll.code, location: null, pickedUpAt: now },
+    });
+    return { id, code: roll.code, pickedUpAt: now.toISOString() };
+  });
+}
+
+export type RollHistoryEntry = {
+  id: string;
+  at: string;
+  reason: RollMoveRow["reason"];
+  /** "Moved", "Taken for scanning", … */
+  label: string;
+  from: string | null;
+  to: string | null;
+  note: string | null;
+};
+
+const toHistory = (m: RollMoveRow): RollHistoryEntry => ({
+  id: m.id,
+  at: m.at.toISOString(),
+  reason: m.reason,
+  label: MOVE_REASON_LABELS[m.reason],
+  from: m.fromLocation ? locationText(m.fromLocation) : null,
+  to: m.toLocation ? locationText(m.toLocation) : null,
+  note: m.note,
+});
+
+/** A roll's location history, newest first, with no names (A-78). */
+export async function rollHistory(id: string): Promise<RollHistoryEntry[]> {
+  return (await listRollMoves(id)).map(toHistory);
+}
+
+export type FoundRoll = {
+  id: string;
+  code: string;
+  tagCode: string | null;
+  status: RollStatus;
+  /** "Not yet scanned", "Returned to supplier", … as the badge reads. */
+  statusText: string;
+  item: string | null;
+  supplier: string | null;
+  areaSqFt: number | null;
+  receivedOn: string | null;
+  location: { id: string; code: string; name: string | null } | null;
+  /** Where it is, in one line: "R1-B3 · Rack 1, bin 3", "Not placed", "Being scanned at Capture"… */
+  where: string;
+  /** The Floor Manager may place or move it. */
+  canMove: boolean;
+  /** Returned to supplier and not yet taken (A-77). */
+  awaitsPickup: boolean;
+};
+
+/** Where a roll is now, in one line (Phase 32). */
+function whereOf(
+  r: StorageFields & Pick<RollListRow, "location" | "finishedAt" | "cancelledAt">,
+): string {
+  return whereText(
+    { ...storageOf(r), location: r.location, finishedAt: r.finishedAt, cancelledAt: r.cancelledAt },
+    (d) => formatManilaDateTime(d),
+  );
+}
+
+export function toFoundRoll(r: RollListRow): FoundRoll {
+  const storage = storageOf(r);
+  return {
+    id: r.id,
+    code: r.code,
+    tagCode: r.tagCode,
+    status: r.status,
+    statusText: rollStatusText(r),
+    item: r.item?.name ?? null,
+    supplier: r.supplier?.name ?? null,
+    areaSqFt: area(r.areaSqFt),
+    receivedOn: dayOf(r.receivedAt),
+    location: r.location,
+    where: whereOf(r),
+    canMove: mayHoldLocation(storage),
+    awaitsPickup: awaitsPickup(storage),
+  };
+}
+
+export type FindResult = {
+  rolls: FoundRoll[];
+  location: (Location & { contents: FoundRoll[] }) | null;
+  /** Nothing matched: the message to show, naming the fix. */
+  message: string | null;
+};
+
+/**
+ * Find roll (Phase 32): a typed or scanned code. `LOC:R1-B3` (a location label) lists what is
+ * there; anything else is a roll code or supplier tag, and when no roll matches, a location code
+ * typed by hand.
+ */
+export async function findRolls(q: string): Promise<FindResult> {
+  const scanned = parseScannedCode(q);
+  if (!scanned) return { rolls: [], location: null, message: noMatchMessage(q) };
+  const locationResult = async (code: string) => {
+    const row = await findLocationByCode(code);
+    if (!row) return null;
+    const contents = (await listRollsInLocation(row.id)).map(toFoundRoll);
+    return { ...toLocation(row), contents };
+  };
+  if (scanned.kind === "location") {
+    const location = await locationResult(scanned.code);
+    return { rolls: [], location, message: location ? null : noMatchMessage(scanned.code) };
+  }
+  const rolls = (await findRollsByCodeOrTag(scanned.code)).map(toFoundRoll);
+  const location = rolls.length === 0 ? await locationResult(scanned.code) : null;
+  const message = rolls.length === 0 && !location ? noMatchMessage(scanned.code) : null;
+  return { rolls, location, message };
 }

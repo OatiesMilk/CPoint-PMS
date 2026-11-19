@@ -17,7 +17,16 @@ import { findInventoryItem, findInventoryItemBySku } from "@/server/models/inven
 import { listActiveSuppliers, listDefectTypes } from "@/server/models/reference-data.model";
 import { findUserByEmail } from "@/server/models/user.model";
 import { getAttendanceDay, saveAttendanceDay } from "./attendance.service";
-import { addRolls, finishRoll, removeRoll, startRoll } from "./roll.service";
+import {
+  addRolls,
+  finishRoll,
+  markPickedUp,
+  moveRolls,
+  removeRoll,
+  setAsideRoll,
+  startRoll,
+} from "./roll.service";
+import { ensureLocation } from "./location.service";
 import { ensureSupplierWithCode } from "./supplier-code.service";
 import { setCameraOperator } from "./camera.service";
 import { markNonWorking, saveCheckIn, saveDayPlan } from "./production.service";
@@ -330,6 +339,16 @@ export type DemoSeedResult =
     }
   | { seeded: false; reason: string };
 
+/** The demo's placeholder bins (Phase 32, A-53): CPoint's real rack layout isn't known yet. */
+export const DEMO_BINS: readonly [string, string][] = [
+  ["R1-B1", "Rack 1, bin 1"],
+  ["R1-B2", "Rack 1, bin 2"],
+  ["R1-B3", "Rack 1, bin 3"],
+  ["R2-B1", "Rack 2, bin 1"],
+  ["R2-B2", "Rack 2, bin 2"],
+  ["R2-B3", "Rack 2, bin 3"],
+];
+
 export async function seedDemoWeek(
   options: { now?: Date; seed?: number; imageSize?: number } = {},
 ): Promise<DemoSeedResult> {
@@ -415,16 +434,36 @@ export async function seedDemoWeek(
   await stock("TH-001", "IN", 6, "Delivery received", at(addDays(firstDay, 9), 14));
   await stock("AD-001", "IN", 3, "Delivery received", at(addDays(firstDay, 10), 14));
 
+  // ── storage locations (Phase 32, D-128): placeholder racks and bins and a return area. CPoint
+  //    hasn't confirmed its rack layout (A-53), so these codes are the demo's only. ──
+  const bins: string[] = [];
+  for (const [code, name] of DEMO_BINS)
+    bins.push((await ensureLocation({ code, name, kind: "BIN", notes: null }, fm)).id);
+  const returnArea = (
+    await ensureLocation(
+      {
+        code: "RETURN",
+        name: "Return area",
+        kind: "AREA",
+        notes: "Rolls Returned to supplier wait here for the supplier.",
+      },
+      fm,
+    )
+  ).id;
+  let delivery = 0;
+
   // ── leather rolls (Phase 30A, D-103, D-104): the Floor Manager adds each roll to its item with
   //    its own area, the evening before the week and when a delivery comes in. A constructor picks
   //    the oldest roll of the item at Capture. ──
   const shelfRolls = new Map<
     string,
-    { id: string; code: string; addedAt: Date; areaSqFt: number }[]
+    { id: string; code: string; addedAt: Date; areaSqFt: number; locationId: string }[]
   >();
   const addDemoRolls = async (sku: string, count: number, t: Date) => {
     if (!past(t)) return;
     const [minArea, maxArea] = DEMO_ROLL_AREA_SQ_FT;
+    // Each delivery goes into the next bin (Phase 32).
+    const locationId = bins[delivery++ % bins.length];
     const areas = Array.from(
       { length: count },
       () => Math.round(between(minArea, maxArea) * 4) / 4,
@@ -438,13 +477,14 @@ export async function seedDemoWeek(
           tagCode:
             i % 2 === 0 ? `T${manilaToday(t).slice(5).replace("-", "")}-${i + 1}` : undefined,
         })),
+        locationId,
       },
       fm,
       t,
     );
     const list = shelfRolls.get(sku) ?? [];
     result.added.forEach((r, i) =>
-      list.push({ id: r.id, code: r.code, addedAt: t, areaSqFt: areas[i] }),
+      list.push({ id: r.id, code: r.code, addedAt: t, areaSqFt: areas[i], locationId }),
     );
     shelfRolls.set(sku, list);
   };
@@ -465,6 +505,8 @@ export async function seedDemoWeek(
     return i === -1 ? null : list.splice(i, 1)[0];
   };
   let marked = 0;
+  /** Rolls Returned to supplier, set aside in the return area, oldest first (A-77). */
+  const setAside: { id: string; at: Date }[] = [];
 
   // ── rolls: two a working day (Mon–Fri, D-105), each picked, captured shot by shot and finished at
   //    Capture by a demo constructor (Phase 26, 30A) ──
@@ -551,7 +593,15 @@ export async function seedDemoWeek(
       // a roll.
       if (past(t) && !newest && captured > 0) {
         const finished = await finishRoll(roll.id, capturer, t);
-        if (finished.marked) marked += 1;
+        if (finished.marked) {
+          marked += 1;
+          // The constructor sets it aside for the supplier (Phase 32, A-77).
+          const asideAt = plus(t, 2 * MINUTE);
+          if (past(asideAt)) {
+            await setAsideRoll(roll.id, returnArea, capturer, asideAt);
+            setAside.push({ id: roll.id, at: asideAt });
+          }
+        }
       }
       logger.info({ roll: roll.code }, "Demo week: roll replayed");
     }
@@ -570,6 +620,29 @@ export async function seedDemoWeek(
     await removeRoll(damaged.id, "Water damage in storage; the supplier was told.", fm, removeAt);
 
   logger.info({ marked }, "Demo week: rolls with too many defects");
+
+  // ── where rolls are kept (Phase 32): on the last working day before today the Floor Manager
+  //    moves two rolls still on the shelf to another bin, and the supplier picks up the oldest
+  //    returned roll a day after it was set aside ──
+  const moveDay = workingDays.filter((d) => d < today).at(-1) ?? workingDays[0];
+  const moveAt = at(moveDay, 14);
+  const toMove = (shelfRolls.get("LR-001") ?? [])
+    .filter((r) => r.addedAt.getTime() <= moveAt.getTime())
+    .slice(-2);
+  const moveTo = bins.findLast((b) => toMove.every((r) => r.locationId !== b));
+  if (past(moveAt) && toMove.length > 0 && moveTo)
+    await moveRolls(
+      {
+        rollIds: toMove.map((r) => r.id),
+        toLocationId: moveTo,
+        note: "The first bin was full.",
+      },
+      fm,
+      moveAt,
+    );
+  const pickup = setAside[0];
+  const pickupAt = pickup ? plus(pickup.at, 24 * HOUR) : null;
+  if (pickup && pickupAt && past(pickupAt)) await markPickedUp(pickup.id, fm, pickupAt);
 
   // ── two more deliveries: thread and tacks on the second working day, tacks on the fourth (with
   //    the leather rolls added above). They reach the ledger on the next stock update. ──

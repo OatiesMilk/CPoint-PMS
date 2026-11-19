@@ -179,7 +179,8 @@ test.describe("Returned to supplier (D-116)", () => {
     await page.getByRole("link", { name: "Claim sheet" }).click();
     await expect(page.getByRole("heading", { name: "How damaged is this roll?" })).toBeVisible();
     await expect(page.getByTestId("defect-share")).toHaveText("16.7%");
-    await expect(page.getByText("Over the 10% limit")).toBeVisible();
+    // Exact: the Returned to supplier line above also says "over the 10% limit" (run 1 F3).
+    await expect(page.getByText("Over the 10% limit", { exact: true })).toBeVisible();
   });
 
   test("the Floor Manager's old decision route is gone", async ({ browser }) => {

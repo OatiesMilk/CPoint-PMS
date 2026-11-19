@@ -46,6 +46,11 @@ import { listItemRolls } from "@/server/services/roll.service";
 import { isInventoryId } from "@/server/validators/inventory.validator";
 import { itemRollsQuerySchema } from "@/server/validators/roll.validator";
 import { removeRollAction } from "../../reports/rolls/actions";
+import { moveRollsAction } from "../locations/actions";
+import { MoveRollsDialog } from "@/components/features/rolls/move-rolls-dialog";
+import { listLocations } from "@/server/services/location.service";
+import { Printer, Warehouse } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { AddRollsDialog } from "./add-rolls-dialog";
 import { StockActions } from "./stock-actions";
 
@@ -71,10 +76,23 @@ export default async function InventoryItemPage({
   const canManage = can(user.role, "inventory:manage");
   const canReadRolls = can(user.role, "roll:read");
   const canRemoveRolls = can(user.role, "roll:manage");
+  const canMoveRolls = can(user.role, "roll:move");
   const isLeather = item.category === "LEATHER_ROLL";
   const rolls = isLeather
     ? await listItemRolls(id, { status: rollQuery.rollStatus, page: rollQuery.rollPage })
     : null;
+  // Where rolls can go (Phase 32): the active storage locations, for Add rolls and Move.
+  const locations =
+    isLeather && canManage
+      ? (await listLocations({ activeOnly: true })).map(({ id, code, name }) => ({
+          id,
+          code,
+          name,
+        }))
+      : [];
+  const movable = (rolls?.rows ?? [])
+    .filter((r) => r.canMove)
+    .map((r) => ({ id: r.id, code: r.code, where: r.where, locationId: r.locationId }));
   // Both tables page on their own; each link keeps the other's place and the roll filter.
   const hrefWith = (next: { page?: number; rollPage?: number; rollStatus?: string | null }) => {
     const q = new URLSearchParams();
@@ -122,19 +140,49 @@ export default async function InventoryItemPage({
             <div className="flex flex-col gap-1.5">
               <CardTitle>Rolls</CardTitle>
               <CardDescription>
-                Each roll with its own area. A roll leaves stock when it is finished at Capture
-                (Finish roll), or removed. Never who scanned it.
+                Each roll with its own area and where it is kept. A roll leaves stock when it is
+                finished at Capture (Finish roll), or removed. Print labels prints the rolls not
+                scanned yet. Never who scanned it.
               </CardDescription>
             </div>
             {canManage && item.isActive && (
               <div className="flex flex-col items-end gap-1">
-                <AddRollsDialog
-                  item={{ id: item.id, name: item.name }}
-                  supplierCode={item.supplier?.code ?? null}
-                />
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button asChild variant="secondary">
+                    <Link href={`/inventory/labels?item=${item.id}`}>
+                      <Printer aria-hidden />
+                      Print labels
+                    </Link>
+                  </Button>
+                  {canMoveRolls && (
+                    <MoveRollsDialog
+                      rolls={movable}
+                      locations={locations}
+                      action={moveRollsAction}
+                      size="md"
+                    />
+                  )}
+                  <AddRollsDialog
+                    item={{ id: item.id, name: item.name }}
+                    supplierCode={item.supplier?.code ?? null}
+                    locations={locations}
+                  />
+                </div>
                 {!item.supplier && (
                   <p className="text-sm text-muted-foreground">
                     Choose the item’s supplier first (Edit).
+                  </p>
+                )}
+                {locations.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    <Link
+                      href="/inventory/locations"
+                      className="inline-flex items-center gap-1 underline underline-offset-4"
+                    >
+                      <Warehouse aria-hidden className="size-4" />
+                      Add storage locations
+                    </Link>{" "}
+                    to keep track of where each roll is.
                   </p>
                 )}
               </div>
@@ -177,11 +225,12 @@ export default async function InventoryItemPage({
                       <TableHead numeric>Area</TableHead>
                       <TableHead>Arrived</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Location</TableHead>
                       <TableHead numeric>Shots</TableHead>
                       <TableHead numeric>Rejected</TableHead>
                       <TableHead>Defects found</TableHead>
                       <TableHead numeric>Defect %</TableHead>
-                      {(canReadRolls || canRemoveRolls) && <TableActionsHead />}
+                      {(canReadRolls || canRemoveRolls || canMoveRolls) && <TableActionsHead />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -211,6 +260,13 @@ export default async function InventoryItemPage({
                         <TableCell>
                           <RollStatusBadge roll={r} className="max-w-32 whitespace-normal" />
                         </TableCell>
+                        <TableCell className="max-w-40 whitespace-normal">
+                          {r.location ? (
+                            <span className="font-mono font-medium">{r.location.code}</span>
+                          ) : (
+                            <span className="text-muted-foreground">{r.where}</span>
+                          )}
+                        </TableCell>
                         <TableCell numeric>{r._count.scans}</TableCell>
                         <TableCell numeric>{r.rejected}</TableCell>
                         <TableCell className="max-w-44 min-w-28 whitespace-normal">
@@ -223,9 +279,24 @@ export default async function InventoryItemPage({
                         <TableCell numeric>
                           <DefectShare roll={r} />
                         </TableCell>
-                        {(canReadRolls || canRemoveRolls) && (
+                        {(canReadRolls || canRemoveRolls || canMoveRolls) && (
                           <TableCell>
                             <div className="flex items-center justify-end gap-2">
+                              {canMoveRolls && r.canMove && locations.length > 0 && (
+                                <MoveRollsDialog
+                                  rolls={[
+                                    {
+                                      id: r.id,
+                                      code: r.code,
+                                      where: r.where,
+                                      locationId: r.locationId,
+                                    },
+                                  ]}
+                                  locations={locations}
+                                  action={moveRollsAction}
+                                  variant="ghost"
+                                />
+                              )}
                               {canReadRolls && (
                                 <TableViewLink
                                   href={`/reports/rolls/${r.id}`}

@@ -1,4 +1,4 @@
-import type { Prisma, RollStatus } from "@/generated/prisma/client";
+import type { Prisma, RollMoveReason, RollStatus } from "@/generated/prisma/client";
 import type { RollReportStatus } from "@/lib/roll-rules";
 import { type Db, defaultDb } from "./db";
 
@@ -35,6 +35,10 @@ const listSelect = {
   markedForReturn: true,
   returnDecision: true,
   returnedOn: true,
+  // Where it is kept (Phase 32, D-128)
+  locationId: true,
+  pickedUpAt: true,
+  location: { select: { id: true, code: true, name: true } },
   supplier: { select: { id: true, name: true } },
   item: { select: { id: true, sku: true, name: true } },
   _count: { select: { scans: true } },
@@ -220,6 +224,9 @@ const openSelect = {
   usedCheckInId: true,
   markedForReturn: true,
   returnDecision: true,
+  locationId: true,
+  pickedUpAt: true,
+  location: { select: { id: true, code: true, name: true } },
   supplier: { select: { name: true } },
   item: { select: { name: true } },
   _count: { select: { scans: true } },
@@ -273,16 +280,21 @@ export function insertRoll(data: Prisma.RollUncheckedCreateInput, db: Db = defau
   return db.roll.create({ data, select: openSelect });
 }
 
-type RollMove =
-  | { status: "OPEN"; startedAt: Date; startedById: string }
-  | { status: "IN_STOCK"; startedAt: null; startedById: null }
-  | { status: "FINISHED"; finishedAt: Date; finishedById: string }
-  | {
-      status: "CANCELLED";
-      cancelledAt: Date;
-      cancelledById: string;
-      cancelledReason: string | null;
-    };
+/** Picking or removing a roll also clears its location (Phase 32). */
+type LocationFields = { locationId?: string | null; locatedAt?: Date | null };
+
+type RollMove = LocationFields &
+  (
+    | { status: "OPEN"; startedAt: Date; startedById: string }
+    | { status: "IN_STOCK"; startedAt: null; startedById: null }
+    | { status: "FINISHED"; finishedAt: Date; finishedById: string }
+    | {
+        status: "CANCELLED";
+        cancelledAt: Date;
+        cancelledById: string;
+        cancelledReason: string | null;
+      }
+  );
 
 /**
  * Moves a roll only if it is still in the status the caller saw (optimistic concurrency, D-019).
@@ -373,4 +385,121 @@ export async function listRollFinishes(start: Date, end: Date, db: Db = defaultD
     select: { finishedAt: true, status: true, markedForReturn: true, returnDecision: true },
   });
   return rows.map((r) => ({ ...r, finishedAt: r.finishedAt as Date }));
+}
+
+// ───────────── Where a roll is kept (Phase 32, D-128) ─────────────
+
+/**
+ * Sets a roll's location only if it still has the status and location the caller saw (D-019).
+ * Returns false when someone else moved it first.
+ */
+export async function setRollLocation(
+  id: string,
+  seen: { status: RollStatus; locationId: string | null },
+  data: { locationId: string | null; locatedAt: Date | null; pickedUpAt?: Date },
+  db: Db = defaultDb(),
+): Promise<boolean> {
+  const { count } = await db.roll.updateMany({
+    where: { id, status: seen.status, locationId: seen.locationId },
+    data,
+  });
+  return count === 1;
+}
+
+export function insertRollMove(
+  data: {
+    rollId: string;
+    fromLocationId: string | null;
+    toLocationId: string | null;
+    reason: RollMoveReason;
+    note?: string | null;
+    byId: string;
+    at: Date;
+  },
+  db: Db = defaultDb(),
+) {
+  return db.rollMove.create({ data: { ...data, note: data.note ?? null }, select: { id: true } });
+}
+
+/** A roll's location history, newest first. No person: who moved it is for the audit only (A-78). */
+export function listRollMoves(rollId: string, db: Db = defaultDb()) {
+  return db.rollMove.findMany({
+    where: { rollId },
+    orderBy: [{ at: "desc" }, { id: "desc" }],
+    take: 100,
+    select: {
+      id: true,
+      reason: true,
+      note: true,
+      at: true,
+      fromLocation: { select: { code: true, name: true } },
+      toLocation: { select: { code: true, name: true } },
+    },
+  });
+}
+
+export type RollMoveRow = Awaited<ReturnType<typeof listRollMoves>>[number];
+
+/** Where each roll was last taken from at Capture, to prefill Put back (Phase 32). */
+export async function lastTakenFrom(
+  rollIds: string[],
+  db: Db = defaultDb(),
+): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (rollIds.length === 0) return out;
+  const moves = await db.rollMove.findMany({
+    where: { rollId: { in: rollIds }, reason: "TAKEN_FOR_USE" },
+    orderBy: [{ at: "desc" }, { id: "desc" }],
+    select: { rollId: true, fromLocationId: true },
+  });
+  for (const m of moves) if (!out.has(m.rollId)) out.set(m.rollId, m.fromLocationId);
+  return out;
+}
+
+/** Rolls by id with what a move, a label or Find roll needs. */
+export function findRollsByIds(ids: string[], db: Db = defaultDb()): Promise<RollListRow[]> {
+  if (ids.length === 0) return Promise.resolve([]);
+  return db.roll.findMany({ where: { id: { in: ids } }, select: listSelect });
+}
+
+/** The rolls kept in one location now, by code. */
+export function listRollsInLocation(locationId: string, db: Db = defaultDb()) {
+  return db.roll.findMany({
+    where: { locationId },
+    select: listSelect,
+    orderBy: { code: "asc" },
+    take: 200,
+  });
+}
+
+/**
+ * Find roll: the roll whose code is exactly this first, then codes and supplier tags containing
+ * it (case-insensitive), at most 10. Removed rolls are found too, so their story can be read.
+ */
+export async function findRollsByCodeOrTag(q: string, db: Db = defaultDb()) {
+  const exact = await db.roll.findUnique({ where: { code: q }, select: listSelect });
+  const more = await db.roll.findMany({
+    where: {
+      ...(exact ? { NOT: { id: exact.id } } : {}),
+      OR: [
+        { code: { contains: q, mode: "insensitive" } },
+        { tagCode: { contains: q, mode: "insensitive" } },
+      ],
+    },
+    select: listSelect,
+    orderBy: [{ createdAt: "desc" }, { code: "asc" }],
+    take: exact ? 9 : 10,
+  });
+  return exact ? [exact, ...more] : more;
+}
+
+/** A leather item's rolls still in stock, by code, for their labels (Phase 32). */
+export async function listInStockRollIds(itemId: string, db: Db = defaultDb()): Promise<string[]> {
+  const rows = await db.roll.findMany({
+    where: { itemId, status: "IN_STOCK" },
+    select: { id: true },
+    orderBy: { code: "asc" },
+    take: 200,
+  });
+  return rows.map((r) => r.id);
 }

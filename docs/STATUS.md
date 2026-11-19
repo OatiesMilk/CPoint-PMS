@@ -3,12 +3,11 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-09 (two weeks of demo data, D-126; demo clock, D-125 merged #48; demo data D-123, D-124; Phase 31 still waits for D4)
-**Branch:** `main` at c5b1848 has everything through Phase 30F (#41 to #45).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 31, the documentation and the paper's
-figures. Plan `docs/prompts/plans/phase-31-plan.md`, handoff `qa/handoffs/2026-11-07-phase-31-docs.md`,
-prompt `qa/CODEX_PROMPT_PHASE_31.md`. Also the two UAT case lists in `qa/uat/` (Dylan's go to
-include them).
+**Last updated:** 2026-11-19 (Phase 32 Codex run 3 PASS; git commands given to Dylan)
+**Branch:** `main` at 7f69dbe (#53) on the laptop.
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 32 (this session's code, migration, tests and
+docs), the defense plans (`docs/prompts/plans/defense-revisions-plan.md`,
+`phase-32-roll-locations-plan.md`) and this file. `docs/DEMO_SCRIPT.md` stays out (Dylan).
 
 - **Phase 31 (built 2026-11-07, Dylan's go):** the master spec's context, domain rules, roles,
   data model and CV contract rewritten to the system as built, with "Changed since the rebuild";
@@ -76,6 +75,42 @@ include them).
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
   included; Codex only tests and reports; every agent reads the Obsidian vault first.
 - **Overall:** every planned phase is built (0 to 31); Phase 31 waits for QA.
+- **Phase 32, roll locations (built 2026-11-17, Dylan's go, D-128):** storage locations (racks,
+  bins, areas) managed by the Floor Manager under Inventory; A4 QR label sheets for rolls (their
+  code) and locations (`LOC:<code>`); Add rolls into a place and Move one or many; Find roll
+  (`/find`, FM and constructors with camera access) by code, tag or a scanned label, with the
+  location history (no names); Capture shows each roll's place, picks a roll by its label, Put back
+  asks where, a roll Returned to supplier is set aside; Picked up by supplier frees its place.
+  Migration `20261117090000_roll_locations` (applied on the laptop for run 1). Packages
+  `qrcode` 1.5.4 and `jsqr` 1.4.0. `npm run check` passed (**787 unit tests**, build OK). Plan
+  `docs/prompts/plans/phase-32-roll-locations-plan.md`, handoff
+  `qa/handoffs/2026-11-17-roll-locations.md`, prompt `qa/CODEX_PROMPT_PHASE_32.md`.
+- **Phase 32 Codex run 1 FAIL, fixed** (`qa/reports/2026-11-19-phase-32-run1.md`; 14 of 17
+  passed): F1 a 21-label sheet printed on two pages (the print page's 12.9 mm top margin), now no
+  page margin and a 0.45 mm offset; F2 the bulk `roll.move` audit had no Before, now each roll's old
+  place; F3 the e2e suite: one real locator clash in `returns.spec.ts` (claim sheet "Over the 10%
+  limit", exact now), the other failures time-outs and stuck sign-ins with six workers on one dev
+  server; the single-roll button's accessible name now follows its word ("Set aside LR-…"). The
+  roll page loads its history and lunch together. `npm run check` passed (787). Next:
+  `qa/CODEX_PROMPT_PHASE_32_RUN2.md` (L4, L10, the observation, L12).
+- **Phase 32 Codex run 2 FAIL on L12 only** (`qa/reports/2026-11-19-phase-32-run2.md`): L4 (one A4
+  page, 21 QR codes read), L10 (Before in the audit) and the Set aside name passed, so every
+  scenario has now passed. The six targeted specs passed 30 of 30; the full suite (six workers on
+  one `next dev`) had 5 failures, and the reruns started right after it failed on demo sign-ins
+  hanging on "Signing in…" or a blank `/`. No code fault found (the same specs pass on a fresh
+  server; the server answered in 0.1 s afterwards). Next: `qa/CODEX_PROMPT_PHASE_32_RUN3.md`
+  (a fresh dev server, the full suite with `--workers=2`).
+- **Phase 32 Codex run 3 PASS** (`qa/reports/2026-11-19-phase-32-run3.md`): the full e2e suite with
+  two workers passed, 100 passed and 2 skipped (5.3 min); with the default six workers on one
+  `next dev` 14 tests timed out or stalled on sign-in, each passing in the two-worker run (an
+  observation, as in run 2). With runs 1 and 2, all 17 scenarios have passed. Next: Dylan runs the
+  git commands (branch `feature/roll-locations`) and opens the PR; CI's e2e job is the next check.
+- **Defense revisions (planned 2026-11-16, re-checked on the laptop 2026-11-17, waiting for Dylan's go):** the panel's four revisions
+  as Phases 32 to 36 in `docs/prompts/plans/defense-revisions-plan.md`: 32 roll locations and QR
+  labels, 33 the Inspection queue with batch codes, 34 final-product defects, repairs and work in
+  progress, 35 reports by day / week / month / custom with sort, filter, print and corrections,
+  36 the docs and figures. Proposed assumptions A-52 to A-76 are in the plan and move here when
+  each phase is approved. WIP decided 2026-11-17: stage assignments in the plan, constructors enter counts; the stage is Construction. Return stage learned from the QI's findings (suggestion after 5 in 4 weeks).
 
 ## Phase progress
 
@@ -141,6 +176,8 @@ include them).
       weekday
 - [ ] 31. The documentation and the paper's figures match the system (built 2026-11-07,
       uncommitted; Codex run 1 next)
+- [ ] 32. Roll IDs and storage locations you can find on the floor (defense revision 4; built
+      2026-11-17, D-128; QA passed, run 3; to commit on `feature/roll-locations`)
 
 ## What works right now
 
@@ -170,11 +207,14 @@ D-entries.
   suppliers with codes, the lunch break; API tokens for the simulator; the audit log.
 - **Look (Phase 30F, D-122):** tokens, shared page header, KPI tiles, states, phone layouts for
   Capture and Batches.
-- **Database:** the latest migration is `demo_clock` (D-125); `prisma/migrations/` lists them all.
+- **Database:** the latest migration is `roll_locations` (D-128, Phase 32); `prisma/migrations/` lists them all.
   UUIDv7 ids (D-018).
 
 ## Next step (exact)
 
+0. Phase 32: Dylan runs the git commands from the thread (branch `feature/roll-locations`), opens
+   the PR on GitHub; if CI fails, Claude fixes it.
+   Then Phase 33 (the Inspection queue) in its own thread.
 1. Dylan: paste `qa/CODEX_PROMPT_PHASE_31_RUN4.md` into Codex (a weekday).
 2. Dylan, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too).
@@ -184,14 +224,35 @@ D-entries.
    the card to check the 3-inch line on real cuts.
 6. Optional: fresh screenshots for README (the ones in `docs/screenshots/` predate Phase 25 and
    30F, so README no longer embeds them); delete `%TEMP%\cpoint-qa-uploads-phase26` and the two
-   Phase 25 folders; the backups in `storage/backups/`, the old `certs/` files and
-   `docker image prune -a -f` (about 8.4 GB).
+   Phase 25 folders. Done 2026-11-08: the 15 older backups (only
+   `before-reset-2026-11-04.dump` is kept), `certs/`, `mkcert -uninstall`, the Phase 26 temp
+   folder; `docker image prune -a -f` freed 0 B (nothing unused left).
 
 ## Blockers
 
 - None for the demo.
 
 ## Open questions / assumptions awaiting client confirmation
+
+- Decided (Dylan, 2026-11-17, D-128): the Floor Manager manages storage locations under Inventory;
+  the QR holds the plain code (`LR-…`, `LOC:…`), read in the app; returned rolls are tracked until
+  Picked up by supplier; Put back asks where, prefilled. Tell CPoint.
+- ASSUMPTION (A-52, D-128): a roll's code stays `LR-<supplier>-NNN`; the label prints that code.
+- ASSUMPTION (A-53, D-128): CPoint has not confirmed its rack layout, so rack/bin naming (e.g.
+  R1-B3) is a placeholder; the demo's R1-B1 to R2-B3 and RETURN are placeholders only.
+- ASSUMPTION (A-54, D-128): labels print on plain A4 sticker paper from an office printer (no label
+  printer); the 3 × 7 sheet (70 × 42.3 mm) is a placeholder until CPoint names its paper.
+- ASSUMPTION (A-55, D-128): a roll picked at Capture leaves storage; a passed roll is used up and
+  never returns to a place; leftover pieces aren't tracked.
+- ASSUMPTION (A-56, D-128): the Floor Manager places and moves rolls; a constructor only picks,
+  puts back, and sets a returned roll aside right after Finish roll.
+- ASSUMPTION (A-71): Find roll is a phone page like Capture.
+- ASSUMPTION (A-77, D-128): a roll Returned to supplier stays in storage until the supplier takes
+  it; its status stays Finished, only its place changes.
+- ASSUMPTION (A-78, D-128): the location history shows no names; the audit log keeps the actor.
+- ASSUMPTION (A-79, D-128): a location's code can't change once rolls were kept there (it is on
+  labels); its name can.
+- ASSUMPTION (A-80, D-128): the QR holds the plain code, read in the app, not a URL.
 
 - Decided (Dylan, 2026-11-04 and 06, D-119): the System Admin has only the administration
   modules; the Camera page is removed, not moved to the Floor Manager, who sees every shot from
@@ -444,8 +505,8 @@ D-entries.
 - `npm audit`: 9 highs, all in dev tooling (the Prisma CLI and eslint-config-next, D-027);
   none from `onnxruntime-node`.
 - `onnxruntime-node` downloads a CUDA build on Linux unless `ONNXRUNTIME_NODE_INSTALL=skip`
-  (set in the Dockerfile and CI). Dylan's old mkcert files are still in `certs/` (git-ignored, no
-  longer used since D-076); delete them and run `mkcert -uninstall` when convenient.
+  (set in the Dockerfile and CI). The old mkcert files in `certs/` were deleted on 2026-11-08 (unused
+  since D-076); Dylan ran `mkcert -uninstall` the same day.
 - Cloud sandbox only:
   - Build Docker with `--build-arg NODE_IMAGE=<local base image>`, then `up -d`.
   - Use `-p <name>` (and other `DB_PORT`/`APP_PORT` values) for a throwaway stack beside the dev

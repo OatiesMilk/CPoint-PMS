@@ -5,6 +5,7 @@ import {
   PERMISSIONS,
   can,
   canCaptureFor,
+  canFindRolls,
   checkInCoverReason,
   mayEnterCheckIns,
   type Permission,
@@ -23,6 +24,9 @@ const EXPECTED: Record<Permission, Role[]> = {
   "camera:operators": [AD],
   "scan:read": [FM],
   "inventory:read": [FM],
+  "location:read": [FM, SC],
+  "location:manage": [FM],
+  "roll:move": [FM],
   "inventory:manage": [FM],
   "report:production": [FM],
   "report:quality": [FM],
@@ -51,9 +55,22 @@ describe("permissions matrix", () => {
     }
   }
 
-  it("gives the Shoe Constructor only Capture, and only with camera access (D-075, Phase 26)", () => {
+  it("gives the Shoe Constructor only Capture and Find roll, and only with camera access (D-075, Phase 32)", () => {
     const granted = Object.keys(PERMISSIONS).filter((p) => can(SC, p as Permission));
-    expect(granted).toEqual(["camera:capture"]);
+    expect(granted.sort()).toEqual(["camera:capture", "location:read"]);
+  });
+
+  it("lets the Floor Manager and a constructor with camera access find rolls, nobody else (Phase 32)", () => {
+    expect(canFindRolls({ role: FM, canCapture: false })).toBe(true);
+    expect(canFindRolls({ role: SC, canCapture: true })).toBe(true);
+    expect(canFindRolls({ role: SC, canCapture: false })).toBe(false);
+    expect(canFindRolls({ role: QI, canCapture: true })).toBe(false);
+    expect(canFindRolls({ role: AD, canCapture: true })).toBe(false);
+    // Only the Floor Manager manages locations and moves rolls (A-56).
+    for (const role of [QI, AD, SC]) {
+      expect(can(role, "location:manage")).toBe(false);
+      expect(can(role, "roll:move")).toBe(false);
+    }
   });
 });
 
@@ -89,8 +106,19 @@ describe("navigationFor", () => {
 
   it("gives each role exactly its row of the table, in order (Phase 28, D-100, C-18)", () => {
     expect(labels(SC)).toEqual(["Capture"]);
+    expect(navigationFor({ role: SC, canCapture: true })[0].items.map((i) => i.label)).toEqual([
+      "Capture",
+      "Find roll",
+    ]);
     expect(labels(QI)).toEqual(["Batches"]);
-    expect(labels(FM)).toEqual(["Overview", "Batches", "Attendance", "Reports", "Inventory"]);
+    expect(labels(FM)).toEqual([
+      "Overview",
+      "Batches",
+      "Attendance",
+      "Reports",
+      "Inventory",
+      "Find roll",
+    ]);
     expect(labels(AD)).toEqual(["Overview", "Users", "Settings", "API tokens", "Audit log"]);
   });
 
@@ -111,6 +139,7 @@ describe("navigationFor", () => {
       "/attendance",
       "/reports",
       "/inventory",
+      "/find",
     ]);
     expect(hrefs(AD)).toEqual([
       "/admin",
@@ -121,11 +150,16 @@ describe("navigationFor", () => {
     ]);
   });
 
-  it("gives a constructor one page, Capture, which is also their home (Phase 26)", () => {
-    for (const canCapture of [false, true]) {
-      const items = navigationFor({ role: SC, canCapture }).flatMap((s) => s.items);
-      expect(items.map((i) => [i.label, i.href])).toEqual([["Capture", "/camera/capture"]]);
-    }
+  it("gives a constructor Capture as their home, and Find roll once they may capture (Phase 26, 32)", () => {
+    const items = (canCapture: boolean) =>
+      navigationFor({ role: SC, canCapture })
+        .flatMap((s) => s.items)
+        .map((i) => [i.label, i.href]);
+    expect(items(false)).toEqual([["Capture", "/camera/capture"]]);
+    expect(items(true)).toEqual([
+      ["Capture", "/camera/capture"],
+      ["Find roll", "/find"],
+    ]);
     // Nobody else captures, whatever the switch says.
     for (const role of [FM, QI, AD]) expect(labels(role)).not.toContain("Capture");
   });

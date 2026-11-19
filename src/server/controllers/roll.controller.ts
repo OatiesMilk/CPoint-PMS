@@ -1,12 +1,22 @@
 import { manilaToday } from "@/lib/format";
-import { Errors } from "@/server/lib/errors";
+import { AppError, Errors } from "@/server/lib/errors";
 import { handle, json, readJsonBody } from "@/server/lib/http";
-import { requireApiCapture, requireApiPermission, requireDevice } from "@/server/policies/guard";
+import {
+  requireApiCapture,
+  requireApiPermission,
+  requireApiUser,
+  requireDevice,
+} from "@/server/policies/guard";
 import {
   addRolls,
   deviceTargetRoll,
+  findRolls,
   finishRoll,
   getRollDetail,
+  markPickedUp,
+  moveRolls,
+  rollHistory,
+  setAsideRoll,
   listRollsForReport,
   openRollsForCapture,
   putBackRoll,
@@ -23,10 +33,28 @@ import {
   removeRollSchema,
   rollListQuerySchema,
 } from "@/server/validators/roll.validator";
-import { AppError } from "@/server/lib/errors";
+import { canCaptureFor, can } from "@/server/policies/permissions";
+import { requireApiFinder } from "./location.controller";
+import {
+  findQuerySchema,
+  moveRollsSchema,
+  putBackSchema,
+  setAsideSchema,
+} from "@/server/validators/location.validator";
 import { ROLL_MESSAGES } from "@/lib/roll-rules";
 
 type IdContext = { params: Promise<{ id: string }> };
+
+/** A JSON body that may be empty (the old Put back sent none). */
+async function readOptionalJson(request: Request): Promise<unknown> {
+  const text = await request.text();
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw Errors.badRequest("The request body must be valid JSON.");
+  }
+}
 
 async function rollIdFrom(ctx: IdContext): Promise<string> {
   const { id } = await ctx.params;
@@ -117,9 +145,50 @@ export const rollController = {
    * POST /api/v1/rolls/{id}/cancel: at Capture, put back a roll picked by mistake (no shots). A
    * roll from Inventory waits to be scanned again; one from before Phase 30A is cancelled.
    */
-  cancel: handle(async (_request: Request, ctx: IdContext) => {
+  cancel: handle(async (request: Request, ctx: IdContext) => {
     const user = await requireApiCapture();
-    return json({ data: await putBackRoll(await rollIdFrom(ctx), user) });
+    const id = await rollIdFrom(ctx);
+    // Where it went (Phase 32): optional, and an empty body still puts it back.
+    const { locationId } = putBackSchema.parse(await readOptionalJson(request));
+    return json({ data: await putBackRoll(id, user, undefined, locationId ?? null) });
+  }),
+
+  /** POST /api/v1/rolls/move { rollIds, toLocationId, note? }: the Floor Manager (Phase 32). */
+  move: handle(async (request: Request) => {
+    const user = await requireApiPermission("roll:move");
+    const values = moveRollsSchema.parse(await readJsonBody(request));
+    return json({ data: await moveRolls(values, user) });
+  }),
+
+  /**
+   * POST /api/v1/rolls/{id}/set-aside { locationId }: a roll Returned to supplier is set aside for
+   * the supplier (A-77), by the constructor right after Finish roll or by the Floor Manager.
+   */
+  setAside: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiUser();
+    if (!can(user.role, "roll:move") && !canCaptureFor(user)) throw Errors.forbidden();
+    const id = await rollIdFrom(ctx);
+    const { locationId } = setAsideSchema.parse(await readJsonBody(request));
+    return json({ data: await setAsideRoll(id, locationId, user) });
+  }),
+
+  /** POST /api/v1/rolls/{id}/picked-up: the supplier took a returned roll (A-77). */
+  pickedUp: handle(async (_request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("roll:manage");
+    return json({ data: await markPickedUp(await rollIdFrom(ctx), user) });
+  }),
+
+  /** GET /api/v1/rolls/find?q=: Find roll by code, tag or a location label (Phase 32). */
+  find: handle(async (request: Request) => {
+    await requireApiFinder();
+    const { q } = findQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
+    return json({ data: await findRolls(q) });
+  }),
+
+  /** GET /api/v1/rolls/{id}/moves: a roll's location history, newest first, no names (A-78). */
+  moves: handle(async (_request: Request, ctx: IdContext) => {
+    await requireApiFinder();
+    return json({ data: await rollHistory(await rollIdFrom(ctx)) });
   }),
 
   /** POST /api/v1/rolls/{id}/remove { reason }: the Floor Manager removes a roll (Phase 30A). */

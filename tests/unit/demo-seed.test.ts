@@ -4,6 +4,8 @@ import type { Detection } from "@/server/lib/leather-scan";
 const calls: {
   fn: string;
   rollId?: string;
+  locationId?: string | null;
+  rollIds?: string[];
   now: Date;
   classKeys?: string[];
   by?: string;
@@ -17,14 +19,21 @@ const svc = {
   addRolls: vi.fn(
     async (
       itemId: string,
-      values: { rolls: { areaSqFt: number }[] },
+      values: { rolls: { areaSqFt: number }[]; locationId?: string | null },
       actor: { id: string },
       now: Date,
     ) => {
       const added = values.rolls.map((r) => {
         nextRoll += 1;
         const id = `r${nextRoll}`;
-        calls.push({ fn: "addRoll", rollId: id, now, by: actor.id, areaSqFt: r.areaSqFt });
+        calls.push({
+          fn: "addRoll",
+          rollId: id,
+          now,
+          by: actor.id,
+          areaSqFt: r.areaSqFt,
+          locationId: values.locationId ?? null,
+        });
         return { id, code: `LR-${itemId}-${String(nextRoll).padStart(3, "0")}` };
       });
       return { added, quantityOnHand: added.length };
@@ -41,6 +50,33 @@ const svc = {
   }),
   removeRoll: vi.fn(async (rollId: string, _reason: string, actor: { id: string }, now: Date) => {
     calls.push({ fn: "removeRoll", rollId, now, by: actor.id });
+  }),
+  // Phase 32: where rolls are kept.
+  moveRolls: vi.fn(
+    async (
+      values: { rollIds: string[]; toLocationId: string },
+      actor: { id: string },
+      now: Date,
+    ) => {
+      calls.push({
+        fn: "moveRolls",
+        rollIds: values.rollIds,
+        locationId: values.toLocationId,
+        now,
+        by: actor.id,
+      });
+      return { moved: values.rollIds.map((id) => ({ id })) };
+    },
+  ),
+  setAsideRoll: vi.fn(
+    async (rollId: string, locationId: string, actor: { id: string }, now: Date) => {
+      calls.push({ fn: "setAside", rollId, locationId, now, by: actor.id });
+      return { id: rollId };
+    },
+  ),
+  markPickedUp: vi.fn(async (rollId: string, actor: { id: string }, now: Date) => {
+    calls.push({ fn: "pickedUp", rollId, now, by: actor.id });
+    return { id: rollId };
   }),
   ingestScan: vi.fn(
     async (
@@ -114,6 +150,11 @@ vi.mock("@/server/models/user.model", () => ({ findUserByEmail: mocks.findUserBy
 const setCameraOperator = vi.fn(async () => ({}));
 vi.mock("@/server/services/camera.service", () => ({ setCameraOperator }));
 vi.mock("@/server/services/roll.service", () => svc);
+const ensureLocation = vi.fn(async (v: { code: string }) => ({
+  id: `loc-${v.code}`,
+  code: v.code,
+}));
+vi.mock("@/server/services/location.service", () => ({ ensureLocation }));
 const inventory = { createItem: vi.fn(async () => ({ id: "item" })) };
 vi.mock("@/server/services/inventory.service", () => inventory);
 const stockUpdates = { saveStockUpdate: vi.fn(async () => ({ id: "u", items: 1 })) };
@@ -450,6 +491,39 @@ describe("seedDemoWeek", () => {
       stockUpdates.saveStockUpdate.mock.calls as unknown as [{ lines: { itemId: string }[] }][]
     ).flatMap(([b]) => b.lines.map((l) => l.itemId));
     expect(sheetItems.some((id) => id.startsWith("LR-"))).toBe(false);
+  });
+
+  it("keeps every roll in a placeholder bin, sets returned rolls aside, and one is picked up (Phase 32)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    // Six bins and a return area, all placeholders (A-53).
+    const codes = ensureLocation.mock.calls.map(([v]) => (v as { code: string }).code);
+    expect(codes).toEqual(["R1-B1", "R1-B2", "R1-B3", "R2-B1", "R2-B2", "R2-B3", "RETURN"]);
+    // Every delivery goes into a bin, one bin after another.
+    const added = calls.filter((c) => c.fn === "addRoll");
+    expect(added.every((a) => a.locationId?.startsWith("loc-R"))).toBe(true);
+    expect(new Set(added.map((a) => a.locationId)).size).toBeGreaterThan(1);
+    // Rolls Returned to supplier are set aside in the return area by whoever finished them.
+    const finished = calls.filter((c) => c.fn === "finishRoll");
+    const aside = calls.filter((c) => c.fn === "setAside");
+    expect(aside.length).toBeGreaterThan(0);
+    for (const a of aside) {
+      expect(a.locationId).toBe("loc-RETURN");
+      const f = finished.find((x) => x.rollId === a.rollId)!;
+      expect(f.by).toBe(a.by);
+      expect(a.now.getTime()).toBeGreaterThan(f.now.getTime());
+      expect(a.now.getTime()).toBeLessThanOrEqual(now.getTime());
+    }
+    // The oldest is picked up by the supplier a day later, marked by the Floor Manager.
+    const picked = calls.filter((c) => c.fn === "pickedUp");
+    expect(picked).toHaveLength(1);
+    expect(picked[0].rollId).toBe(aside[0].rollId);
+    expect(picked[0].by).toBe("manager@cpoint.local");
+    // Two rolls still on the shelf moved once, never one that was picked at Capture.
+    const moves = calls.filter((c) => c.fn === "moveRolls");
+    expect(moves).toHaveLength(1);
+    expect(moves[0].rollIds).toHaveLength(2);
+    const started = new Set(calls.filter((c) => c.fn === "startRoll").map((c) => c.rollId));
+    for (const id of moves[0].rollIds!) expect(started.has(id)).toBe(false);
   });
 
   it("damages fourteen rolls past 10% with a mix of defects, two just under, a few minutes each (D-110, D-123, D-124)", async () => {

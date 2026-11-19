@@ -20,6 +20,19 @@ const rolls = {
   ),
   saveRollMeasure: vi.fn(async () => ({})),
   listRollTimes: vi.fn(async (): Promise<unknown[]> => []),
+  // Phase 32: where rolls are kept.
+  lastTakenFrom: vi.fn(async (): Promise<Map<string, string | null>> => new Map()),
+  insertRollMove: vi.fn(async (..._args: unknown[]) => ({ id: "m1" })),
+  setRollLocation: vi.fn(async (..._args: unknown[]) => true),
+  listRollMoves: vi.fn(async (): Promise<unknown[]> => []),
+  findRollsByIds: vi.fn(async (): Promise<unknown[]> => []),
+  findRollsByCodeOrTag: vi.fn(async (): Promise<unknown[]> => []),
+  listRollsInLocation: vi.fn(async (): Promise<unknown[]> => []),
+  listInStockRollIds: vi.fn(async (): Promise<string[]> => []),
+};
+const locations = {
+  findLocation: vi.fn(async (): Promise<unknown> => null),
+  findLocationByCode: vi.fn(async (): Promise<unknown> => null),
 };
 // Lunch 11:00 to 12:00 from the start (D-121's timer leaves it out).
 const listLunchBreaks = vi.fn(async (): Promise<unknown[]> => [
@@ -50,6 +63,7 @@ const recordAudit = vi.fn();
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/roll.model", () => rolls);
+vi.mock("@/server/models/location.model", () => locations);
 vi.mock("@/server/models/reference-data.model", () => refs);
 vi.mock("@/server/models/inventory.model", () => inventory);
 vi.mock("@/server/models/production.model", () => ({ listLunchBreaks }));
@@ -126,6 +140,9 @@ describe("addRolls (Phase 30A, D-103)", () => {
         status: "IN_STOCK",
         createdById: "fm1",
         createdAt: now,
+        // Phase 32: no location chosen, so not placed and no move row.
+        locationId: null,
+        locatedAt: null,
       },
       "tx",
     );
@@ -208,7 +225,7 @@ describe("picking and finishing at Capture", () => {
     expect(rolls.moveRoll).toHaveBeenCalledWith(
       "r1",
       "IN_STOCK",
-      { status: "OPEN", startedAt: now, startedById: "sc1" },
+      { status: "OPEN", startedAt: now, startedById: "sc1", locationId: null, locatedAt: null },
       "tx",
     );
     expect(roll).toMatchObject({ id: "r1", code: "LR-MLT-007", mine: true, fromInventory: true });
@@ -216,7 +233,7 @@ describe("picking and finishing at Capture", () => {
       "tx",
       expect.objectContaining({
         action: "roll.start",
-        after: { status: "OPEN", code: "LR-MLT-007" },
+        after: { status: "OPEN", code: "LR-MLT-007", location: null },
       }),
     );
   });
@@ -277,7 +294,13 @@ describe("picking and finishing at Capture", () => {
     expect(rolls.moveRoll).toHaveBeenCalledWith(
       "r1",
       "OPEN",
-      { status: "IN_STOCK", startedAt: null, startedById: null },
+      {
+        status: "IN_STOCK",
+        startedAt: null,
+        startedById: null,
+        locationId: null,
+        locatedAt: null,
+      },
       "tx",
     );
     rolls.findRollState.mockResolvedValue(
@@ -304,6 +327,8 @@ describe("removeRoll (the Floor Manager)", () => {
         cancelledAt: now,
         cancelledById: "fm1",
         cancelledReason: "Water damage",
+        locationId: null,
+        locatedAt: null,
       },
       "tx",
     );
@@ -406,6 +431,7 @@ describe("rolls at Capture", () => {
         "fromInventory",
         "id",
         "item",
+        "location",
         "lunches",
         "mine",
         "scale",
@@ -413,6 +439,7 @@ describe("rolls at Capture", () => {
         "startedAt",
         "supplier",
         "tagCode",
+        "takenFromId",
       ].sort(),
     );
   });
@@ -438,6 +465,7 @@ describe("rolls at Capture", () => {
         supplier: "Marikina Leather Trading",
         item: "Brown suede",
         areaSqFt: 24.5,
+        location: null,
       },
     ]);
   });
@@ -605,6 +633,307 @@ describe("rollOutcomesByDay (Phase 30D, D-118)", () => {
       "2026-11-03": { scanned: 1, returned: 1 },
       "2026-11-04": { scanned: 3, returned: 1 },
       "2026-11-05": { scanned: 1, returned: 0 },
+    });
+  });
+});
+
+// ───────────── Phase 32: where rolls are kept (D-128) ─────────────
+
+const BIN = {
+  id: "b1",
+  code: "R1-B3",
+  name: "Rack 1, bin 3",
+  isActive: true,
+  _count: { rolls: 0 },
+};
+const BIN2 = { id: "b2", code: "R2-B1", name: null, isActive: true, _count: { rolls: 1 } };
+const listRow = (over: object = {}) => ({
+  id: "r1",
+  code: "LR-MLT-007",
+  tagCode: null,
+  status: "IN_STOCK",
+  areaSqFt: 24.5,
+  receivedAt: new Date("2026-10-26T00:00:00Z"),
+  createdAt: now,
+  startedAt: null,
+  finishedAt: null,
+  cancelledAt: null,
+  usedAt: null,
+  defectAreaSqIn: null,
+  defectSharePct: null,
+  returnLimitPct: null,
+  markedForReturn: false,
+  returnDecision: null,
+  returnedOn: null,
+  locationId: null,
+  pickedUpAt: null,
+  location: null,
+  supplier: { id: "sp1", name: "Marikina Leather Trading" },
+  item: { id: "it1", sku: "LR-002", name: "Brown suede" },
+  _count: { scans: 0 },
+  ...over,
+});
+
+describe("where rolls are kept (Phase 32)", () => {
+  beforeEach(() => {
+    locations.findLocation.mockResolvedValue(BIN);
+    rolls.setRollLocation.mockResolvedValue(true);
+  });
+
+  it("places new rolls in the chosen location, one Placed row each, and audits the location", async () => {
+    rolls.insertRoll.mockImplementation(async (data: { code: string }) => ({
+      id: `id-${data.code}`,
+    }));
+    rolls.nextRollCodeNumber.mockResolvedValueOnce(7).mockResolvedValueOnce(8);
+    await svc.addRolls(
+      "it1",
+      {
+        receivedOn: "2026-10-26",
+        rolls: [
+          { areaSqFt: 5, tagCode: undefined },
+          { areaSqFt: 6, tagCode: undefined },
+        ],
+        locationId: "b1",
+      },
+      FM,
+      now,
+    );
+    expect(rolls.insertRoll).toHaveBeenCalledWith(
+      expect.objectContaining({ locationId: "b1", locatedAt: now }),
+      "tx",
+    );
+    expect(rolls.insertRollMove).toHaveBeenCalledTimes(2);
+    expect(rolls.insertRollMove).toHaveBeenCalledWith(
+      {
+        rollId: "id-LR-MLT-007",
+        fromLocationId: null,
+        toLocationId: "b1",
+        reason: "PLACED",
+        byId: "fm1",
+        at: now,
+      },
+      "tx",
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "roll.add",
+        after: expect.objectContaining({ location: "R1-B3" }),
+      }),
+    );
+  });
+
+  it("refuses a deactivated location before anything is saved", async () => {
+    locations.findLocation.mockResolvedValueOnce({ ...BIN, isActive: false });
+    await expect(
+      svc.addRolls(
+        "it1",
+        {
+          receivedOn: "2026-10-26",
+          rolls: [{ areaSqFt: 5, tagCode: undefined }],
+          locationId: "b1",
+        },
+        FM,
+        now,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(rolls.insertRoll).not.toHaveBeenCalled();
+  });
+
+  it("takes a roll out of its place when it is picked at Capture (Taken for scanning)", async () => {
+    rolls.findRollState.mockResolvedValue(
+      state({ status: "IN_STOCK", locationId: "b1", location: BIN }),
+    );
+    const roll = await svc.startRoll("r1", SC, now);
+    expect(rolls.insertRollMove).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromLocationId: "b1",
+        toLocationId: null,
+        reason: "TAKEN_FOR_USE",
+      }),
+      "tx",
+    );
+    expect(roll.takenFromId).toBe("b1");
+    expect(roll.location).toBeNull();
+  });
+
+  it("puts an empty roll back where the constructor says (Put back)", async () => {
+    rolls.findRollState.mockResolvedValue(state({ _count: { scans: 0 } }));
+    await expect(svc.putBackRoll("r1", SC, now, "b1")).resolves.toMatchObject({
+      status: "IN_STOCK",
+      location: "R1-B3",
+    });
+    expect(rolls.moveRoll).toHaveBeenCalledWith(
+      "r1",
+      "OPEN",
+      expect.objectContaining({ status: "IN_STOCK", locationId: "b1", locatedAt: now }),
+      "tx",
+    );
+    expect(rolls.insertRollMove).toHaveBeenCalledWith(
+      expect.objectContaining({ toLocationId: "b1", reason: "PUT_BACK" }),
+      "tx",
+    );
+  });
+
+  it("frees a removed roll's place with the reason as the note", async () => {
+    rolls.findRollState.mockResolvedValue(
+      state({ status: "IN_STOCK", locationId: "b1", location: BIN }),
+    );
+    await svc.removeRoll("r1", "Water damage", FM, now);
+    expect(rolls.insertRollMove).toHaveBeenCalledWith(
+      expect.objectContaining({ fromLocationId: "b1", reason: "REMOVED", note: "Water damage" }),
+      "tx",
+    );
+  });
+
+  it("moves rolls all or nothing: Placed or Moved per roll, one audit row", async () => {
+    locations.findLocation.mockResolvedValue(BIN2);
+    rolls.findRollsByIds.mockResolvedValueOnce([
+      listRow(),
+      listRow({ id: "r2", code: "LR-MLT-008", locationId: "b1", location: BIN }),
+    ]);
+    const { moved } = await svc.moveRolls(
+      { rollIds: ["r1", "r2"], toLocationId: "b2", note: null },
+      FM,
+      now,
+    );
+    expect(moved).toEqual([
+      { id: "r1", code: "LR-MLT-007", from: null, to: "R2-B1" },
+      { id: "r2", code: "LR-MLT-008", from: "R1-B3", to: "R2-B1" },
+    ]);
+    expect(rolls.setRollLocation).toHaveBeenCalledWith(
+      "r2",
+      { status: "IN_STOCK", locationId: "b1" },
+      { locationId: "b2", locatedAt: now },
+      "tx",
+    );
+    expect(rolls.insertRollMove.mock.calls.map((c) => (c[0] as { reason: string }).reason)).toEqual(
+      ["PLACED", "MOVED"],
+    );
+    expect(recordAudit).toHaveBeenCalledTimes(1);
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "roll.move",
+        entity: "StorageLocation",
+        entityId: "b2",
+        // Each roll's place before the move (run 1 F2).
+        before: {
+          rolls: [
+            { code: "LR-MLT-007", location: null },
+            { code: "LR-MLT-008", location: "R1-B3" },
+          ],
+        },
+      }),
+    );
+  });
+
+  it("refuses the whole move when one roll can't go, naming it", async () => {
+    rolls.findRollsByIds.mockResolvedValueOnce([
+      listRow(),
+      listRow({ id: "r2", code: "LR-MLT-008", status: "OPEN" }),
+    ]);
+    await expect(
+      svc.moveRolls({ rollIds: ["r1", "r2"], toLocationId: "b1", note: null }, FM, now),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "LR-MLT-008 is being scanned at Capture. Put it back first.",
+    });
+    expect(rolls.setRollLocation).not.toHaveBeenCalled();
+  });
+
+  it("answers STALE when someone moved the roll first", async () => {
+    rolls.findRollsByIds.mockResolvedValueOnce([listRow()]);
+    rolls.setRollLocation.mockResolvedValueOnce(false);
+    await expect(
+      svc.moveRolls({ rollIds: ["r1"], toLocationId: "b1", note: null }, FM, now),
+    ).rejects.toMatchObject({ code: "STALE" });
+  });
+
+  it("sets a roll Returned to supplier aside, then marks it picked up (A-77)", async () => {
+    const finished = state({
+      status: "FINISHED",
+      markedForReturn: true,
+      locationId: null,
+      location: null,
+    });
+    rolls.findRollState.mockResolvedValue(finished);
+    await expect(svc.setAsideRoll("r1", "b1", SC, now)).resolves.toMatchObject({
+      location: { code: "R1-B3" },
+    });
+    expect(rolls.insertRollMove).toHaveBeenCalledWith(
+      expect.objectContaining({ toLocationId: "b1", reason: "SET_ASIDE_FOR_RETURN" }),
+      "tx",
+    );
+    rolls.findRollState.mockResolvedValue({ ...finished, locationId: "b1", location: BIN });
+    await svc.markPickedUp("r1", FM, now);
+    expect(rolls.setRollLocation).toHaveBeenLastCalledWith(
+      "r1",
+      { status: "FINISHED", locationId: "b1" },
+      { locationId: null, locatedAt: null, pickedUpAt: now },
+      "tx",
+    );
+    expect(recordAudit).toHaveBeenLastCalledWith(
+      "tx",
+      expect.objectContaining({ action: "roll.picked_up" }),
+    );
+  });
+
+  it("won't set aside or pick up a roll that wasn't returned", async () => {
+    rolls.findRollState.mockResolvedValue(state({ status: "FINISHED" }));
+    await expect(svc.setAsideRoll("r1", "b1", SC, now)).rejects.toMatchObject({ status: 409 });
+    await expect(svc.markPickedUp("r1", FM, now)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("finds a roll by code or tag, a location by its label, or says what to check", async () => {
+    rolls.findRollsByCodeOrTag.mockResolvedValueOnce([
+      listRow({ locationId: "b1", location: BIN }),
+    ]);
+    const byCode = await svc.findRolls("lr-mlt-007");
+    expect(rolls.findRollsByCodeOrTag).toHaveBeenCalledWith("LR-MLT-007");
+    expect(byCode.rolls[0]).toMatchObject({
+      code: "LR-MLT-007",
+      where: "R1-B3 · Rack 1, bin 3",
+      canMove: true,
+      statusText: "Not yet scanned",
+    });
+
+    locations.findLocationByCode.mockResolvedValueOnce(BIN);
+    rolls.listRollsInLocation.mockResolvedValueOnce([listRow({ locationId: "b1", location: BIN })]);
+    const byLabel = await svc.findRolls("LOC:R1-B3");
+    expect(byLabel.location).toMatchObject({ code: "R1-B3" });
+    expect(byLabel.location?.contents).toHaveLength(1);
+    expect(rolls.findRollsByCodeOrTag).toHaveBeenCalledTimes(1);
+
+    rolls.findRollsByCodeOrTag.mockResolvedValueOnce([]);
+    const none = await svc.findRolls("LR-MLT-040");
+    expect(none).toEqual({
+      rolls: [],
+      location: null,
+      message: "No roll or location has the code LR-MLT-040. Check the label or type the code.",
+    });
+  });
+
+  it("shows the history without names (A-78)", async () => {
+    rolls.listRollMoves.mockResolvedValueOnce([
+      {
+        id: "m2",
+        reason: "MOVED",
+        note: null,
+        at: now,
+        fromLocation: { code: "R1-B3", name: "Rack 1, bin 3" },
+        toLocation: { code: "R2-B1", name: null },
+      },
+    ]);
+    const [entry] = await svc.rollHistory("r1");
+    expect(entry).toEqual({
+      id: "m2",
+      at: now.toISOString(),
+      reason: "MOVED",
+      label: "Moved",
+      from: "R1-B3 · Rack 1, bin 3",
+      to: "R2-B1",
+      note: null,
     });
   });
 });
