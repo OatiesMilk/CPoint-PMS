@@ -127,6 +127,8 @@ model User {
   checkInsCorrected ProductionCheckIn[] @relation("CheckInCorrectedBy")
   stockUpdates      StockUpdate[]
   inventorySettings InventorySettings[]
+  locationsCreated  StorageLocation[]   @relation("LocationCreatedBy")
+  rollMoves         RollMove[]          @relation("RollMoveBy")
 
   @@index([role, isActive])
   @@map("users")
@@ -323,6 +325,12 @@ model Roll {
   returnNote        String?
   returnDecidedAt   DateTime?
   returnDecidedById String?         @db.Uuid
+  /// Where it is kept now (Phase 32, D-128): only a roll in stock, or one Returned to supplier
+  /// that is set aside until the supplier picks it up. Null = not placed / left storage.
+  locationId        String?         @db.Uuid
+  locatedAt         DateTime?
+  /// Returned to supplier and taken by the supplier (Phase 32, A-77); null until then.
+  pickedUpAt        DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -335,6 +343,9 @@ model Roll {
   usedBy          User?               @relation("RollUsedBy", fields: [usedById], references: [id])
   returnDecidedBy User?               @relation("RollReturnDecidedBy", fields: [returnDecidedById], references: [id])
   usedCheckIn     ProductionCheckIn?  @relation(fields: [usedCheckInId], references: [id])
+  location        StorageLocation?    @relation(fields: [locationId], references: [id])
+  /// Its location history, one row per change (Phase 32)
+  moves           RollMove[]
   scans           Scan[]
   /// Its stock entries: added (+1), and fully used or removed (−1) since Phase 30A
   movements       InventoryMovement[]
@@ -352,7 +363,84 @@ model Roll {
   @@index([finishedById])
   @@index([cancelledById])
   @@index([createdAt])
+  @@index([locationId])
   @@map("batches")
+}
+
+/// Where a roll can be kept (Phase 32, D-128): a rack, a bin or a floor area. CPoint hasn't
+/// confirmed its rack layout (A-53), so the codes are theirs to choose; R1-B3 is a placeholder.
+enum LocationKind {
+  RACK
+  BIN
+  AREA
+}
+
+model StorageLocation {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  /// Printed on its label and inside its QR as LOC:<code> ("R1-B3"); upper case, unique.
+  code        String       @unique
+  /// What people call it ("Rack 1, bin 3"); optional.
+  name        String?
+  kind        LocationKind
+  notes       String?
+  /// Only an empty location can be deactivated; inactive ones are left out of every picker.
+  isActive    Boolean      @default(true)
+  sortOrder   Int          @default(0)
+  /// Who added it: kept for the audit only (D-008).
+  createdById String       @db.Uuid
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  createdBy User       @relation("LocationCreatedBy", fields: [createdById], references: [id])
+  rolls     Roll[]
+  movesFrom RollMove[] @relation("MoveFrom")
+  movesTo   RollMove[] @relation("MoveTo")
+
+  @@index([isActive, sortOrder])
+  @@index([createdById])
+  @@map("storage_locations")
+}
+
+/// Why a roll's location changed (Phase 32, D-128).
+enum RollMoveReason {
+  /// First placed: at Add rolls, or later on a roll with no location
+  PLACED
+  /// Moved by the Floor Manager
+  MOVED
+  /// Picked at Capture; the roll leaves its location
+  TAKEN_FOR_USE
+  /// Put back at Capture
+  PUT_BACK
+  /// Removed with a reason; the roll leaves its location
+  REMOVED
+  /// Finished as Returned to supplier and set aside for the supplier
+  SET_ASIDE_FOR_RETURN
+  /// Taken by the supplier; the roll leaves its location
+  PICKED_UP_BY_SUPPLIER
+}
+
+/// One change of a roll's location: the roll's location history (Phase 32, D-128).
+model RollMove {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  rollId         String         @db.Uuid
+  fromLocationId String?        @db.Uuid
+  toLocationId   String?        @db.Uuid
+  reason         RollMoveReason
+  note           String?
+  /// Who did it: kept for the audit only, never shown or totalled per person (D-008, A-78).
+  byId           String         @db.Uuid
+  at             DateTime       @default(now())
+
+  roll         Roll             @relation(fields: [rollId], references: [id])
+  fromLocation StorageLocation? @relation("MoveFrom", fields: [fromLocationId], references: [id])
+  toLocation   StorageLocation? @relation("MoveTo", fields: [toLocationId], references: [id])
+  by           User             @relation("RollMoveBy", fields: [byId], references: [id])
+
+  @@index([rollId, at])
+  @@index([fromLocationId])
+  @@index([toLocationId])
+  @@index([byId])
+  @@map("roll_moves")
 }
 
 // ───────────── computer vision ─────────────

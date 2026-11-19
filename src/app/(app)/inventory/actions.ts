@@ -105,14 +105,18 @@ export async function saveReminderDaysAction(input: unknown): Promise<ActionResu
 export async function addRollsAction(
   id: string,
   input: unknown,
-): Promise<ActionResult<{ codes: string[] }>> {
+): Promise<ActionResult<{ codes: string[]; ids: string[] }>> {
   const user = await requirePermission("inventory:manage");
   if (!isInventoryId(id)) return NOT_FOUND;
   try {
     const result = await addRolls(id, addRollsSchema.parse(input), user);
     refresh(id);
     revalidatePath("/reports/rolls");
-    return { ok: true, codes: result.added.map((r) => r.code) };
+    return {
+      ok: true,
+      codes: result.added.map((r) => r.code),
+      ids: result.added.map((r) => r.id),
+    };
   } catch (error) {
     return toResult(error);
   }

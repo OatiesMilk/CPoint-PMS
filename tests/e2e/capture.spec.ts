@@ -335,9 +335,10 @@ test.describe("Capture on a phone (Phase 26)", () => {
     const roll = await addInventoryRoll({ areaSqFt: 24.5 });
     const code = roll.code;
     await signInCapturer(page);
-    // One page only: no page menu in the phone bar, no sidebar.
+    // No sidebar on a phone; with Find roll (Phase 32) a capturer has two pages, so the phone bar
+    // has its Pages menu.
     await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
-    await expect(page.getByRole("button", { name: "Pages" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Pages" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Capture", level: 1 })).toBeVisible();
     // No page scrolls sideways at phone width.
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(

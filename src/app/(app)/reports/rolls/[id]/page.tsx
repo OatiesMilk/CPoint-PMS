@@ -41,6 +41,15 @@ import { isRollId } from "@/server/validators/roll.validator";
 import { RemoveRoll } from "@/components/features/rolls/remove-roll";
 import { formatArea, isReturnedToSupplier } from "@/lib/roll-rules";
 import { removeRollAction } from "../actions";
+import { LocationHistory } from "@/components/features/rolls/location-history";
+import { MoveRollsDialog } from "@/components/features/rolls/move-rolls-dialog";
+import { PickedUpButton } from "@/components/features/rolls/picked-up-button";
+import { listLocations } from "@/server/services/location.service";
+import {
+  moveRollsAction,
+  pickedUpAction,
+  setAsideAction,
+} from "../../../inventory/locations/actions";
 
 export const metadata: Metadata = { title: "Roll" };
 
@@ -59,6 +68,15 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
   const shots = roll.scans.length;
   const returned = isReturnedToSupplier(roll) && roll.status !== "RETURNED";
   const findings = rollFindings(roll.scans);
+  // Where it is kept (Phase 32, D-128).
+  const canMove = roll.canMove && can(user.role, "roll:move");
+  const canPickUp = roll.awaitsPickup && can(user.role, "roll:manage");
+  const locations = canMove
+    ? (await listLocations({ activeOnly: true })).map(({ id, code, name }) => ({ id, code, name }))
+    : [];
+  // A returned roll not yet in a place is set aside (A-77); anything else in storage is moved.
+  const settingAside = roll.awaitsPickup && !roll.location;
+  const showHistory = fromInventory && (roll.history.length > 0 || roll.canMove);
 
   const when = (d: Date | null, none: string) => (d ? formatManilaDateTime(d) : none);
   const details: [string, React.ReactNode][] = [
@@ -73,6 +91,18 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
       ),
     ],
     ["Area", formatArea(roll.areaSqFt)],
+    ...(fromInventory
+      ? ([
+          [
+            "Kept in",
+            roll.location ? (
+              <span className="font-mono font-medium">{roll.where}</span>
+            ) : (
+              roll.where
+            ),
+          ],
+        ] as [string, React.ReactNode][])
+      : []),
     ["Supplier", roll.supplier?.name ?? "Not recorded"],
     ["Tag number", roll.tagCode ? <span className="font-mono">{roll.tagCode}</span> : "—"],
     ...(roll.receivedAt
@@ -168,13 +198,36 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
             of the reports.
           </Alert>
         )}
-        {canRemove && (
-          <RemoveRoll
-            code={roll.code}
-            shots={shots}
-            fromInventory={fromInventory}
-            action={removeRollAction.bind(null, roll.id)}
-          />
+        {(canRemove || canMove || canPickUp) && (
+          <div className="flex flex-wrap gap-2">
+            {canMove && (
+              <MoveRollsDialog
+                rolls={[
+                  {
+                    id: roll.id,
+                    code: roll.code,
+                    where: roll.where,
+                    locationId: roll.locationId,
+                  },
+                ]}
+                locations={locations}
+                action={settingAside ? setAsideAction.bind(null, roll.id) : moveRollsAction}
+                size="md"
+                triggerLabel={settingAside ? "Set aside" : roll.location ? "Move" : "Place it"}
+              />
+            )}
+            {canPickUp && (
+              <PickedUpButton code={roll.code} action={pickedUpAction.bind(null, roll.id)} />
+            )}
+            {canRemove && (
+              <RemoveRoll
+                code={roll.code}
+                shots={shots}
+                fromInventory={fromInventory}
+                action={removeRollAction.bind(null, roll.id)}
+              />
+            )}
+          </div>
         )}
       </div>
 
@@ -190,6 +243,17 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
           </dl>
         </CardContent>
       </Card>
+
+      {showHistory && (
+        <Card aria-labelledby="history-heading">
+          <CardHeader>
+            <CardTitle id="history-heading">Location history</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LocationHistory entries={roll.history} />
+          </CardContent>
+        </Card>
+      )}
 
       {fromInventory && (
         <RollFindings roll={roll} byType={findings.byType} largest={findings.largest} />

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { RollStatus } from "@/lib/domain";
+import { LOCATION_MESSAGES } from "@/lib/location-rules";
 import {
   ADD_ROLLS_MAX,
   CANCEL_REASON_MAX,
@@ -33,6 +34,8 @@ export const addRollsSchema = z
       )
       .min(1, ROLL_MESSAGES.addAtLeastOne)
       .max(ADD_ROLLS_MAX, ROLL_MESSAGES.tooMany),
+    /** Where they are kept (Phase 32), optional: rolls can be placed later. */
+    locationId: z.uuid({ error: LOCATION_MESSAGES.chooseLocation }).optional().nullable(),
   })
   .transform((value, ctx) => {
     const rolls = value.rolls.map((roll, i) => {
@@ -55,7 +58,7 @@ export const addRollsSchema = z
         });
       return { areaSqFt: parsed.ok ? parsed.value : 0, tagCode: tag || undefined };
     });
-    return { receivedOn: value.receivedOn, rolls };
+    return { receivedOn: value.receivedOn, rolls, locationId: value.locationId ?? null };
   });
 
 export type AddRollsInput = z.input<typeof addRollsSchema>;

@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   Package,
+  ScanSearch,
   ScrollText,
   Settings,
   UserRound,
@@ -41,6 +42,7 @@ type NavIcon =
   | "attendance"
   | "capture"
   | "inventory"
+  | "find"
   | "reports"
   | "users"
   | "settings"
@@ -55,6 +57,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   attendance: CalendarCheck,
   capture: Aperture,
   inventory: Package,
+  find: ScanSearch,
   reports: ChartColumn,
   users: Users,
   settings: Settings,
@@ -121,7 +124,8 @@ type BarProps = Props & { current: string | null };
 
 /**
  * Below 640 px (a phone, Phase 26, D-096): a top bar with the logo, the page's name, a page menu
- * when the role has more than one page, and the account menu. A Shoe Constructor has only Capture.
+ * when the role has more than one page, and the account menu. A Shoe Constructor with camera
+ * access has Capture and Find roll (Phase 32).
  */
 function PhoneBar({ sections, current, user, signOutAction, bell, stockDue, planDue }: BarProps) {
   const items = sections.flatMap((s) => s.items).filter((i) => !i.phase);

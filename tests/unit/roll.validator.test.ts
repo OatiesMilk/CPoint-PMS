@@ -25,6 +25,7 @@ describe("addRollsSchema (Phase 30A, D-103)", () => {
         { areaSqFt: 24.5, tagCode: "T-1" },
         { areaSqFt: 30, tagCode: undefined },
       ],
+      locationId: null,
     });
   });
 

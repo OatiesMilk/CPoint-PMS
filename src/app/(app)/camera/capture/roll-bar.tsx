@@ -13,11 +13,13 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { FieldError } from "@/components/ui/field-error";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { formatManilaWeekdayDate, manilaToday } from "@/lib/format";
 import type { BreakRule } from "@/lib/production-rules";
 import { finishedLine, formatArea, openSinceLine, type FinishData } from "@/lib/roll-rules";
+import { locationText } from "@/lib/location-rules";
 import { formatScanningTime, inLunch, lunchFromMap, scanningMs } from "@/lib/roll-timer";
 import type { RollScale } from "@/lib/scale-marker";
 
@@ -39,7 +41,22 @@ export type OpenRollView = {
   scale: RollScale | null;
   /** Each day's lunch break since it started, so the timer leaves lunch out (D-121). */
   lunches: Record<string, BreakRule | null>;
+  /** Where it was taken from when picked, to prefill Put back (Phase 32). */
+  takenFromId?: string | null;
 };
+
+type LocationOption = { id: string; code: string; name: string | null; kind: string };
+
+/** The active storage locations (Phase 32), read when a dialog needs them; [] when offline. */
+async function fetchLocations(): Promise<LocationOption[]> {
+  try {
+    const res = await fetch("/api/v1/locations", { cache: "no-store" });
+    if (!res.ok) return [];
+    return ((await res.json()) as { data: LocationOption[] }).data;
+  } catch {
+    return [];
+  }
+}
 
 /**
  * The scanning timer (D-121): working time since Start scanning, ticking every second; it stops
@@ -123,6 +140,49 @@ export function RollBar({
   const [dialog, setDialog] = useState<"finish" | "cancel" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Phase 32: where an empty roll goes back to, and where a returned roll is set aside.
+  const [locations, setLocations] = useState<LocationOption[]>([]);
+  const [putBackTo, setPutBackTo] = useState("");
+  const [aside, setAside] = useState<{ id: string; code: string; message: string } | null>(null);
+  const [asideTo, setAsideTo] = useState("");
+  const [asideError, setAsideError] = useState<string | null>(null);
+
+  async function openPutBack() {
+    setDialog("cancel");
+    if (!chosen?.fromInventory) return;
+    const list = await fetchLocations();
+    setLocations(list);
+    setPutBackTo(list.some((l) => l.id === chosen.takenFromId) ? (chosen.takenFromId ?? "") : "");
+  }
+
+  async function setAsideNow() {
+    if (!aside) return;
+    if (!asideTo) {
+      setAsideError("Choose where you put it, or press Skip.");
+      return;
+    }
+    setBusy(true);
+    setAsideError(null);
+    try {
+      const res = await fetch(`/api/v1/rolls/${aside.id}/set-aside`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locationId: asideTo }),
+      });
+      const body = (await res.json().catch(() => ({}))) as ApiError;
+      if (!res.ok) {
+        setAsideError(body.error?.message ?? "That didn’t work. Try again, or press Skip.");
+        return;
+      }
+      const place = locations.find((l) => l.id === asideTo);
+      onClosed(aside.id, `${aside.message} It is set aside in ${place?.code ?? "its place"}.`);
+      setAside(null);
+    } catch {
+      setAsideError("The server didn’t answer. Check the Wi-Fi, then try again, or press Skip.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function close(kind: "finish" | "cancel") {
     if (!chosen) return;
@@ -132,17 +192,31 @@ export function RollBar({
       const res = await fetch(`/api/v1/rolls/${chosen.id}/${kind}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: "{}",
+        body: JSON.stringify(
+          kind === "cancel" && chosen.fromInventory && putBackTo ? { locationId: putBackTo } : {},
+        ),
       });
       const body = (await res.json().catch(() => ({}))) as ApiError & { data?: FinishData };
       setDialog(null);
+      if (res.ok && kind === "finish" && body.data?.marked && chosen.fromInventory) {
+        // Returned to supplier (D-116): ask where it was set aside for the supplier (A-77).
+        const list = await fetchLocations();
+        setLocations(list);
+        if (list.length > 0) {
+          setAsideTo(list.find((l) => l.kind === "AREA")?.id ?? "");
+          setAsideError(null);
+          setAside({ id: chosen.id, code: chosen.code, message: finishedLine(chosen, body.data) });
+          return;
+        }
+      }
       if (res.ok) {
+        const place = locations.find((l) => l.id === putBackTo);
         onClosed(
           chosen.id,
           kind === "finish"
             ? finishedLine(chosen, body.data)
             : chosen.fromInventory
-              ? `${chosen.code} is back with the rolls waiting to be scanned.`
+              ? `${chosen.code} is back with the rolls waiting to be scanned${place ? `, in ${place.code}` : ""}.`
               : `${chosen.code} is cancelled.`,
         );
       } else {
@@ -235,7 +309,7 @@ export function RollBar({
               size="lg"
               variant="destructive"
               disabled={disabled}
-              onClick={() => setDialog("cancel")}
+              onClick={() => void openPutBack()}
             >
               <X aria-hidden />
               {chosen.fromInventory ? "Put roll back" : "Cancel roll"}
@@ -283,6 +357,27 @@ export function RollBar({
               ? "It has no shots yet. It goes back to the rolls waiting to be scanned."
               : "It has no shots yet. Cancel it if it was started by mistake."}
           </DialogDescription>
+          {chosen?.fromInventory && locations.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="put-back-location" className="text-base">
+                Where did you put it?
+              </Label>
+              <Select
+                id="put-back-location"
+                className="h-11"
+                value={putBackTo}
+                onChange={(e) => setPutBackTo(e.target.value)}
+              >
+                <option value="">Not placed</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {locationText(l)}
+                    {l.id === chosen.takenFromId ? " (where it was)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="ghost" size="lg">
@@ -297,6 +392,61 @@ export function RollBar({
             >
               {spinner}
               {chosen?.fromInventory ? "Put roll back" : "Cancel roll"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={aside !== null}
+        onOpenChange={(open) => {
+          if (!open && aside) {
+            onClosed(aside.id, aside.message);
+            setAside(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogTitle>Set {aside?.code} aside for the supplier</DialogTitle>
+          <DialogDescription>
+            It is marked Returned to supplier. Choose where you put it, so the Floor Manager can
+            find it when the supplier comes.
+          </DialogDescription>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="aside-location" className="text-base">
+              Where did you put it?
+            </Label>
+            <Select
+              id="aside-location"
+              className="h-11"
+              value={asideTo}
+              aria-invalid={!!asideError}
+              aria-describedby={asideError ? "aside-location-error" : undefined}
+              onChange={(e) => setAsideTo(e.target.value)}
+            >
+              <option value="">Choose a place</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {locationText(l)}
+                </option>
+              ))}
+            </Select>
+            <FieldError id="aside-location-error" message={asideError ?? undefined} />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={() => {
+                if (aside) onClosed(aside.id, aside.message);
+                setAside(null);
+              }}
+            >
+              Skip
+            </Button>
+            <Button size="lg" disabled={busy} onClick={() => void setAsideNow()}>
+              {spinner}
+              Set aside
             </Button>
           </DialogFooter>
         </DialogContent>

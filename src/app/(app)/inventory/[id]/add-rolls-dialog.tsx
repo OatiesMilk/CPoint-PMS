@@ -18,6 +18,9 @@ import { FieldError } from "@/components/ui/field-error";
 import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import type { LocationOption } from "@/components/features/rolls/move-rolls-dialog";
+import { locationText } from "@/lib/location-rules";
 import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import { manilaToday } from "@/lib/format";
 import { ADD_ROLLS_MAX, ROLL_MESSAGES } from "@/lib/roll-rules";
@@ -32,6 +35,24 @@ const blank = (): Row => ({ key: ++rowKeys, areaSqFt: "", tagCode: "" });
 
 const fieldId = (path: string) => `add-rolls-${path.replaceAll(".", "-")}`;
 
+/** The location last used in this browser, to prefill the next delivery (Phase 32). */
+const LAST_LOCATION_KEY = "cpoint.addRolls.locationId";
+function lastLocation(locations: LocationOption[]): string {
+  try {
+    const id = window.localStorage.getItem(LAST_LOCATION_KEY) ?? "";
+    return locations.some((l) => l.id === id) ? id : "";
+  } catch {
+    return "";
+  }
+}
+function rememberLocation(id: string) {
+  try {
+    if (id) window.localStorage.setItem(LAST_LOCATION_KEY, id);
+  } catch {
+    // Private mode or blocked storage: nothing to remember, the field just starts empty.
+  }
+}
+
 /**
  * Add rolls (Phase 30A, D-103): the day they arrived, then one row per roll with its area in
  * square feet (from the stamp or the receipt) and the supplier's tag (optional). Every message
@@ -40,8 +61,11 @@ const fieldId = (path: string) => `add-rolls-${path.replaceAll(".", "-")}`;
 export function AddRollsDialog({
   item,
   supplierCode,
+  locations = [],
 }: {
   item: { id: string; name: string };
+  /** Active storage locations (Phase 32); the rolls can be placed in one as they are added. */
+  locations?: LocationOption[];
   /** The supplier's short code, for "Codes run LR-MLT-…". Null when the item has no supplier. */
   supplierCode: string | null;
 }) {
@@ -50,6 +74,7 @@ export function AddRollsDialog({
   const [pending, startTransition] = useTransition();
   const [receivedOn, setReceivedOn] = useState(manilaToday());
   const [rows, setRows] = useState<Row[]>(() => [blank()]);
+  const [locationId, setLocationId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -57,6 +82,7 @@ export function AddRollsDialog({
   function reset() {
     setReceivedOn(manilaToday());
     setRows([blank()]);
+    setLocationId(lastLocation(locations));
     setErrors({});
     setFormError(null);
   }
@@ -86,13 +112,24 @@ export function AddRollsDialog({
       const result = await addRollsAction(item.id, {
         receivedOn,
         rolls: rows.map(({ areaSqFt, tagCode }) => ({ areaSqFt, tagCode })),
+        locationId: locationId || null,
       });
       if (result.ok) {
         const n = result.codes.length;
+        const place = locations.find((l) => l.id === locationId);
+        rememberLocation(locationId);
         toast.success(
-          n === 1
-            ? `${result.codes[0]} added to ${item.name}.`
-            : `${n} rolls added to ${item.name}: ${result.codes[0]} to ${result.codes[n - 1]}.`,
+          (n === 1
+            ? `${result.codes[0]} added to ${item.name}`
+            : `${n} rolls added to ${item.name}: ${result.codes[0]} to ${result.codes[n - 1]}`) +
+            (place ? `, in ${place.code}.` : "."),
+          {
+            duration: 10000,
+            action: {
+              label: n === 1 ? "Print its label" : "Print their labels",
+              onClick: () => router.push(`/inventory/labels?rolls=${result.ids.join(",")}`),
+            },
+          },
         );
         setOpen(false);
         reset();
@@ -159,6 +196,30 @@ export function AddRollsDialog({
               />
               <FieldError id={`${fieldId("receivedOn")}-error`} message={errors.receivedOn} />
             </div>
+            {locations.length > 0 && (
+              <div className="flex flex-col gap-1.5 sm:max-w-80">
+                <Label htmlFor={fieldId("locationId")}>
+                  Kept in <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Select
+                  id={fieldId("locationId")}
+                  value={locationId}
+                  aria-invalid={!!errors.locationId}
+                  aria-describedby={
+                    errors.locationId ? `${fieldId("locationId")}-error` : undefined
+                  }
+                  onChange={(e) => setLocationId(e.target.value)}
+                >
+                  <option value="">Not placed yet</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {locationText(l)}
+                    </option>
+                  ))}
+                </Select>
+                <FieldError id={`${fieldId("locationId")}-error`} message={errors.locationId} />
+              </div>
+            )}
             <ol className="flex flex-col gap-3">
               {rows.map((row, i) => {
                 const areaKey = `rolls.${i}.areaSqFt`;

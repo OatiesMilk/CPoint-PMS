@@ -11,6 +11,14 @@ import {
 } from "@/server/validators/inventory.validator";
 import { ingestFieldsSchema } from "@/server/validators/scan.validator";
 import {
+  addLocationSchema,
+  editLocationSchema,
+  findQuerySchema,
+  moveRollsSchema,
+  putBackSchema,
+  setAsideSchema,
+} from "@/server/validators/location.validator";
+import {
   defectTypeCreateSchema,
   referenceActiveSchema,
   supplierSchema,
@@ -91,6 +99,42 @@ const CASES: [string, ZodType, unknown[]][] = [
     ],
   ],
   ["remove roll (Floor Manager)", removeRollSchema, [{}, { reason: "  " }, { reason: long(201) }]],
+  [
+    "storage location (Phase 32)",
+    addLocationSchema,
+    [
+      {},
+      { code: "", kind: "" },
+      { code: "R1 B3", kind: "SHELF" },
+      { code: "-R1", kind: "BIN" },
+      { code: long(21), kind: "BIN", name: long(61), notes: long(201) },
+    ],
+  ],
+  [
+    "edit storage location (Phase 32)",
+    editLocationSchema,
+    [{ code: "a" }, { kind: "BOX" }, { name: long(61) }, { isActive: "no" }],
+  ],
+  [
+    "move rolls (Phase 32)",
+    moveRollsSchema,
+    [
+      {},
+      { rollIds: [], toLocationId: "" },
+      { rollIds: ["nope"], toLocationId: "nope" },
+      {
+        rollIds: Array.from(
+          { length: 51 },
+          (_, i) => `0192f000-0000-7000-8000-${String(i).padStart(12, "0")}`,
+        ),
+        toLocationId: "0192f000-0000-7000-8000-000000000001",
+        note: long(201),
+      },
+    ],
+  ],
+  ["set aside (Phase 32)", setAsideSchema, [{}, { locationId: "" }, { locationId: "x" }]],
+  ["put back (Phase 32)", putBackSchema, [{ locationId: "x" }]],
+  ["find roll (Phase 32)", findQuerySchema, [{}, { q: "  " }, { q: long(65) }]],
   [
     "inventory item",
     inventoryItemFormSchema,

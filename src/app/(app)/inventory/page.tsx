@@ -10,7 +10,7 @@ import type { Metadata } from "next";
 import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ClipboardPen, Plus } from "lucide-react";
+import { ClipboardPen, Plus, Warehouse } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { PageHeader } from "@/components/features/page-header";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,12 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
                 <Link href="/inventory/new">
                   <Plus aria-hidden />
                   Add item
+                </Link>
+              </Button>
+              <Button asChild variant="secondary">
+                <Link href="/inventory/locations">
+                  <Warehouse aria-hidden />
+                  Storage locations
                 </Link>
               </Button>
             </div>

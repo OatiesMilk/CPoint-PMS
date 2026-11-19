@@ -5,6 +5,62 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-19 · Phase 32: Codex run 3 PASS; git commands
+
+- Codex run 3 (`qa/reports/2026-11-19-phase-32-run3.md`): **PASS**. The full e2e suite with two
+  workers: 100 passed, 2 skipped, 0 failed (5.3 min). The default six-worker comparison had 14
+  time-outs and stalled sign-ins, each passing with two workers (an observation; the server had
+  been up 40 minutes, not restarted). All 17 scenarios have passed across runs 1 to 3.
+- Wrap-up: the git commands for `feature/roll-locations` given to Dylan (78 files, by a list file);
+  left out on purpose: `docs/DEMO_SCRIPT.md` and the Phase 33 plan.
+
+## 2026-11-19 · Phase 32: Codex run 2, every scenario passes; the e2e suite isn't green
+
+- Codex run 2 (`qa/reports/2026-11-19-phase-32-run2.md`): L4 (21 labels on one A4 page, every QR
+  read), L10 (the bulk move's Before) and the Set aside accessible name passed. L12: the six
+  targeted specs 30 of 30; the full suite 95 passed, 5 failed; the single-spec reruns, started within
+  a minute of it, failed on demo sign-ins hanging on "Signing in…" or a blank `/`.
+- Triage: no code fault. The failing specs are the same ones that passed in the targeted run on a
+  fresh server; no e2e test resets the demo data; afterwards `/api/health` answered in 0.09 s and
+  `/login` in 0.25 s, with 3 database connections open. Nothing changed in the code.
+- Run 3 (`qa/CODEX_PROMPT_PHASE_32_RUN3.md`): a fresh dev server, the full suite with
+  `--workers=2` (command line, not config), failing specs rerun alone after a restart.
+
+## 2026-11-19 · Phase 32: Codex run 1 FAIL, fixed
+
+- Codex run 1 (`qa/reports/2026-11-19-phase-32-run1.md`): 14 of 17 passed; L4, L10, L12 failed.
+- F1: a 21-label A4 sheet printed 18 + 3 (seven 42.3 mm rows don't fit under a 12.9 mm top margin).
+  `globals.css`: the print page has no margin and the sheet starts 0.45 mm down.
+- F2: the bulk `roll.move` audit had no Before. `moveRolls` now writes each roll's old place in
+  Before; the unit test checks it.
+- F3: of the e2e failures, one is a real locator clash from the claim sheet (#51): `returns.spec.ts`
+  now reads "Over the 10% limit" exactly. The others were 30-second time-outs, sign-ins left on
+  `/login`, `ERR_ABORTED` and a closed context with six workers on one dev server;
+  `inventory.spec`'s on-hand check passed in the targeted run. Run 2 reruns them alone once.
+- Also: the single-roll Move button's accessible name follows its word ("Set aside LR-…"); the
+  roll page loads its history with the lunch breaks in parallel.
+- `npm run check` passed (787 unit tests, build OK). Prompt `qa/CODEX_PROMPT_PHASE_32_RUN2.md`.
+
+## 2026-11-17 · Phase 32: storage locations, QR labels and Find roll (D-128)
+
+- Dylan's go on `docs/prompts/plans/phase-32-roll-locations-plan.md` with its four
+  recommendations (FM manages locations under Inventory; the QR holds the plain code; returned rolls
+  tracked until Picked up by supplier; Put back asks where). D-128, A-77 to A-80.
+- Built: migration `20261117090000_roll_locations` (not applied to the laptop DB; Codex runs
+  `db:deploy`), `location-rules.ts`, location model/service/controller/validator, label service
+  (`qrcode` 1.5.4), seven routes (`/api/v1/locations`, `…/{id}`, `rolls/move`, `rolls/find`,
+  `rolls/{id}/set-aside`, `…/picked-up`, `…/moves`), permissions `location:read`,
+  `location:manage`, `roll:move` and Find roll in the nav; pages Inventory → Storage locations,
+  roll and location label sheets, Find roll with Scan label (`jsqr` 1.4.0), Move rolls; Add rolls,
+  the item's rolls, Capture (place in the picker, Scan the roll's label, Put back asks where, set
+  aside after a return) and the roll's page (Kept in, history, Move / Set aside / Picked up); demo
+  seed (placeholder bins R1-B1 to R2-B3, RETURN) and reset.
+- Checks: `npm run check` passed (lint, typecheck, 787 unit tests, build). Browser and e2e tests
+  not run (Codex). `npm audit` shows no advisory from `qrcode` or `jsqr`.
+- Docs: API.md (Storage locations), DESIGN (Find roll phone layout, four components), CLAUDE.md's
+  phone-pages line, DECISIONS, ROADMAP, STATUS. Handoff `qa/handoffs/2026-11-17-roll-locations.md`,
+  prompt `qa/CODEX_PROMPT_PHASE_32.md`. No skill named ponytail exists on the laptop, so it wasn't used.
+
 ## 2026-11-14 · User manual, and the Inventory roll wording
 
 - New `docs/USER_MANUAL.md`: a plain-language manual for CPoint staff, by role (sign-in, Capture,

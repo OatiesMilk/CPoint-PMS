@@ -41,8 +41,8 @@ whose `slotAt` is the batch's end, under the `production.*` code and `/api/v1/pr
   → `server/models` (the only place that imports Prisma). Pages call services, never Prisma.
 - Desktop web first. The layout adapts to narrower windows (D-034): no fixed column counts,
   use auto-fit grids and `xl:`/`sm:` stacking, and never let the page scroll sideways. Phone
-  layouts only for Capture (Phase 26) and Batches (Phase 27), as in `DESIGN.md` → "Phone layout"
-  (D-096); every other page stays desktop.
+  layouts only for Capture (Phase 26), Batches (Phase 27) and Find roll (Phase 32, D-128), as in
+  `DESIGN.md` → "Phone layout" (D-096); every other page stays desktop.
 - No per-person workforce rankings or scores anywhere (client sensitivity, see the survey).
 - Defect types, CV thresholds and class keys are **data**, never hardcoded.
 - Docker: one compose file, two services (`app`, `db`). Don't add containers.

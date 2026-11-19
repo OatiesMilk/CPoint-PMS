@@ -31,6 +31,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     checkIns,
     dayPlans,
     lunchBreaks,
+    locations,
   ] = await Promise.all([
     db.user.count({ where: { email: notIn(keep.emails) } }),
     db.apiToken.count({ where: { tokenHash: notIn(keep.tokenHashes) } }),
@@ -48,6 +49,8 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.dayPlan.count(),
     // Lunch breaks the System Admin saved; the default comes back from the start (Phase 27).
     db.lunchBreak.count({ where: { createdById: { not: null } } }),
+    // Storage locations (Phase 32); the demo adds its placeholder racks again (A-53).
+    db.storageLocation.count(),
   ]);
   return {
     users,
@@ -64,6 +67,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     checkIns,
     dayPlans,
     lunchBreaks,
+    locations,
   };
 }
 
@@ -75,7 +79,10 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   await db.inventoryMovement.deleteMany();
   await db.detection.deleteMany();
   await db.scan.deleteMany();
+  // Each roll's location history, then the rolls, then the storage locations (Phase 32).
+  await db.rollMove.deleteMany();
   await db.roll.deleteMany();
+  await db.storageLocation.deleteMany();
   await db.rollSequence.deleteMany();
   await db.rollCodeSequence.deleteMany();
   // Stock: the Update stock saves, then the items (the demo week adds them back, leather with

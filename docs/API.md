@@ -101,9 +101,18 @@ a person (D-008).
 | `POST /api/v1/rolls/{id}/remove`    | `roll:manage` (Floor Manager)         | `{ reason }` (1 to 200 characters)                                                                   | `{ data: { id, code, status: "CANCELLED" } }`                                                                                                                             |
 | `GET /api/v1/rolls/current`         | a device token (`scans:create`)       | —                                                                                                    | the roll being scanned the longest, or `404 NO_OPEN_ROLL`                                                                                                                 |
 
-**`ReadyRoll`**: `{ id, code, tagCode, supplier, item, areaSqFt }`. **`OpenRoll`**: the same plus
-`{ shots, startedAt, mine, fromInventory }`; `mine` only says whether the person asking picked it,
-to start the dropdown on their own roll. `/current` leaves it out.
+Phase 32 (D-128) adds where each roll is kept; see **Storage locations** below for the routes. On
+the routes above: `POST /inventory/{id}/rolls` takes an optional `locationId` (an active location;
+each roll is placed there), `POST /rolls/{id}/cancel` (put back) takes an optional
+`{ locationId }` (an empty body still works), and the start, put back and remove audits carry the
+location before and after.
+
+**`ReadyRoll`**: `{ id, code, tagCode, supplier, item, areaSqFt, location }` (`location` is
+`{ code, name }` or null, Phase 32). **`OpenRoll`**: the same plus
+`{ shots, startedAt, mine, fromInventory, takenFromId }`; `mine` only says whether the person
+asking picked it, to start the dropdown on their own roll; `takenFromId` is the location it was
+taken from when picked (to prefill Put back), and an open roll's `location` is null. `/current`
+leaves `mine` out.
 
 - **Add rolls:** the item must be an active Leather roll item with an active supplier (its code
   makes the roll codes), else `409` named. `receivedOn` is a date, not after today (Manila).
@@ -265,6 +274,52 @@ device `POST` remains), and a section is reached from its roll (`/api/v1/rolls/{
 The camera's verdict is final (D-093): there is no decision endpoint. The Review Queue, the Repair
 Station and Salvage, with `/api/v1/rework/**`, `/api/v1/salvage/**` and
 `POST /api/v1/scans/{id}/decision`, were removed in Phase 25 (D-094) and answer `404`.
+
+## Storage locations (session, Phase 32, D-128)
+
+Racks, bins and areas where leather rolls are kept, and each roll's location history. CPoint
+hasn't confirmed its rack layout (A-53); codes like `R1-B3` are placeholders the Floor Manager
+replaces. A location is never deleted. Only a roll in storage has a location: one in stock, or one
+Returned to supplier that the supplier hasn't picked up yet (A-55, A-77).
+
+| Method & path                       | Permission                                                  | Body / query                                                                     | Response                                                                                               |
+| ----------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET /api/v1/locations`             | the Floor Manager, or a Shoe Constructor with camera access | `active=false` to include deactivated ones                                       | `{ data: Location[] }`, by the Floor Manager's order, then code                                        |
+| `POST /api/v1/locations`            | `location:manage` (Floor Manager)                           | `{ code, kind, name?, notes? }`                                                  | `201 { data: Location }`                                                                               |
+| `GET /api/v1/locations/{id}`        | as `GET /locations`                                         | —                                                                                | `{ data: Location }`                                                                                   |
+| `PATCH /api/v1/locations/{id}`      | `location:manage`                                           | any of `{ code, kind, name, notes, isActive }`                                   | `{ data: Location }`; `409` named when the code is locked or the location still holds rolls            |
+| `POST /api/v1/rolls/move`           | `roll:move` (Floor Manager)                                 | `{ rollIds: [1..50], toLocationId, note? }`                                      | `{ data: { moved: [{ id, code, from, to }] } }`; all or nothing                                        |
+| `POST /api/v1/rolls/{id}/set-aside` | `roll:move`, or a Shoe Constructor with camera access       | `{ locationId }`                                                                 | `{ data: { id, code, location: { code, name } } }`; only a roll Returned to supplier and not picked up |
+| `POST /api/v1/rolls/{id}/picked-up` | `roll:manage` (Floor Manager)                               | `{}`                                                                             | `{ data: { id, code, pickedUpAt } }`; the roll leaves storage                                          |
+| `GET /api/v1/rolls/find`            | as `GET /locations`                                         | `q`: a roll code, part of one or a supplier tag, or a location label `LOC:R1-B3` | `{ data: { rolls: FoundRoll[], location: Location & { contents: FoundRoll[] } \| null, message } }`    |
+| `GET /api/v1/rolls/{id}/moves`      | as `GET /locations`                                         | —                                                                                | `{ data: [{ id, at, reason, label, from, to, note }] }`, newest first, no names (A-78)                 |
+
+**`Location`**: `{ id, code, name, kind (RACK | BIN | AREA), notes, isActive, rolls }`, `rolls`
+being the rolls kept there now. **`FoundRoll`**: `{ id, code, tagCode, status, statusText, item,
+supplier, areaSqFt, receivedOn, location, where, canMove, awaitsPickup }`; `where` says it in one
+line ("R1-B3 · Rack 1, bin 3", "Not placed yet", "Being scanned at Capture", "Left storage: scanned
+on …", "Picked up by the supplier on …").
+
+- **Codes:** trimmed and upper-cased, 2 to 20 letters, numbers or dashes ("Location code: use 2 to
+  20 letters, numbers or dashes, like R1-B3."), unique ("R1-B3 is already a location. Choose
+  another code.", `422` at `code`). A code can't change once a roll was placed there or taken
+  from it, because it is printed on labels (A-79). `name` up to 60, `notes` up to 200.
+- **Deactivate** (`isActive: false`) only when empty ("R1-B3 still holds 3 rolls. Move them
+  first."); a deactivated location is left out of every picker and refuses rolls.
+- **Moves:** each roll is `PLACED` (it had no location) or `MOVED`; moving to where it already is,
+  a roll being scanned ("LR-MLT-004 is being scanned at Capture. Put it back first."), or a roll
+  that left storage is `409` naming the roll, and nothing moves. A move that lost a race is
+  `409 STALE`.
+- **Automatic history rows:** Add rolls with a location (`PLACED`), Start scanning (`TAKEN_FOR_USE`,
+  the location is cleared), Put back with a location (`PUT_BACK`), Remove (`REMOVED`, the reason
+  as the note), set aside (`SET_ASIDE_FOR_RETURN`) and picked up (`PICKED_UP_BY_SUPPLIER`).
+- **Labels** are pages, not API routes: `/inventory/labels?item=<id>` (the item's rolls not scanned
+  yet) or `?rolls=<id>,<id>`, and `/inventory/locations/labels?ids=…` (the Floor Manager). The QR
+  holds the roll's code alone or `LOC:<code>` for a location (A-80), drawn on the server by
+  `qrcode` as SVG; up to 105 labels a page.
+- Audited: `location.add`, `location.edit`, `location.deactivate`, `location.reactivate`,
+  `roll.move` (one row per move, on the target location), `roll.set_aside`, `roll.picked_up`.
+- The Quality Inspector and the System Admin get `403` on every route here.
 
 ## Inventory (session)
 

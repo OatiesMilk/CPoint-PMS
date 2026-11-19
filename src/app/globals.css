@@ -108,3 +108,85 @@
     }
   }
 }
+
+/*
+ * Printed labels (Phase 32, D-128): an A4 sheet of 3 × 7 stickers, 70 × 42.3 mm each, a common
+ * office sticker sheet (A-54, a placeholder until CPoint names its paper). Sizes are the paper's,
+ * in millimetres, so they live here and not in components. On screen the sheet previews at the
+ * same size inside a scroll region.
+ */
+@layer components {
+  .label-sheet {
+    display: grid;
+    grid-template-columns: repeat(3, 70mm);
+    grid-auto-rows: 42.3mm;
+    width: 210mm;
+    padding: 0;
+    gap: 0;
+    background: var(--card);
+    color: var(--brand-ink);
+  }
+
+  .label-sheet > .label {
+    display: flex;
+    gap: 2.5mm;
+    align-items: center;
+    padding: 3mm;
+    overflow: hidden;
+    break-inside: avoid;
+    outline: 1px dashed var(--border);
+    outline-offset: -1px;
+  }
+
+  .label-sheet .label-qr {
+    flex: none;
+    width: 30mm;
+    height: 30mm;
+  }
+
+  .label-sheet .label-qr svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .label-sheet .label-code {
+    font-family: var(--font-code);
+    font-size: 15pt;
+    font-weight: 700;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+
+  .label-sheet .label-line {
+    font-size: 7.5pt;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .label-sheet.locations .label-code {
+    font-size: 22pt;
+  }
+
+  @media print {
+    /* Seven 42.3 mm rows are 296.1 mm of A4's 297 mm, so the page has no margin of its own and
+       the sheet starts 0.45 mm down, centring the rows (run 1 F1: a 12.9 mm top margin pushed the
+       last row onto a second page). */
+    @page {
+      size: A4;
+      margin: 0;
+    }
+
+    .label-sheet {
+      padding-top: 0.45mm;
+    }
+
+    .label-sheet {
+      background: white; /* paper, in both themes */
+      color: var(--brand-ink);
+    }
+
+    .label-sheet > .label {
+      outline: none;
+    }
+  }
+}

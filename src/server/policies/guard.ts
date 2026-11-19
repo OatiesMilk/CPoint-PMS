@@ -8,7 +8,7 @@ import type { DeviceScope } from "@/server/lib/device-token";
 import { authenticateDevice, type DeviceIdentity } from "@/server/services/api-token.service";
 import { checkSession, type SessionState, type SessionUser } from "@/server/services/auth.service";
 import { syncDemoClock } from "@/server/services/demo-clock.service";
-import { can, canCaptureFor, type Permission } from "./permissions";
+import { can, canCaptureFor, canFindRolls, type Permission } from "./permissions";
 
 /**
  * Data Access Layer: the real authorization check (src/proxy.ts only does a cookie check).
@@ -61,6 +61,13 @@ export async function requirePermission(permission: Permission): Promise<Session
 export async function requireCapture(): Promise<SessionUser> {
   const user = await requireUser();
   if (!canCaptureFor(user)) redirect("/forbidden");
+  return user;
+}
+
+/** Pages: Find roll, for the Floor Manager and constructors allowed to capture (Phase 32). */
+export async function requireFindRoll(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!canFindRolls(user)) redirect("/forbidden");
   return user;
 }
 

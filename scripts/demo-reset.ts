@@ -43,6 +43,7 @@ const LABELS: Record<string, string> = {
   checkIns: "finished batches (the demo week adds its own)",
   dayPlans: "day plans and Non-working marks (the demo week plans its own days)",
   lunchBreaks: "lunch breaks the System Admin saved (the default 11:00 to 12:00 comes back)",
+  locations: "storage locations (the demo week adds its placeholder racks)",
 };
 
 async function main() {

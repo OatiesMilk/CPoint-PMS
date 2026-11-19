@@ -16,11 +16,11 @@ test("health endpoint reports app and database up", async ({ request }) => {
 
 // Each role sees only its modules (Phase 28, D-100, C-18): one list, in this order.
 const EXPECTED_NAV = {
-  manager: ["Overview", "Batches", "Attendance", "Reports", "Inventory"],
+  manager: ["Overview", "Batches", "Attendance", "Reports", "Inventory", "Find roll"],
   inspector: ["Batches"],
   // No Camera: its page is gone (D-119).
   admin: ["Overview", "Users", "Settings", "API tokens", "Audit log"],
-  // Capture is a constructor's only page and home, with or without camera access.
+  // Capture is a constructor's home; Find roll joins it once they have camera access (Phase 32).
   constructor: ["Capture"],
 } as const;
 
@@ -38,7 +38,12 @@ for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {
     await page.goto("/login");
     await signIn(page, account.email);
     await expect(page).toHaveURL(account.home);
-    expect(await navLabels(page)).toEqual([...EXPECTED_NAV[role]]);
+    const labels = await navLabels(page);
+    if (role === "constructor") {
+      // With camera access (the demo week gives it to this account) Find roll follows Capture.
+      expect(labels[0]).toBe("Capture");
+      expect(labels.slice(1)).toEqual(labels.length > 1 ? ["Find roll"] : []);
+    } else expect(labels).toEqual([...EXPECTED_NAV[role]]);
   });
 }
 

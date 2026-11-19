@@ -836,3 +836,33 @@ D-114, D-115.
 - [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_30E2_RUN3.md`: **PASS** (deadline failures passed
       alone; ledger 0)
 - [ ] Committed, PR open, CI green
+
+## Phase 32 — Roll IDs and storage locations you can find on the floor (defense revision 4)
+
+The panel's revision 4 after the 2026-11-16 defense. Plans: `docs/prompts/plans/defense-revisions-plan.md`
+(Phases 32 to 36) and `docs/prompts/plans/phase-32-roll-locations-plan.md` (Dylan's go on
+2026-11-17 with its four recommendations). Decision: D-128. Assumptions: A-52 to A-56, A-77 to A-80.
+
+- [x] Migration `roll_locations`: `storage_locations`, `roll_moves`, and `locationId`,
+      `locatedAt`, `pickedUpAt` on rolls; existing rolls stay unplaced
+- [x] Inventory → Storage locations (the Floor Manager): add, edit, deactivate when empty, code
+      locked once used, print location labels
+- [x] Roll labels (A4 3 × 7 stickers, QR with the roll's code) from a leather item and after Add
+      rolls; location labels with `LOC:<code>`
+- [x] Add rolls into a location; the item's rolls show their location; Move one or many rolls
+- [x] Find roll (`/find`, FM and constructors with camera access): type or scan, where it is in
+      large text, location history without names; Move and Picked up by supplier for the FM
+- [x] Capture: each roll shows its place; Scan the roll's label picks it; picking takes it out of
+      its place; Put back asks where (prefilled); a roll Returned to supplier is set aside
+- [x] The roll's page: Kept in, Location history, Move / Set aside / Picked up by supplier
+- [x] Demo week: six placeholder bins and a return area, every delivery in a bin, one move,
+      returned rolls set aside, the oldest picked up; `demo:reset` clears moves and locations
+- [x] `npm run check` passes (787 unit tests); `docs/API.md`, DESIGN, DECISIONS updated
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_32.md` (handoff
+      `qa/handoffs/2026-11-17-roll-locations.md`): FAIL (label sheet on two pages, the bulk-move
+      audit's Before, a returns locator; the rest e2e time-outs), fixed
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_32_RUN2.md`: L4, L10 pass; the full e2e suite
+      not green (time-outs and stuck sign-ins on a worn dev server; no code fault)
+- [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_32_RUN3.md`: **PASS** (the full suite with two
+      workers, 100 passed, 2 skipped)
+- [ ] Committed, PR open, CI green

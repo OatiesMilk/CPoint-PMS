@@ -7,8 +7,10 @@ export {
   DefectOutcome,
   RollStatus,
   InventoryCategory,
+  LocationKind,
   MovementType,
   Role,
+  RollMoveReason,
   ScanSource,
   Verdict,
 } from "@/generated/prisma/enums";

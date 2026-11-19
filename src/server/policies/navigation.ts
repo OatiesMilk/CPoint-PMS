@@ -1,5 +1,5 @@
 import { ROLE_HOME, type Role } from "@/lib/domain";
-import { can, type Permission } from "./permissions";
+import { can, canFindRolls, type Permission } from "./permissions";
 
 export type NavIcon =
   | "overview"
@@ -7,6 +7,7 @@ export type NavIcon =
   | "attendance"
   | "capture"
   | "inventory"
+  | "find"
   | "reports"
   | "users"
   | "settings"
@@ -23,7 +24,19 @@ export type NavItem = {
 
 export type NavSection = { title: string | null; items: NavItem[] };
 
-type Definition = NavItem & { permission: Permission };
+type Definition = NavItem & {
+  permission: Permission;
+  /** Shown only to a constructor the System Admin allows to capture (Find roll, Phase 32). */
+  needsCapture?: boolean;
+};
+
+const FIND_ROLL: Definition = {
+  label: "Find roll",
+  href: "/find",
+  icon: "find",
+  permission: "location:read",
+  needsCapture: true,
+};
 
 const BATCHES: Definition = {
   label: "Batches",
@@ -46,6 +59,7 @@ const MENUS: Record<Role, Definition[]> = {
       icon: "capture",
       permission: "camera:capture",
     },
+    FIND_ROLL,
   ],
   // Batches is the QI's home and only page.
   QUALITY_INSPECTOR: [BATCHES],
@@ -55,6 +69,7 @@ const MENUS: Record<Role, Definition[]> = {
     { label: "Attendance", href: "/attendance", icon: "attendance", permission: "attendance:read" },
     { label: "Reports", href: "/reports", icon: "reports", permission: "report:production" },
     { label: "Inventory", href: "/inventory", icon: "inventory", permission: "inventory:read" },
+    FIND_ROLL,
   ],
   SYSTEM_ADMIN: [
     {
@@ -74,6 +89,11 @@ const MENUS: Record<Role, Definition[]> = {
 export function navigationFor(user: { role: Role; canCapture?: boolean }): NavSection[] {
   const items = MENUS[user.role]
     .filter((item) => can(user.role, item.permission))
+    .filter(
+      (item) =>
+        !item.needsCapture ||
+        canFindRolls({ role: user.role, canCapture: user.canCapture ?? false }),
+    )
     .map(({ label, href, icon, phase }) => ({ label, href, icon, phase }));
   return [{ title: null, items }];
 }
