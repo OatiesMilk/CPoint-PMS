@@ -44,6 +44,9 @@ export const PERMISSIONS = {
   "production:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
   "production:checkin": ["QUALITY_INSPECTOR", "FLOOR_MANAGER"],
   "production:plan": ["FLOOR_MANAGER"],
+  // The Inspection queue (Phase 33, D-129, A-58, A-84): the Floor Manager marks a batch Urgent
+  // or voids one that won't be inspected; who inspects follows production:checkin.
+  "production:prioritise": ["FLOOR_MANAGER"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -275,7 +275,7 @@ const CASES: [string, ZodType, unknown[]][] = [
       { rollsPlanned: 201, quota: 5, shiftStart: "08:00", shiftEnd: "17:00", intervalMinutes: 120 },
     ],
   ],
-  ["batch pairs", pairsSchema(2), ["", "abc", "-1", "2.5", "2001"]],
+  ["batch pairs", pairsSchema("B-261116-2"), ["", "abc", "-1", "2.5", "2001"]],
   ["failed pairs", failedPairsSchema(), ["abc", "-1", "2.5", "2001"]],
   ["daily quota", quotaPairsSchema, ["", "0", "1.5", "60000"]],
   [
@@ -473,16 +473,16 @@ describe("attendance messages (D-038, D-079)", () => {
   });
 });
 
-describe("batch messages (D-038, Phase 27)", () => {
-  it("names the batch for the pairs finished", () => {
-    const schema = pairsSchema(2);
+describe("batch messages (D-038, Phase 27; by code since Phase 33)", () => {
+  it("names the batch by its code for the pairs finished", () => {
+    const schema = pairsSchema("B-261116-2");
     const whole =
-      "Enter the pairs finished in Batch 2 as a whole number, like 24. Enter 0 if none.";
+      "Enter the pairs finished in B-261116-2 as a whole number, like 24. Enter 0 if none.";
     expect(messages(schema, "")).toEqual([whole]);
     expect(messages(schema, "2.5")).toEqual([whole]);
     expect(messages(schema, "-3")).toEqual([whole]);
     expect(messages(schema, "2001")).toEqual([
-      "Batch 2 can't be more than 2,000 pairs. Check the number.",
+      "B-261116-2 can't be more than 2,000 pairs. Check the number.",
     ]);
     expect(schema.parse("0")).toBe(0);
     expect(schema.parse(" 24 ")).toBe(24);
@@ -492,11 +492,11 @@ describe("batch messages (D-038, Phase 27)", () => {
     expect(messages(failedPairsSchema(), "-1")).toEqual([
       "Enter the pairs that failed inspection as a whole number, like 2. Enter 0 if none.",
     ]);
-    expect(parseBatchCounts(1, { pairs: "3", failedPairs: "4" })).toEqual({
+    expect(parseBatchCounts("B-261116-1", { pairs: "3", failedPairs: "4" })).toEqual({
       ok: false,
       errors: { failedPairs: "Failed inspection can't be more than the pairs finished (3)." },
     });
-    expect(parseBatchCounts(1, { pairs: "3" })).toEqual({
+    expect(parseBatchCounts("B-261116-1", { pairs: "3" })).toEqual({
       ok: true,
       pairs: 3,
       failedPairs: 0,

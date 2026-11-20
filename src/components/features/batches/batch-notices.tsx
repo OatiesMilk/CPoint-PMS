@@ -25,7 +25,14 @@ import { cn } from "@/lib/utils";
  * back) and the clock. No browser notification, push or sound; nothing reaches a closed app.
  */
 
-type TodayRow = { number: number; slotAt: string; time: string; checkIn: unknown | null };
+type TodayRow = {
+  number: number;
+  slotAt: string;
+  time: string;
+  checkIn: unknown | null;
+  /** Phase 33: a voided batch gets no notice. */
+  queue?: { status: string } | null;
+};
 type Today = { rows: TodayRow[]; canEnter: boolean };
 
 const REFETCH_MS = 60_000;
@@ -54,7 +61,9 @@ function useNotices(): Notice[] {
       at: new Date(r.slotAt),
       time: r.time,
     }));
-    const finished = new Set(data.rows.filter((r) => r.checkIn).map((r) => r.slotAt));
+    const finished = new Set(
+      data.rows.filter((r) => r.checkIn || r.queue?.status === "VOID").map((r) => r.slotAt),
+    );
     return noticesFor(batches, finished, now);
   }, [data, now]);
 
@@ -80,20 +89,26 @@ const finishHref = (n: Notice) => `/batches?finish=${encodeURIComponent(n.slotAt
 function useTabCount(count: number) {
   const pathname = usePathname();
   useEffect(() => {
-    const strip = (t: string) => t.replace(/^\(\d+\) /, "");
+    // Any "(n) " prefixes, however many, with or without the space (the title getter trims it).
+    const strip = (t: string) => t.replace(/^(\(\d+\)\s*)+/, "");
+    // Next.js sets the title on navigation, sometimes with a new <title> element (Queue → Today
+    // keeps the pathname), so each <title> in the head gets the count, never twice, and an
+    // empty one stays empty (Phase 33 runs 3 and 4).
+    const titles = () => Array.from(document.head.querySelectorAll("title"));
     const apply = () => {
-      const base = strip(document.title);
-      const next = count > 0 ? `(${count}) ${base}` : base;
-      if (document.title !== next) document.title = next;
+      for (const el of titles()) {
+        const text = el.textContent ?? "";
+        const base = strip(text);
+        const next = count > 0 && base ? `(${count}) ${base}` : base;
+        if (text !== next) el.textContent = next;
+      }
     };
     apply();
-    // Next.js sets the title on navigation; put the count back after it does.
     const observer = new MutationObserver(apply);
-    const title = document.querySelector("title");
-    if (title) observer.observe(title, { childList: true });
+    observer.observe(document.head, { childList: true, subtree: true, characterData: true });
     return () => {
       observer.disconnect();
-      document.title = strip(document.title);
+      for (const el of titles()) el.textContent = strip(el.textContent ?? "");
     };
   }, [count, pathname]);
 }
@@ -132,7 +147,7 @@ export function BatchNoticeBanner() {
       <div className="flex items-center gap-2">
         {due && (
           <Button asChild size="lg" className="h-11 flex-1 sm:flex-none">
-            <Link href={finishHref(shown)}>Finish batch {shown.number}</Link>
+            <Link href={finishHref(shown)}>Finish {shown.code}</Link>
           </Button>
         )}
         <Button
@@ -246,7 +261,7 @@ export function BatchBell({
                 <DropdownMenuItem key={n.slotAt} asChild>
                   <Link href={finishHref(n)}>
                     <Hourglass aria-hidden />
-                    Batch {n.number} is due. Finish it now.
+                    {n.code} is due. Finish it now.
                   </Link>
                 </DropdownMenuItem>
               ))

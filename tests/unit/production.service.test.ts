@@ -60,6 +60,19 @@ const model = {
   findCheckInBySlot: vi.fn(async () => null as unknown),
   insertCheckIn: vi.fn(async (d: object) => ({ id: "ci1", ...d })),
   correctCheckIn: vi.fn(async () => true),
+  // Phase 33: batch rows and codes. By default every row already exists (nothing to make).
+  listBatchRows: vi.fn(async () => [] as unknown[]),
+  listUnlinkedCheckIns: vi.fn(async () => [] as unknown[]),
+  getQueueStart: vi.fn(async () => null as Date | null),
+  applyBatchSync: vi.fn(async (_d: string, sync: { insert: unknown[]; remove: unknown[] }) => ({
+    inserted: sync.insert.length,
+    removed: sync.remove.length,
+  })),
+  findBatch: vi.fn(async () => null as unknown),
+  findBatchBySlot: vi.fn(async () => null as unknown),
+  insertBatchForCheckIn: vi.fn(async () => ({ id: "b-new" })),
+  linkCheckIn: vi.fn(async () => undefined),
+  updateBatch: vi.fn(async () => true),
 };
 const workforce = {
   qualityInspectorPresentOn: vi.fn(async () => true as boolean | null),
@@ -113,7 +126,7 @@ describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
       QI,
       at("2026-10-20T05:05:00.000Z"),
     );
-    expect(r).toEqual({ id: "ci1", number: 1, time: "13:00" });
+    expect(r).toEqual({ id: "ci1", number: 1, code: "B-261020-1", time: "13:00" });
     expect(model.insertCheckIn).toHaveBeenCalledWith(
       expect.objectContaining({
         day: "2026-10-20",
@@ -154,7 +167,7 @@ describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
   it("opens Finish batch 10 minutes before the end, not earlier", async () => {
     await expect(
       svc.saveCheckIn({ slotAt: B2, pairs: 5 }, QI, at("2026-10-20T08:49:00.000Z")),
-    ).rejects.toMatchObject({ status: 409, message: "Batch 2 can be finished from 16:50." });
+    ).rejects.toMatchObject({ status: 409, message: "B-261020-2 can be finished from 16:50." });
     await svc.saveCheckIn({ slotAt: B2, pairs: 5 }, QI, at("2026-10-20T08:50:00.000Z"));
     expect(model.insertCheckIn).toHaveBeenCalledWith(
       expect.objectContaining({ failedPairs: 0 }),
@@ -162,12 +175,57 @@ describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
     );
   });
 
-  it("refuses after midnight", async () => {
+  it("finishes a batch from an earlier day: it waited in the queue (Phase 33, D-129)", async () => {
+    const r = await svc.saveCheckIn({ slotAt: B1, pairs: 1 }, QI, at("2026-10-21T01:00:00.000Z"));
+    expect(r).toMatchObject({ code: "B-261020-1" });
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "production.checkin",
+        after: expect.objectContaining({ code: "B-261020-1", inspectedOnLaterDay: true }),
+      }),
+    );
+  });
+
+  it("finishes by the queued row, marks it Inspected and refuses a voided one", async () => {
+    const row = {
+      id: "b1",
+      code: "B-261020-1",
+      day: "2026-10-20",
+      number: 1,
+      startAt: at("2026-10-20T00:00:00.000Z"),
+      slotAt: at(B1),
+      status: "OPEN",
+      priority: "NORMAL",
+      updatedAt: STAMP,
+      checkIn: null,
+      voidReason: null,
+    };
+    model.findBatch.mockResolvedValueOnce(row);
+    model.findBatchBySlot.mockResolvedValueOnce(row);
+    await svc.saveCheckIn({ batchId: "b1", pairs: 4 }, QI, at("2026-10-20T05:10:00.000Z"));
+    expect(model.insertCheckIn).toHaveBeenCalledWith(
+      expect.objectContaining({ batchId: "b1" }),
+      "tx",
+    );
+    expect(model.updateBatch).toHaveBeenCalledWith(
+      "b1",
+      null,
+      ["OPEN", "INSPECTING"],
+      { status: "INSPECTED" },
+      "tx",
+    );
+    model.findBatch.mockResolvedValueOnce({ ...row, status: "VOID", voidReason: "Line stopped" });
+    model.findBatchBySlot.mockResolvedValueOnce({
+      ...row,
+      status: "VOID",
+      voidReason: "Line stopped",
+    });
     await expect(
-      svc.saveCheckIn({ slotAt: B1, pairs: 1 }, QI, at("2026-10-20T16:00:00.000Z")),
+      svc.saveCheckIn({ batchId: "b1", pairs: 4 }, QI, at("2026-10-20T05:10:00.000Z")),
     ).rejects.toMatchObject({
       status: 409,
-      message: expect.stringContaining("Batch 1 of Tue, 20 Oct closed at midnight."),
+      message: "B-261020-1 was voided: Line stopped. It can't be finished.",
     });
   });
 
@@ -193,7 +251,7 @@ describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
         {
           path: ["pairs"],
           message:
-            "Enter the pairs finished in Batch 1 as a whole number, like 24. Enter 0 if none.",
+            "Enter the pairs finished in B-261020-1 as a whole number, like 24. Enter 0 if none.",
         },
       ],
     });
@@ -228,7 +286,7 @@ describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
     await expect(svc.saveCheckIn({ slotAt: B1, pairs: 1 }, QI, at(B1))).rejects.toMatchObject({
       status: 409,
       code: "STALE",
-      message: "Lea Santos already finished Batch 1 at 13:04. Refresh to see it.",
+      message: "Lea Santos already finished B-261020-1 at 13:04. Refresh to see it.",
     });
     expect(model.insertCheckIn).not.toHaveBeenCalled();
   });
@@ -306,6 +364,7 @@ describe("correctCheckIn", () => {
     day: at("2026-10-20T00:00:00.000Z"),
     slotAt: at(B1),
     updatedAt: at("2026-10-20T05:05:00.000Z"),
+    enteredAt: at("2026-10-20T05:05:00.000Z"),
     pairs: 42,
     failedPairs: 2,
     correctedAt: null,
@@ -322,7 +381,7 @@ describe("correctCheckIn", () => {
   it("keeps both counts in the audit, with the reason", async () => {
     model.findCheckIn.mockResolvedValueOnce(saved);
     const r = await svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T06:00:00.000Z"));
-    expect(r).toEqual({ id: "ci1", number: 1, time: "13:00" });
+    expect(r).toEqual({ id: "ci1", number: 1, code: "B-261020-1", time: "13:00" });
     expect(model.correctCheckIn).toHaveBeenCalledWith(
       "ci1",
       saved.updatedAt,
@@ -344,14 +403,23 @@ describe("correctCheckIn", () => {
     );
   });
 
-  it("only on the same Manila day", async () => {
+  it("only on the day it was inspected (Dylan 2026-11-19, until Phase 35)", async () => {
     model.findCheckIn.mockResolvedValueOnce(saved);
     await expect(
       svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T16:30:00.000Z")),
     ).rejects.toMatchObject({
       status: 409,
-      message: "A batch can only be corrected on the same day. This one was on Tue, 20 Oct.",
+      message:
+        "A batch can only be corrected on the day it was inspected. This one was inspected on Tue, 20 Oct.",
     });
+    // Inspected a day late: it can be corrected that later day.
+    model.findCheckIn.mockResolvedValueOnce({
+      ...saved,
+      enteredAt: at("2026-10-21T01:00:00.000Z"),
+    });
+    await expect(
+      svc.correctCheckIn("ci1", input(), QI, at("2026-10-21T02:00:00.000Z")),
+    ).resolves.toMatchObject({ code: "B-261020-1" });
   });
 
   it("is 409 STALE when someone corrected it first", async () => {
@@ -617,7 +685,9 @@ describe("productionDays (D-086, D-008, C-41)", () => {
   }
 
   it("totals each day's passed pairs against the quota, explains a short day and names nobody", async () => {
-    model.listDayPlans.mockResolvedValueOnce([plan("2026-10-19", { quota: 85, rollsPlanned: 3 })]);
+    // Read twice: once to make the batch rows (Phase 33), once for the day rows.
+    const monday = [plan("2026-10-19", { quota: 85, rollsPlanned: 3 })];
+    model.listDayPlans.mockResolvedValueOnce(monday).mockResolvedValueOnce(monday);
     rolls.rollsScannedByDay.mockResolvedValueOnce(new Map([["2026-10-19", 2]]));
     model.listCheckIns.mockResolvedValueOnce(
       ["05:00", "09:00"].map((t, i) => ({
@@ -721,5 +791,101 @@ describe("capturePlan (Phase 30D, D-118)", () => {
     const days = await svc.capturePlan(new Date("2026-11-04T02:00:00.000Z"));
     expect(days[0]).toMatchObject({ day: "2026-11-04", kind: "NOT_PLANNED", planned: null });
     expect(days).toHaveLength(2);
+  });
+});
+
+describe("ensureBatchRows: every batch gets its code, old data too (Phase 33, D-129)", () => {
+  it("makes the missing rows of planned days and links the old finishes, audited once", async () => {
+    model.listDayPlans.mockResolvedValueOnce([plan("2026-10-20")]);
+    model.listUnlinkedCheckIns.mockResolvedValueOnce([
+      { id: "ci-old", day: at("2026-10-20T00:00:00.000Z"), slotAt: at(B1) },
+    ]);
+    model.findBatchBySlot.mockResolvedValueOnce({ id: "b-1" });
+    const r = await svc.ensureBatchRows("2026-10-20", "2026-10-20", at("2026-10-21T01:00:00.000Z"));
+    expect(r).toEqual({ inserted: 2, linked: 1 });
+    expect(model.applyBatchSync).toHaveBeenCalledWith(
+      "2026-10-20",
+      expect.objectContaining({
+        insert: [
+          expect.objectContaining({ code: "B-261020-1", void: false }),
+          expect.objectContaining({ code: "B-261020-2", void: false }),
+        ],
+        remove: [],
+      }),
+      "Not inspected, from before the queue",
+      expect.any(Date),
+      "tx",
+    );
+    expect(model.linkCheckIn).toHaveBeenCalledWith("ci-old", "b-1", "tx");
+    expect(recordAudit).toHaveBeenCalledTimes(1);
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({ action: "production.batches.sync", actor: { type: "SYSTEM" } }),
+    );
+  });
+
+  it("makes batches that ended before the queue began Void (A-61)", async () => {
+    model.listDayPlans.mockResolvedValueOnce([plan("2026-10-20")]);
+    model.getQueueStart.mockResolvedValueOnce(at("2026-10-20T07:00:00.000Z")); // 15:00 Manila
+    await svc.ensureBatchRows("2026-10-20", "2026-10-20", at("2026-10-21T01:00:00.000Z"));
+    expect(model.applyBatchSync).toHaveBeenCalledWith(
+      "2026-10-20",
+      expect.objectContaining({
+        insert: [
+          expect.objectContaining({ code: "B-261020-1", void: true }),
+          expect.objectContaining({ code: "B-261020-2", void: false }),
+        ],
+      }),
+      "Not inspected, from before the queue",
+      expect.any(Date),
+      "tx",
+    );
+  });
+
+  it("writes nothing when every row is there", async () => {
+    model.listDayPlans.mockResolvedValueOnce([]);
+    expect(await svc.ensureBatchRows("2026-10-20", "2026-10-20")).toEqual({
+      inserted: 0,
+      linked: 0,
+    });
+    expect(recordAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuses a plan change that would move a batch someone is inspecting, naming it", async () => {
+    // Read before the save (every 4 hours), then inside it (the new plan: once a day).
+    model.findDayPlan
+      .mockResolvedValueOnce(plan("2026-10-21"))
+      .mockResolvedValueOnce(plan("2026-10-21", { intervalMinutes: null }));
+    model.listBatchRows.mockResolvedValueOnce([
+      {
+        id: "b-1",
+        number: 1,
+        slotAt: at("2026-10-21T05:00:00.000Z"),
+        status: "INSPECTING",
+        priority: "NORMAL",
+        checkIn: null,
+      },
+    ]);
+    await expect(
+      svc.saveDayPlan(
+        "2026-10-21",
+        {
+          rollsPlanned: 2,
+          quota: 100,
+          suggestedQuota: null,
+          intervalMinutes: null,
+          shiftStart: "08:00",
+          shiftEnd: "17:00",
+          expectedUpdatedAt: STAMP.toISOString(),
+        },
+        FM,
+        at("2026-10-21T00:30:00.000Z"),
+      ),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringMatching(
+        /^B-261021-1 is being inspected, so .+ batches can't change\.$/,
+      ),
+    });
   });
 });

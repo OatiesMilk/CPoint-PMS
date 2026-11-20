@@ -865,4 +865,40 @@ The panel's revision 4 after the 2026-11-16 defense. Plans: `docs/prompts/plans/
       not green (time-outs and stuck sign-ins on a worn dev server; no code fault)
 - [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_32_RUN3.md`: **PASS** (the full suite with two
       workers, 100 passed, 2 skipped)
-- [ ] Committed, PR open, CI green
+- [x] Committed, PR #54 merged (42a2c1e), CI green on `main`
+
+## Phase 33 — The Inspection queue with real batch codes (defense revision 2)
+
+The panel's revision 2. Plans: `docs/prompts/plans/defense-revisions-plan.md` and
+`docs/prompts/plans/phase-33-inspection-queue-plan.md` (Dylan's answers and go, 2026-11-19).
+Decision: D-129. Assumptions: A-57 to A-61, A-81 to A-85.
+
+- [x] Migration `inspection_queue`: `production_batches` (code, status, priority, who started,
+      void reason), `production_check_ins.batchId`, `inspection_queue_start`, `batches.formerCode`;
+      old `B-`/`R-` roll codes renamed to `LR-…`
+- [x] Batch codes `B-YYMMDD-N` on every page, notice and message; rows made from the plan, the
+      lunch break and on read; old batches get codes too
+- [x] Batches → Queue (the QI's home) and Today; waiting batches across days, Urgent first, then
+      oldest; filters; Inspected and void (7 days)
+- [x] Start inspection, Inspect a batch from an earlier day; no midnight close; correction on the
+      inspection day
+- [x] The Floor Manager's Urgent (with a reason) and Void (with a reason); a plan change can't move
+      a batch someone acted on
+- [x] Find roll finds a renamed roll by its old code
+- [x] Demo week: the missed batch waits, Urgent; `demo:reset` clears the batches; CI docker checks
+- [x] `npm run check` passes (822 unit tests); e2e `inspection-queue.spec.ts` written,
+      `batches.spec.ts` updated; `docs/API.md`, DESIGN, USER_MANUAL, DECISIONS updated
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_33.md` (handoff
+      `qa/handoffs/2026-11-19-phase-33-inspection-queue.md`): FAIL, the old Docker app on port 3000;
+      fixed Add rolls' 5 s transaction limit
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_33_RUN2.md`: FAIL, 13 of 18 (Clear, Correct
+      from the list, the phone Inspect height, a no-plan e2e step), fixed
+- [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_33_RUN3.md`: Q3, Q9, Q13 pass; e2e FAIL (Clear
+      at once, the title's due count), fixed
+- [x] Codex QA run 4 from `qa/CODEX_PROMPT_PHASE_33_RUN4.md`: R1, R2 pass; full e2e 102 of 103 (a
+      clean-up clash between specs), fixed; the duplicate title fixed
+- [x] Codex QA run 5 from `qa/CODEX_PROMPT_PHASE_33_RUN5.md`: targeted e2e pass; full suite 2
+      dev-server sign-in stalls (no code fault); R2 blocked (nothing due)
+- [x] Codex QA run 6 from `qa/CODEX_PROMPT_PHASE_33_RUN6.md`: **PASS WITH ISSUES** (full suite
+      104 passed, 0 failed; the demo clock's 3 s title refresh noted)
+- [ ] Committed and merged (`feature/inspection-queue`)

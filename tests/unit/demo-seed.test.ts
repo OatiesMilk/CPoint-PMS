@@ -202,8 +202,18 @@ const production = {
   saveDayPlan: vi.fn(async (day: string) => ({ saved: true, day })),
   markNonWorking: vi.fn(async (day: string) => ({ saved: true, day })),
   saveCheckIn: vi.fn(async () => ({ id: "ci", number: 1, time: "13:00" })),
+  queueFromTheStart: vi.fn(async () => undefined),
 };
 vi.mock("@/server/services/production.service", () => production);
+const batchQueue = {
+  queuedBatchAt: vi.fn(async () => ({
+    id: "b1",
+    code: "B-260101-2",
+    updatedAt: "2026-01-01T09:00:00.000Z",
+  })),
+  setBatchPriority: vi.fn(async () => ({ id: "b1", code: "B-260101-2", saved: true })),
+};
+vi.mock("@/server/services/batch-queue.service", () => batchQueue);
 vi.mock("@/server/services/attendance.service", () => attendance);
 vi.mock("@/server/services/scan-ingest.service", () => ({ ingestScan: svc.ingestScan }));
 

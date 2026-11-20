@@ -153,9 +153,10 @@ D-128, A-71). Every other page stays desktop first.
 For whoever finishes today's batches (the QI, or the Floor Manager covering, D-088), on every page:
 
 - **Banner** at the top of the main column (`role="status"`, polite): the most urgent notice only.
-  At 10 minutes before a batch's end, muted (`bg-muted/60`, `Hourglass`): "Batch 2 ends at 13:00.
-  Get ready to count the finished pairs." At the end, info (`border-info bg-info-soft`,
-  `BellRing`): "Batch 2 is due. Finish it now." with **Finish batch 2** (`size="lg"`, `h-11`).
+  At 10 minutes before a batch's end, muted (`bg-muted/60`, `Hourglass`): "B-261116-2 ends at
+  13:00. Get ready to count the finished pairs." At the end, info (`border-info bg-info-soft`,
+  `BellRing`): "B-261116-2 is due. Finish it now." with **Finish B-261116-2** (`size="lg"`,
+  `h-11`). Since Phase 33 every batch is named by its code, never "Batch 2" alone (D-129).
   **Not now** hides that notice until the next one; it stays in the bell.
 - **Bell** beside the logo (sidebar on a desk, the phone top bar on a phone, `size-11` there): a
   dropdown of the due batches, each linking to Finish batch; its accessible name counts them
@@ -168,6 +169,29 @@ day is planned or marked Non-working / Holiday: the same info banner (`border-in
 `BellRing`) "Today has no plan yet, so there are no batches. Plan today." with **Plan today**
 (`size="lg"`, `h-11`), a **Plan today** card first on the FM home, and a bell item. The Quality
 Inspector reads "No batches yet today. The Floor Manager plans them first." on Batches.
+
+## Inspection queue (Phase 33, D-129)
+
+Batches has two tabs, **Queue** and **Today**: links in a `nav` ("Batches views") under the page
+header, `min-h-11`, the current one with a 2 px `border-foreground` underline and
+`aria-current="page"`. Queue is the Quality Inspector's home; the Floor Manager opens on Today.
+
+- **Queue card** (one per waiting batch, a `Card` in a list, the same shape as Today's batch
+  card): the **code** large in mono (`font-mono text-xl font-semibold`), then its badges, each
+  with an icon and a word (colour never alone): **Urgent** (danger, `Flag`), **Late** (warning,
+  `Clock`), **Waiting** (info, `Hourglass`), **Being inspected** (brand, `UserCheck`). Below:
+  the day and times (muted, tabular), the rolls line ("6 rolls (Full-grain black ×4, Suede brown
+  ×2)"), "Waiting 3 hours 10 minutes", the Urgent reason, and who is inspecting it.
+- **Actions** on the right on a desk, stacked full width on a phone (`sm:w-44`, `max-sm:h-11`):
+  **Start inspection** (secondary, `Play`) and **Inspect** (primary, opens the Finish sheet).
+  A batch someone else is inspecting has neither. The Floor Manager's **Mark Urgent** /
+  **Set to Normal** and **Void** are small ghost buttons under the text; each opens a reason
+  dialog (a bottom sheet on a phone) whose message names the field.
+- **Filters** above the list in an auto-fit grid: Batch code, Day, Status, Priority, **Filter**
+  (secondary) and **Clear** (ghost). A plain GET form, so the filters are in the address.
+- **Inspected and void** below, a card with a divided list: code and badge, day and times and
+  rolls, then the counts and who, or the void reason.
+- Empty: a dashed box, "No batches are waiting for inspection."
 
 ## Plan calendar (D-114)
 

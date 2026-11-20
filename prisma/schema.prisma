@@ -81,6 +81,20 @@ enum DayKind {
   NON_WORKING
 }
 
+/// A batch's life in the Inspection queue (Phase 33, D-129). Upcoming, In progress, Waiting and Late
+/// are worked out from the clock (the demo clock moves it), never stored.
+enum BatchStatus {
+  OPEN
+  INSPECTING
+  INSPECTED
+  VOID
+}
+
+enum BatchPriority {
+  NORMAL
+  URGENT
+}
+
 enum ActorType {
   USER
   DEVICE
@@ -107,28 +121,31 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  rollsCreated      Roll[]              @relation("RollCreatedBy")
-  rollsFinished     Roll[]              @relation("RollFinishedBy")
-  rollsCancelled    Roll[]              @relation("RollCancelledBy")
-  rollsStarted      Roll[]              @relation("RollStartedBy")
-  rollsUsed         Roll[]              @relation("RollUsedBy")
-  rollsDecided      Roll[]              @relation("RollReturnDecidedBy")
-  movements         InventoryMovement[]
-  apiTokensCreated  ApiToken[]
-  cvSettingsUpdates CvSettings[]
-  auditLogs         AuditLog[]
-  revokedSessions   SessionRevocation[]
-  attendanceTaken   AttendanceDay[]     @relation("AttendanceTakenBy")
-  attendanceMarks   AttendanceMark[]
-  lunchBreaksSet    LunchBreak[]
-  dayPlansCreated   DayPlan[]           @relation("DayPlanCreatedBy")
-  dayPlansUpdated   DayPlan[]           @relation("DayPlanUpdatedBy")
-  checkInsEntered   ProductionCheckIn[] @relation("CheckInEnteredBy")
-  checkInsCorrected ProductionCheckIn[] @relation("CheckInCorrectedBy")
-  stockUpdates      StockUpdate[]
-  inventorySettings InventorySettings[]
-  locationsCreated  StorageLocation[]   @relation("LocationCreatedBy")
-  rollMoves         RollMove[]          @relation("RollMoveBy")
+  rollsCreated       Roll[]              @relation("RollCreatedBy")
+  rollsFinished      Roll[]              @relation("RollFinishedBy")
+  rollsCancelled     Roll[]              @relation("RollCancelledBy")
+  rollsStarted       Roll[]              @relation("RollStartedBy")
+  rollsUsed          Roll[]              @relation("RollUsedBy")
+  rollsDecided       Roll[]              @relation("RollReturnDecidedBy")
+  movements          InventoryMovement[]
+  apiTokensCreated   ApiToken[]
+  cvSettingsUpdates  CvSettings[]
+  auditLogs          AuditLog[]
+  revokedSessions    SessionRevocation[]
+  attendanceTaken    AttendanceDay[]     @relation("AttendanceTakenBy")
+  attendanceMarks    AttendanceMark[]
+  lunchBreaksSet     LunchBreak[]
+  dayPlansCreated    DayPlan[]           @relation("DayPlanCreatedBy")
+  dayPlansUpdated    DayPlan[]           @relation("DayPlanUpdatedBy")
+  checkInsEntered    ProductionCheckIn[] @relation("CheckInEnteredBy")
+  checkInsCorrected  ProductionCheckIn[] @relation("CheckInCorrectedBy")
+  batchesStarted     ProductionBatch[]   @relation("BatchInspectionStartedBy")
+  batchesPrioritised ProductionBatch[]   @relation("BatchPrioritySetBy")
+  batchesVoided      ProductionBatch[]   @relation("BatchVoidedBy")
+  stockUpdates       StockUpdate[]
+  inventorySettings  InventorySettings[]
+  locationsCreated   StorageLocation[]   @relation("LocationCreatedBy")
+  rollMoves          RollMove[]          @relation("RollMoveBy")
 
   @@index([role, isActive])
   @@map("users")
@@ -285,8 +302,11 @@ model RollCodeSequence {
 /// Capture, captures it shot by shot and finishes it; the QI ticks it Fully used at Finish batch.
 model Roll {
   id                String          @id @default(uuid(7)) @db.Uuid
-  /// LR-MLT-001 since Phase 30A; R-YYYY-NNNN (Phases 26 to 29) and B-YYYY-NNNN rolls keep theirs
+  /// LR-MLT-001. Older R-YYYY-NNNN and B-YYYY-NNNN rolls were renamed to LR-… in Phase 33 (D-129),
+  /// so B- means a batch only.
   code              String          @unique
+  /// The roll's code before Phase 33's rename (an old label or claim sheet); still found by Find roll.
+  formerCode        String?         @unique
   /// The number on the supplier's tag, optional.
   tagCode           String?         @map("rollCode")
   supplierId        String?         @db.Uuid // the leather item's supplier; older rolls may have none
@@ -691,13 +711,61 @@ model ProductionCheckIn {
   correctionReason     String?
   updatedAt            DateTime  @updatedAt
 
-  enteredBy   User   @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
-  correctedBy User?  @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
+  enteredBy   User             @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
+  correctedBy User?            @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
   /// Rolls ticked Fully used when this batch was finished or corrected (Phase 30A)
   rollsUsed   Roll[]
+  /// The queued batch this finish inspected (Phase 33, D-129); null only before its row is made.
+  batchId     String?          @unique @db.Uuid
+  batch       ProductionBatch? @relation(fields: [batchId], references: [id])
 
   @@unique([day, slotAt])
   @@index([enteredById])
   @@index([correctedById])
   @@map("production_check_ins")
+}
+
+/// One batch of a working day with its code, B-YYMMDD-N (Phase 33, D-129, A-57), made from the
+/// day's plan. It waits in the Inspection queue from its end until inspected or voided.
+model ProductionBatch {
+  id                    String        @id @default(uuid(7)) @db.Uuid
+  code                  String        @unique
+  day                   DateTime      @db.Date // the Manila calendar date
+  number                Int
+  startAt               DateTime
+  slotAt                DateTime // the batch's end
+  status                BatchStatus   @default(OPEN)
+  priority              BatchPriority @default(NORMAL)
+  priorityReason        String?
+  prioritySetAt         DateTime?
+  prioritySetById       String?       @db.Uuid
+  inspectionStartedAt   DateTime?
+  inspectionStartedById String?       @db.Uuid
+  voidReason            String?
+  voidedAt              DateTime?
+  /// Null when the system voided it ("from before the queue", A-61).
+  voidedById            String?       @db.Uuid
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  inspectionStartedBy User?              @relation("BatchInspectionStartedBy", fields: [inspectionStartedById], references: [id])
+  prioritySetBy       User?              @relation("BatchPrioritySetBy", fields: [prioritySetById], references: [id])
+  voidedBy            User?              @relation("BatchVoidedBy", fields: [voidedById], references: [id])
+  checkIn             ProductionCheckIn?
+
+  @@unique([day, slotAt])
+  @@index([status, priority])
+  @@index([inspectionStartedById])
+  @@index([prioritySetById])
+  @@index([voidedById])
+  @@map("production_batches")
+}
+
+/// When the Inspection queue began (Phase 33, A-61): a batch that ended before it and was never
+/// inspected is Void, "Not inspected, from before the queue". One row; none = every batch queues.
+model InspectionQueueStart {
+  id        Int      @id @default(1)
+  startedAt DateTime
+
+  @@map("inspection_queue_start")
 }

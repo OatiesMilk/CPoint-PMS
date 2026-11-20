@@ -29,7 +29,8 @@ import {
 import { ensureLocation } from "./location.service";
 import { ensureSupplierWithCode } from "./supplier-code.service";
 import { setCameraOperator } from "./camera.service";
-import { markNonWorking, saveCheckIn, saveDayPlan } from "./production.service";
+import { markNonWorking, queueFromTheStart, saveCheckIn, saveDayPlan } from "./production.service";
+import { queuedBatchAt, setBatchPriority } from "./batch-queue.service";
 import { createItem } from "./inventory.service";
 import { saveStockUpdate } from "./stock-update.service";
 import { ingestScan } from "./scan-ingest.service";
@@ -772,13 +773,15 @@ export async function seedDemoWeek(
    *    11:00–12:00, and 13:00–17:00) a few minutes after its end, with a pair or two failing
    *    inspection in each; one finished 50 minutes late on a day that makes the quota, and one
    *    missed on the shortest-handed day, so it adds no short day of its own; on the day attendance
-   *    shows the QI absent, the Floor Manager finishes them (D-088);
+   *    shows the QI absent, the Floor Manager finishes them (D-088); the missed one stays in the
+   *    Inspection queue (Phase 33), marked Urgent by the Floor Manager with a reason;
    *  - pairs follow the constructors present and the working hours (demoRate, from the roster),
    *    so the days with 2, 3, 4 and 5 absent end below quota on passed pairs and the others meet it. A day without
    *    attendance counts everyone on the roster.
    * Today: batches finished more than 30 minutes ago are saved; a newer one is left Due.
    */
   async function seedProduction(): Promise<number> {
+    await queueFromTheStart();
     for (const [i, day] of workingDays.entries()) {
       const plannedAt = at(day, 7);
       await saveDayPlan(
@@ -844,6 +847,23 @@ export async function seedDemoWeek(
         );
         entered += 1;
       }
+    }
+    // The missed batch waits in the Inspection queue (Phase 33): the Floor Manager marks it Urgent.
+    if (missedDay) {
+      const last = batchesFor(DEFAULT_SCHEDULE, [DEFAULT_LUNCH], missedDay).at(-1);
+      const queued = last ? await queuedBatchAt(missedDay, last.at) : null;
+      const markedAt = last ? plus(last.at, 45 * MINUTE) : null;
+      if (queued && markedAt && past(markedAt))
+        await setBatchPriority(
+          queued.id,
+          {
+            priority: "URGENT",
+            reason: "Count it first: the customer picks these up today.",
+            expectedUpdatedAt: queued.updatedAt,
+          },
+          { ...fm!, role: "FLOOR_MANAGER" },
+          markedAt,
+        );
     }
     return entered;
   }

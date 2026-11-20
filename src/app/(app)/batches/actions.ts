@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { toActionError, type ActionResult } from "@/server/lib/action-result";
+import {
+  setBatchPriority,
+  startInspection,
+  voidBatch,
+} from "@/server/services/batch-queue.service";
 import { requirePermission } from "@/server/policies/guard";
 import {
   clearNonWorking,
@@ -16,6 +21,9 @@ import {
   dayMarkSchema,
   dayPlanSchema,
   planDaySchema,
+  prioritySchema,
+  startInspectionSchema,
+  voidBatchSchema,
 } from "@/server/validators/production.validator";
 import { z } from "zod";
 
@@ -34,18 +42,68 @@ function refreshAll() {
 /** Finish a batch: the pairs finished and, of these, failed inspection (C-27). */
 export async function finishBatchAction(
   input: unknown,
-): Promise<ActionResult<{ number: number; time: string }>> {
+): Promise<ActionResult<{ number: number; code: string; time: string }>> {
   const user = await requirePermission("production:checkin");
   try {
     const result = await saveCheckIn(checkInSchema.parse(input), user);
     refresh();
-    return { ok: true, number: result.number, time: result.time };
+    return { ok: true, number: result.number, code: result.code, time: result.time };
   } catch (error) {
     return toActionError(error, "Finishing the batch");
   }
 }
 
-/** A same-day correction with a reason. */
+const NO_BATCH = "This batch doesn't exist. Refresh the page.";
+
+/** Start inspection (Phase 33, A-60): so another inspector takes a different batch. */
+export async function startInspectionAction(
+  id: string,
+  input: unknown,
+): Promise<ActionResult<{ code: string }>> {
+  const user = await requirePermission("production:checkin");
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: NO_BATCH };
+  try {
+    const result = await startInspection(id, startInspectionSchema.parse(input), user);
+    refresh();
+    return { ok: true, code: result.code };
+  } catch (error) {
+    return toActionError(error, "Starting the inspection");
+  }
+}
+
+/** Urgent with a reason, or back to Normal (Phase 33, A-58). */
+export async function batchPriorityAction(
+  id: string,
+  input: unknown,
+): Promise<ActionResult<{ code: string }>> {
+  const user = await requirePermission("production:prioritise");
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: NO_BATCH };
+  try {
+    const result = await setBatchPriority(id, prioritySchema.parse(input), user);
+    refresh();
+    return { ok: true, code: result.code };
+  } catch (error) {
+    return toActionError(error, "The priority");
+  }
+}
+
+/** Void a batch that won't be inspected, with a reason (Phase 33, A-59). */
+export async function voidBatchAction(
+  id: string,
+  input: unknown,
+): Promise<ActionResult<{ code: string }>> {
+  const user = await requirePermission("production:prioritise");
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: NO_BATCH };
+  try {
+    const result = await voidBatch(id, voidBatchSchema.parse(input), user);
+    refresh();
+    return { ok: true, code: result.code };
+  } catch (error) {
+    return toActionError(error, "Voiding the batch");
+  }
+}
+
+/** A correction on the day the batch was inspected, with a reason. */
 export async function correctBatchAction(
   id: string,
   input: unknown,

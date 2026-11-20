@@ -31,12 +31,15 @@ const wholeNumber = (message: string, max: number, tooMany: string) =>
       .refine((n) => n <= max, tooMany),
   );
 
-/** The pairs finished in a batch (C-27): "Enter the pairs finished in Batch 2 as a whole number…". */
-export function pairsSchema(batchNumber: number) {
+/**
+ * The pairs finished in a batch (C-27), named by its code (Phase 33): "Enter the pairs finished in
+ * B-261116-2 as a whole number…".
+ */
+export function pairsSchema(batch: string) {
   return wholeNumber(
-    `Enter the pairs finished in Batch ${batchNumber} as a whole number, like 24. Enter 0 if none.`,
+    `Enter the pairs finished in ${batch} as a whole number, like 24. Enter 0 if none.`,
     MAX_PAIRS_PER_CHECK_IN,
-    `Batch ${batchNumber} can't be more than ${MAX_PAIRS_PER_CHECK_IN.toLocaleString("en-PH")} pairs. Check the number.`,
+    `${batch} can't be more than ${MAX_PAIRS_PER_CHECK_IN.toLocaleString("en-PH")} pairs. Check the number.`,
   );
 }
 
@@ -57,13 +60,13 @@ export const failedAboveFinishedMessage = (finished: number) =>
  * so the form puts each under its own field.
  */
 export function parseBatchCounts(
-  batchNumber: number,
+  batch: string,
   raw: { pairs?: unknown; failedPairs?: unknown },
 ):
   | { ok: true; pairs: number; failedPairs: number }
   | { ok: false; errors: Partial<Record<"pairs" | "failedPairs", string>> } {
   const errors: Partial<Record<"pairs" | "failedPairs", string>> = {};
-  const pairs = pairsSchema(batchNumber).safeParse(raw.pairs);
+  const pairs = pairsSchema(batch).safeParse(raw.pairs);
   const failed = failedPairsSchema().safeParse(raw.failedPairs ?? 0);
   if (!pairs.success) errors.pairs = pairs.error.issues[0].message;
   if (!failed.success) errors.failedPairs = failed.error.issues[0].message;
@@ -98,16 +101,80 @@ export const correctionReasonSchema = z
   .min(5, CORRECTION_REASON_MESSAGE)
   .max(300, "Keep the reason under 300 characters.");
 
-/** POST /api/v1/production/check-ins: finish a batch. The counts are checked by the service. */
-export const checkInSchema = z.object({
-  slotAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
-  pairs: z.unknown().optional(),
-  failedPairs: z.unknown().optional(),
-  notes: optionalText(500, "notes"),
-});
+/**
+ * POST /api/v1/production/check-ins: finish a batch, named by its queued row (Phase 33) or, as
+ * before, by its end. The counts are checked by the service.
+ */
+export const checkInSchema = z
+  .object({
+    batchId: z.uuid({ error: OUT_OF_DATE }).optional(),
+    slotAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }).optional(),
+    pairs: z.unknown().optional(),
+    failedPairs: z.unknown().optional(),
+    notes: optionalText(500, "notes"),
+  })
+  .refine((v) => v.batchId !== undefined || v.slotAt !== undefined, {
+    message: OUT_OF_DATE,
+    path: ["batchId"],
+  });
 export type CheckInInput = z.infer<typeof checkInSchema>;
 
-/** PATCH /api/v1/production/check-ins/{id}: a same-day correction, with a reason. */
+// ───────────── the Inspection queue (Phase 33, D-129) ─────────────
+
+export const PRIORITY_REASON_MESSAGE =
+  'Say why this batch is urgent, at least 5 characters, like "Customer pick-up at 3 pm".';
+export const VOID_REASON_MESSAGE =
+  'Say why this batch won\'t be inspected, at least 5 characters, like "Line stopped, no pairs made".';
+
+const reasonField = (message: string) =>
+  z
+    .string({ error: message })
+    .trim()
+    .min(5, message)
+    .max(200, "Keep the reason under 200 characters.");
+
+/** POST /api/v1/production/batches/{id}/start: I'm inspecting this batch now. */
+export const startInspectionSchema = z.object({
+  expectedUpdatedAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
+});
+export type StartInspectionInput = z.infer<typeof startInspectionSchema>;
+
+/** PUT /api/v1/production/batches/{id}/priority: Urgent needs a reason; Normal clears it (A-58). */
+export const prioritySchema = z.discriminatedUnion(
+  "priority",
+  [
+    z.object({
+      priority: z.literal("URGENT"),
+      reason: reasonField(PRIORITY_REASON_MESSAGE),
+      expectedUpdatedAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
+    }),
+    z.object({
+      priority: z.literal("NORMAL"),
+      reason: z.unknown().optional(),
+      expectedUpdatedAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
+    }),
+  ],
+  { error: "Choose Urgent or Normal." },
+);
+export type PriorityInput = z.infer<typeof prioritySchema>;
+
+/** POST /api/v1/production/batches/{id}/void: it won't be inspected, with a reason (A-59). */
+export const voidBatchSchema = z.object({
+  reason: reasonField(VOID_REASON_MESSAGE),
+  expectedUpdatedAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
+});
+export type VoidBatchInput = z.infer<typeof voidBatchSchema>;
+
+/** GET /api/v1/production/batches: the queue's filters; anything unknown is ignored. */
+export const queueQuerySchema = z.object({
+  day: attendanceDaySchema.optional().catch(undefined),
+  status: z.enum(["WAITING", "LATE", "INSPECTING"]).optional().catch(undefined),
+  priority: z.enum(["NORMAL", "URGENT"]).optional().catch(undefined),
+  q: z.string().trim().max(20).optional().catch(undefined),
+});
+export type QueueQuery = z.infer<typeof queueQuerySchema>;
+
+/** PATCH /api/v1/production/check-ins/{id}: a correction on the day it was inspected, with a reason. */
 export const correctionSchema = z.object({
   expectedUpdatedAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
   pairs: z.unknown().optional(),

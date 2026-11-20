@@ -26,9 +26,21 @@ import { correctBatchAction, finishBatchAction } from "./actions";
 
 type Props = {
   mode: "finish" | "correct";
-  batch: { number: number; slotAt: string; times: string };
-  /** "14 of 16", or null when attendance isn't taken. */
-  workforceLine: string | null;
+  /**
+   * The batch by its code (Phase 33). `batchId` when it is queued; `dayLabel` for a batch from an
+   * earlier day, inspected from the queue.
+   */
+  batch: {
+    code: string;
+    times: string;
+    slotAt?: string;
+    batchId?: string | null;
+    dayLabel?: string;
+  };
+  /** "14 of 16", or null when attendance isn't taken; left out from the queue (another day). */
+  workforceLine?: string | null;
+  /** The button's word: "Finish batch" on Today, "Inspect" in the queue. */
+  buttonLabel?: string;
   /** For a correction: the saved batch. */
   checkIn?: {
     id: string;
@@ -45,7 +57,7 @@ type Props = {
 const FIELD_IDS = { pairs: "batch-pairs", failedPairs: "batch-failed", reason: "batch-reason" };
 
 /**
- * Finish batch / Correct (C-27, D-098): "Pairs finished in Batch 2 (10:00–13:00)" and "Of these,
+ * Finish batch / Correct (C-27, D-098): "Pairs finished in B-261116-2 (10:00–13:00)" and "Of these,
  * failed inspection" (0 to start), both with the numeric keypad, optional notes; a correction needs
  * a reason. No rolls: the QI only counts pairs (Phase 30E, D-111). A sheet at the bottom of a phone
  * (D-096), a dialog on a desk.
@@ -57,6 +69,7 @@ export function FinishBatchDialog({
   checkIn,
   autoOpen,
   primary,
+  buttonLabel = "Finish batch",
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(autoOpen ?? false);
@@ -87,7 +100,7 @@ export function FinishBatchDialog({
   }
 
   function validate(): Record<string, string> {
-    const parsed = parseBatchCounts(batch.number, { pairs, failedPairs: failed });
+    const parsed = parseBatchCounts(batch.code, { pairs, failedPairs: failed });
     const out: Record<string, string> = parsed.ok ? {} : { ...parsed.errors };
     if (mode === "correct") {
       const r = correctionReasonSchema.safeParse(reason);
@@ -105,7 +118,7 @@ export function FinishBatchDialog({
       const result =
         mode === "finish"
           ? await finishBatchAction({
-              slotAt: batch.slotAt,
+              ...(batch.batchId ? { batchId: batch.batchId } : { slotAt: batch.slotAt }),
               pairs,
               failedPairs: failed,
               notes,
@@ -119,8 +132,8 @@ export function FinishBatchDialog({
       if (result.ok) {
         toast.success(
           mode === "finish"
-            ? `Batch ${batch.number} finished.`
-            : `Batch ${batch.number} corrected. Both counts are kept in the audit log.`,
+            ? `${batch.code} finished.`
+            : `${batch.code} corrected. Both counts are kept in the audit log.`,
         );
         setOpen(false);
         reset();
@@ -148,7 +161,7 @@ export function FinishBatchDialog({
   /** Clears a field's message as soon as what's typed is fine. */
   function recheck(next: { pairs: string; failed: string }) {
     if (!errors.pairs && !errors.failedPairs) return;
-    const parsed = parseBatchCounts(batch.number, {
+    const parsed = parseBatchCounts(batch.code, {
       pairs: next.pairs,
       failedPairs: next.failed,
     });
@@ -206,7 +219,8 @@ export function FinishBatchDialog({
         }}
       >
         {mode === "correct" ? <Pencil aria-hidden /> : <CircleCheck aria-hidden />}
-        {mode === "finish" ? `Finish batch ${batch.number}` : "Correct"}
+        {mode === "finish" ? buttonLabel : "Correct"}
+        <span className="sr-only"> {batch.code}</span>
       </Button>
       {stale && (
         <Alert tone="info" className="mt-2">
@@ -243,11 +257,11 @@ export function FinishBatchDialog({
           )}
         >
           <DialogTitle>
-            {mode === "finish" ? `Finish batch ${batch.number}` : `Correct batch ${batch.number}`}
+            {mode === "finish" ? `Finish ${batch.code}` : `Correct ${batch.code}`}
           </DialogTitle>
           <DialogDescription>
-            Batch {batch.number} · {batch.times}. Count the pairs that left Finishing in this batch,
-            not a running total.
+            {batch.code} · {batch.dayLabel ? `${batch.dayLabel}, ` : ""}
+            {batch.times}. Count the pairs that left Finishing in this batch, not a running total.
           </DialogDescription>
           <form
             ref={formRef}
@@ -262,7 +276,7 @@ export function FinishBatchDialog({
             <div className="grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] items-start gap-4">
               {numberField(
                 "pairs",
-                `Pairs finished in Batch ${batch.number} (${batch.times.split(",")[0]})`,
+                `Pairs finished in ${batch.code} (${batch.times.split(",")[0]})`,
                 pairs,
                 (v) => {
                   setPairs(v);
@@ -274,10 +288,12 @@ export function FinishBatchDialog({
                 recheck({ pairs, failed: v });
               })}
             </div>
-            <p className="text-sm">
-              <span className="text-muted-foreground">Shoe Constructors present today: </span>
-              {workforceLine ?? "Attendance not taken yet. Ask the Floor Manager."}
-            </p>
+            {workforceLine !== undefined && (
+              <p className="text-sm">
+                <span className="text-muted-foreground">Shoe Constructors present today: </span>
+                {workforceLine ?? "Attendance not taken yet. Ask the Floor Manager."}
+              </p>
+            )}
             {mode === "finish" ? (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="batch-notes">
@@ -319,7 +335,7 @@ export function FinishBatchDialog({
               </DialogClose>
               <Button type="submit" disabled={pending} className="max-sm:h-11">
                 {pending && <LoaderCircle aria-hidden className="animate-spin" />}
-                {mode === "finish" ? `Finish batch ${batch.number}` : "Save correction"}
+                {mode === "finish" ? `Finish ${batch.code}` : "Save correction"}
               </Button>
             </DialogFooter>
           </form>

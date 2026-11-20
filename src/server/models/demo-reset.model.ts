@@ -29,6 +29,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     defectTypes,
     attendanceDays,
     checkIns,
+    batches,
     dayPlans,
     lunchBreaks,
     locations,
@@ -45,6 +46,8 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.defectType.count({ where: { key: notIn(keep.defectTypeKeys) } }),
     db.attendanceDay.count(),
     db.productionCheckIn.count(),
+    // Queued batches and their codes (Phase 33); the demo week's plans make them again.
+    db.productionBatch.count(),
     // Day plans and Non-working marks (D-114); the demo week plans its days again.
     db.dayPlan.count(),
     // Lunch breaks the System Admin saved; the default comes back from the start (Phase 27).
@@ -65,6 +68,7 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     defectTypes,
     attendanceDays,
     checkIns,
+    batches,
     dayPlans,
     lunchBreaks,
     locations,
@@ -97,6 +101,9 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   // Batches (Phases 23, 27, 30E-2): finished batches, every day plan and every lunch break; the
   // service puts the default lunch back and the demo week plans its days (D-114).
   await db.productionCheckIn.deleteMany();
+  await db.productionBatch.deleteMany();
+  // A reset database has no batches from "before the queue": every demo batch queues (A-61).
+  await db.inspectionQueueStart.deleteMany();
   await db.dayPlan.deleteMany();
   await db.lunchBreak.deleteMany();
   // History, then accounts and tokens nobody needs (their sessions go with them).

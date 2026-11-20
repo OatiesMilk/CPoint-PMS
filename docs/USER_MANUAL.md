@@ -187,42 +187,63 @@ the station opens straight into it next time (press F11 for full screen).
 
 Your only page is **Batches**. You can use it on a phone.
 
-### 5.1 Read the Batches page
+Every batch has its own code, for example **B-261116-2**: the second batch of 16 Nov 2026
+(B, then the year, month and day, then the batch number that day).
+
+### 5.1 The Inspection queue (your home)
+
+Batches opens on the **Queue** tab. It lists every batch that has ended and still waits for
+inspection, **from any day**, with the most urgent first and then the one that has waited longest.
+
+Each batch shows its code, its day and times, the leather rolls scanned during it, how long it has
+waited, and a badge: **Waiting**, **Late** (more than 30 minutes after it ended), **Urgent** (the
+Floor Manager's reason is shown), or **Being inspected** (by whom).
+
+1. Tap **Start inspection** on the batch you are counting. Others then see that you have it.
+2. Tap **Inspect**, enter the **Pairs finished** and how many **failed inspection**, then tap
+   **Finish B-…**. The batch leaves the queue.
+
+A batch no longer closes at midnight: yesterday's batch stays in the queue until you inspect it.
+Use **Batch code**, **Day**, **Status** and **Priority** at the top to find one, then **Filter**.
+**Inspected and void** at the bottom lists the batches of the last 7 days that have left the queue.
+
+### 5.2 Read the Today tab
 
 - **Today against the quota**: today's passed pairs against the day's quota.
 - **The list of today's batches**: each batch with its start and end time. The lunch break is left
   out of the batch it falls in.
-- **Recent days**: earlier days, with a short reason for any day that fell short.
+- **Recent days** (the Floor Manager only): earlier days, with a short reason for any day that
+  fell short.
 
 ![The Batches page on a phone: the plan, each batch and its counts.](screenshots/manual/05-batches.png)
 
 If there are no batches, the page tells you why, for example "No batches yet today. The Floor
 Manager plans them first." Saturdays, Sundays and days marked Non-working / Holiday have no batches.
 
-### 5.2 Watch for the notices
+### 5.3 Watch for the notices
 
-- **10 minutes before a batch ends**, a banner says, for example, "Batch 2 ends at 17:00. Get ready
-  to count the finished pairs."
-- **When the batch ends**, it says "Batch 2 is due. Finish it now." A bell sounds, and the browser
-  tab shows "(1)".
+- **10 minutes before a batch ends**, a banner says, for example, "B-261116-2 ends at 17:00. Get
+  ready to count the finished pairs."
+- **When the batch ends**, it says "B-261116-2 is due. Finish it now." The bell shows it, and the
+  browser tab shows "(1)".
 
 Keep the Batches page open on your phone so you see the notices.
 
-### 5.3 Finish a batch
+### 5.4 Finish a batch from the Today tab
 
 1. Tap **Finish batch** on the batch that is due.
 2. Enter the **Pairs finished** in that batch.
 3. Enter how many of these **failed inspection**.
-4. Tap **Finish batch**. The page says "Batch N finished."
+4. Tap **Finish B-…**. The page says, for example, "B-261116-2 finished."
 
 The form also shows how many Shoe Constructors are present today. If it says "Attendance not taken
 yet", remind the Floor Manager; you can still finish the batch.
 
 A batch can only be finished once.
 
-### 5.4 Correct a mistake
+### 5.5 Correct a mistake
 
-On the same day, tap **Correct** on the finished batch, change the numbers, and write **Why are you
+On the day you inspected the batch, tap **Correct** on the finished batch, change the numbers, and write **Why are you
 correcting it?** Then tap **Save correction**. Both the old and new counts are kept in the audit log.
 
 ---
@@ -275,6 +296,16 @@ Good to know:
 You see the same Batches page as the Quality Inspector (see [section 5](#5-quality-inspector-finish-each-batch)).
 **If no Quality Inspector is present today**, you can finish the batches yourself. They are saved
 under your name and marked in the audit log as covering.
+
+The **Queue** tab shows every batch waiting for inspection (see [section 5.1](#51-the-inspection-queue-your-home)).
+There you can:
+
+- **Mark Urgent** a waiting batch, with a reason such as "Customer pick-up at 3 pm". It moves to
+  the top of the queue. **Set to Normal** puts it back.
+- **Void** a batch that won't be inspected, with a reason such as "Line stopped, no pairs made".
+  It leaves the queue. This can't be undone.
+
+Once a batch is being inspected, Urgent, voided or finished, today's plan can't change it.
 
 **Recent days** explains each short day in one sentence, for example "Below quota by 18 pairs. 3 of
 12 Shoe Constructors were absent." It never names a person.
@@ -462,6 +493,9 @@ Filter by action or record type, or paste a record id to see its full history.
 | "The server didn't answer. Check the Wi-Fi, then try again."           | Check the phone's Wi-Fi, then try again.                                      |
 | "Today has no plan yet, so there are no batches."                      | The Floor Manager plans today on **Batches → Plan days**.                     |
 | "Attendance not taken yet."                                            | The Floor Manager saves today's attendance.                                   |
+| "… is already inspecting B-…. Pick another batch."                     | Someone else is counting that batch. Take another one from the queue.         |
+| "B-… was voided: …. It can't be finished."                             | The Floor Manager voided it. Nothing to count.                                |
+| "A batch can only be corrected on the day it was inspected."           | Ask the Floor Manager; corrections to older batches come with Phase 35.       |
 
 ---
 
@@ -477,10 +511,10 @@ Filter by action or record type, or paste a record id to see its full history.
 
 **Quality Inspector**
 
-1. Keep **Batches** open.
-2. When "Batch N is due" shows, tap **Finish batch**.
+1. Keep **Batches** open: the **Queue** lists every batch waiting, by its code (B-261116-2).
+2. Take the top one: **Start inspection**, then **Inspect**.
 3. Enter pairs finished and how many failed. Save.
-4. Mistake? **Correct**, same day, with a reason.
+4. Mistake? **Correct**, on the day you inspected it, with a reason.
 
 **Floor Manager**
 

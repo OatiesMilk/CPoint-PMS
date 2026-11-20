@@ -144,9 +144,24 @@ export function lunchProblem(
   return null;
 }
 
+/**
+ * A batch's code (Phase 33, D-129, A-57): "B-261116-2" is the second batch of 16 Nov 2026. The
+ * number never changes once a batch is queued, so the code can be worked out anywhere.
+ */
+export function batchCode(day: string, number: number): string {
+  return `B-${day.slice(2, 4)}${day.slice(5, 7)}${day.slice(8, 10)}-${number}`;
+}
+
+/** True for a batch code such as B-261116-2 (any case). */
+export function isBatchCode(value: string): boolean {
+  return /^B-\d{6}-\d{1,2}$/i.test(value.trim());
+}
+
 export type Batch = {
   /** 1, 2, 3 … */
   number: number;
+  /** "B-261116-2" (Phase 33) */
+  code: string;
   start: Date;
   /** The batch's end, which is when it is due (stored as the check-in's `slotAt`). */
   at: Date;
@@ -158,7 +173,7 @@ export type Batch = {
   lunch: BreakRule | null;
   /** Minutes of work, the breaks left out. */
   workingMinutes: number;
-  /** "Batch 2 · 10:00–13:00, lunch 11:00–12:00" */
+  /** "B-261116-2 · 10:00–13:00, lunch 11:00–12:00" */
   label: string;
 };
 
@@ -233,15 +248,17 @@ export function batchesFor(
     const startTime = timeOf(s);
     const time = timeOf(e);
     const paused = within.reduce((sum, b) => sum + (b.end - b.start), 0);
+    const code = batchCode(day, i + 1);
     return {
       number: i + 1,
+      code,
       start: new Date(dayStart + s * MINUTE),
       at: new Date(dayStart + e * MINUTE),
       startTime,
       time,
       lunch,
       workingMinutes: e - s - paused,
-      label: `Batch ${i + 1} · ${batchTimes({ startTime, time, lunch })}`,
+      label: `${code} · ${batchTimes({ startTime, time, lunch })}`,
     };
   });
 }
@@ -310,8 +327,8 @@ export function describeMinutes(ms: number): string {
 }
 
 /**
- * Can a batch be finished now? From 10 minutes before its end (C-28) until the end of its Manila
- * day (D-084). The reason names the batch and what to do instead.
+ * Can a batch be finished now? From 10 minutes before its end (C-28). Since Phase 33 (D-129) it no
+ * longer closes at midnight: it waits in the Inspection queue until it is inspected or voided.
  */
 export function finishWindow(
   batch: { number: number; at: Date },
@@ -322,12 +339,9 @@ export function finishWindow(
   if (now.getTime() < opens.getTime())
     return {
       ok: false,
-      reason: `Batch ${batch.number} can be finished from ${clockTime(opens)}.`,
-    };
-  if (now.getTime() >= manilaDayEnd(day).getTime())
-    return {
-      ok: false,
-      reason: `Batch ${batch.number} of ${formatAttendanceDay(day)} closed at midnight. Write the count in the notes of today's next batch instead.`,
+      reason: `${batchCode(day, batch.number)} can be finished from ${clockTime(opens)}${
+        day === manilaDayOf(now) ? "" : ` on ${formatAttendanceDay(day)}`
+      }.`,
     };
   return { ok: true };
 }
@@ -344,9 +358,159 @@ export type Notice = {
   /** SOON from 10 minutes before the end, DUE from the end until the batch is finished. */
   kind: "SOON" | "DUE";
   number: number;
+  /** "B-261116-2" (Phase 33) */
+  code: string;
   slotAt: string;
   message: string;
 };
+
+// ───────────── the Inspection queue (Phase 33, D-129) ─────────────
+
+export type QueueState =
+  "UPCOMING" | "IN_PROGRESS" | "WAITING" | "LATE" | "INSPECTING" | "INSPECTED" | "VOID";
+
+export const QUEUE_STATE_LABELS: Record<QueueState, string> = {
+  UPCOMING: "Upcoming",
+  IN_PROGRESS: "In progress",
+  WAITING: "Waiting",
+  LATE: "Late",
+  INSPECTING: "Being inspected",
+  INSPECTED: "Inspected",
+  VOID: "Void",
+};
+
+export type StoredBatchStatus = "OPEN" | "INSPECTING" | "INSPECTED" | "VOID";
+export type BatchPriority = "NORMAL" | "URGENT";
+
+/**
+ * Where a queued batch stands. Only what people did is stored (open, being inspected, inspected,
+ * void); the rest comes from the clock, so the demo clock moves it too (D-125): Upcoming before its
+ * start, In progress until its end, Waiting from its end, Late 30 minutes after (D-084). It never
+ * becomes Missed at midnight.
+ */
+export function queueState(
+  batch: { status: StoredBatchStatus; startAt: Date; slotAt: Date },
+  now: Date,
+): QueueState {
+  if (batch.status === "INSPECTED") return "INSPECTED";
+  if (batch.status === "VOID") return "VOID";
+  if (batch.status === "INSPECTING") return "INSPECTING";
+  const t = now.getTime();
+  if (t < batch.startAt.getTime()) return "UPCOMING";
+  if (t < batch.slotAt.getTime()) return "IN_PROGRESS";
+  if (t > batch.slotAt.getTime() + LATE_AFTER_MINUTES * MINUTE) return "LATE";
+  return "WAITING";
+}
+
+/** In the queue: waiting (or late) for inspection, or being inspected. */
+export function isQueued(state: QueueState): boolean {
+  return state === "WAITING" || state === "LATE" || state === "INSPECTING";
+}
+
+/** The queue's order (A-58): Urgent first, then the batch that has waited longest, then its number. */
+export function compareQueue(
+  a: { priority: BatchPriority; slotAt: Date; number: number },
+  b: { priority: BatchPriority; slotAt: Date; number: number },
+): number {
+  const urgent = (x: { priority: BatchPriority }) => (x.priority === "URGENT" ? 0 : 1);
+  return urgent(a) - urgent(b) || a.slotAt.getTime() - b.slotAt.getTime() || a.number - b.number;
+}
+
+/** "Waiting 3 hours 10 minutes" from the batch's end. */
+export function waitingFor(slotAt: Date, now: Date): string {
+  return `Waiting ${describeMinutes(now.getTime() - slotAt.getTime())}`;
+}
+
+/** Why a never-inspected batch from before Phase 33 is Void (A-61). */
+export const BEFORE_QUEUE_REASON = "Not inspected, from before the queue";
+
+/**
+ * What went into a batch: the rolls whose scan finished at Capture inside it (A-83), by leather.
+ * "6 rolls (Full-grain black ×4, Suede brown ×2)", "1 roll (Suede brown)", "No rolls scanned".
+ */
+export function batchRollsLine(rolls: readonly { item: string | null }[]): string {
+  if (rolls.length === 0) return "No rolls scanned";
+  const counts = new Map<string, number>();
+  for (const r of rolls) {
+    const name = r.item ?? "Leather";
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  const parts = [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([name, n]) =>
+      counts.size === 1 && n === rolls.length && n === 1 ? name : `${name} ×${n}`,
+    );
+  return `${rolls.length} roll${rolls.length === 1 ? "" : "s"} (${parts.join(", ")})`;
+}
+
+export type ExistingBatchRow = {
+  id: string;
+  number: number;
+  slotAt: Date;
+  status: StoredBatchStatus;
+  priority: BatchPriority;
+  /** A finish (check-in) is linked to it. */
+  inspected: boolean;
+};
+
+export type BatchSync = {
+  /** New rows for slots that have none. */
+  insert: { number: number; code: string; startAt: Date; slotAt: Date; void: boolean }[];
+  /** Open, normal rows whose slot is gone from the plan. */
+  remove: string[];
+  /** Rows a person acted on whose slot would move or vanish: the plan can't change. */
+  blocked: { code: string; reason: string }[];
+};
+
+/**
+ * Lines a day's stored batch rows up with the batches its plan gives now (Phase 33). Rows nobody
+ * acted on are remade freely; a row that is being inspected, inspected, void or Urgent keeps its
+ * slot and number, so its code never changes (A-36 already stops plan changes after the first
+ * finish). Slots that ended before the queue began and were never inspected are made Void (A-61).
+ */
+export function syncBatches(
+  day: string,
+  batches: readonly Pick<Batch, "number" | "start" | "at">[],
+  existing: readonly ExistingBatchRow[],
+  queueStart: Date | null,
+): BatchSync {
+  const bySlot = new Map(batches.map((b) => [b.at.getTime(), b]));
+  const rowBySlot = new Map(existing.map((r) => [r.slotAt.getTime(), r]));
+  const actedOn = (r: ExistingBatchRow) =>
+    r.inspected || r.status !== "OPEN" || r.priority === "URGENT";
+  const remove: string[] = [];
+  const blocked: BatchSync["blocked"] = [];
+  for (const r of existing) {
+    const b = bySlot.get(r.slotAt.getTime());
+    if (b && b.number === r.number) continue;
+    if (actedOn(r)) {
+      blocked.push({
+        code: batchCode(day, r.number),
+        reason:
+          r.status === "INSPECTING"
+            ? "is being inspected"
+            : r.inspected || r.status === "INSPECTED"
+              ? "is already inspected"
+              : r.status === "VOID"
+                ? "was voided"
+                : "is marked Urgent",
+      });
+    } else remove.push(r.id);
+  }
+  const insert: BatchSync["insert"] = [];
+  for (const b of batches) {
+    const row = rowBySlot.get(b.at.getTime());
+    if (row && row.number === b.number) continue;
+    insert.push({
+      number: b.number,
+      code: batchCode(day, b.number),
+      startAt: b.start,
+      slotAt: b.at,
+      void: queueStart !== null && b.at.getTime() < queueStart.getTime(),
+    });
+  }
+  return { insert, remove, blocked };
+}
 
 /**
  * The on-screen notices for today's batches, worked out in the browser from the clock (no
@@ -373,15 +537,17 @@ export function noticesFor(
       current.push({
         kind: "DUE",
         number: b.number,
+        code: batchCode(manilaDayOf(b.at), b.number),
         slotAt,
-        message: `Batch ${b.number} is due. Finish it now.`,
+        message: `${batchCode(manilaDayOf(b.at), b.number)} is due. Finish it now.`,
       });
     else if (t >= soon)
       current.push({
         kind: "SOON",
         number: b.number,
+        code: batchCode(manilaDayOf(b.at), b.number),
         slotAt,
-        message: `Batch ${b.number} ends at ${b.time}. Get ready to count the finished pairs.`,
+        message: `${batchCode(manilaDayOf(b.at), b.number)} ends at ${b.time}. Get ready to count the finished pairs.`,
       });
     for (const at of [soon, due]) if (at > t && (nextAt === null || at < nextAt)) nextAt = at;
   }

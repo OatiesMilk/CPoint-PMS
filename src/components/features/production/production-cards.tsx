@@ -14,6 +14,7 @@ type BatchesToday = {
   nonWorking: boolean;
   next: {
     number: number;
+    code: string;
     times: string;
     time: string;
     state: BatchState;
@@ -35,10 +36,10 @@ function nextLine(today: BatchesToday): string {
   if (today.nonWorking) return "Today is marked Non-working / Holiday.";
   if (!today.workingDay) return "Today isn’t a working day.";
   if (!n) return "Every batch for today is finished.";
-  if (n.state === "LATE") return `${n.lateBy}: Batch ${n.number} (${n.times}).`;
-  if (n.state === "DUE") return `Batch ${n.number} (${n.times}) is due.`;
-  if (n.state === "IN_PROGRESS") return `Batch ${n.number} (${n.times}) ends at ${n.time}.`;
-  return `Next: Batch ${n.number} (${n.times}).`;
+  if (n.state === "LATE") return `${n.lateBy}: ${n.code} (${n.times}).`;
+  if (n.state === "DUE") return `${n.code} (${n.times}) is due.`;
+  if (n.state === "IN_PROGRESS") return `${n.code} (${n.times}) ends at ${n.time}.`;
+  return `Next: ${n.code} (${n.times}).`;
 }
 
 /**

@@ -431,71 +431,76 @@ export async function addRolls(
     );
   const location = values.locationId ? await activeLocation(values.locationId) : null;
 
-  return runInTransaction(async (tx) => {
-    const added = [];
-    let onHand = Number(item.quantityOnHand);
-    for (const roll of values.rolls) {
-      let code: string;
-      do {
-        code = formatRollCode(
-          supplier.code,
-          await nextRollCodeNumber(rollCodePrefix(supplier.code), tx),
-        );
-      } while (await rollCodeTaken(code, tx));
-      const row = await insertRoll(
-        {
-          code,
-          tagCode: roll.tagCode ?? null,
-          itemId: item.id,
-          supplierId: supplier.id,
-          areaSqFt: roll.areaSqFt,
-          receivedAt: new Date(`${values.receivedOn}T00:00:00Z`),
-          status: "IN_STOCK",
-          createdById: actor.id,
-          createdAt: now,
-          locationId: location?.id ?? null,
-          locatedAt: location ? now : null,
-        },
-        tx,
-      );
-      if (location)
-        await insertRollMove(
+  // About seven statements a roll in one transaction: a delivery of 25 can pass Prisma's default
+  // 5 s on a busy laptop (Phase 33 run 1, demo:reset after the e2e suite), so it gets 30 s.
+  return runInTransaction(
+    async (tx) => {
+      const added = [];
+      let onHand = Number(item.quantityOnHand);
+      for (const roll of values.rolls) {
+        let code: string;
+        do {
+          code = formatRollCode(
+            supplier.code,
+            await nextRollCodeNumber(rollCodePrefix(supplier.code), tx),
+          );
+        } while (await rollCodeTaken(code, tx));
+        const row = await insertRoll(
           {
-            rollId: row.id,
-            fromLocationId: null,
-            toLocationId: location.id,
-            reason: "PLACED",
-            byId: actor.id,
-            at: now,
+            code,
+            tagCode: roll.tagCode ?? null,
+            itemId: item.id,
+            supplierId: supplier.id,
+            areaSqFt: roll.areaSqFt,
+            receivedAt: new Date(`${values.receivedOn}T00:00:00Z`),
+            status: "IN_STOCK",
+            createdById: actor.id,
+            createdAt: now,
+            locationId: location?.id ?? null,
+            locatedAt: location ? now : null,
           },
           tx,
         );
-      const moved = await postMovement(
-        tx,
-        { id: item.id, sku: item.sku, name: item.name, unit: item.unit, quantityOnHand: onHand },
-        { type: "IN", delta: 1, reason: `Roll ${code} added`, rollId: row.id },
-        actor,
-        now,
-      );
-      onHand = moved.onHandAfter;
-      added.push({ id: row.id, code, areaSqFt: roll.areaSqFt, tagCode: roll.tagCode ?? null });
-    }
-    await recordAudit(tx, {
-      actor: { type: "USER", userId: actor.id },
-      action: "roll.add",
-      entity: "InventoryItem",
-      entityId: item.id,
-      after: {
-        item: `${item.sku} · ${item.name}`,
-        supplier: supplier.name,
-        receivedOn: values.receivedOn,
-        location: location?.code ?? null,
-        rolls: added.map(({ code, areaSqFt, tagCode }) => ({ code, areaSqFt, tagCode })),
-        quantityOnHand: onHand,
-      },
-    });
-    return { added, quantityOnHand: onHand };
-  });
+        if (location)
+          await insertRollMove(
+            {
+              rollId: row.id,
+              fromLocationId: null,
+              toLocationId: location.id,
+              reason: "PLACED",
+              byId: actor.id,
+              at: now,
+            },
+            tx,
+          );
+        const moved = await postMovement(
+          tx,
+          { id: item.id, sku: item.sku, name: item.name, unit: item.unit, quantityOnHand: onHand },
+          { type: "IN", delta: 1, reason: `Roll ${code} added`, rollId: row.id },
+          actor,
+          now,
+        );
+        onHand = moved.onHandAfter;
+        added.push({ id: row.id, code, areaSqFt: roll.areaSqFt, tagCode: roll.tagCode ?? null });
+      }
+      await recordAudit(tx, {
+        actor: { type: "USER", userId: actor.id },
+        action: "roll.add",
+        entity: "InventoryItem",
+        entityId: item.id,
+        after: {
+          item: `${item.sku} · ${item.name}`,
+          supplier: supplier.name,
+          receivedOn: values.receivedOn,
+          location: location?.code ?? null,
+          rolls: added.map(({ code, areaSqFt, tagCode }) => ({ code, areaSqFt, tagCode })),
+          quantityOnHand: onHand,
+        },
+      });
+      return { added, quantityOnHand: onHand };
+    },
+    { timeoutMs: 30_000 },
+  );
 }
 
 /** Pick a roll at Capture (Phase 30A): a roll in stock, not scanned yet, becomes Being scanned. */
@@ -1045,6 +1050,8 @@ export async function rollHistory(id: string): Promise<RollHistoryEntry[]> {
 export type FoundRoll = {
   id: string;
   code: string;
+  /** Its code before Phase 33's rename (D-129), shown as "Formerly B-2026-0003". */
+  formerCode: string | null;
   tagCode: string | null;
   status: RollStatus;
   /** "Not yet scanned", "Returned to supplier", … as the badge reads. */
@@ -1077,6 +1084,7 @@ export function toFoundRoll(r: RollListRow): FoundRoll {
   return {
     id: r.id,
     code: r.code,
+    formerCode: r.formerCode,
     tagCode: r.tagCode,
     status: r.status,
     statusText: rollStatusText(r),

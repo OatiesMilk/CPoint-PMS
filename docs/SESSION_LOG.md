@@ -5,6 +5,109 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-20 · Phase 33: Codex run 6 PASS WITH ISSUES; QA done; git commands
+
+- Codex run 6 (`qa/reports/2026-11-20-phase-33-run6.md`): R2 passed at the demo clock's 17:05
+  (one "(1)" and one `<title>` on every Queue/Today switch); `reports.spec.ts` and
+  `returns.spec.ts` passed alone (7) and the full suite passed (104 passed, 0 failed, 2
+  skipped). The issue: after Back to real time the old "(1)" stayed about 3 s until the
+  notices refetched, the demo clock's existing refresh (D-125); no change.
+- Every scenario has passed across runs 2 to 6 (Q12 not applicable). Git commands for
+  `feature/inspection-queue` given to Dylan, with the list file `qa/phase-33-files.txt` (not
+  committed). Left out: `docs/DEMO_SCRIPT.md`, the list file, git-ignored artifacts and backups.
+
+## 2026-11-20 · Phase 33: Codex run 5, two sign-in stalls; run 6 prompt
+
+- Codex run 5 (`qa/reports/2026-11-20-phase-33-run5.md`): targeted e2e 11 of 11; full suite 102
+  passed, 2 failed (`reports.spec.ts:227`, `returns.spec.ts:121`): the Floor Manager's sign-in
+  reached `/` and waited there 10 s. `src/app/page.tsx` only redirects by role; the FM home's
+  calls are unchanged since run 4, when both passed. Same symptom as Phase 32 runs 2 and 3
+  ("hanging on a blank `/`"), before Phase 33. No code change. R2 blocked: no batch due after
+  the reset; the no-due titles were right (one `<title>`, no prefix).
+- Run 6 prompt `qa/CODEX_PROMPT_PHASE_33_RUN6.md`: R2 with the demo clock at 17:05, the two specs
+  alone, the full suite again, and a retry rule that covers a stalled sign-in.
+
+## 2026-11-20 · Phase 33: Codex run 4 FAIL on one e2e clash; fixed; run 5 prompt
+
+- Codex run 4 (`qa/reports/2026-11-20-phase-33-run4.md`): R1, R2 passed; targeted e2e 11 of 11;
+  full suite 102 passed, 1 failed: the Correct dialog stayed open with "This batch was not
+  found". Cause: `batches.spec.ts`'s afterAll deleted every check-in entered since it started,
+  so with two workers it removed `inspection-queue.spec.ts`'s Sunday check-in mid-test. It now
+  deletes only today's check-ins. No app fault.
+- Observation fixed: after Today → Queue the head held two `<title>` elements, one "(1) (1)"
+  (the title getter trims the trailing space, so the old strip missed the first prefix).
+  `useTabCount` now strips any number of prefixes and sets each `<title>` once; an empty one
+  stays empty.
+- `npm run check` passed (823 unit tests, build OK). Run 5 prompt `qa/CODEX_PROMPT_PHASE_33_RUN5.md`.
+
+## 2026-11-20 · Phase 33: Codex run 3 FAIL on the e2e; fixed; run 4 prompt
+
+- Codex run 3 (`qa/reports/2026-11-19-phase-33-run3.md`): Q3, Q9, Q13 passed; Q14 failed in
+  both the targeted and the full run on two real issues. F1: the filter form remounts only when
+  Clear's navigation arrives, so a Day picked at once still carried the old code
+  (`ClearQueueFilters` now empties the fields on click; the spec checks the field is empty).
+  F2: `useTabCount` watched the first `<title>` element; on Queue → Today (same pathname)
+  Next.js puts a new one in, so the "(n)" was lost (it now observes `document.head`).
+  F3: Inventory `ECONNRESET` in the full run passed alone, no change.
+- `npm run check` passed (823 unit tests, build OK). Run 4 prompt `qa/CODEX_PROMPT_PHASE_33_RUN4.md`.
+
+## 2026-11-19 · Phase 33: Codex run 2 FAIL (13 of 18), fixed; run 3 prompt
+
+- Codex run 2 (`qa/reports/2026-11-19-phase-33-run2.md`) on the right server: Q1 (old data on
+  run 1's restored backup), Q2, Q4 to Q8, Q10, Q11 and A1 to A4 passed; Q12 not applicable.
+- Fixed: F1 Clear left the old code in the Batch code field (the uncontrolled form kept its
+  values across the client navigation; it is now keyed by the filters); F2 Inspected and void had
+  no Correct for a batch inspected today (the service allowed it; the row now has Correct, with the
+  check-in's id and updatedAt in the queue item); F3 Inspect was 36 px on a phone (now `h-11`);
+  F4 `batches.spec.ts`'s no-plan test opens the QI's Today tab. `inspection-queue.spec.ts` also
+  corrects the day-old batch; a unit test covers who can correct.
+- `npm run check` passed (823 unit tests, build OK). Run 3 prompt `qa/CODEX_PROMPT_PHASE_33_RUN3.md`.
+
+## 2026-11-19 · Phase 33: Codex run 1 FAIL (wrong app on port 3000); run 2 prompt
+
+- Codex run 1 (`qa/reports/2026-11-19-phase-33-run1.md`): FAIL, 1 passed, 15 failed, 2 blocked.
+  Every Phase 33 scenario saw the pre-Phase-33 app: port 3000 was the Docker container
+  `cpoint-pms-app-1` (up 45 h, built before Phases 32 and 33; `docker ps`) and the Supply-Chain
+  project's Vite server. The CPoint dev server on 3001 (started 09:47, before the schema change)
+  failed with "Cannot read properties of undefined (reading 'findMany')" at
+  `db.productionBatch` (its `.next/dev/logs`): a stale client in memory, not a code fault.
+- Confirmed and fixed: `demo:reset` after the e2e suite failed twice on the 5 s transaction limit
+  inside Add rolls (about seven statements a roll); that transaction now has 30 s.
+- Not applicable: the e2e failures (`auth` Find roll, `capture` Pages, the plan preview, the
+  queue tab) and the 404s are the old build; Q12 had no old roll code to search.
+- `npm run check` passed (822 unit tests, build OK). Run 2 prompt
+  `qa/CODEX_PROMPT_PHASE_33_RUN2.md`: a pre-flight that port 3000 is this checkout, Q1 on run 1's
+  pre-reset backup, Q2 to Q14 and A1 to A4, a second QI for Q6, a second reset after the e2e.
+
+## 2026-11-19 · Phase 33 built: the Inspection queue with batch codes (D-129)
+
+- Plan `docs/prompts/plans/phase-33-inspection-queue-plan.md`; Dylan's answers (keep `B-` and
+  rename the old roll codes; store only the lifecycle; old batches get codes; correct on the
+  inspection day; A-81 to A-84) and go. The laptop moved to `main` at 42a2c1e with
+  `git switch -C main origin/main` (the local `main` was older; the tree equals
+  `feature/roll-locations`); the Phase 32 wrap-up edits carried over.
+- Built: migration `20261119090000_inspection_queue` (batch rows and codes, the check-in link,
+  when the queue began, `formerCode` and the old roll-code rename, tested in a rolled-back
+  transaction: `B-2026-0003` → `LR-BSA-281`, `R-2026-0001` → `LR-OLD-001`); rows made on plan,
+  lunch and read; Batches → Queue and Today; Start inspection, Inspect from any day, Urgent and
+  Void; no midnight close; codes in notices, cards, calendar and messages; Find roll by former
+  code; demo's missed batch waits, Urgent; CI docker checks.
+- Found while adding the CI checks: on an empty database the migration's "queue began" row
+  would have made the demo week's past batches Void and its finishes fail. The row is now made
+  only on a database with batches, and the demo seed clears it (audited).
+- Checks: `npm run check` passed (822 unit tests, build OK). E2E written, not run:
+  `tests/e2e/inspection-queue.spec.ts` (new), `tests/e2e/batches.spec.ts` (codes, tabs).
+- Handoff `qa/handoffs/2026-11-19-phase-33-inspection-queue.md`, prompt
+  `qa/CODEX_PROMPT_PHASE_33.md`. Next: `npm run db:deploy`, then Codex run 1.
+
+## 2026-11-19 · Phase 32 merged (#54); CI green on main
+
+- Dylan merged `feature/roll-locations` (#54, 42a2c1e). The PR's CI run never started: every job
+  stopped in seconds with GitHub's billing message (failed payment or spending limit), as every run
+  had since 14 Nov (#51 to #53). The run on `main` after the merge did start and passed: check
+  (2m49s), station, e2e (97 passed, 5 skipped), docker. Actions warns that actions/checkout@v4,
+  setup-node@v4, setup-python@v5 and cache@v4 run on Node 20, which is deprecated.
+
 ## 2026-11-19 · Phase 32: Codex run 3 PASS; git commands
 
 - Codex run 3 (`qa/reports/2026-11-19-phase-32-run3.md`): **PASS**. The full e2e suite with two
