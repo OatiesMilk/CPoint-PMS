@@ -69,6 +69,8 @@ async function axe(page: Page) {
 
 type Row = {
   number: number;
+  /** "B-261119-3" (Phase 33) */
+  code: string;
   slotAt: string;
   time: string;
   state: string;
@@ -87,6 +89,8 @@ test.beforeAll(async () => {
     const before = await db.query(`SELECT * FROM day_plans WHERE day = $1::date`, [today]);
     savedToday = before.rows[0] ?? null;
     await db.query(`DELETE FROM day_plans WHERE day = $1::date`, [today]);
+    // Today's queued batches follow the plan (Phase 33): drop them so the hourly plan's are made.
+    await db.query(`DELETE FROM production_batches WHERE day = $1::date`, [today]);
     // An hourly plan for today (an old interval the form no longer offers, D-115).
     await db.query(
       `INSERT INTO day_plans (id, day, kind, "rollsPlanned", quota, "intervalMinutes", "shiftStart", "shiftEnd", "createdAt", "updatedAt")
@@ -116,8 +120,14 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await withDb(async (db) => {
     const today = manilaDay();
-    await db.query(`DELETE FROM production_check_ins WHERE "enteredAt" >= $1`, [STARTED]);
+    // Only today's batches: other specs running alongside finish batches on other days.
+    await db.query(`DELETE FROM production_check_ins WHERE "enteredAt" >= $1 AND day = $2::date`, [
+      STARTED,
+      today,
+    ]);
     await db.query(`DELETE FROM day_plans WHERE day = $1::date`, [today]);
+    // The hourly plan's batches go too; the app makes today's again from the plan put back.
+    await db.query(`DELETE FROM production_batches WHERE day = $1::date`, [today]);
     if (savedToday) {
       const cols = Object.keys(savedToday);
       await db.query(
@@ -191,8 +201,8 @@ test("the Floor Manager plans a day on the calendar, marks a holiday and undoes 
   await form.getByLabel("Shift start").fill("08:00");
   await form.getByLabel("Shift end").fill("17:00");
   await interval.selectOption({ label: "Once at the end of the day" });
-  await expect(form).toContainText(/Batch 1 08:00–17:00/);
-  await expect(form).not.toContainText("Batch 2");
+  await expect(form).toContainText(/B-\d{6}-1 08:00–17:00/);
+  await expect(form).not.toContainText(/B-\d{6}-2 /);
   await expect(form.getByText(/Suggested: \d+ pairs|No quota suggestion yet/)).toBeVisible();
   expect(await axe(page)).toEqual([]);
   await form.getByRole("button", { name: "Save plan" }).click();
@@ -265,6 +275,8 @@ test("a weekday with no plan has no batches and the Floor Manager is told to pla
     expect(await axe(fm)).toEqual([]);
 
     const qi = await signedIn(browser, ACCOUNTS.inspector.email, ACCOUNTS.inspector.home);
+    // The QI lands on the Queue tab (Phase 33); the day's message is on Today.
+    await qi.getByTestId("tab-today").click();
     await expect(qi.getByTestId("no-batches")).toContainText(
       "No batches yet today. The Floor Manager plans them first.",
     );
@@ -358,38 +370,43 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
     height: 844,
   });
   const note = `E2E batch ${Date.now()}`;
-  // Batches is the QI's home (Phase 28, D-100).
+  // Batches is the QI's home (Phase 28, D-100), on the Queue tab since Phase 33; Today has the
+  // day's batches.
+  await expect(page.getByTestId("tab-queue")).toHaveAttribute("aria-current", "page");
+  await page.getByTestId("tab-today").click();
   await expect(page.getByTestId("today-batches")).toBeVisible();
 
   // The notice: a banner on any page, a "(n)" in the tab title and the bell (A-9, C-6).
   const banner = page.getByTestId("batch-notice");
-  await expect(banner).toContainText(/Batch \d+ is due\. Finish it now\./);
+  await expect(banner).toContainText(/B-\d{6}-\d+ is due\. Finish it now\./);
   await expect.poll(() => page.title()).toMatch(/^\(\d+\) /);
   await expect(
     page.getByRole("button", { name: /Batch notices: \d+ batch(es)? due/ }),
   ).toBeVisible();
-  const number = Number((await banner.innerText()).match(/Batch (\d+) is due/)![1]);
+  // Batches are named by their code, B-YYMMDD-N (Phase 33, D-129).
+  const code = (await banner.innerText()).match(/(B-\d{6}-\d+) is due/)![1];
+  const number = Number(code.split("-")[2]);
 
-  // Finish batch from the banner opens the batch's sheet.
-  await banner.getByRole("link", { name: `Finish batch ${number}` }).click();
+  // Finish from the banner opens the batch's sheet.
+  await banner.getByRole("link", { name: `Finish ${code}` }).click();
   await expect(page).toHaveURL(/\/batches\?finish=/);
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toContainText(`Batch ${number}`);
-  const finished = dialog.getByLabel(new RegExp(`^Pairs finished in Batch ${number}`));
+  await expect(dialog).toContainText(code);
+  const finished = dialog.getByLabel(new RegExp(`^Pairs finished in ${code}`));
   const failed = dialog.getByLabel("Of these, failed inspection");
   await expect(failed).toHaveValue("0");
 
   // Empty pairs, then more failed than finished: each message under its own field.
-  await dialog.getByRole("button", { name: `Finish batch ${number}` }).click();
+  await dialog.getByRole("button", { name: `Finish ${code}` }).click();
   await expect(
     dialog.getByText(
-      `Enter the pairs finished in Batch ${number} as a whole number, like 24. Enter 0 if none.`,
+      `Enter the pairs finished in ${code} as a whole number, like 24. Enter 0 if none.`,
     ),
   ).toBeVisible();
   await expect(finished).toBeFocused();
   await finished.fill("3");
   await failed.fill("4");
-  await dialog.getByRole("button", { name: `Finish batch ${number}` }).click();
+  await dialog.getByRole("button", { name: `Finish ${code}` }).click();
   await expect(
     dialog.getByText("Failed inspection can't be more than the pairs finished (3)."),
   ).toBeVisible();
@@ -406,9 +423,9 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
   // No rolls on Finish batch (Phase 30E, D-111): the QI only counts pairs.
   await expect(dialog.getByText("Rolls fully used")).toHaveCount(0);
   await expect(dialog.getByRole("checkbox")).toHaveCount(0);
-  await dialog.getByRole("button", { name: `Finish batch ${number}` }).click();
+  await dialog.getByRole("button", { name: `Finish ${code}` }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText(`Batch ${number} finished.`, { exact: true })).toBeVisible();
+  await expect(page.getByText(`${code} finished.`, { exact: true })).toBeVisible();
   const card = page.getByTestId(`batch-${number}`);
   await expect(card).toContainText("12 pairs, 2 failed inspection");
   await expect(card).toContainText(`Note: ${note}`);
@@ -422,7 +439,7 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
   const state = await today(page);
   if (state.rows.some((r) => !r.checkIn && r.canFinishNow)) {
     const box = await page
-      .getByRole("button", { name: /^Finish batch \d+$/ })
+      .getByRole("button", { name: /^Finish batch B-\d{6}-\d+$/ })
       .first()
       .boundingBox();
     expect(box!.y + box!.height).toBeGreaterThan(844 - 80);
@@ -436,7 +453,7 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
   expect(again.status()).toBe(409);
   const body = await again.json();
   expect(body.error.code).toBe("STALE");
-  expect(body.error.message).toContain(`already finished Batch ${number} at`);
+  expect(body.error.message).toContain(`already finished ${code} at`);
 
   // A batch that isn't open yet is refused with the time it opens (C-28).
   const later = state.rows.find((r) => !r.checkIn && !r.canFinishNow && r.state === "UPCOMING");
@@ -446,14 +463,14 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
     });
     expect(early.status()).toBe(409);
     expect((await early.json()).error.message).toBe(
-      `Batch ${later.number} can be finished from ${later.finishOpensAt}.`,
+      `${later.code} can be finished from ${later.finishOpensAt}.`,
     );
   }
 
   // Correct: a reason is required, then it shows who corrected it and why.
   await card.getByRole("button", { name: "Correct" }).click();
   const fix = page.getByRole("dialog");
-  await fix.getByLabel(new RegExp(`^Pairs finished in Batch ${number}`)).fill("11");
+  await fix.getByLabel(new RegExp(`^Pairs finished in ${code}`)).fill("11");
   await fix.getByRole("button", { name: "Save correction" }).click();
   await expect(
     fix.getByText("Say why you're correcting this batch, at least 5 characters."),
@@ -466,7 +483,7 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
   await expect(card).toContainText("Counted one rack twice");
   expect(await rollState()).toEqual(before);
 
-  // The QI sees today only (Dylan 2026-10-24).
+  // Recent days stay the Floor Manager's; the QI tracks batches in the queue (Phase 33).
   await expect(page.getByText("Recent days")).toHaveCount(0);
 
   expect(await axe(page)).toEqual([]);
@@ -532,15 +549,15 @@ test("the Floor Manager finishes batches only on a day no Quality Inspector is p
     await expect(page.getByTestId("batch-notice")).toBeVisible();
     await page
       .getByTestId("today-batches")
-      .getByRole("button", { name: /^Finish batch \d+$/ })
+      .getByRole("button", { name: /^Finish batch B-\d{6}-\d+$/ })
       .first()
       .click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel(/^Pairs finished in Batch \d+/).fill("3");
+    await dialog.getByLabel(/^Pairs finished in B-\d{6}-\d+/).fill("3");
     // A note of its own per run, so earlier runs' rows never match (Phase 25 QA run 2).
     const coverNote = `E2E FM cover ${Date.now()}`;
     await dialog.getByLabel("Notes (optional)").fill(coverNote);
-    await dialog.getByRole("button", { name: /^Finish batch \d+$/ }).click();
+    await dialog.getByRole("button", { name: /^Finish B-\d{6}-\d+$/ }).click();
     await expect(dialog).toBeHidden();
     await expect(
       page

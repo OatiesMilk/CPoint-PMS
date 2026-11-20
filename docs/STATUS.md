@@ -3,11 +3,12 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-19 (Phase 32 Codex run 3 PASS; git commands given to Dylan)
-**Branch:** `main` at 7f69dbe (#53) on the laptop.
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 32 (this session's code, migration, tests and
-docs), the defense plans (`docs/prompts/plans/defense-revisions-plan.md`,
-`phase-32-roll-locations-plan.md`) and this file. `docs/DEMO_SCRIPT.md` stays out (Dylan).
+**Last updated:** 2026-11-20 (Phase 33 QA passed, run 6; git commands given to Dylan)
+**Branch:** `main` at 42a2c1e (#54, Phase 32).
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`, on `main`):** Phase 33 (code, migration, tests, plan,
+handoff, prompts, reports and docs, QA passed) and the Phase 32 wrap-up edits to this file,
+ROADMAP and SESSION_LOG.
+`docs/DEMO_SCRIPT.md` stays out (Dylan).
 
 - **Phase 31 (built 2026-11-07, Dylan's go):** the master spec's context, domain rules, roles,
   data model and CV contract rewritten to the system as built, with "Changed since the rebuild";
@@ -103,8 +104,68 @@ docs), the defense plans (`docs/prompts/plans/defense-revisions-plan.md`,
 - **Phase 32 Codex run 3 PASS** (`qa/reports/2026-11-19-phase-32-run3.md`): the full e2e suite with
   two workers passed, 100 passed and 2 skipped (5.3 min); with the default six workers on one
   `next dev` 14 tests timed out or stalled on sign-in, each passing in the two-worker run (an
-  observation, as in run 2). With runs 1 and 2, all 17 scenarios have passed. Next: Dylan runs the
-  git commands (branch `feature/roll-locations`) and opens the PR; CI's e2e job is the next check.
+  observation, as in run 2). With runs 1 and 2, all 17 scenarios have passed. **Merged #54**
+  (42a2c1e); CI on `main` green: check, station, e2e (97 passed, 5 skipped), docker. The PR's own
+  run, and every run from 14 Nov (#51 to #53), was never started: GitHub's billing block
+  ("recent account payments have failed or your spending limit…"); it cleared for the main run.
+- **Phase 33, the Inspection queue (built 2026-11-19, Dylan's go, D-129):** every batch has a code
+  `B-YYMMDD-N` and a row (`production_batches`); Batches → **Queue** (the QI's home: waiting
+  batches across days, Urgent first then oldest, rolls in each, wait, filters, Inspected and void
+  for 7 days) and **Today**; Start inspection, Inspect a batch from an earlier day (no midnight
+  close), the FM's Urgent and Void with reasons; correction on the inspection day; codes in every
+  notice, card and message. Old batches get codes (unfinished old ones Void "from before the
+  queue"); old `B-`/`R-` roll codes renamed `LR-…` with `formerCode` kept for Find roll.
+  Migration `20261119090000_inspection_queue` (applied on the laptop 2026-11-19 14:02 by a slip in a shell command; no roll needed renaming).
+  `npm run check` passed (**822 unit tests**, build OK); e2e written, not run. Plan
+  `docs/prompts/plans/phase-33-inspection-queue-plan.md`, handoff
+  `qa/handoffs/2026-11-19-phase-33-inspection-queue.md`, prompt `qa/CODEX_PROMPT_PHASE_33.md`.
+- **Phase 33 Codex run 1 FAIL, environment** (`qa/reports/2026-11-19-phase-33-run1.md`; 1 passed,
+  15 failed, 2 blocked): port 3000 was the old Docker container `cpoint-pms-app-1` (built before
+  Phases 32 and 33) plus another project's Vite server, so the Queue, the codes and the new routes
+  (404) were missing, and the auth and capture e2e failures were Phase 32 items missing too. The
+  CPoint dev server on 3001 was started before the Phase 33 schema was generated: its in-memory
+  client had no `productionBatch` (its log). No code fault in Q2 to Q14 or A1 to A4. Fixed: Add
+  rolls' transaction gets 30 s (`demo:reset` after the e2e suite failed twice at 5.0 s). Q6 was
+  blocked (no second QI; run 2 creates one), Q12 not applicable (no old roll codes). `npm run
+check` passed (822). Next: `qa/CODEX_PROMPT_PHASE_33_RUN2.md` (Dylan stops the Docker app, the
+  Vite server and the old dev server first).
+- **Phase 33 Codex run 2 FAIL, fixed** (`qa/reports/2026-11-19-phase-33-run2.md`; 13 passed, 4
+  failed, 1 not applicable): the right app this time. Q1 passed on run 1's restored data (17 finishes
+  linked, 2 old batches Void "from before the queue"), and so did the queue, codes, Urgent, Void, two
+  inspectors, the overnight carry-over and every access check; the final `demo:reset` finished
+  (77 s). Fixed: F1 Clear kept the old code in the field (the filter form now starts fresh when the
+  filters change); F2 no Correct for an earlier-day batch inspected today (now under Inspected and
+  void, until Phase 35); F3 Inspect was 36 px on a phone (now 44 px); F4 `batches.spec.ts`'s
+  no-plan test now opens the QI's Today tab. Q12 not applicable (no old roll codes). `npm run
+check` passed (**823 unit tests**). Next: `qa/CODEX_PROMPT_PHASE_33_RUN3.md` (Q3, Q9, Q13, Q14).
+- **Phase 33 Codex run 3 FAIL on Q14 only, fixed** (`qa/reports/2026-11-19-phase-33-run3.md`,
+  run 2026-11-20): Q3, Q9 and Q13 passed (Clear, Correct from the list, 44 px on a phone). The e2e
+  failed on two real issues, both fixed: F1 Clear emptied the fields only when the reload arrived,
+  so a Day picked at once still sent the old code (Clear now empties them on click); F2 the tab
+  title lost its "(n)" going from Queue to Today (Next.js puts a new `<title>` in; the count now
+  watches the whole head). F3 an Inventory `ECONNRESET` passed alone (no change). `npm run
+check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
+- **Phase 33 Codex run 4 FAIL on one e2e, fixed** (`qa/reports/2026-11-20-phase-33-run4.md`): R1
+  (Clear then a Day at once) and R2 (the title's "(n)") passed; the targeted specs passed 11 of 11;
+  the full suite 102 passed, 1 failed. The failure was a clash between specs: `batches.spec.ts`'s
+  clean-up deleted every check-in entered during its run, including `inspection-queue.spec.ts`'s,
+  so its Correct said "This batch was not found"; it now removes only today's. Also fixed: the head
+  could hold two `<title>` elements, one reading "(1) (1)"; the count now goes on each once.
+  `npm run check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN5.md` (R2, Q14).
+- **Phase 33 Codex run 5 FAIL, no code fault** (`qa/reports/2026-11-20-phase-33-run5.md`): the
+  targeted specs passed 11 of 11 (the due-count title included); the full suite 102 passed, 2
+  failed: `reports.spec.ts` and `returns.spec.ts`'s Floor Manager sign-in stayed on `/` for
+  10 s. `/` is a one-line redirect and both passed in run 4 with the same code; it is the
+  dev-server stall of Phase 32 runs 2 and 3. R2 was blocked (no batch due after the reset). No code
+  change. Next: `qa/CODEX_PROMPT_PHASE_33_RUN6.md` (R2 with the demo clock at 17:05; the two specs
+  alone, then the full suite).
+- **Phase 33 Codex run 6 PASS WITH ISSUES** (`qa/reports/2026-11-20-phase-33-run6.md`): R2
+  passed (exactly one "(1)" across Queue → Today four times at the demo clock's 17:05, one
+  `<title>`); the two run 5 specs passed alone (7) and the full suite passed (104 passed, 0 failed,
+  2 skipped). The one issue: after Back to real time, the old "(1)" and notice stayed about 3 s
+  until the notices refetched (the demo clock's existing refresh, D-125, not Phase 33). With runs 2
+  to 4 every scenario has passed; Q12 not applicable. **Phase 33 QA done**; git commands for
+  `feature/inspection-queue` given to Dylan.
 - **Defense revisions (planned 2026-11-16, re-checked on the laptop 2026-11-17, waiting for Dylan's go):** the panel's four revisions
   as Phases 32 to 36 in `docs/prompts/plans/defense-revisions-plan.md`: 32 roll locations and QR
   labels, 33 the Inspection queue with batch codes, 34 final-product defects, repairs and work in
@@ -176,8 +237,10 @@ docs), the defense plans (`docs/prompts/plans/defense-revisions-plan.md`,
       weekday
 - [ ] 31. The documentation and the paper's figures match the system (built 2026-11-07,
       uncommitted; Codex run 1 next)
-- [ ] 32. Roll IDs and storage locations you can find on the floor (defense revision 4; built
-      2026-11-17, D-128; QA passed, run 3; to commit on `feature/roll-locations`)
+- [x] 32. Roll IDs and storage locations you can find on the floor (defense revision 4; built
+      2026-11-17, D-128; QA passed, run 3; merged #54, CI green)
+- [x] 33. The Inspection queue with real batch codes (defense revision 2; built 2026-11-19, D-129;
+      QA passed, run 6; to commit as `feature/inspection-queue`)
 
 ## What works right now
 
@@ -194,9 +257,10 @@ D-entries.
   model runs on the server (ONNX Runtime); Pass or Reject, final; a cut from 3 in Not accepted;
   Finish roll takes it off stock and works out the defect share; over 10% → Returned to supplier;
   a scanning timer; roll counts against the day's plan; Floor view for a station monitor.
-- **Batches (Phases 27, 30E-2):** the FM plans each weekday on a calendar (rolls, quota of passed
-  pairs, every 4 hours or once a day, shift; Non-working / Holiday); lunch left out; the QI
-  finishes each batch with pairs finished and failed; on-screen notices; Recent days with the
+- **Batches (Phases 27, 30E-2, 33):** the FM plans each weekday on a calendar (rolls, quota of
+  passed pairs, every 4 hours or once a day, shift; Non-working / Holiday); lunch left out; every
+  batch has a code (B-261116-2) and waits in the Inspection queue until the QI inspects it (pairs
+  finished and failed) or the FM voids it; Urgent first; on-screen notices; Recent days with the
   reason for each short day.
 - **Inventory (Phases 29, 30A):** leather rolls added with their area; the Update stock sheet
   (Added, Used, Correction); reminders on Wednesday and Friday; low stock.
@@ -207,14 +271,14 @@ D-entries.
   suppliers with codes, the lunch break; API tokens for the simulator; the audit log.
 - **Look (Phase 30F, D-122):** tokens, shared page header, KPI tiles, states, phone layouts for
   Capture and Batches.
-- **Database:** the latest migration is `roll_locations` (D-128, Phase 32); `prisma/migrations/` lists them all.
+- **Database:** the latest migration is `inspection_queue` (D-129, Phase 33); `prisma/migrations/` lists them all.
   UUIDv7 ids (D-018).
 
 ## Next step (exact)
 
-0. Phase 32: Dylan runs the git commands from the thread (branch `feature/roll-locations`), opens
-   the PR on GitHub; if CI fails, Claude fixes it.
-   Then Phase 33 (the Inspection queue) in its own thread.
+0. Phase 33: Dylan runs the git commands (branch `feature/inspection-queue`, list file
+   `qa/phase-33-files.txt`), opens the PR, and merges once CI is green. Rebuild the Docker app
+   (`docker compose up --build -d`) before using it again. Then Phase 34 in its own thread.
 1. Dylan: paste `qa/CODEX_PROMPT_PHASE_31_RUN4.md` into Codex (a weekday).
 2. Dylan, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too).
@@ -233,6 +297,25 @@ D-entries.
 - None for the demo.
 
 ## Open questions / assumptions awaiting client confirmation
+
+- Decided (Dylan, 2026-11-19, D-129): batches keep `B-` and old `B-`/`R-` roll codes are renamed
+  `LR-…` (old code kept); only Open / Inspecting / Inspected / Void is stored; every old batch gets
+  a code; a batch is corrected on the day it was inspected (until Phase 35). Tell CPoint.
+- ASSUMPTION (A-57, D-129): the batch code is `B-YYMMDD-N`; CPoint hasn't named a format.
+- ASSUMPTION (A-58, D-129): priority is Normal or Urgent only, set by the Floor Manager; the queue
+  is Urgent first, then the oldest.
+- ASSUMPTION (A-59, D-129): a waiting batch never expires; the FM voids one with a reason.
+- ASSUMPTION (A-60, D-129): Start inspection is optional; an inspector may go straight to Inspect.
+- ASSUMPTION (A-61, D-129): batches that ended before the queue began and were never finished are
+  Void "Not inspected, from before the queue".
+- ASSUMPTION (A-81, D-129): a batch inspected on a later day counts on its own day in the reports.
+- ASSUMPTION (A-82, D-129): who may inspect follows today's attendance (D-088), whatever the
+  batch's day.
+- ASSUMPTION (A-83, D-129): a batch's rolls are those whose scan finished at Capture inside it.
+- ASSUMPTION (A-84, D-129): the Floor Manager can always mark Urgent and Void; inspects only when
+  covering (D-088).
+- ASSUMPTION (A-85, D-129): an old roll with no supplier is renamed `LR-OLD-NNN`; its former code
+  stays searchable.
 
 - Decided (Dylan, 2026-11-17, D-128): the Floor Manager manages storage locations under Inventory;
   the QR holds the plain code (`LR-…`, `LOC:…`), read in the app; returned rolls are tracked until
@@ -483,6 +566,11 @@ D-entries.
   them under Settings → Defect types (D-093).
 
 ## Known test observations
+
+- After `npm run db:generate` (a schema change), restart `npm run dev`: a dev server started
+  before it keeps the old database client in memory (Phase 33 run 1: "reading 'findMany'").
+- The dev overlay's "Encountered a script tag while rendering React component" (the theme script
+  in `src/app/layout.tsx`, since Phase 0) doesn't stop pages.
 
 - Fixed: full e2e runs crashed Chromium late in the run, because helper pages were never closed.
   They're closed now; three local and two Docker full runs since passed 64/64.

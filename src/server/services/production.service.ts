@@ -46,6 +46,9 @@ import {
   planProblem,
   quotaProgress,
   suggestQuota,
+  BEFORE_QUEUE_REASON,
+  batchCode,
+  syncBatches,
   type Batch,
   type BatchState,
   type BreakRule,
@@ -58,8 +61,19 @@ import { addDays, toCsv, type ReportRange } from "@/lib/report-rules";
 import { Errors } from "@/server/lib/errors";
 import { runInTransaction } from "@/server/models/db";
 import {
+  applyBatchSync,
   correctCheckIn as correctCheckInRow,
   countLunchBreaks,
+  findBatch,
+  findBatchBySlot,
+  getQueueStart,
+  clearQueueStart,
+  insertBatchForCheckIn,
+  linkCheckIn,
+  listBatchRows,
+  listUnlinkedCheckIns,
+  updateBatch,
+  type BatchRow,
   deleteDayPlan,
   findCheckIn,
   findCheckInBySlot,
@@ -134,10 +148,14 @@ function batchesOn(plans: Plans, day: string): Batch[] {
   return batchesFor(planRule(plans.plans.get(day)), breaksOf(lunchOn(plans.lunches, day)), day);
 }
 
-/** "Batch 1 08:00–13:00, lunch 11:00–12:00; Batch 2 13:00–17:00" for a sample working day. */
-export function describeBatches(rule: ScheduleRule, breaks: readonly BreakRule[]): string {
-  const sample = batchesFor({ ...rule, workingDays: undefined }, breaks, "2026-01-05");
-  return sample.map((b) => `Batch ${b.number} ${batchTimes(b)}`).join("; ");
+/** "B-261116-1 08:00–13:00, lunch 11:00–12:00; B-261116-2 13:00–17:00" for one day (Phase 33). */
+export function describeBatches(
+  rule: ScheduleRule,
+  breaks: readonly BreakRule[],
+  day: string,
+): string {
+  const batches = batchesFor({ ...rule, workingDays: undefined }, breaks, day);
+  return batches.map((b) => `${b.code} ${batchTimes(b)}`).join("; ");
 }
 
 /** "08:00 to 17:00, every 4 hours". */
@@ -174,6 +192,146 @@ export async function ensureDefaultLunchBreak(db: Tx, now: Date = appNow()) {
     after: { ...DEFAULT_LUNCH, effectiveFrom },
   });
   return true;
+}
+
+// ───────────── batch rows and codes (Phase 33, D-129) ─────────────
+
+/**
+ * Brings one day's batch rows in line with its plan, inside the caller's transaction (a plan or
+ * lunch save). 409 when a batch someone acted on would move or vanish, naming it.
+ */
+async function syncDay(day: string, tx: Tx, now: Date, strict: boolean) {
+  const [plan, lunches, rows, queueStart] = await Promise.all([
+    findDayPlan(day, tx),
+    listLunchBreaks(tx),
+    listBatchRows(day, day, tx),
+    getQueueStart(tx),
+  ]);
+  const batches = batchesOn({ plans: byDay(plan ? [plan] : []), lunches }, day);
+  const sync = syncBatches(day, batches, rows.map(existingRow), queueStart);
+  if (sync.blocked.length > 0) {
+    if (strict)
+      throw Errors.conflict(
+        `${sync.blocked.map((b) => `${b.code} ${b.reason}`).join("; ")}, so ${formatAttendanceDay(day)}'s batches can't change.`,
+      );
+    // Reading: leave a day someone acted on as it is, only add what is missing.
+    const taken = new Set(rows.map((r) => r.slotAt.getTime()));
+    sync.insert = sync.insert.filter((b) => !taken.has(b.slotAt.getTime()));
+    sync.remove = [];
+  }
+  return applyBatchSync(day, sync, BEFORE_QUEUE_REASON, now, tx);
+}
+
+const existingRow = (r: BatchRow) => ({
+  id: r.id,
+  number: r.number,
+  slotAt: r.slotAt,
+  status: r.status,
+  priority: r.priority,
+  inspected: r.checkIn !== null,
+});
+
+/**
+ * Makes sure every batch from `from` to `to` has its row and code, and links each finish from
+ * before Phase 33 to its batch (Dylan, 2026-11-19: old data gets codes too). Idempotent, so two
+ * pages loading at once make the rows once. Writes one audit entry when it changed anything.
+ */
+export async function ensureBatchRows(from: string, to: string, now: Date = appNow()) {
+  const [plans, lunches, rows, unlinked, queueStart] = await Promise.all([
+    listDayPlans(from, to),
+    listLunchBreaks(),
+    listBatchRows(from, to),
+    listUnlinkedCheckIns(from, to),
+    getQueueStart(),
+  ]);
+  const data: Plans = { plans: byDay(plans), lunches };
+  const rowsByDay = new Map<string, BatchRow[]>();
+  for (const r of rows) rowsByDay.set(r.day, [...(rowsByDay.get(r.day) ?? []), r]);
+  const todo = new Map<string, ReturnType<typeof syncBatches>>();
+  for (const plan of plans) {
+    const dayRows = rowsByDay.get(plan.day) ?? [];
+    const sync = syncBatches(
+      plan.day,
+      batchesOn(data, plan.day),
+      dayRows.map(existingRow),
+      queueStart,
+    );
+    const taken = new Set(dayRows.map((r) => r.slotAt.getTime()));
+    // Reading never removes or blocks: it only adds the rows that are missing.
+    const insert = sync.insert.filter((b) => !taken.has(b.slotAt.getTime()));
+    if (insert.length) todo.set(plan.day, { insert, remove: [], blocked: [] });
+  }
+  if (todo.size === 0 && unlinked.length === 0) return { inserted: 0, linked: 0 };
+  try {
+    return await writeBatchRows(from, to, todo, unlinked, now);
+  } catch (error) {
+    // Another page made the same rows at the same moment: theirs stand.
+    if ((error as { code?: string })?.code === "P2002") return { inserted: 0, linked: 0 };
+    throw error;
+  }
+}
+
+async function writeBatchRows(
+  from: string,
+  to: string,
+  todo: Map<string, ReturnType<typeof syncBatches>>,
+  unlinked: Awaited<ReturnType<typeof listUnlinkedCheckIns>>,
+  now: Date,
+) {
+  return runInTransaction(async (tx) => {
+    let inserted = 0;
+    for (const [day, sync] of todo)
+      inserted += (await applyBatchSync(day, sync, BEFORE_QUEUE_REASON, now, tx)).inserted;
+    let linked = 0;
+    for (const c of unlinked) {
+      const day = dayString(c.day);
+      let row = await findBatchBySlot(day, c.slotAt, tx);
+      if (!row) {
+        // The plan no longer gives this slot (changed after the finish): a row from the finish.
+        const dayRows = await listBatchRows(day, day, tx);
+        const number = Math.max(0, ...dayRows.map((r) => r.number)) + 1;
+        const created = await insertBatchForCheckIn(
+          { day, number, code: batchCode(day, number), startAt: c.slotAt, slotAt: c.slotAt },
+          tx,
+        );
+        row = await findBatch(created.id, tx);
+      }
+      if (row) {
+        await linkCheckIn(c.id, row.id, tx);
+        linked += 1;
+      }
+    }
+    await recordAudit(tx, {
+      actor: { type: "SYSTEM" },
+      action: "production.batches.sync",
+      entity: "ProductionBatch",
+      after: { from, to, inserted, linked },
+    });
+    return { inserted, linked };
+  });
+}
+
+/**
+ * The demo week (an empty database only) makes two weeks of batches in the past: every one of them
+ * queues, none is Void "from before the queue" (A-61).
+ */
+export async function queueFromTheStart() {
+  await runInTransaction(async (tx) => {
+    await clearQueueStart(tx);
+    await recordAudit(tx, {
+      actor: { type: "SYSTEM" },
+      action: "production.queue.fromStart",
+      entity: "InspectionQueueStart",
+      after: { reason: "Demo week: every batch queues" },
+    });
+  });
+}
+
+/** The day's rows by their end (ISO), made first if missing. */
+async function rowsBySlot(from: string, to: string, now: Date) {
+  await ensureBatchRows(from, to, now);
+  const rows = await listBatchRows(from, to);
+  return new Map(rows.map((r) => [r.slotAt.toISOString(), r]));
 }
 
 // ───────────── day rows (Recent days, Reports, the CSV, the suggestion) ─────────────
@@ -238,6 +396,7 @@ export async function productionDays(
   to: string,
   now: Date = appNow(),
 ): Promise<{ days: DayRow[] }> {
+  await ensureBatchRows(from, to, now);
   const [data, first] = await Promise.all([load(from, to), firstCheckInDay()]);
   // Days before the first batch ever finished weren't counted yet, so they aren't "missed".
   const days = first ? daysFrom(from > first ? from : first, to) : [];
@@ -303,6 +462,20 @@ export async function recentProductionDays(count: number, now: Date = appNow()) 
 
 export type BatchView = {
   number: number;
+  /** "B-261116-2" (Phase 33, D-129). */
+  code: string;
+  /** Its queued row, once made (Phase 33). */
+  batchId: string | null;
+  /** Its Inspection queue status: who started inspecting it, Urgent, Void. */
+  queue: {
+    status: "OPEN" | "INSPECTING" | "INSPECTED" | "VOID";
+    priority: "NORMAL" | "URGENT";
+    priorityReason: string | null;
+    inspectingBy: string | null;
+    inspectingSince: string | null;
+    voidReason: string | null;
+    updatedAt: string;
+  } | null;
   /** The batch's end (ISO), which identifies it. */
   slotAt: string;
   startTime: string;
@@ -340,17 +513,36 @@ export type BatchView = {
   } | null;
 };
 
+export function queueInfo(b: BatchRow | undefined): BatchView["queue"] {
+  if (!b) return null;
+  return {
+    status: b.status,
+    priority: b.priority,
+    priorityReason: b.priorityReason,
+    inspectingBy: b.status === "INSPECTING" ? (b.inspectionStartedBy?.name ?? "Someone") : null,
+    inspectingSince:
+      b.status === "INSPECTING" && b.inspectionStartedAt ? clockTime(b.inspectionStartedAt) : null,
+    voidReason: b.voidReason,
+    updatedAt: b.updatedAt.toISOString(),
+  };
+}
+
 function batchView(
   batch: Batch,
   row: CheckInRow | undefined,
   now: Date,
   todayPresent: number | null,
   usedRolls: { id: string; code: string }[] = [],
+  queued?: BatchRow,
 ): BatchView {
   const state = batchState(batch, row ?? null, now);
   const opens = finishOpensAt(batch);
+  const voided = queued?.status === "VOID";
   return {
     number: batch.number,
+    code: batch.code,
+    batchId: queued?.id ?? null,
+    queue: queueInfo(queued),
     slotAt: batch.at.toISOString(),
     startTime: batch.startTime,
     time: batch.time,
@@ -359,7 +551,7 @@ function batchView(
     label: batch.label,
     state,
     pausedForLunch: state === "IN_PROGRESS" && pausedForLunch(batch, now),
-    canFinishNow: !row && state !== "MISSED" && now.getTime() >= opens.getTime(),
+    canFinishNow: !row && !voided && state !== "MISSED" && now.getTime() >= opens.getTime(),
     finishOpensAt: clockTime(opens),
     lateBy:
       state === "LATE" ? `Late by ${describeMinutes(now.getTime() - batch.at.getTime())}` : null,
@@ -394,10 +586,11 @@ function batchView(
 /** Today on the line: each batch, passed pairs against the quota, the next batch to finish. */
 export async function productionToday(viewer: { role: Role }, now: Date = appNow()) {
   const day = manilaToday(now);
-  const [data, workforce, qiPresent] = await Promise.all([
+  const [data, workforce, qiPresent, queued] = await Promise.all([
     load(day, day),
     workforceByDay([day]),
     qualityInspectorPresentOn(day),
+    rowsBySlot(day, day, now),
   ]);
   const wf = workforce.get(day)!;
   const plan = data.plans.get(day) ?? null;
@@ -409,12 +602,21 @@ export async function productionToday(viewer: { role: Role }, now: Date = appNow
   const used = await rollsUsedByCheckIn(data.checkIns.map((c) => c.id));
   const rows = batches.map((b) => {
     const row = data.checkIns.find((c) => c.slotAt.getTime() === b.at.getTime());
-    return batchView(b, row, now, wf.constructorsPresent, row ? (used.get(row.id) ?? []) : []);
+    return batchView(
+      b,
+      row,
+      now,
+      wf.constructorsPresent,
+      row ? (used.get(row.id) ?? []) : [],
+      queued.get(b.at.toISOString()),
+    );
   });
   const quota = quotaOn(data.plans, day);
   const finished = data.checkIns.reduce((s, c) => s + c.pairs, 0);
   const failed = data.checkIns.reduce((s, c) => s + c.failedPairs, 0);
-  const left = rows.filter((r) => !r.checkIn && r.state !== "MISSED").length;
+  const left = rows.filter(
+    (r) => !r.checkIn && r.state !== "MISSED" && r.queue?.status !== "VOID",
+  ).length;
   const progress = quotaProgress(finished, failed, quota, left);
   const dayDone = rows.length > 0 && left === 0;
   const shortfall = dayDone
@@ -534,7 +736,7 @@ export async function planMonth(month: string, now: Date = appNow()) {
                 shiftStart: rule.shiftStart,
                 shiftEnd: rule.shiftEnd,
                 short: describePlanShort(row),
-                batches: describeBatches(rule, lunch ? [lunch] : []),
+                batches: describeBatches(rule, lunch ? [lunch] : [], day),
               }
             : null,
         updatedAt: row ? row.updatedAt.toISOString() : null,
@@ -652,13 +854,15 @@ async function writeDay(
         if (!ok) throw Errors.stale("Someone else changed this day. Refresh to see it.");
         id = row.id;
       } else id = (await insertDayPlan(day, data, actor.id, now, tx)).id;
+      // The day's batches and their codes follow the plan (Phase 33).
+      const batches = await syncDay(day, tx, now, true);
       await recordAudit(tx, {
         actor: { type: "USER", userId: actor.id },
         action,
         entity: "DayPlan",
         entityId: id,
         before: planAudit(row),
-        after: { day, ...data },
+        after: { day, ...data, batchesMade: batches.inserted, batchesRemoved: batches.removed },
       });
       return { saved: true, day };
     });
@@ -734,6 +938,7 @@ export async function clearNonWorking(
   return runInTransaction(async (tx) => {
     const ok = await deleteDayPlan(row.id, row.updatedAt, tx);
     if (!ok) throw Errors.stale("Someone else changed this day. Refresh to see it.");
+    await syncDay(day, tx, now, true);
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "production.plan.cleared",
@@ -811,6 +1016,9 @@ export async function saveLunchBreak(input: LunchBreakInput, actor: Actor, now: 
       { ...input, effectiveFrom, createdById: actor.id, createdAt: now },
       tx,
     );
+    // Planned days from tomorrow get their batches remade with the new lunch (Phase 33).
+    const planned = await listDayPlans(effectiveFrom, addDays(effectiveFrom, 100), tx);
+    for (const plan of planned) await syncDay(plan.day, tx, now, true);
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "production.lunch.set",
@@ -824,8 +1032,8 @@ export async function saveLunchBreak(input: LunchBreakInput, actor: Actor, now: 
 
 // ───────────── finishing a batch ─────────────
 
-function counts(batchNumber: number, raw: { pairs?: unknown; failedPairs?: unknown }) {
-  const parsed = parseBatchCounts(batchNumber, raw);
+function counts(batch: string, raw: { pairs?: unknown; failedPairs?: unknown }) {
+  const parsed = parseBatchCounts(batch, raw);
   if (!parsed.ok)
     throw Errors.validation(
       Object.entries(parsed.errors).map(([field, message]) => ({ path: [field], message })),
@@ -833,17 +1041,21 @@ function counts(batchNumber: number, raw: { pairs?: unknown; failedPairs?: unkno
   return { pairs: parsed.pairs, failedPairs: parsed.failedPairs };
 }
 
-function alreadyFinished(row: CheckInRow, number: number) {
+function alreadyFinished(row: CheckInRow, code: string) {
   return Errors.stale(
-    `${row.enteredBy.name} already finished Batch ${number} at ${clockTime(row.enteredAt)}. Refresh to see it.`,
+    `${row.enteredBy.name} already finished ${code} at ${clockTime(row.enteredAt)}. Refresh to see it.`,
   );
 }
 
 /**
- * Who may finish or correct a batch on a day (D-084, D-088, C-29): the Quality Inspector, or the
- * Floor Manager when that day's attendance shows no Quality Inspector present. 403 with the reason.
+ * Who may inspect, finish or correct a batch (D-084, D-088, C-29): the Quality Inspector, or the
+ * Floor Manager when today's attendance shows no Quality Inspector present, whatever the batch's
+ * day (A-82). 403 with the reason.
  */
-async function assertMayEnter(actor: CheckInActor, day: string): Promise<{ covering: boolean }> {
+export async function assertMayEnter(
+  actor: CheckInActor,
+  day: string,
+): Promise<{ covering: boolean }> {
   if (actor.role === "QUALITY_INSPECTOR") return { covering: false };
   const qiPresent = actor.role === "FLOOR_MANAGER" ? await qualityInspectorPresentOn(day) : null;
   const reason = checkInCoverReason(actor.role, qiPresent);
@@ -856,9 +1068,11 @@ async function assertMayEnter(actor: CheckInActor, day: string): Promise<{ cover
  * inspection. From 10 minutes before its end (C-28) until midnight; one finish per batch.
  */
 export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now: Date = appNow()) {
-  const slotAt = new Date(input.slotAt);
-  const day = manilaDayOf(slotAt);
-  const { covering } = await assertMayEnter(actor, day);
+  const named = input.batchId ? await findBatch(input.batchId) : null;
+  if (input.batchId && !named) throw Errors.notFound("This batch");
+  const slotAt = named ? named.slotAt : new Date(input.slotAt as string);
+  const day = named ? named.day : manilaDayOf(slotAt);
+  const { covering } = await assertMayEnter(actor, manilaToday(now));
   const [plan, lunches, workforce] = await Promise.all([
     findDayPlan(day),
     listLunchBreaks(),
@@ -874,8 +1088,14 @@ export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now:
   const window = finishWindow(batch, day, now);
   if (!window.ok) throw Errors.conflict(window.reason);
   const existing = await findCheckInBySlot(day, slotAt);
-  if (existing) throw alreadyFinished(existing, batch.number);
-  const { pairs, failedPairs } = counts(batch.number, input);
+  if (existing) throw alreadyFinished(existing, batch.code);
+  await ensureBatchRows(day, day, now);
+  const queued = await findBatchBySlot(day, slotAt);
+  if (queued?.status === "VOID")
+    throw Errors.conflict(
+      `${batch.code} was voided${queued.voidReason ? `: ${queued.voidReason}` : ""}. It can't be finished.`,
+    );
+  const { pairs, failedPairs } = counts(batch.code, input);
   const wf = workforce.get(day)!;
 
   try {
@@ -891,9 +1111,21 @@ export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now:
           constructorsPresent: wf.constructorsPresent,
           constructorsOnRoster: wf.taken ? wf.constructorsOnRoster : null,
           notes: input.notes ?? null,
+          batchId: queued?.id ?? null,
         },
         tx,
       );
+      if (queued) {
+        const ok = await updateBatch(
+          queued.id,
+          null,
+          ["OPEN", "INSPECTING"],
+          { status: "INSPECTED" },
+          tx,
+        );
+        if (!ok)
+          throw Errors.stale(`${batch.code} was changed by someone else. Refresh to see it.`);
+      }
       await recordAudit(tx, {
         actor: { type: "USER", userId: actor.id },
         action: "production.checkin",
@@ -902,6 +1134,8 @@ export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now:
         after: {
           day,
           batch: batch.label,
+          code: batch.code,
+          inspectedOnLaterDay: day !== manilaToday(now) ? true : undefined,
           pairs,
           failedPairs,
           constructorsPresent: wf.constructorsPresent,
@@ -909,19 +1143,22 @@ export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now:
           ...(covering ? { coveringForQualityInspector: true } : {}),
         },
       });
-      return { id: row.id, number: batch.number, time: batch.time };
+      return { id: row.id, number: batch.number, code: batch.code, time: batch.time };
     });
   } catch (error) {
     // Two people finishing the same batch at once: the unique slot decides, the second is stale.
     if ((error as { code?: string })?.code === "P2002") {
       const winner = await findCheckInBySlot(day, slotAt);
-      if (winner) throw alreadyFinished(winner, batch.number);
+      if (winner) throw alreadyFinished(winner, batch.code);
     }
     throw error;
   }
 }
 
-/** Correct a finished batch the same Manila day, with a reason; both counts go in the audit. */
+/**
+ * Correct a finished batch on the day it was inspected (Dylan 2026-11-19, until Phase 35), with a
+ * reason; both counts go in the audit.
+ */
 export async function correctCheckIn(
   id: string,
   input: CorrectionInput,
@@ -931,10 +1168,11 @@ export async function correctCheckIn(
   const row = await findCheckIn(id);
   if (!row) throw Errors.notFound("This batch");
   const day = dayString(row.day);
-  const { covering } = await assertMayEnter(actor, day);
-  if (day !== manilaToday(now))
+  const { covering } = await assertMayEnter(actor, manilaToday(now));
+  const inspectedOn = manilaDayOf(row.enteredAt);
+  if (inspectedOn !== manilaToday(now))
     throw Errors.conflict(
-      `A batch can only be corrected on the same day. This one was on ${formatAttendanceDay(day)}.`,
+      `A batch can only be corrected on the day it was inspected. This one was inspected on ${formatAttendanceDay(inspectedOn)}.`,
     );
   if (row.updatedAt.toISOString() !== new Date(input.expectedUpdatedAt).toISOString())
     throw Errors.stale(
@@ -947,7 +1185,8 @@ export async function correctCheckIn(
     (b) => b.at.getTime() === row.slotAt.getTime(),
   );
   const number = batch?.number ?? 0;
-  const next = counts(number, input);
+  const code = batch?.code ?? batchCode(day, number);
+  const next = counts(code, input);
 
   return runInTransaction(async (tx) => {
     const ok = await correctCheckInRow(
@@ -969,7 +1208,7 @@ export async function correctCheckIn(
         ...(covering ? { coveringForQualityInspector: true } : {}),
       },
     });
-    return { id, number, time: clockTime(row.slotAt) };
+    return { id, number, code, time: clockTime(row.slotAt) };
   });
 }
 

@@ -160,6 +160,7 @@ export function insertCheckIn(
     notes: string | null;
     pairs: number;
     failedPairs: number;
+    batchId: string | null;
   },
   db: Db,
 ) {
@@ -200,4 +201,185 @@ export async function firstCheckInDay(db: Db = defaultDb()): Promise<string | nu
     select: { day: true },
   });
   return row ? dayString(row.day) : null;
+}
+
+// ───────────── queued batches (Phase 33, D-129) ─────────────
+
+const batchInclude = {
+  inspectionStartedBy: { select: { name: true } },
+  prioritySetBy: { select: { name: true } },
+  voidedBy: { select: { name: true } },
+  checkIn: {
+    select: {
+      id: true,
+      updatedAt: true,
+      enteredAt: true,
+      pairs: true,
+      failedPairs: true,
+      enteredBy: { select: { name: true } },
+    },
+  },
+} satisfies Prisma.ProductionBatchInclude;
+
+function batchRow(r: Prisma.ProductionBatchGetPayload<{ include: typeof batchInclude }>) {
+  return { ...r, day: dayString(r.day) };
+}
+
+export type BatchRow = ReturnType<typeof batchRow>;
+
+/** Every batch row from `from` to `to`, oldest first. */
+export async function listBatchRows(from: string, to: string, db: Db = defaultDb()) {
+  const rows = await db.productionBatch.findMany({
+    where: { day: { gte: dayValue(from), lte: dayValue(to) } },
+    include: batchInclude,
+    orderBy: [{ day: "asc" }, { number: "asc" }],
+  });
+  return rows.map(batchRow);
+}
+
+/** Batches still open or being inspected, any day (the Inspection queue). */
+export async function listOpenBatchRows(db: Db = defaultDb()) {
+  const rows = await db.productionBatch.findMany({
+    where: { status: { in: ["OPEN", "INSPECTING"] } },
+    include: batchInclude,
+    orderBy: [{ slotAt: "asc" }, { number: "asc" }],
+  });
+  return rows.map(batchRow);
+}
+
+/** Batches inspected or voided on a day from `from` on (the queue's Done list). */
+export async function listDoneBatchRows(from: string, db: Db = defaultDb()) {
+  const rows = await db.productionBatch.findMany({
+    where: { status: { in: ["INSPECTED", "VOID"] }, day: { gte: dayValue(from) } },
+    include: batchInclude,
+    orderBy: [{ slotAt: "desc" }, { number: "desc" }],
+    take: 200,
+  });
+  return rows.map(batchRow);
+}
+
+export async function findBatch(id: string, db: Db = defaultDb()): Promise<BatchRow | null> {
+  const row = await db.productionBatch.findUnique({ where: { id }, include: batchInclude });
+  return row ? batchRow(row) : null;
+}
+
+export async function findBatchBySlot(
+  day: string,
+  slotAt: Date,
+  db: Db = defaultDb(),
+): Promise<BatchRow | null> {
+  const row = await db.productionBatch.findUnique({
+    where: { day_slotAt: { day: dayValue(day), slotAt } },
+    include: batchInclude,
+  });
+  return row ? batchRow(row) : null;
+}
+
+/** The first batch whose code is this (any case), for search. */
+export async function findBatchByCode(code: string, db: Db = defaultDb()) {
+  const row = await db.productionBatch.findFirst({
+    where: { code: { equals: code.trim(), mode: "insensitive" } },
+    include: batchInclude,
+  });
+  return row ? batchRow(row) : null;
+}
+
+/**
+ * Makes and removes a day's rows (Phase 33). Removes only open, normal rows nobody inspected; new
+ * rows that already exist (another reader made them first) are skipped. Returns what changed.
+ */
+export async function applyBatchSync(
+  day: string,
+  sync: {
+    insert: { number: number; code: string; startAt: Date; slotAt: Date; void: boolean }[];
+    remove: string[];
+  },
+  voidReason: string,
+  at: Date,
+  db: Db,
+): Promise<{ inserted: number; removed: number }> {
+  const removed = sync.remove.length
+    ? (
+        await db.productionBatch.deleteMany({
+          where: { id: { in: sync.remove }, status: "OPEN", priority: "NORMAL", checkIn: null },
+        })
+      ).count
+    : 0;
+  const inserted = sync.insert.length
+    ? (
+        await db.productionBatch.createMany({
+          data: sync.insert.map((b) => ({
+            code: b.code,
+            day: dayValue(day),
+            number: b.number,
+            startAt: b.startAt,
+            slotAt: b.slotAt,
+            status: b.void ? ("VOID" as const) : ("OPEN" as const),
+            ...(b.void ? { voidReason, voidedAt: at } : {}),
+          })),
+          skipDuplicates: true,
+        })
+      ).count
+    : 0;
+  return { inserted, removed };
+}
+
+/** Finishes from before Phase 33 that have no batch row linked yet. */
+export function listUnlinkedCheckIns(from: string, to: string, db: Db = defaultDb()) {
+  return db.productionCheckIn.findMany({
+    where: { batchId: null, day: { gte: dayValue(from), lte: dayValue(to) } },
+    select: { id: true, day: true, slotAt: true },
+  });
+}
+
+/** Links a finish to its batch and marks the batch Inspected. */
+export async function linkCheckIn(checkInId: string, batchId: string, db: Db) {
+  await db.productionCheckIn.updateMany({
+    where: { id: checkInId, batchId: null },
+    data: { batchId },
+  });
+  await db.productionBatch.update({
+    where: { id: batchId },
+    data: { status: "INSPECTED" },
+  });
+}
+
+/** A batch row for a finish whose slot the day's plan no longer gives (older data). */
+export function insertBatchForCheckIn(
+  data: { day: string; number: number; code: string; startAt: Date; slotAt: Date },
+  db: Db,
+) {
+  const { day, ...rest } = data;
+  return db.productionBatch.create({
+    data: { ...rest, day: dayValue(day), status: "INSPECTED" },
+  });
+}
+
+/**
+ * Changes a batch only if nobody changed it since `seen` (its `updatedAt`) and it is still in one
+ * of `statuses`; false when someone did, so the caller answers STALE.
+ */
+export async function updateBatch(
+  id: string,
+  seen: Date | null,
+  statuses: ("OPEN" | "INSPECTING" | "INSPECTED" | "VOID")[],
+  data: Prisma.ProductionBatchUncheckedUpdateManyInput,
+  db: Db,
+): Promise<boolean> {
+  const { count } = await db.productionBatch.updateMany({
+    where: { id, ...(seen ? { updatedAt: seen } : {}), status: { in: statuses } },
+    data,
+  });
+  return count === 1;
+}
+
+/** When the queue began (A-61); null when every batch queues (a fresh or reset database). */
+export async function getQueueStart(db: Db = defaultDb()): Promise<Date | null> {
+  const row = await db.inspectionQueueStart.findUnique({ where: { id: 1 } });
+  return row?.startedAt ?? null;
+}
+
+/** The demo week makes its batches in the past, so none is "from before the queue" (A-61). */
+export async function clearQueueStart(db: Db = defaultDb()) {
+  await db.inspectionQueueStart.deleteMany();
 }

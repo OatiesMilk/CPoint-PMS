@@ -20,6 +20,7 @@ export type RollListFilters = {
 const listSelect = {
   id: true,
   code: true,
+  formerCode: true,
   tagCode: true,
   status: true,
   areaSqFt: true,
@@ -71,6 +72,7 @@ function listWhere(filters: RollListFilters): Prisma.RollWhereInput {
       ? {
           OR: [
             { code: { contains: q, mode: "insensitive" } },
+            { formerCode: { contains: q, mode: "insensitive" } },
             { tagCode: { contains: q, mode: "insensitive" } },
           ],
         }
@@ -387,6 +389,19 @@ export async function listRollFinishes(start: Date, end: Date, db: Db = defaultD
   return rows.map((r) => ({ ...r, finishedAt: r.finishedAt as Date }));
 }
 
+/**
+ * The rolls whose scan finished between two instants with their leather item's name, for what went
+ * into each batch (Phase 33, A-83). A removed roll is left out.
+ */
+export async function listRollsFinishedWithItem(start: Date, end: Date, db: Db = defaultDb()) {
+  const rows = await db.roll.findMany({
+    where: { finishedAt: { gte: start, lt: end }, status: { not: "CANCELLED" } },
+    select: { finishedAt: true, item: { select: { name: true } } },
+    orderBy: { finishedAt: "asc" },
+  });
+  return rows.map((r) => ({ finishedAt: r.finishedAt as Date, item: r.item?.name ?? null }));
+}
+
 // ───────────── Where a roll is kept (Phase 32, D-128) ─────────────
 
 /**
@@ -477,12 +492,16 @@ export function listRollsInLocation(locationId: string, db: Db = defaultDb()) {
  * it (case-insensitive), at most 10. Removed rolls are found too, so their story can be read.
  */
 export async function findRollsByCodeOrTag(q: string, db: Db = defaultDb()) {
-  const exact = await db.roll.findUnique({ where: { code: q }, select: listSelect });
+  // An old label or claim sheet still names the roll's code from before Phase 33 (D-129).
+  const exact =
+    (await db.roll.findUnique({ where: { code: q }, select: listSelect })) ??
+    (await db.roll.findUnique({ where: { formerCode: q }, select: listSelect }));
   const more = await db.roll.findMany({
     where: {
       ...(exact ? { NOT: { id: exact.id } } : {}),
       OR: [
         { code: { contains: q, mode: "insensitive" } },
+        { formerCode: { contains: q, mode: "insensitive" } },
         { tagCode: { contains: q, mode: "insensitive" } },
       ],
     },

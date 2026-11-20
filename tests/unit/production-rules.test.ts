@@ -67,7 +67,8 @@ describe("batchesFor: the visit's examples, 08:00–17:00 with lunch 11:00–12:
     ]);
     expect(batches[1].lunch).toEqual(DEFAULT_LUNCH);
     expect(batches[1].workingMinutes).toBe(120);
-    expect(batches[1].label).toBe("Batch 2 · 10:00–13:00, lunch 11:00–12:00");
+    expect(batches[1].label).toBe("B-261019-2 · 10:00–13:00, lunch 11:00–12:00");
+    expect(batches[1].code).toBe("B-261019-2");
   });
 
   it("once at the end of the day gives one batch 08:00–17:00", () => {
@@ -198,16 +199,21 @@ describe("finishWindow (C-28)", () => {
   it("opens 10 minutes before the end, and says from when", () => {
     expect(finishWindow(b3, MON, manila("14:49"))).toEqual({
       ok: false,
-      reason: "Batch 3 can be finished from 14:50.",
+      reason: "B-261019-3 can be finished from 14:50.",
     });
     expect(finishWindow(b3, MON, manila("14:50"))).toEqual({ ok: true });
     expect(finishWindow(b3, MON, manila("23:59"))).toEqual({ ok: true });
   });
 
-  it("closes at midnight, naming the day", () => {
-    const r = finishWindow(b3, MON, at("2026-10-19T16:00:00.000Z"));
+  it("no longer closes at midnight: it waits in the queue (Phase 33, D-129)", () => {
+    expect(finishWindow(b3, MON, at("2026-10-19T16:00:00.000Z"))).toEqual({ ok: true });
+    expect(finishWindow(b3, MON, at("2026-10-22T03:00:00.000Z"))).toEqual({ ok: true });
+  });
+
+  it("names the day when the batch isn't open yet and is on another day", () => {
+    const r = finishWindow(b3, MON, at("2026-10-18T06:00:00.000Z"));
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toMatch(/^Batch 3 of .+ closed at midnight\./);
+    if (!r.ok) expect(r.reason).toMatch(/^B-261019-3 can be finished from 14:50 on /);
   });
 });
 
@@ -227,8 +233,9 @@ describe("noticesFor (A-9, C-6, C-31)", () => {
       {
         kind: "SOON",
         number: 1,
+        code: "B-261019-1",
         slotAt: batches[0].at.toISOString(),
-        message: "Batch 1 ends at 13:00. Get ready to count the finished pairs.",
+        message: "B-261019-1 ends at 13:00. Get ready to count the finished pairs.",
       },
     ]);
     expect(r.nextAt?.toISOString()).toBe(manila("13:00").toISOString());
@@ -237,7 +244,7 @@ describe("noticesFor (A-9, C-6, C-31)", () => {
   it("at the end: due, until it is finished", () => {
     const r = noticesFor(batches, none, manila("13:00"));
     expect(r.current.map((n) => [n.kind, n.message])).toEqual([
-      ["DUE", "Batch 1 is due. Finish it now."],
+      ["DUE", "B-261019-1 is due. Finish it now."],
     ]);
     expect(
       noticesFor(batches, new Set([batches[0].at.toISOString()]), manila("13:05")).current,

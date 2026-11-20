@@ -15,8 +15,18 @@ import {
   saveLunchBreak,
 } from "@/server/services/production.service";
 import {
+  inspectionQueue,
+  setBatchPriority,
+  startInspection,
+  voidBatch,
+} from "@/server/services/batch-queue.service";
+import {
   checkInSchema,
   correctionSchema,
+  prioritySchema,
+  queueQuerySchema,
+  startInspectionSchema,
+  voidBatchSchema,
   dayMarkSchema,
   dayPlanSchema,
   daysQuerySchema,
@@ -28,6 +38,12 @@ import { z } from "zod";
 
 type IdContext = { params: Promise<{ id: string }> };
 type DayContext = { params: Promise<{ day: string }> };
+
+async function batchId(ctx: IdContext) {
+  const { id } = await ctx.params;
+  if (!z.uuid().safeParse(id).success) throw Errors.notFound("This batch");
+  return id;
+}
 
 async function planDay(ctx: DayContext) {
   const { day } = await ctx.params;
@@ -67,7 +83,41 @@ export const productionController = {
     return json({ data: await productionDays(from, to) });
   }),
 
-  /** POST /api/v1/production/check-ins  { slotAt, pairs, failedPairs, notes? }: finish a batch */
+  /** GET /api/v1/production/batches?day=&status=&priority=&q=: the Inspection queue (Phase 33) */
+  queue: handle(async (request: Request) => {
+    const user = await requireApiPermission("production:read");
+    const q = queueQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
+    return json({ data: await inspectionQueue(user, q) });
+  }),
+
+  /** POST /api/v1/production/batches/{id}/start  { expectedUpdatedAt }: I'm inspecting it now */
+  startInspection: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("production:checkin");
+    const id = await batchId(ctx);
+    const input = startInspectionSchema.parse(await readJsonBody(request));
+    return json({ data: await startInspection(id, input, user) });
+  }),
+
+  /** PUT /api/v1/production/batches/{id}/priority  { priority, reason?, expectedUpdatedAt } */
+  priority: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("production:prioritise");
+    const id = await batchId(ctx);
+    const input = prioritySchema.parse(await readJsonBody(request));
+    return json({ data: await setBatchPriority(id, input, user) });
+  }),
+
+  /** POST /api/v1/production/batches/{id}/void  { reason, expectedUpdatedAt } */
+  voidBatch: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("production:prioritise");
+    const id = await batchId(ctx);
+    const input = voidBatchSchema.parse(await readJsonBody(request));
+    return json({ data: await voidBatch(id, input, user) });
+  }),
+
+  /**
+   * POST /api/v1/production/check-ins  { batchId | slotAt, pairs, failedPairs, notes? }: finish
+   * (inspect) a batch, from any day while it waits (Phase 33)
+   */
   createCheckIn: handle(async (request: Request) => {
     const user = await requireApiPermission("production:checkin");
     const input = checkInSchema.parse(await readJsonBody(request));

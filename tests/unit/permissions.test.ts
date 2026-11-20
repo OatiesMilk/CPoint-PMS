@@ -40,6 +40,7 @@ const EXPECTED: Record<Permission, Role[]> = {
   "production:read": [FM, QI],
   "production:checkin": [QI, FM],
   "production:plan": [FM],
+  "production:prioritise": [FM],
 };
 
 describe("permissions matrix", () => {

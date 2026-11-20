@@ -2539,3 +2539,46 @@ Phase 30A), but nothing said where it was. Plan: `docs/prompts/plans/phase-32-ro
 `roll.service.ts`, `src/app/(app)/{find,inventory/locations,inventory/labels}`,
 `src/components/features/rolls/{qr-scanner,move-rolls-dialog,location-history,picked-up-button}.tsx`,
 `src/server/policies/{permissions,navigation}.ts`, `docs/API.md` → Storage locations.
+
+### D-129 · 2026-11-19 · Accepted — The Inspection queue: every batch has a code and waits until inspected (Phase 33, the panel's revision 2)
+
+**Context:** the defense panel asked for "a clear queue of pending batches so inspectors can
+identify, prioritize, and track multiple batches awaiting inspection. Don't just put 'Batch 1' /
+'Batch 2'." A batch (D-097) was worked out from the day's plan, named only by its number, stored
+only once finished, and closed at midnight (D-084); the QI saw today only (Dylan 2026-10-24).
+Plan: `docs/prompts/plans/phase-33-inspection-queue-plan.md` (Dylan's answers and go, 2026-11-19).
+**Decision:**
+
+- **Every batch has a stored row and a code**, `B-YYMMDD-N` (`production_batches`, A-57), made
+  from the day's plan when the plan or the lunch break is saved and on first read. A finish
+  (`production_check_ins.batchId`) is its inspection result.
+- **Only what people did is stored** (Open, Being inspected, Inspected, Void, and Normal / Urgent);
+  Upcoming, In progress, Waiting and Late come from the clock, so the demo clock (D-125) moves them
+  (Dylan, Q2). Late still starts 30 minutes after the end (D-084).
+- **The Inspection queue** (Batches → Queue, the QI's home): every batch whose end has come and
+  that isn't inspected or void, across days, Urgent first and then the oldest (A-58), with its day,
+  times, the rolls finished inside it (A-83) and how long it has waited; filters by day, status,
+  priority and code; the last 7 days of inspected and void batches below.
+- **Supersedes** "the QI sees today only" (2026-10-24) and **D-084's midnight close**: a batch
+  waits until it is inspected or the Floor Manager voids it with a reason (A-59). Start inspection
+  is optional (A-60). The Floor Manager marks Urgent with a reason and voids
+  (`production:prioritise`, A-84).
+- **Corrections** happen on the day a batch was inspected (was: its own day), until Phase 35
+  (Dylan, Q4). Who may inspect follows today's attendance (A-82, D-088). A batch inspected late
+  counts on its own day (A-81).
+- **A plan change can't move a batch someone acted on** (being inspected, inspected, void or
+  Urgent): it is refused, naming the batch; batches nobody touched are remade.
+- **Old data matches (Dylan, Q3 and Q1):** every old batch gets a code; old finished ones are
+  Inspected; old never-inspected ones are Void "Not inspected, from before the queue" (A-61; the
+  migration marks when the queue began, only on a database that already had batches). The old roll
+  codes `B-YYYY-NNNN` (before Phase 26) and `R-YYYY-NNNN` (Phases 26 to 29) are renamed in the
+  migration to `LR-<supplier>-NNN`, numbered after the highest number of that prefix, oldest first;
+  a roll with no supplier gets `LR-OLD-NNN` (A-85). The old code stays in `batches.formerCode` so
+  Find roll and an old label or claim sheet still find it ("Formerly B-2026-0003"); each rename is
+  a `roll.recode` audit row. So `B-` means a batch only (amends D-095's "older rolls keep `B-`").
+
+**Where:** `prisma/migrations/20261119090000_inspection_queue`, `src/lib/production-rules.ts`
+(`batchCode`, `queueState`, `compareQueue`, `syncBatches`), `src/server/models/production.model.ts`,
+`src/server/services/{production,batch-queue}.service.ts`, `src/app/api/v1/production/batches/**`,
+`src/app/(app)/batches/{page,queue-list,queue-actions,finish-batch-dialog}.tsx`, `docs/API.md` →
+Batches.

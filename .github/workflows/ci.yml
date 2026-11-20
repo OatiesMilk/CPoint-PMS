@@ -145,6 +145,15 @@ jobs:
           test "$(q "select count(*) from production_check_ins")" -ge 1
           test "$(q "select count(*) from production_check_ins where \"failedPairs\" > 0")" -ge 1
           test "$(q "select count(*) from information_schema.tables where table_name in ('shoe_types','production_counts')")" -eq 0
+          # The Inspection queue (Phase 33, D-129): every finished batch is linked to its queued
+          # batch, every code is B-YYMMDD-N and matches its day, the missed demo batch still waits
+          # (Urgent, with a reason), and no roll code starts with B- or R- any more.
+          q "select count(*) from production_check_ins where \"batchId\" is null" | grep -qx 0
+          q "select count(*) from production_batches where code !~ '^B-[0-9]{6}-[0-9]+$' or code <> 'B-' || to_char(day, 'YYMMDD') || '-' || number" | grep -qx 0
+          q "select count(*) from production_batches b join production_check_ins c on c.\"batchId\" = b.id where b.status <> 'INSPECTED'" | grep -qx 0
+          test "$(q "select count(*) from production_batches where status in ('OPEN','INSPECTING') and \"slotAt\" < now()")" -ge 1
+          test "$(q "select count(*) from production_batches where priority='URGENT' and \"priorityReason\" is not null")" -ge 1
+          q "select count(*) from batches where code like 'B-%' or code like 'R-%'" | grep -qx 0
           # Stock updates (Phase 29, D-102): the reminder days row (Wednesday and Friday), at least
           # one Update stock save with its entries, and every leather roll item has a supplier.
           test "$(q "select count(*) from inventory_settings where \"reminderDays\" = '{3,5}'")" -eq 1

@@ -433,21 +433,27 @@ line (D-008); the only names are who finished or corrected a batch and who last 
 plan. Days are Manila calendar days. The paths keep `production`; a finished batch is a `check-in`
 row whose `slotAt` is the batch's end.
 
-| Method & path                                       | Permission           | Body / query                                                                                         |
-| --------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/production/today`                      | `production:read`    | —                                                                                                    |
-| `GET /api/v1/production/days?from=&to=`             | `production:read`    | default the last 14 days, at most 92                                                                 |
-| `POST /api/v1/production/check-ins`                 | `production:checkin` | `{ slotAt, pairs, failedPairs?, notes? }` (no rolls, D-111)                                          |
-| `PATCH /api/v1/production/check-ins/{id}`           | `production:checkin` | `{ expectedUpdatedAt, pairs, failedPairs?, reason }`                                                 |
-| `GET /api/v1/production/plans?month=`               | `production:plan`    | `month` `YYYY-MM`, default this month (D-114)                                                        |
-| `PUT /api/v1/production/plans/{day}`                | `production:plan`    | `{ rollsPlanned, quota, suggestedQuota?, intervalMinutes, shiftStart, shiftEnd, expectedUpdatedAt }` |
-| `PUT /api/v1/production/plans/{day}/non-working`    | `production:plan`    | `{ expectedUpdatedAt }` (body optional): mark Non-working / Holiday                                  |
-| `DELETE /api/v1/production/plans/{day}/non-working` | `production:plan`    | `{ expectedUpdatedAt }`: undo the mark                                                               |
+| Method & path                                              | Permission              | Body / query                                                                                                                            |
+| ---------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/production/today`                             | `production:read`       | —                                                                                                                                       |
+| `GET /api/v1/production/days?from=&to=`                    | `production:read`       | default the last 14 days, at most 92                                                                                                    |
+| `GET /api/v1/production/batches?day=&status=&priority=&q=` | `production:read`       | the Inspection queue (Phase 33, D-129); `status` `WAITING`, `LATE` or `INSPECTING`, `priority` `NORMAL` or `URGENT`, `q` part of a code |
+| `POST /api/v1/production/batches/{id}/start`               | `production:checkin`    | `{ expectedUpdatedAt }`: Start inspection (A-60)                                                                                        |
+| `PUT /api/v1/production/batches/{id}/priority`             | `production:prioritise` | `{ priority: "URGENT", reason, expectedUpdatedAt }` or `{ priority: "NORMAL", expectedUpdatedAt }`                                      |
+| `POST /api/v1/production/batches/{id}/void`                | `production:prioritise` | `{ reason, expectedUpdatedAt }` (A-59)                                                                                                  |
+| `POST /api/v1/production/check-ins`                        | `production:checkin`    | `{ batchId \| slotAt, pairs, failedPairs?, notes? }` (no rolls, D-111)                                                                  |
+| `PATCH /api/v1/production/check-ins/{id}`                  | `production:checkin`    | `{ expectedUpdatedAt, pairs, failedPairs?, reason }`                                                                                    |
+| `GET /api/v1/production/plans?month=`                      | `production:plan`       | `month` `YYYY-MM`, default this month (D-114)                                                                                           |
+| `PUT /api/v1/production/plans/{day}`                       | `production:plan`       | `{ rollsPlanned, quota, suggestedQuota?, intervalMinutes, shiftStart, shiftEnd, expectedUpdatedAt }`                                    |
+| `PUT /api/v1/production/plans/{day}/non-working`           | `production:plan`       | `{ expectedUpdatedAt }` (body optional): mark Non-working / Holiday                                                                     |
+| `DELETE /api/v1/production/plans/{day}/non-working`        | `production:plan`       | `{ expectedUpdatedAt }`: undo the mark                                                                                                  |
 
 `production:read` is the Floor Manager, the Quality Inspector and the System Admin;
 `production:checkin` the Quality Inspector, and the Floor Manager **only on a day attendance shows no
 Quality Inspector present** (D-088; otherwise `403` "A Quality Inspector is present today, so they
-finish the batches." or "Take today's attendance first. …"); `production:plan` the Floor Manager.
+finish the batches." or "Take today's attendance first. …"; since Phase 33 it is **today's**
+attendance, whatever the batch's day, A-82); `production:plan` and `production:prioritise` the
+Floor Manager.
 `PUT /api/v1/production/schedule` and `PUT /api/v1/production/quotas` are gone (`404`, Phase
 30E-2).
 
@@ -468,13 +474,36 @@ has no batches, no start-of-day notice and no stock reminder. Days before Phase 
 from the old schedule and quota (no author, `rollsPlanned` null, and possibly an interval of 60 to
 180).
 
+**The Inspection queue (Phase 33, D-129).** Every batch of a planned day has a row and a code,
+`B-YYMMDD-N` (A-57), made when the plan or the lunch break is saved and on first read (old
+batches too: a finish is linked to its batch; a batch that ended before the queue began and was
+never finished is `VOID` "Not inspected, from before the queue", A-61). Only `status` (`OPEN`,
+`INSPECTING`, `INSPECTED`, `VOID`) and `priority` are stored; the queue's `state` (`WAITING`
+from the end, `LATE` 30 minutes after, `INSPECTING`) comes from the clock. A plan or lunch save
+that would move a batch someone acted on is `409` "B-261116-1 is being inspected, so Mon, 16 Nov's
+batches can't change." (also "is already inspected", "was voided", "is marked Urgent").
+
+- **batches** → `{ today, waiting: [item], done: [item] (inspected or void, the last 7 days),
+total, urgent, late, days: [{ day, label }], filters, canInspect, inspectNote, canPrioritise }`;
+  `waiting` is Urgent first, then the oldest end (A-58). An item is `{ id, code, day, dayLabel, times,
+state, stateLabel, priority, priorityReason, priorityBy, waiting ("Waiting 3 hours 10 minutes"),
+rolls ("6 rolls (Full-grain black ×4, Suede brown ×2)", A-83), inspectingBy, inspectingSince,
+inspectingByMe, finished: { pairs, failedPairs, by, at } | null, voidReason, voidedBy, canFinish,
+updatedAt }`. Names are who is inspecting, who marked it Urgent and who voided it (log-book facts).
+- **start:** `{ id, code, started }` (`started: false` when you already started it). `409` "Lea
+  Santos is already inspecting B-261116-2 (since 09:05). Pick another batch.", "B-… is already
+  inspected.", "B-… was voided. It isn't in the queue.", "B-… can be inspected from 16:50.";
+  `409 STALE` when it changed since loaded.
+- **priority / void:** `{ id, code, saved }`. `reason` 5–200 characters: `422` "Say why this batch
+  is urgent, at least 5 characters, …" or "Say why this batch won't be inspected, at least 5
+  characters, …". `409` "B-… hasn't started yet. …" for a batch that hasn't begun.
 - **plans** → `{ month, today, weeks: [[day | null] × 7], days: [{ day, label, weekend, past,
 isToday, kind (PLANNED | NON_WORKING | null), plan: { rollsPlanned, quota, intervalMinutes,
 shiftStart, shiftEnd, short, batches } | null, updatedAt, changed: { by, at } | null, lunch,
 rollsScanned (today and past days), editable, lockedReason }], prevMonth, nextMonth, suggestion,
 factory }`.
 - **today** → `{ day, dayLabel, schedule, lunch, workingDay, plan, nonWorking, planNeeded,
-rollsPlanned, rollsScanned, rows: [{ number, slotAt, startTime, time, lunch, times, label, state,
+rollsPlanned, rollsScanned, rows: [{ number, code, batchId, queue, slotAt, startTime, time, lunch, times, label, state,
 pausedForLunch, canFinishNow, finishOpensAt, lateBy, checkIn }], progress: { finished, failed,
 passed, quota, share, pace }, next, late, missed, workforce, shortfall, canEnter, covering,
 enterNote }`. `planNeeded` is a weekday with no plan and no mark (the Floor Manager's notice,
@@ -487,16 +516,19 @@ failedShare, quota, share, rollsPlanned, rollsScanned, attendanceTaken, construc
 constructorsOnRoster, pairsPerConstructor, shortfall }] }`, from the first day a batch was ever
   finished. `share` is passed ÷ quota (C-41); `rollsScanned` counts the rolls whose Finish roll
   was that day; `pairsPerConstructor` is a line average.
-- **check-ins (Finish batch):** `slotAt` must be the end of a batch on that day; Finish batch is
-  open from 10 minutes before the end until midnight Manila. `pairs` 0–2,000; `failedPairs`
-  0–2,000 (default 0) and never more than `pairs`. Returns `{ id, number, time }`. Errors: `422`
-  keyed `pairs` ("Enter the pairs finished in Batch 2 as a whole number, like 24. Enter 0 if
-  none.") or `failedPairs` ("Failed inspection can't be more than the pairs finished (12).");
-  `409 CONFLICT` "Batch 3 can be finished from 14:50.", "Batch 1 of Mon, 20 Oct closed at
-  midnight. …" or "There's no batch ending at 12:00 on …"; `409 STALE` "Lea Santos already
-  finished Batch 1 at 13:04. Refresh to see it."
-- **corrections:** the same Manila day only, `reason` 5–300 characters; the audit row keeps both
-  counts. `409 STALE` when it changed since it was loaded.
+- **check-ins (Finish batch):** `batchId` (a queued batch) or `slotAt` (the end of a batch on
+  that day); Finish batch opens 10 minutes before the end and, since Phase 33, stays open until the
+  batch is inspected or voided (no midnight close). `pairs` 0–2,000; `failedPairs` 0–2,000
+  (default 0) and never more than `pairs`. Returns `{ id, number, code, time }`; the batch becomes
+  `INSPECTED`. Errors: `422` keyed `pairs` ("Enter the pairs finished in B-261116-2 as a whole
+  number, like 24. Enter 0 if none.") or `failedPairs` ("Failed inspection can't be more than the
+  pairs finished (12)."); `409 CONFLICT` "B-261116-3 can be finished from 14:50.", "B-… was
+  voided: <reason>. It can't be finished." or "There's no batch ending at 12:00 on …"; `409 STALE`
+  "Lea Santos already finished B-261116-1 at 13:04. Refresh to see it."
+- **corrections:** on the day the batch was inspected (Phase 33, until Phase 35), `reason` 5–300
+  characters; the audit row keeps both counts. `409` "A batch can only be corrected on the day it
+  was inspected. This one was inspected on Mon, 16 Nov."; `409 STALE` when it changed since it
+  was loaded.
 - The lunch break (Settings) sits inside the factory's hours, 08:00 to 17:00, and applies from
   tomorrow; a day planned with a shorter shift that leaves it out ignores it.
 

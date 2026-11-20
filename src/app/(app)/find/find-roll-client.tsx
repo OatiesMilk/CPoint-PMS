@@ -25,6 +25,8 @@ import { moveRollsAction, pickedUpAction } from "../inventory/locations/actions"
 type FoundRoll = {
   id: string;
   code: string;
+  /** Its code before Phase 33's rename, on an old label (D-129). */
+  formerCode: string | null;
   tagCode: string | null;
   statusText: string;
   item: string | null;
@@ -250,6 +252,7 @@ export function FindRollClient({
                   >
                     <span className="font-mono font-medium">{r.code}</span>
                     <span className="text-sm text-muted-foreground">
+                      {r.formerCode ? `Formerly ${r.formerCode} · ` : ""}
                       {r.tagCode ? `Tag ${r.tagCode} · ` : ""}
                       {r.where}
                     </span>
@@ -270,6 +273,7 @@ export function FindRollClient({
                 .filter(Boolean)
                 .join(" · ")}
               {chosen.tagCode ? ` · Tag ${chosen.tagCode}` : ""}
+              {chosen.formerCode ? ` · Formerly ${chosen.formerCode}` : ""}
             </p>
             <div>
               <Badge tone="neutral">{chosen.statusText}</Badge>

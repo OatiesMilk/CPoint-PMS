@@ -292,7 +292,7 @@ function DayDialogBody({
         day.lunch && !lunchOutside ? [day.lunch] : [],
         day.day,
       )
-        .map((b) => `Batch ${b.number} ${batchTimes(b)}`)
+        .map((b) => `${b.code} ${batchTimes(b)}`)
         .join("; ")
     : null;
 
