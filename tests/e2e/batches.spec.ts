@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import pg from "pg";
+import { removeCheckIns } from "./db-cleanup";
 import { ACCOUNTS, signIn } from "./helpers";
 import { captureApi, createDeviceToken, createRoll, finishRoll, postScan } from "./cv-helpers";
 
@@ -121,10 +122,8 @@ test.afterAll(async () => {
   await withDb(async (db) => {
     const today = manilaDay();
     // Only today's batches: other specs running alongside finish batches on other days.
-    await db.query(`DELETE FROM production_check_ins WHERE "enteredAt" >= $1 AND day = $2::date`, [
-      STARTED,
-      today,
-    ]);
+    // Their findings and repairs go first (the finish dialog saves a finding line, Phase 34).
+    await removeCheckIns(db, '"enteredAt" >= $1 AND day = $2::date', [STARTED, today]);
     await db.query(`DELETE FROM day_plans WHERE day = $1::date`, [today]);
     // The hourly plan's batches go too; the app makes today's again from the plan put back.
     await db.query(`DELETE FROM production_batches WHERE day = $1::date`, [today]);
@@ -420,6 +419,13 @@ test("the Quality Inspector on a phone gets the notice and finishes the batch wi
   await expect(finished).toHaveValue("12");
   await expect(failed).toHaveValue("2");
   await dialog.getByLabel("Notes (optional)").fill(note);
+  // What was wrong (Phase 34): failed pairs need a reason.
+  await dialog.getByLabel("Defect, line 1").selectOption({ label: "Scuffs" });
+  await dialog.getByLabel("Pairs, line 1", { exact: true }).fill("2");
+  await dialog
+    .getByRole("radiogroup", { name: "Can line 1 be fixed?" })
+    .getByLabel("Not fixable", { exact: true })
+    .check();
   // No rolls on Finish batch (Phase 30E, D-111): the QI only counts pairs.
   await expect(dialog.getByText("Rolls fully used")).toHaveCount(0);
   await expect(dialog.getByRole("checkbox")).toHaveCount(0);
@@ -502,25 +508,34 @@ test("the Floor Manager finishes batches only on a day no Quality Inspector is p
 
   // Remember today's attendance, so it can be put back afterwards.
   const day = manilaDay();
-  const before = (await (await page.request.get("/api/v1/attendance")).json()).data as {
-    taken: boolean;
-    updatedAt: string | null;
-    roster: Roster;
-  };
-  const save = async (marks: { userId: string; present: boolean }[], expected: string | null) => {
-    const res = await page.request.put(`/api/v1/attendance/${day}`, {
-      data: { expectedUpdatedAt: expected, marks },
-    });
-    expect(res.status()).toBe(200);
-    return (await res.json()).data.updatedAt as string;
+  type Attendance = { taken: boolean; updatedAt: string | null; roster: Roster };
+  const read = async () =>
+    (await (await page.request.get("/api/v1/attendance")).json()).data as Attendance;
+  const before = await read();
+  // Like a page that refreshed: read the roster and the day's version just before each save, and
+  // read again once if the server says 409. Other specs make and remove E2E constructors while this
+  // runs, so a roster read at the start can name someone who is gone by the second save (Phase 34 run 3).
+  const save = async (present: (r: Roster[number]) => boolean) => {
+    let status = 0;
+    let body: { data: { updatedAt: string } } | null = null;
+    for (let attempt = 0; attempt < 2 && status !== 200; attempt++) {
+      const fresh = await read();
+      const res = await page.request.put(`/api/v1/attendance/${day}`, {
+        data: {
+          expectedUpdatedAt: fresh.updatedAt,
+          marks: fresh.roster.map((r) => ({ userId: r.id, present: present(r) })),
+        },
+      });
+      status = res.status();
+      if (status === 200) body = await res.json();
+    }
+    expect(status).toBe(200);
+    return body!.data.updatedAt;
   };
 
   try {
     // 1. A QI marked present: no Finish batch, no notice, and the API refuses with the reason.
-    const withQi = await save(
-      before.roster.map((r) => ({ userId: r.id, present: true })),
-      before.updatedAt,
-    );
+    await save(() => true);
     await page.goto("/batches");
     await expect(page.getByRole("button", { name: /^Finish batch/ })).toHaveCount(0);
     await expect(page.getByTestId("batch-notice")).toHaveCount(0);
@@ -538,10 +553,7 @@ test("the Floor Manager finishes batches only on a day no Quality Inspector is p
     await expect(page.getByText("Recent days")).toBeVisible();
 
     // 2. Every QI marked absent: the Floor Manager covers, and gets the notices.
-    await save(
-      before.roster.map((r) => ({ userId: r.id, present: r.role !== "QUALITY_INSPECTOR" })),
-      withQi,
-    );
+    await save((r) => r.role !== "QUALITY_INSPECTOR");
     await page.goto("/batches");
     await expect(page.getByTestId("covering-note")).toContainText(
       "No Quality Inspector is present today, so you can finish the batches.",
@@ -569,11 +581,10 @@ test("the Floor Manager finishes batches only on a day no Quality Inspector is p
   } finally {
     // Put today's attendance back as it was.
     if (before.taken) {
-      const now = (await (await page.request.get("/api/v1/attendance")).json()).data.updatedAt;
-      await save(
-        before.roster.map((r) => ({ userId: r.id, present: r.present })),
-        now,
-      );
+      // From what was there at the start: someone who has gone since is simply not sent, and
+      // someone new is saved absent.
+      const was = new Map(before.roster.map((r) => [r.id, r.present]));
+      await save((r) => was.get(r.id) ?? false);
     } else {
       await withDb(async (db) => {
         await db.query(

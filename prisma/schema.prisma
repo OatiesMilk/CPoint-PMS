@@ -95,6 +95,29 @@ enum BatchPriority {
   URGENT
 }
 
+/// The four stages of the line (Phase 34, D-130). Construction was "Upper making".
+enum ProductionStage {
+  PREPARATION
+  CONSTRUCTION
+  SOLE_ING
+  FINISHING
+}
+
+/// What the QI decides for a failed pair (Phase 34, D-130).
+enum Remedy {
+  FIXABLE
+  NOT_FIXABLE
+}
+
+/// A repair job's life (Phase 34, D-130): at its stage, back for inspection, done; or cancelled
+/// (the Floor Manager marked it Not fixable, or a correction remade it).
+enum RepairStatus {
+  AT_STAGE
+  BACK_FOR_INSPECTION
+  DONE
+  CANCELLED
+}
+
 enum ActorType {
   USER
   DEVICE
@@ -146,6 +169,11 @@ model User {
   inventorySettings  InventorySettings[]
   locationsCreated   StorageLocation[]   @relation("LocationCreatedBy")
   rollMoves          RollMove[]          @relation("RollMoveBy")
+  repairsBack        RepairJob[]         @relation("RepairBackBy")
+  repairsInspected   RepairJob[]         @relation("RepairInspectedBy")
+  stageAssignments   StageAssignment[]   @relation("StageAssignee")
+  stageAssigned      StageAssignment[]   @relation("StageAssignedBy")
+  stageCounts        StageCount[]        @relation("StageCountBy")
 
   @@index([role, isActive])
   @@map("users")
@@ -711,13 +739,15 @@ model ProductionCheckIn {
   correctionReason     String?
   updatedAt            DateTime  @updatedAt
 
-  enteredBy   User             @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
-  correctedBy User?            @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
+  enteredBy   User                @relation("CheckInEnteredBy", fields: [enteredById], references: [id])
+  correctedBy User?               @relation("CheckInCorrectedBy", fields: [correctedById], references: [id])
   /// Rolls ticked Fully used when this batch was finished or corrected (Phase 30A)
   rollsUsed   Roll[]
   /// The queued batch this finish inspected (Phase 33, D-129); null only before its row is made.
-  batchId     String?          @unique @db.Uuid
-  batch       ProductionBatch? @relation(fields: [batchId], references: [id])
+  batchId     String?             @unique @db.Uuid
+  batch       ProductionBatch?    @relation(fields: [batchId], references: [id])
+  /// What was wrong with the failed pairs (Phase 34, D-130); empty before Phase 34.
+  findings    InspectionFinding[]
 
   @@unique([day, slotAt])
   @@index([enteredById])
@@ -752,6 +782,7 @@ model ProductionBatch {
   prioritySetBy       User?              @relation("BatchPrioritySetBy", fields: [prioritySetById], references: [id])
   voidedBy            User?              @relation("BatchVoidedBy", fields: [voidedById], references: [id])
   checkIn             ProductionCheckIn?
+  stageCounts         StageCount[]
 
   @@unique([day, slotAt])
   @@index([status, priority])
@@ -768,4 +799,118 @@ model InspectionQueueStart {
   startedAt DateTime
 
   @@map("inspection_queue_start")
+}
+
+/// The defects found on finished shoes (Phase 34, D-130, A-62): data the System Admin sets, a
+/// separate list from the camera's leather DefectTypes. OTHER always exists and needs a note.
+model FinalDefectType {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  key         String   @unique
+  label       String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  findings InspectionFinding[]
+
+  @@map("final_defect_types")
+}
+
+/// One line of "what was wrong": pairs of a failed batch with one defect, and the QI's call
+/// (Phase 34, D-130). `returnStage` is where a Fixable pair goes back to (A-75); a Not fixable
+/// pair is scrapped and has none.
+model InspectionFinding {
+  id                String           @id @default(uuid(7)) @db.Uuid
+  checkInId         String           @db.Uuid
+  finalDefectTypeId String           @db.Uuid
+  pairs             Int
+  remedy            Remedy
+  returnStage       ProductionStage?
+  note              String?
+  createdAt         DateTime         @default(now())
+
+  checkIn         ProductionCheckIn @relation(fields: [checkInId], references: [id])
+  finalDefectType FinalDefectType   @relation(fields: [finalDefectTypeId], references: [id])
+  repairJobs      RepairJob[]
+
+  @@index([checkInId])
+  @@index([finalDefectTypeId, createdAt])
+  @@map("inspection_findings")
+}
+
+/// Fixable pairs sent back to a stage (Phase 34, D-130). `code` is RP-<yymmdd>-<batch no>-<seq>.
+model RepairJob {
+  id            String          @id @default(uuid(7)) @db.Uuid
+  code          String          @unique
+  findingId     String          @db.Uuid
+  /// The job this one was sent back again from (A-88).
+  parentId      String?         @db.Uuid
+  pairs         Int
+  stage         ProductionStage
+  status        RepairStatus    @default(AT_STAGE)
+  sentAt        DateTime
+  backAt        DateTime?
+  backById      String?         @db.Uuid
+  inspectedAt   DateTime?
+  inspectedById String?         @db.Uuid
+  passedPairs   Int?
+  scrappedPairs Int?
+  resentPairs   Int?
+  changeReason  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  finding     InspectionFinding @relation(fields: [findingId], references: [id])
+  parent      RepairJob?        @relation("RepairResent", fields: [parentId], references: [id])
+  children    RepairJob[]       @relation("RepairResent")
+  backBy      User?             @relation("RepairBackBy", fields: [backById], references: [id])
+  inspectedBy User?             @relation("RepairInspectedBy", fields: [inspectedById], references: [id])
+
+  @@index([status, stage])
+  @@index([findingId])
+  @@index([parentId])
+  @@index([backById])
+  @@index([inspectedById])
+  @@map("repair_jobs")
+}
+
+/// Who works at which stage on a day (Phase 34, D-130, A-86): the Floor Manager's assignment, not
+/// a score. A constructor is at one stage a day.
+model StageAssignment {
+  id           String          @id @default(uuid(7)) @db.Uuid
+  day          DateTime        @db.Date // the Manila calendar date
+  stage        ProductionStage
+  userId       String          @db.Uuid
+  assignedById String          @db.Uuid
+  createdAt    DateTime        @default(now())
+
+  user       User @relation("StageAssignee", fields: [userId], references: [id])
+  assignedBy User @relation("StageAssignedBy", fields: [assignedById], references: [id])
+
+  @@unique([day, userId])
+  @@index([day, stage])
+  @@index([assignedById])
+  @@map("stage_assignments")
+}
+
+/// Pairs at a stage now (Phase 34, D-130, A-72, A-73): one shared snapshot per stage, appended on
+/// every save; the latest row of a day and stage is the current count. Never per person.
+model StageCount {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  day         DateTime        @db.Date
+  stage       ProductionStage
+  pairs       Int
+  enteredById String          @db.Uuid
+  enteredAt   DateTime        @default(now())
+  batchId     String?         @db.Uuid
+
+  enteredBy User             @relation("StageCountBy", fields: [enteredById], references: [id])
+  batch     ProductionBatch? @relation(fields: [batchId], references: [id])
+
+  @@index([day, stage, enteredAt])
+  @@index([enteredById])
+  @@index([batchId])
+  @@map("stage_counts")
 }

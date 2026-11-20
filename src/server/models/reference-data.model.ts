@@ -68,7 +68,7 @@ export function listDefectTypes(db: Db = defaultDb()) {
 
 // ───────────── admin CRUD (D-024) ─────────────
 
-export type ReferenceKind = "defectType" | "supplier";
+export type ReferenceKind = "defectType" | "supplier" | "finalDefectType";
 
 export type ReferenceRow = { id: string; isActive: boolean } & Record<string, unknown>;
 
@@ -85,6 +85,7 @@ function delegate(kind: ReferenceKind, db: Db): RefDelegate {
   const delegates = {
     defectType: db.defectType,
     supplier: db.supplier,
+    finalDefectType: db.finalDefectType,
   };
   return delegates[kind] as unknown as RefDelegate;
 }
@@ -92,6 +93,7 @@ function delegate(kind: ReferenceKind, db: Db): RefDelegate {
 const ORDER: Record<ReferenceKind, object[]> = {
   defectType: [{ sortOrder: "asc" }, { label: "asc" }],
   supplier: [{ isActive: "desc" }, { name: "asc" }],
+  finalDefectType: [{ sortOrder: "asc" }, { label: "asc" }],
 };
 
 /** Every row of a kind, active first where it matters, inactive ones included. */

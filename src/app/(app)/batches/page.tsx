@@ -32,6 +32,10 @@ import { cn } from "@/lib/utils";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { inspectionQueue } from "@/server/services/batch-queue.service";
+import { FindingsSummary } from "@/components/features/production/findings-summary";
+import { defectSuggestions, finalDefectTypeOptions } from "@/server/services/repair.service";
+import { wipBoard } from "@/server/services/stage.service";
+import { WipBoard } from "./wip-board";
 import { productionToday, recentProductionDays } from "@/server/services/production.service";
 import { queueQuerySchema } from "@/server/validators/production.validator";
 import { FinishBatchDialog } from "./finish-batch-dialog";
@@ -49,7 +53,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
   // The queue is the Quality Inspector's home (Phase 33); the Floor Manager opens on Today. A
   // notice's ?finish= link always opens Today, where that batch's dialog is.
   const tab =
-    params.tab === "queue" || params.tab === "today"
+    params.tab === "queue" || params.tab === "today" || params.tab === "wip"
       ? params.tab
       : finish
         ? "today"
@@ -58,6 +62,13 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
           : "today";
   // Recent days are the Floor Manager's; the Quality Inspector tracks batches in the queue.
   const showRecent = user.role !== "QUALITY_INSPECTOR";
+  // The final defect types and the usual answers are for the people who finish batches (Phase 34).
+  const mayInspect = can(user.role, "production:checkin");
+  const [finalDefectTypes, suggestions, board] = await Promise.all([
+    mayInspect ? finalDefectTypeOptions() : Promise.resolve([]),
+    mayInspect ? defectSuggestions() : Promise.resolve({}),
+    tab === "wip" ? wipBoard(user) : Promise.resolve(null),
+  ]);
   const [today, recent, queue] = await Promise.all([
     productionToday(user),
     showRecent && tab === "today" ? recentProductionDays(RECENT_DAYS) : Promise.resolve(null),
@@ -92,6 +103,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
           [
             ["queue", `Queue${queue.total ? ` (${queue.total})` : ""}`],
             ["today", "Today"],
+            ["wip", "Work in progress"],
           ] as const
         ).map(([key, label]) => (
           <Link
@@ -111,7 +123,11 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
         ))}
       </nav>
 
-      {tab === "queue" && <QueueList queue={queue} />}
+      {tab === "queue" && (
+        <QueueList queue={queue} finalDefectTypes={finalDefectTypes} suggestions={suggestions} />
+      )}
+
+      {tab === "wip" && board && <WipBoard board={board} />}
 
       {tab === "today" && (
         <section aria-labelledby="today-batches" className="flex flex-col gap-3">
@@ -224,6 +240,10 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                                     {c.constructorsPresent !== null &&
                                       ` · ${c.constructorsPresent} of ${c.constructorsOnRoster} constructors present`}
                                   </p>
+                                  <FindingsSummary
+                                    lines={c.findings.summary}
+                                    failedPairs={c.failedPairs}
+                                  />
                                   {c.attendanceChanged && (
                                     <p className="text-xs text-caution">
                                       Attendance changed after this batch was finished
@@ -274,6 +294,8 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                                     workforceLine={workforceLine}
                                     autoOpen={openSlot === r.slotAt}
                                     primary={isPrimary}
+                                    finalDefectTypes={finalDefectTypes}
+                                    suggestions={suggestions}
                                   />
                                 </div>
                               )}
@@ -283,6 +305,10 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                                   batch={r}
                                   workforceLine={workforceLine}
                                   checkIn={c}
+                                  finalDefectTypes={finalDefectTypes}
+                                  suggestions={suggestions}
+                                  findings={c.findings.lines}
+                                  findingsLockedReason={c.findings.lockedReason}
                                 />
                               )}
                             </div>

@@ -16,6 +16,7 @@ import { AttentionList, KpiTile } from "./ops-parts";
 import { Stat } from "@/components/features/kpi-tile";
 import { CardLink } from "@/components/ui/card-link";
 import { StockRiskCard, SupplierQualityCard } from "./ops-sections";
+import { DefectOriginsCard, FinalDefectsCard, RepairsCard, WipReportCard } from "./repair-sections";
 import type { OperationsReport } from "@/server/services/ops-report.service";
 import type { ReportRange } from "@/lib/report-rules";
 
@@ -124,6 +125,11 @@ export function OperationsView({
           <ProductionDaysTable days={production.days} testid="ops-production-table" />
         </CardContent>
       </Card>
+
+      <FinalDefectsCard report={report} />
+      <DefectOriginsCard report={report} />
+      <RepairsCard report={report} />
+      <WipReportCard report={report} />
 
       <StockRiskCard stock={report.stock} days={range.days} />
 

@@ -2582,3 +2582,62 @@ Plan: `docs/prompts/plans/phase-33-inspection-queue-plan.md` (Dylan's answers an
 `src/server/services/{production,batch-queue}.service.ts`, `src/app/api/v1/production/batches/**`,
 `src/app/(app)/batches/{page,queue-list,queue-actions,finish-batch-dialog}.tsx`, `docs/API.md` →
 Batches.
+
+### D-130 · 2026-11-20 · Accepted — Final-product defects, repairs and work in progress (Phase 34, the panel's revision 1)
+
+**Context.** The defense panel asked that a failed pair say _what was wrong_, that a fixable one
+go back to a stage and return for inspection, and that the line show its work in progress, with
+"Upper making" renamed. D-094 had removed repair for good; the plan reverses it for finished shoes
+only (leather defects and the camera checkpoint are unchanged, A-66).
+
+**Decision.**
+
+- **What was wrong.** A failed batch is saved with lines: a final defect type (data the System Admin
+  edits, separate from the camera's leather defect types, A-62; `OTHER` always exists and needs a
+  note), the pairs, **Fixable** or **Not fixable** and, for a fixable one, the stage it goes back to
+  (A-75). The lines add up to the failed pairs. A Not fixable line has no stage and is scrapped.
+- **Repairs.** A Fixable line makes a repair job at once (`RP-YYMMDD-<batch no>-<n>`, A-87): At
+  stage → Back for inspection (the constructor assigned to that stage today, or the Floor Manager) →
+  Done (the QI, from the Queue). The Floor Manager may move an At-stage job or call it Not fixable
+  after all, with a reason, until it is Back (A-63, amended). At inspection the QI enters passed,
+  scrapped and sent back again; a repair that fails again can be scrapped or sent back with **no
+  limit** (A-88). Repairs have no due time, so they are never Late, and they are not in the tab
+  title's due count (A-65, A-90).
+- **Quota.** `passed = finished − failed + repaired pairs that passed that day` (A-64); a repaired
+  pair is never counted twice as finished.
+- **The usual answer** (A-76): after 5 findings of a type in the last 4 weeks the form suggests the
+  most common remedy and stage ("Usually fixable at Sole-ing, 14 of 17"); a tie goes to Fixable and
+  to the earlier stage. It is a hint with **Use this**, never pre-filled.
+- **Stages and counts.** The Floor Manager assigns active Shoe Constructors to stages for a planned
+  day in the Plan dialog; **one stage per constructor per day** (Dylan, A-86); an empty day starts
+  from the last working day's stages (A-74). An assigned constructor (with or without camera access,
+  Dylan) or the Floor Manager saves the pairs at a stage: one shared number per stage, latest wins
+  (A-72, A-73); who entered it is in the audit log only. Earlier days read "Not counted today"
+  (A-91). **My stage** is on Capture; the board is a **third tab on Batches** (Dylan), so the QI's nav
+  stays Batches only.
+- **Corrections.** The failed pairs and lines can change on the inspection day, until a repair from
+  the batch is Back or Done (A-93); a repair's own inspection can't be corrected until Phase 35 (A-94).
+- **Old data.** Failed pairs from before Phase 34 have no reasons and show as "Reason not
+  recorded" (A-89); nothing is backfilled.
+- **Rename.** "Upper making" is **Construction** in the app, README, CLAUDE.md, the user manual and
+  the master spec; old DECISIONS entries, the client survey and old briefs keep the old name as written.
+- **Supersedes** the parent plan's `/production/wip` page and its "Reports → Quality" placement
+  (the sections are in Reports → Operations); partly reverses D-094 for finished shoes.
+- **Addendum 1 (Dylan, 2026-11-20): Capture constructors are stationed at Preparation.** A Shoe
+  Constructor with Capture access (`User.canCapture`) is at Preparation every working day and can't
+  be put at another stage (A-95). It is read from the flag at read time, **not stored** as a stage
+  assignment (no migration): a flag change applies at once, the Plan dialog shows them under
+  Preparation locked ("Has Capture access") and doesn't offer them elsewhere, the suggestion skips
+  them, the board's "Assigned today" and My stage include them at Preparation, and the server
+  refuses another stage ("Sam is a shoe constructor with Capture access, so Sam works at
+  Preparation. Choose Preparation, or ask the Admin to remove Capture access first."). Constructors
+  without Capture access can still go to any stage, Preparation included (A-96). Amends A-86 and
+  the Q2 answer for capture constructors only.
+- **Still no per-person figures** (D-008): counts and shares are per stage, defect or day; names
+  appear only as who is assigned today (below the figures) and in the audit log.
+
+**Where:** `prisma/migrations/20261120120000_final_defects_and_repairs`, `src/lib/repair-rules.ts`,
+`src/server/{models,services,controllers,validators}/{repair,stage}.*`, `batch-queue.service.ts`,
+`production.service.ts`, `ops-report.service.ts`, `src/app/api/v1/production/{repairs,stages,
+stage-counts,wip,defect-suggestions}`, `src/app/api/v1/final-defect-types`,
+`src/app/(app)/batches/*`, `…/camera/capture/my-stage.tsx`, `docs/API.md` → Batches.

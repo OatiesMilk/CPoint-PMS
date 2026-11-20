@@ -30,7 +30,12 @@ import { ensureLocation } from "./location.service";
 import { ensureSupplierWithCode } from "./supplier-code.service";
 import { setCameraOperator } from "./camera.service";
 import { markNonWorking, queueFromTheStart, saveCheckIn, saveDayPlan } from "./production.service";
-import { queuedBatchAt, setBatchPriority } from "./batch-queue.service";
+import { inspectRepair, queuedBatchAt, setBatchPriority } from "./batch-queue.service";
+import { STAGES, type Remedy, type Stage } from "@/lib/repair-rules";
+import { listRepairsByStatus } from "@/server/models/repair.model";
+import { listActiveConstructors } from "@/server/models/stage.model";
+import { finalDefectTypeOptions, markRepairBack } from "./repair.service";
+import { saveStageAssignments, saveStageCount } from "./stage.service";
 import { createItem } from "./inventory.service";
 import { saveStockUpdate } from "./stock-update.service";
 import { ingestScan } from "./scan-ingest.service";
@@ -350,12 +355,38 @@ export const DEMO_BINS: readonly [string, string][] = [
   ["R2-B3", "Rack 2, bin 3"],
 ];
 
+/**
+ * What the QI found on each failed batch, by a fixed rotation, not chance, so every run is the same
+ * (Phase 34, D-130): enough Lifted sole and Glue marks inside 4 weeks for the form's suggestion to
+ * show, mostly Fixable; some Scuffs that can't be fixed; one Loose stitching for Construction.
+ */
+const DEMO_FINDINGS: readonly { key: string; remedy: Remedy; stage: Stage | null }[] = [
+  { key: "LIFTED_SOLE", remedy: "FIXABLE", stage: "SOLE_ING" },
+  { key: "GLUE_MARKS", remedy: "FIXABLE", stage: "FINISHING" },
+  { key: "LIFTED_SOLE", remedy: "FIXABLE", stage: "SOLE_ING" },
+  { key: "GLUE_MARKS", remedy: "FIXABLE", stage: "FINISHING" },
+  { key: "SCUFFS", remedy: "NOT_FIXABLE", stage: null },
+  { key: "LIFTED_SOLE", remedy: "FIXABLE", stage: "SOLE_ING" },
+  { key: "LIFTED_SOLE", remedy: "NOT_FIXABLE", stage: null },
+];
+/** The ninth failed batch is the one Loose stitching that goes back to Construction. */
+const DEMO_STITCHING_AT = 8;
+/** Pairs at each stage at the demo's counts, by stage (a believable spread, not a ranking). */
+const DEMO_STAGE_COUNT: Record<Stage, [number, number]> = {
+  PREPARATION: [20, 40],
+  CONSTRUCTION: [15, 35],
+  SOLE_ING: [10, 30],
+  FINISHING: [8, 24],
+};
+
 export async function seedDemoWeek(
   options: { now?: Date; seed?: number; imageSize?: number } = {},
 ): Promise<DemoSeedResult> {
   const started = Date.now();
   const now = options.now ?? appNow();
   const random = mulberry32(options.seed ?? 20261003);
+  // Phase 34's data has its own stream, so the rest of the week stays exactly as it was.
+  const stream = mulberry32((options.seed ?? 20261003) + 34);
   const between = (lo: number, hi: number) => lo + random() * (hi - lo);
   const pick = <T>(items: readonly T[]) => items[Math.floor(random() * items.length)];
   const past = (t: Date) => t.getTime() <= now.getTime() - MINUTE;
@@ -392,6 +423,7 @@ export async function seedDemoWeek(
   if (capturers.length === 0)
     return { seeded: false, reason: "demo constructors are missing (set SEED_DEMO_USERS=true)" };
   const capturerIds = new Set(capturers.map((c) => c.id));
+  const finalTypes = new Map((await finalDefectTypeOptions()).map((t) => [t.key, t.id]));
   // The week's scans show the defect types active in Settings, as the camera's model would.
   const classes = defectTypes
     .filter((t) => t.isActive)
@@ -677,6 +709,108 @@ export async function seedDemoWeek(
   return result;
 
   /**
+   * Who works where and the counts (Phase 34, D-130): each working day the Floor Manager assigns
+   * the demo constructors across the four stages (one stage each, rotating by day; the ones with
+   * Capture access are at Preparation every day and aren't saved), and the stages
+   * are counted twice a day, once by the Floor Manager and once by a constructor assigned there.
+   * The counts are a believable spread; nothing ranks a stage or a person.
+   */
+  async function seedStages(): Promise<void> {
+    const everyone = await listActiveConstructors();
+    if (everyone.length === 0) return;
+    // The demo constructors with Capture access are at Preparation every day, derived from the
+    // flag (Addendum 1, A-95); the others rotate over the four stages, one stage each.
+    const constructors = everyone.filter((c) => !c.canCapture);
+    const capture = everyone.filter((c) => c.canCapture);
+    for (const [d, day] of workingDays.entries()) {
+      const morning = at(day, 7.5);
+      const when = past(morning) ? morning : now;
+      const groups = STAGES.map((stage, k) => ({
+        stage,
+        userIds: constructors.filter((_, i) => (i + d) % STAGES.length === k).map((c) => c.id),
+      }));
+      await saveStageAssignments(day, { assignments: groups }, fm!, when);
+      for (const [n, hour] of [10.5, 15.5].entries())
+        for (const stage of STAGES) {
+          const t = at(day, hour);
+          if (!past(t)) continue;
+          const [lo, hi] = DEMO_STAGE_COUNT[stage];
+          const pairs = Math.round(lo + stream() * (hi - lo));
+          const assigned = groups.find((g) => g.stage === stage)?.userIds ?? [];
+          const person =
+            stage === "PREPARATION" && capture.length > 0
+              ? capture[0]
+              : constructors.find((c) => c.id === assigned[0]);
+          const byConstructor = n === 1 && person;
+          await saveStageCount(
+            { stage, pairs },
+            byConstructor ? { id: person.id, name: person.name, role: "SHOE_CONSTRUCTOR" } : fm!,
+            t,
+          );
+        }
+    }
+  }
+
+  /**
+   * Repairs at every state (Phase 34): the failed batches' Fixable lines already started jobs At
+   * stage. The oldest three go Back for inspection and are inspected the next day (one passes, one
+   * passes one and scraps one, one is sent back again), one recent job waits Back in the queue,
+   * and the rest stay At stage (the latest Sole-ing and the Construction one included).
+   */
+  async function seedRepairs(): Promise<void> {
+    const jobs = (await listRepairsByStatus(["AT_STAGE"])).filter(
+      (j) => j.finding.finalDefectType.key !== "LOOSE_STITCHING",
+    );
+    if (jobs.length < 5) return;
+    const day = (t: Date) => new Date(t.getTime() + 8 * HOUR).toISOString().slice(0, 10);
+    const later = (j: (typeof jobs)[number], hour: number) => at(addDays(day(j.sentAt), 1), hour);
+    const back = async (j: (typeof jobs)[number], hours: number) => {
+      const t = plus(j.sentAt, hours * HOUR);
+      const when = past(t) ? t : plus(j.sentAt, MINUTE);
+      if (!past(when)) return null;
+      await markRepairBack(j.id, fm!, when);
+      return when;
+    };
+    const [done, partial, again] = jobs;
+    if (await back(done, 3)) {
+      const t = later(done, 10);
+      if (past(t))
+        await inspectRepair(
+          done.id,
+          { passedPairs: done.pairs, scrappedPairs: 0, resend: [] },
+          qi!,
+          t,
+        );
+    }
+    if (await back(partial, 3)) {
+      const t = later(partial, 11);
+      if (past(t))
+        await inspectRepair(
+          partial.id,
+          { passedPairs: Math.max(0, partial.pairs - 1), scrappedPairs: 1, resend: [] },
+          qi!,
+          t,
+        );
+    }
+    if (await back(again, 4)) {
+      const t = later(again, 14);
+      if (past(t))
+        await inspectRepair(
+          again.id,
+          {
+            passedPairs: 0,
+            scrappedPairs: 0,
+            resend: [{ stage: "FINISHING", pairs: again.pairs }],
+          },
+          qi!,
+          t,
+        );
+    }
+    // A recent one waits back for inspection, so the Queue shows a repair.
+    await back(jobs[jobs.length - 2], 2);
+  }
+
+  /**
    * The Update stock sheet through the real service (Phase 29, D-102, C-32): on each of the week's
    * Wednesday and Friday at 16:30 the Floor Manager enters per item what came in and what the line
    * used since the last update (leather rolls laid out, thread, cement, tacks). Used is capped at
@@ -824,6 +958,7 @@ export async function seedDemoWeek(
     const hours = fullDay.reduce((t, b) => t + b.workingMinutes, 0) / 60;
     const rate = hours > 0 ? demoRate(most, hours) : 0;
     let entered = 0;
+    let failedBatches = 0;
     for (const day of workingDays) {
       const batches = batchesFor(DEFAULT_SCHEDULE, [DEFAULT_LUNCH], day);
       const present = views.get(day) ?? 0;
@@ -835,11 +970,35 @@ export async function seedDemoWeek(
         if (!past(when)) continue;
         const pairs = Math.round(present * (batch.workingMinutes / 60) * rate);
         const failedPairs = Math.min(pairs, 1 + Math.floor(random() * 2));
+        // What was wrong with them (Phase 34): one line, by the rotation above.
+        let findings: object[] = [];
+        if (failedPairs > 0) {
+          const pattern =
+            failedBatches === DEMO_STITCHING_AT
+              ? {
+                  key: "LOOSE_STITCHING",
+                  remedy: "FIXABLE" as Remedy,
+                  stage: "CONSTRUCTION" as Stage,
+                }
+              : DEMO_FINDINGS[failedBatches % DEMO_FINDINGS.length];
+          failedBatches += 1;
+          const typeId = finalTypes.get(pattern.key);
+          if (typeId)
+            findings = [
+              {
+                finalDefectTypeId: typeId,
+                pairs: failedPairs,
+                remedy: pattern.remedy,
+                returnStage: pattern.stage ?? undefined,
+              },
+            ];
+        }
         await saveCheckIn(
           {
             slotAt: batch.at.toISOString(),
             pairs,
             failedPairs,
+            findings,
             notes: late ? "Counted late: the sole press was down." : undefined,
           },
           day === qiAwayDay && qiMarkedAbsent ? fm! : qi!,
@@ -848,6 +1007,8 @@ export async function seedDemoWeek(
         entered += 1;
       }
     }
+    await seedStages();
+    await seedRepairs();
     // The missed batch waits in the Inspection queue (Phase 33): the Floor Manager marks it Urgent.
     if (missedDay) {
       const last = batchesFor(DEFAULT_SCHEDULE, [DEFAULT_LUNCH], missedDay).at(-1);

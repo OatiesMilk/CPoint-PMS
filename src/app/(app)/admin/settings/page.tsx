@@ -37,6 +37,7 @@ export const metadata: Metadata = { title: "Settings" };
 const TABS = [
   { id: "thresholds", label: "Thresholds" },
   { id: "defects", label: "Defect types" },
+  { id: "final", label: "Final defect types" },
   { id: "lunch", label: "Lunch break" },
   { id: "suppliers", label: "Suppliers" },
 ] as const;
@@ -102,6 +103,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
       </nav>
       {tab === "thresholds" && <ThresholdsTab />}
       {tab === "defects" && <DefectsTab add={add} />}
+      {tab === "final" && <FinalDefectsTab />}
       {tab === "lunch" && <LunchTab page={Number(params.page) || 1} />}
       {tab === "suppliers" && <SuppliersTab />}
     </>
@@ -119,6 +121,62 @@ async function ThresholdsTab() {
       </p>
       <ThresholdsForm found={t.foundAtOrAbove} returnLimit={t.returnSharePct} />
       <ModelNoticeForm initial={t.earlyModelNotice} />
+    </div>
+  );
+}
+
+async function FinalDefectsTab() {
+  const rows = await listReferenceRows("finalDefectType");
+  return (
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        Final defect types are for finished shoes, found by the Quality Inspector. They are a
+        separate list from the leather defect types the camera checks. The five here are examples
+        until CPoint gives its own list.
+      </p>
+      <ReferenceManager
+        kind="finalDefectType"
+        noun="final defect type"
+        columns={[
+          { key: "label", label: "Label" },
+          { key: "key", label: "Key", mono: true },
+          { key: "description", label: "Description", wrap: true },
+          { key: "sortOrder", label: "Order", numeric: true },
+        ]}
+        fields={[
+          {
+            name: "key",
+            label: "Key",
+            placeholder: "e.g. LIFTED_SOLE",
+            hint: "Capital letters, numbers or _. It can’t be changed later.",
+            lockedOnEdit: "The key stays the same. Add a new type instead.",
+          },
+          { name: "label", label: "Label", placeholder: "e.g. Lifted sole" },
+          { name: "description", label: "Description", type: "textarea", optional: true },
+          {
+            name: "sortOrder",
+            label: "Order",
+            type: "number",
+            optional: true,
+            hint: "Lower shows first.",
+          },
+        ]}
+        emptyText="No final defect types yet."
+        rows={rows.map((r): Row => {
+          const v = {
+            key: str(r.key),
+            label: str(r.label),
+            description: str(r.description),
+            sortOrder: str(r.sortOrder),
+          };
+          return { id: r.id, isActive: r.isActive, values: v, cells: v };
+        })}
+      />
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Info aria-hidden className="size-4" />
+        “Other” always stays on: the inspector needs it for a defect that isn’t listed, and must
+        describe it. An inactive type can’t be picked on a new batch. Past findings keep it.
+      </p>
     </div>
   );
 }
@@ -180,6 +238,10 @@ async function DefectsTab({ add }: { add?: string }) {
   ];
   return (
     <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        Defect types the camera checks on leather. Defects on finished shoes are under Final defect
+        types.
+      </p>
       <ReferenceManager
         key={add ?? "list"}
         kind="defectType"

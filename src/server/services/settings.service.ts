@@ -99,19 +99,28 @@ export async function saveModelNotice(input: ModelNoticeInput, actor: Actor) {
 const AUDIT_PREFIX: Record<ReferenceKind, string> = {
   defectType: "defect_type",
   supplier: "supplier",
+  finalDefectType: "final_defect_type",
 };
 const ENTITY: Record<ReferenceKind, string> = {
   defectType: "DefectType",
   supplier: "Supplier",
+  finalDefectType: "FinalDefectType",
 };
 const WHAT: Record<ReferenceKind, string> = {
   defectType: "This defect type",
   supplier: "This supplier",
+  finalDefectType: "This final defect type",
 };
 /** Fields that must be unique per kind, with the message for a clash. */
 const UNIQUE: Record<ReferenceKind, { field: string; message: (v: string) => string }[]> = {
   defectType: [
     { field: "key", message: (v) => `"${v}" is already a defect type. Edit that one instead.` },
+  ],
+  finalDefectType: [
+    {
+      field: "key",
+      message: (v) => `"${v}" is already a final defect type. Edit that one instead.`,
+    },
   ],
   supplier: [
     { field: "name", message: (v) => `"${v}" is already a supplier.` },
@@ -155,6 +164,7 @@ function toColumns(kind: ReferenceKind, values: Record<string, unknown>) {
   const nullable: Record<ReferenceKind, string[]> = {
     defectType: ["description"],
     supplier: ["contactPerson", "phone", "notes"],
+    finalDefectType: ["description"],
   };
   const out: Record<string, unknown> = { ...values };
   for (const key of nullable[kind]) out[key] = values[key] ?? null;
@@ -222,6 +232,10 @@ export async function setReferenceActive(
 ) {
   const before = await findReference(kind, id);
   if (!before) throw Errors.notFound(WHAT[kind]);
+  if (kind === "finalDefectType" && before.key === "OTHER" && !isActive)
+    throw Errors.conflict(
+      "Other can't be switched off. The Quality Inspector needs it for a defect that isn't listed.",
+    );
   if (before.isActive === isActive) return before;
   return runInTransaction(async (tx) => {
     const after = await updateReference(kind, id, { isActive }, tx);

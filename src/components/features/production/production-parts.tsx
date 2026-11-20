@@ -82,7 +82,10 @@ export function QuotaProgress({ progress }: { progress: Progress }) {
         </div>
       )}
       <p className="text-sm text-muted-foreground">
-        {n(p.finished)} finished, {n(p.failed)} failed inspection. {p.pace}
+        {n(p.finished)} finished, {n(p.failed)} failed inspection.
+        {p.repairedPassed > 0 &&
+          ` ${n(p.repairedPassed)} of the passed pairs were repaired first.`}{" "}
+        {p.pace}
       </p>
     </div>
   );
@@ -96,6 +99,8 @@ export type DayRowView = {
   finished: number;
   failed: number;
   passed: number;
+  /** Of the passed pairs, those that passed after a repair (Phase 34). */
+  repairedPassed?: number;
   failedShare: number | null;
   quota: number | null;
   share: number | null;
@@ -183,6 +188,11 @@ export function ProductionDaysTable({
             </TableCell>
             <TableCell numeric className="whitespace-nowrap">
               {n(d.passed)}
+              {!!d.repairedPassed && (
+                <span className="block text-xs font-normal text-muted-foreground">
+                  incl. {n(d.repairedPassed)} repaired
+                </span>
+              )}
               {d.quota !== null && <span className="text-muted-foreground"> / {n(d.quota)}</span>}
             </TableCell>
             <TableCell numeric>{formatPercent(d.share)}</TableCell>

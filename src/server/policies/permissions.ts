@@ -47,6 +47,15 @@ export const PERMISSIONS = {
   // The Inspection queue (Phase 33, D-129, A-58, A-84): the Floor Manager marks a batch Urgent
   // or voids one that won't be inspected; who inspects follows production:checkin.
   "production:prioritise": ["FLOOR_MANAGER"],
+  // Stages, repairs and the work in progress board (Phase 34, D-130): the Floor Manager assigns
+  // constructors to stages and may count any stage or change a repair; a constructor counts the
+  // stage they are assigned to today and marks its repairs Back for inspection (the service checks
+  // the assignment, mayCountStage); the Floor Manager and the QI read the board.
+  "stage:assign": ["FLOOR_MANAGER"],
+  "stage:count": ["FLOOR_MANAGER", "SHOE_CONSTRUCTOR"],
+  "stage:read": ["FLOOR_MANAGER", "QUALITY_INSPECTOR"],
+  "repair:update": ["FLOOR_MANAGER", "SHOE_CONSTRUCTOR"],
+  "repair:manage": ["FLOOR_MANAGER"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -22,7 +22,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import { cn } from "@/lib/utils";
 import { correctionReasonSchema, parseBatchCounts } from "@/server/validators/production.validator";
+import { summaryFieldId, type Suggestion } from "@/lib/repair-rules";
 import { correctBatchAction, finishBatchAction } from "./actions";
+import {
+  FindingsEditor,
+  emptyFinding,
+  findingErrors,
+  type DefectOption,
+  type FindingDraft,
+} from "./findings-editor";
 
 type Props = {
   mode: "finish" | "correct";
@@ -48,6 +56,12 @@ type Props = {
     pairs: number;
     failedPairs: number;
   };
+  /** The final defect types and the usual answers for "What was wrong" (Phase 34, D-130). */
+  finalDefectTypes?: DefectOption[];
+  suggestions?: Record<string, Suggestion>;
+  /** For a correction: the saved lines, and why they can't change now (A-93), or null. */
+  findings?: FindingDraft[];
+  findingsLockedReason?: string | null;
   /** Open as soon as the page loads (a notice's or the home's Finish batch link). */
   autoOpen?: boolean;
   /** The phone's bottom action (D-096): full width, fixed above the safe area below 640 px. */
@@ -70,6 +84,10 @@ export function FinishBatchDialog({
   autoOpen,
   primary,
   buttonLabel = "Finish batch",
+  finalDefectTypes = [],
+  suggestions = {},
+  findings,
+  findingsLockedReason = null,
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(autoOpen ?? false);
@@ -84,16 +102,26 @@ export function FinishBatchDialog({
   const [pairs, setPairs] = useState(checkIn ? String(checkIn.pairs) : "");
   const [failed, setFailed] = useState(checkIn ? String(checkIn.failedPairs) : "0");
   const [notes, setNotes] = useState("");
+  const startLines = () => (findings && findings.length ? findings : [emptyFinding()]);
+  const [lines, setLines] = useState<FindingDraft[]>(startLines);
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [stale, setStale] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
+  const failedCount =
+    Number(failed.trim()) > 0 && Number.isInteger(Number(failed)) ? Number(failed) : 0;
+  // A batch inspected before reasons were recorded (A-89) keeps its failed count as it is.
+  const legacy =
+    mode === "correct" && !!checkIn && checkIn.failedPairs > 0 && (findings?.length ?? 0) === 0;
+  const keepLegacy = legacy && failedCount === checkIn!.failedPairs;
+
   function reset() {
     setPairs(checkIn ? String(checkIn.pairs) : "");
     setFailed(checkIn ? String(checkIn.failedPairs) : "0");
     setNotes("");
+    setLines(startLines());
     setReason("");
     setErrors({});
     setFormError(null);
@@ -102,6 +130,9 @@ export function FinishBatchDialog({
   function validate(): Record<string, string> {
     const parsed = parseBatchCounts(batch.code, { pairs, failedPairs: failed });
     const out: Record<string, string> = parsed.ok ? {} : { ...parsed.errors };
+    // Only checked once the counts are fine, and not when a repair has locked the lines (A-93).
+    if (parsed.ok && parsed.failedPairs > 0 && !findingsLockedReason && !keepLegacy)
+      Object.assign(out, findingErrors(parsed.failedPairs, lines, finalDefectTypes));
     if (mode === "correct") {
       const r = correctionReasonSchema.safeParse(reason);
       if (!r.success) out.reason = r.error.issues[0].message;
@@ -122,12 +153,16 @@ export function FinishBatchDialog({
               pairs,
               failedPairs: failed,
               notes,
+              findings: failedCount > 0 ? lines : [],
             })
           : await correctBatchAction(checkIn!.id, {
               expectedUpdatedAt: checkIn!.updatedAt,
               pairs,
               failedPairs: failed,
               reason,
+              ...(findingsLockedReason || keepLegacy
+                ? {}
+                : { findings: failedCount > 0 ? lines : [] }),
             });
       if (result.ok) {
         toast.success(
@@ -154,7 +189,7 @@ export function FinishBatchDialog({
   }
 
   const summary = Object.entries(errors).map(([key, message]) => ({
-    fieldId: FIELD_IDS[key as keyof typeof FIELD_IDS] ?? key,
+    fieldId: summaryFieldId(key) ?? FIELD_IDS[key as keyof typeof FIELD_IDS] ?? key,
     message,
   }));
 
@@ -288,6 +323,30 @@ export function FinishBatchDialog({
                 recheck({ pairs, failed: v });
               })}
             </div>
+            {keepLegacy && (
+              <p className="text-sm text-muted-foreground">
+                This batch was inspected before reasons were recorded. Change the failed pairs to
+                add them.
+              </p>
+            )}
+            {failedCount > 0 && !keepLegacy && (
+              <FindingsEditor
+                lines={lines}
+                onChange={setLines}
+                failedPairs={failedCount}
+                types={finalDefectTypes}
+                suggestions={suggestions}
+                errors={errors}
+                lockedReason={findingsLockedReason}
+                onClearError={(key) =>
+                  setErrors((prev) => {
+                    if (!(key in prev)) return prev;
+                    const { [key]: _gone, ...rest } = prev;
+                    return rest;
+                  })
+                }
+              />
+            )}
             {workforceLine !== undefined && (
               <p className="text-sm">
                 <span className="text-muted-foreground">Shoe Constructors present today: </span>

@@ -29,6 +29,10 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     defectTypes,
     attendanceDays,
     checkIns,
+    findings,
+    repairJobs,
+    stageAssignments,
+    stageCounts,
     batches,
     dayPlans,
     lunchBreaks,
@@ -46,6 +50,11 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     db.defectType.count({ where: { key: notIn(keep.defectTypeKeys) } }),
     db.attendanceDay.count(),
     db.productionCheckIn.count(),
+    // Findings, repair jobs, stage assignments and counts (Phase 34); the demo week makes them again.
+    db.inspectionFinding.count(),
+    db.repairJob.count(),
+    db.stageAssignment.count(),
+    db.stageCount.count(),
     // Queued batches and their codes (Phase 33); the demo week's plans make them again.
     db.productionBatch.count(),
     // Day plans and Non-working marks (D-114); the demo week plans its days again.
@@ -68,6 +77,10 @@ export async function countResetTargets(keep: ResetKeep, db: Db = defaultDb()) {
     defectTypes,
     attendanceDays,
     checkIns,
+    findings,
+    repairJobs,
+    stageAssignments,
+    stageCounts,
     batches,
     dayPlans,
     lunchBreaks,
@@ -100,6 +113,12 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   await db.attendanceDay.deleteMany();
   // Batches (Phases 23, 27, 30E-2): finished batches, every day plan and every lunch break; the
   // service puts the default lunch back and the demo week plans its days (D-114).
+  // Phase 34 (D-130): repairs, then the findings they came from, the stage counts (which name a
+  // batch) and assignments; final defect types are reference data and stay.
+  await db.repairJob.deleteMany();
+  await db.inspectionFinding.deleteMany();
+  await db.stageCount.deleteMany();
+  await db.stageAssignment.deleteMany();
   await db.productionCheckIn.deleteMany();
   await db.productionBatch.deleteMany();
   // A reset database has no batches from "before the queue": every demo batch queues (A-61).

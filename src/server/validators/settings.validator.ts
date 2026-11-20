@@ -178,12 +178,37 @@ export const supplierSchema = z.object({
   notes: optionalText(300, "notes"),
 });
 
-export const REFERENCE_KINDS = ["defectType", "supplier"] as const;
+/**
+ * A defect found on a finished shoe (Phase 34, D-130, A-62): a separate list from the camera's
+ * leather defect types. The key is fixed after creation; OTHER always exists.
+ */
+const finalDefectTypeFields = z.object({
+  key: z
+    .string({ error: "Enter a short key for the defect, e.g. LIFTED_SOLE." })
+    .trim()
+    .toUpperCase()
+    .regex(
+      /^[A-Z0-9][A-Z0-9_]{0,39}$/,
+      "Enter a key of up to 40 capital letters, numbers or _, e.g. LIFTED_SOLE.",
+    ),
+  label: z
+    .string({ error: "Enter a label people will read, e.g. Lifted sole." })
+    .trim()
+    .min(1, "Enter a label people will read, e.g. Lifted sole.")
+    .max(40, "Keep the label under 40 characters."),
+  description: optionalText(200, "description"),
+  sortOrder,
+});
+export const finalDefectTypeCreateSchema = finalDefectTypeFields;
+export const finalDefectTypeUpdateSchema = finalDefectTypeFields.omit({ key: true });
+
+export const REFERENCE_KINDS = ["defectType", "supplier", "finalDefectType"] as const;
 export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
 
 export const referenceSchemas = {
   defectType: { create: defectTypeCreateSchema, update: defectTypeUpdateSchema },
   supplier: { create: supplierSchema, update: supplierSchema },
+  finalDefectType: { create: finalDefectTypeCreateSchema, update: finalDefectTypeUpdateSchema },
 } as const;
 
 export const referenceActiveSchema = z.object({ isActive: z.boolean({ error: OUT_OF_DATE }) });

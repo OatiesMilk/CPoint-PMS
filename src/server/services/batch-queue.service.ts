@@ -36,6 +36,27 @@ import {
   type BatchRow,
 } from "@/server/models/production.model";
 import { listRollsFinishedWithItem } from "@/server/models/roll.model";
+import {
+  insertRepair,
+  listFinishedRepairs,
+  listRepairsByStatus,
+  repairCodesWithPrefix,
+  transitionRepair,
+  findRepair,
+  type RepairRow,
+} from "@/server/models/repair.model";
+import {
+  REPAIR_STATUS_LABEL,
+  STAGE_LABEL,
+  compareWaiting,
+  nextRepairSeq,
+  nextRepairState,
+  parseRepairResult,
+  repairCodeForBatch,
+  type Stage,
+} from "@/lib/repair-rules";
+import type { RepairInspectInput } from "@/server/validators/repair.validator";
+import { findingsForCheckIns, type CheckInFindings } from "./repair.service";
 import { can, checkInCoverReason, mayEnterCheckIns } from "@/server/policies/permissions";
 import type {
   PriorityInput,
@@ -84,6 +105,8 @@ export type QueueItem = {
     at: string;
     /** Inspected today, so it can still be corrected (Phase 33, until Phase 35). */
     correctable: boolean;
+    /** What was wrong with the failed pairs, and whether it can change (Phase 34). */
+    findings: CheckInFindings;
   } | null;
   voidReason: string | null;
   voidedBy: string | null;
@@ -110,7 +133,15 @@ async function rollsByBatch(rows: BatchRow[]): Promise<Map<string, string>> {
   return out;
 }
 
-function toItem(r: BatchRow, rolls: string, viewerId: string, now: Date): QueueItem {
+const noFindings: CheckInFindings = { lines: [], summary: [], lockedReason: null };
+
+function toItem(
+  r: BatchRow,
+  rolls: string,
+  viewerId: string,
+  now: Date,
+  findings: Map<string, CheckInFindings> = new Map(),
+): QueueItem {
   const state = queueState(r, now);
   const lunchFree = { startTime: clockTime(r.startAt), time: clockTime(r.slotAt), lunch: null };
   return {
@@ -142,6 +173,7 @@ function toItem(r: BatchRow, rolls: string, viewerId: string, now: Date): QueueI
           checkInId: r.checkIn.id,
           updatedAt: r.checkIn.updatedAt.toISOString(),
           correctable: manilaDayOf(r.checkIn.enteredAt) === manilaDayOf(now),
+          findings: findings.get(r.checkIn.id) ?? noFindings,
           pairs: r.checkIn.pairs,
           failedPairs: r.checkIn.failedPairs,
           by: r.checkIn.enteredBy.name,
@@ -185,19 +217,28 @@ export async function inspectionQueue(
   // Only batches whose end has come are in the queue; upcoming ones are on the Today tab.
   const queuedRows = open.filter((r) => isQueued(queueState(r, now)));
   const rolls = await rollsByBatch([...queuedRows, ...done]);
+  const findings = await findingsForCheckIns(
+    done.flatMap((r) => (r.checkIn ? [r.checkIn.id] : [])),
+  );
   const all = queuedRows
     .slice()
     .sort(compareQueue)
     .map((r) => toItem(r, rolls.get(r.id) ?? "", viewer.id, now));
   const waiting = all.filter((i) => matches(i, query));
+  const repairRows = await repairQueue(query, now);
   const finished = done
-    .map((r) => toItem(r, rolls.get(r.id) ?? "", viewer.id, now))
+    .map((r) => toItem(r, rolls.get(r.id) ?? "", viewer.id, now, findings))
     .filter((i) => (!query.day || i.day === query.day) && (!query.q || matches(i, { q: query.q })));
   const days = [...new Set(all.map((i) => i.day))].sort();
   return {
     today,
     waiting,
     done: finished,
+    /** Repairs back for inspection and the ones inspected in the last 7 days (Phase 34). */
+    repairs: repairRows.waiting,
+    repairsDone: repairRows.done,
+    /** Repairs waiting before the filters; they are not in the tab title's due count (A-90). */
+    repairsTotal: repairRows.total,
     /** Counts before the filters, for the tab badge and the empty state. */
     total: all.length,
     urgent: all.filter((i) => i.priority === "URGENT").length,
@@ -214,6 +255,89 @@ export async function inspectionQueue(
 }
 
 export type InspectionQueue = Awaited<ReturnType<typeof inspectionQueue>>;
+
+export type RepairItem = {
+  id: string;
+  code: string;
+  /** The batch it came from, B-261120-2. */
+  batchCode: string;
+  defect: string;
+  note: string | null;
+  pairs: number;
+  stage: Stage;
+  stageLabel: string;
+  statusLabel: string;
+  /** When it came back (ISO), and its Manila day. */
+  backAt: string | null;
+  day: string | null;
+  dayLabel: string | null;
+  /** "Waiting 2 hours 5 minutes", while it waits. */
+  waiting: string | null;
+  /** A repair that was inspected: what happened to its pairs. */
+  result: { passedPairs: number; scrappedPairs: number; resentPairs: number; at: string } | null;
+};
+
+function toRepairItem(r: RepairRow, now: Date): RepairItem {
+  const day = r.backAt ? manilaDayOf(r.backAt) : null;
+  return {
+    id: r.id,
+    code: r.code,
+    batchCode: r.finding.checkIn.batch?.code ?? "",
+    defect: r.finding.finalDefectType.label,
+    note: r.finding.note,
+    pairs: r.pairs,
+    stage: r.stage,
+    stageLabel: STAGE_LABEL[r.stage],
+    statusLabel: REPAIR_STATUS_LABEL[r.status],
+    backAt: r.backAt?.toISOString() ?? null,
+    day,
+    dayLabel: day ? formatAttendanceDay(day) : null,
+    waiting: r.status === "BACK_FOR_INSPECTION" && r.backAt ? waitingFor(r.backAt, now) : null,
+    result:
+      r.status === "DONE" && r.inspectedAt
+        ? {
+            passedPairs: r.passedPairs ?? 0,
+            scrappedPairs: r.scrappedPairs ?? 0,
+            resentPairs: r.resentPairs ?? 0,
+            at: `${formatAttendanceDay(manilaDayOf(r.inspectedAt))} ${clockTime(r.inspectedAt)}`,
+          }
+        : null,
+  };
+}
+
+/**
+ * Repairs in the queue (Phase 34, A-65, A-90): the ones back for inspection, longest wait first,
+ * and the ones inspected in the last 7 days. No due time, so never Late. The day filter uses the
+ * day the repair came back; Urgent and Waiting filters are about batches, so a repair shows for
+ * "Waiting" and not for Late, Inspecting or Urgent.
+ */
+async function repairQueue(query: QueueQuery, now: Date) {
+  const doneFrom = new Date(now.getTime() - DONE_DAYS * 86_400_000);
+  const [back, finished] = await Promise.all([
+    listRepairsByStatus(["BACK_FOR_INSPECTION"]),
+    listFinishedRepairs(doneFrom),
+  ]);
+  const items = back
+    .slice()
+    .sort((a, b) =>
+      compareWaiting(
+        { urgent: false, since: a.backAt ?? a.sentAt, code: a.code },
+        { urgent: false, since: b.backAt ?? b.sentAt, code: b.code },
+      ),
+    )
+    .map((r) => toRepairItem(r, now));
+  const applies = !query.priority && (!query.status || query.status === "WAITING");
+  const keep = (i: RepairItem) =>
+    (!query.day || i.day === query.day) &&
+    (!query.q || i.code.toUpperCase().includes(query.q.toUpperCase()));
+  return {
+    total: items.length,
+    waiting: applies ? items.filter(keep) : [],
+    done: finished
+      .map((r) => toRepairItem(r, now))
+      .filter((i) => (!query.q || keep(i)) && !query.priority),
+  };
+}
 
 async function loadOpen(id: string): Promise<BatchRow> {
   const row = await findBatch(id);
@@ -372,4 +496,94 @@ export async function voidBatch(
 export async function queuedBatchAt(day: string, slotAt: Date) {
   const row = await findBatchBySlot(day, slotAt);
   return row ? { id: row.id, code: row.code, updatedAt: row.updatedAt.toISOString() } : null;
+}
+
+/**
+ * Inspect a repair that is back (Phase 34, A-64, A-88): the QI enters the pairs that passed, the
+ * pairs scrapped and the pairs sent back again (with the stage of each), adding up to the job's
+ * pairs. Sent back again makes a child job at its stage with the next number; there is no limit.
+ * Passed pairs count on today's quota. Who may inspect follows batches (A-82).
+ */
+export async function inspectRepair(
+  id: string,
+  input: RepairInspectInput,
+  actor: Actor,
+  now: Date = appNow(),
+) {
+  await assertMayEnter(actor, manilaToday(now));
+  const job = await findRepair(id);
+  if (!job) throw Errors.notFound("This repair");
+  const step = nextRepairState(job.status, "inspect");
+  if (!step.ok) throw Errors.conflict(`${job.code}: ${step.reason} Refresh to see it.`);
+  const parsed = parseRepairResult(job.pairs, input);
+  if (!parsed.ok) {
+    const details: { path: string[]; message: string }[] = [];
+    if (parsed.passedPairs) details.push({ path: ["passedPairs"], message: parsed.passedPairs });
+    if (parsed.scrappedPairs)
+      details.push({ path: ["scrappedPairs"], message: parsed.scrappedPairs });
+    for (const [i, message] of Object.entries(parsed.resend ?? {}))
+      details.push({ path: ["resend", i], message });
+    if (parsed.form) details.push({ path: ["result"], message: parsed.form });
+    throw Errors.validation(details);
+  }
+  const { passedPairs, scrappedPairs, resend } = parsed.result;
+  const resentPairs = resend.reduce((s, r) => s + r.pairs, 0);
+  return runInTransaction(async (tx) => {
+    const ok = await transitionRepair(
+      id,
+      ["BACK_FOR_INSPECTION"],
+      {
+        status: "DONE",
+        inspectedAt: now,
+        inspectedById: actor.id,
+        passedPairs,
+        scrappedPairs,
+        resentPairs,
+      },
+      tx,
+    );
+    if (!ok) throw Errors.stale(`${job.code} was changed by someone else. Refresh to see it.`);
+    const batchCode = job.finding.checkIn.batch?.code ?? "";
+    const prefix = repairCodeForBatch(batchCode, 0).slice(0, -1);
+    let seq = nextRepairSeq(await repairCodesWithPrefix(prefix, tx));
+    const children: { code: string; pairs: number; stage: Stage }[] = [];
+    for (const line of resend) {
+      const code = repairCodeForBatch(batchCode, seq++);
+      const child = await insertRepair(
+        {
+          code,
+          findingId: job.finding.id,
+          parentId: job.id,
+          pairs: line.pairs,
+          stage: line.stage,
+          sentAt: now,
+        },
+        tx,
+      );
+      children.push({ code, pairs: line.pairs, stage: line.stage });
+      await recordAudit(tx, {
+        actor: { type: "USER", userId: actor.id },
+        action: "repair.create",
+        entity: "RepairJob",
+        entityId: child.id,
+        after: { code, from: job.code, batch: batchCode, pairs: line.pairs, stage: line.stage },
+      });
+    }
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: "repair.inspect",
+      entity: "RepairJob",
+      entityId: id,
+      before: { status: job.status },
+      after: {
+        code: job.code,
+        status: "DONE",
+        passedPairs,
+        scrappedPairs,
+        resentPairs,
+        sentBackAs: children.map((c) => c.code),
+      },
+    });
+    return { id, code: job.code, passedPairs, scrappedPairs, children };
+  });
 }

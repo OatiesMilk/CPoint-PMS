@@ -95,7 +95,27 @@ const rolls = {
   rollOutcomesByDay: vi.fn(async () => new Map<string, { scanned: number; returned: number }>()),
 };
 
+// Phase 34: findings and repairs are tested in repair.service.test.ts; here they are stubs.
+const repairModel = { repairInspectionsBetween: vi.fn(async () => [] as unknown[]) };
+const repairSvc = {
+  LOCKED_MESSAGE: "A repair is already back.",
+  parseFindingLines: vi.fn(async (_failed: number, raw: unknown) =>
+    Array.isArray(raw) ? raw : [],
+  ),
+  writeFindings: vi.fn(async () => ({ summary: [] as unknown[], jobs: [] as unknown[] })),
+  rebuildFindings: vi.fn(async () => ({ summary: [] as unknown[], jobs: [] as unknown[] })),
+  findingsState: vi.fn(async () => ({
+    findings: [] as { finalDefectTypeId: string }[],
+    jobs: [] as unknown[],
+    locked: false,
+    lines: [] as unknown[],
+  })),
+  findingsForCheckIns: vi.fn(async () => new Map()),
+};
+
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
+vi.mock("@/server/models/repair.model", () => repairModel);
+vi.mock("@/server/services/repair.service", () => repairSvc);
 vi.mock("@/server/models/production.model", () => model);
 vi.mock("@/server/services/attendance.service", () => workforce);
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
@@ -126,7 +146,7 @@ describe("saveCheckIn: Finish batch (C-27, C-28)", () => {
       QI,
       at("2026-10-20T05:05:00.000Z"),
     );
-    expect(r).toEqual({ id: "ci1", number: 1, code: "B-261020-1", time: "13:00" });
+    expect(r).toEqual({ id: "ci1", number: 1, code: "B-261020-1", time: "13:00", repairs: [] });
     expect(model.insertCheckIn).toHaveBeenCalledWith(
       expect.objectContaining({
         day: "2026-10-20",
@@ -358,6 +378,49 @@ describe("the Floor Manager covers only when no QI is present (D-088)", () => {
   });
 });
 
+describe("saveCheckIn: what was wrong (Phase 34, D-130)", () => {
+  it("writes the lines and their repairs with the check-in, and audits them", async () => {
+    repairSvc.parseFindingLines.mockResolvedValueOnce([{ finalDefectTypeId: "t1" }]);
+    repairSvc.writeFindings.mockResolvedValueOnce({
+      summary: [{ defect: "Lifted sole", pairs: 2 }],
+      jobs: [{ code: "RP-261020-1-1", pairs: 2, stage: "SOLE_ING" }],
+    });
+    const r = await svc.saveCheckIn(
+      { slotAt: B1, pairs: "42", failedPairs: 2, findings: [{}] },
+      QI,
+      at("2026-10-20T05:05:00.000Z"),
+    );
+    expect(repairSvc.parseFindingLines).toHaveBeenCalledWith(2, [{}]);
+    expect(repairSvc.writeFindings).toHaveBeenCalledWith(
+      expect.objectContaining({ checkInId: "ci1", batchCode: "B-261020-1" }),
+      "tx",
+    );
+    expect(r.repairs).toEqual([{ code: "RP-261020-1-1", pairs: 2, stage: "SOLE_ING" }]);
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "production.checkin",
+        after: expect.objectContaining({
+          findings: [{ defect: "Lifted sole", pairs: 2 }],
+          repairs: ["RP-261020-1-1"],
+        }),
+      }),
+    );
+  });
+
+  it("saves nothing when the lines are wrong", async () => {
+    repairSvc.parseFindingLines.mockRejectedValueOnce(new Error("lines"));
+    await expect(
+      svc.saveCheckIn(
+        { slotAt: B1, pairs: "42", failedPairs: 2 },
+        QI,
+        at("2026-10-20T05:05:00.000Z"),
+      ),
+    ).rejects.toThrow("lines");
+    expect(model.insertCheckIn).not.toHaveBeenCalled();
+  });
+});
+
 describe("correctCheckIn", () => {
   const saved = {
     id: "ci1",
@@ -374,6 +437,7 @@ describe("correctCheckIn", () => {
     expectedUpdatedAt: "2026-10-20T05:05:00.000Z",
     pairs: 40,
     failedPairs: 3,
+    findings: [{ finalDefectTypeId: "t1", pairs: 3, remedy: "NOT_FIXABLE" }],
     reason: "Counted a rack twice",
     ...over,
   });
@@ -382,6 +446,7 @@ describe("correctCheckIn", () => {
     model.findCheckIn.mockResolvedValueOnce(saved);
     const r = await svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T06:00:00.000Z"));
     expect(r).toEqual({ id: "ci1", number: 1, code: "B-261020-1", time: "13:00" });
+    expect(repairSvc.rebuildFindings).toHaveBeenCalledTimes(1);
     expect(model.correctCheckIn).toHaveBeenCalledWith(
       "ci1",
       saved.updatedAt,
@@ -397,10 +462,60 @@ describe("correctCheckIn", () => {
       "tx",
       expect.objectContaining({
         action: "production.checkin.correct",
-        before: { pairs: 42, failedPairs: 2 },
-        after: { pairs: 40, failedPairs: 3, reason: "Counted a rack twice" },
+        before: { pairs: 42, failedPairs: 2, findings: [] },
+        after: {
+          pairs: 40,
+          failedPairs: 3,
+          findings: [],
+          repairs: [],
+          reason: "Counted a rack twice",
+        },
       }),
     );
+  });
+
+  it("can't change the failed pairs once a repair from the batch is back (A-93)", async () => {
+    model.findCheckIn.mockResolvedValueOnce(saved);
+    repairSvc.findingsState.mockResolvedValueOnce({
+      findings: [],
+      jobs: [],
+      locked: true,
+      lines: [],
+    });
+    await expect(
+      svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T06:00:00.000Z")),
+    ).rejects.toMatchObject({ status: 409, message: "A repair is already back." });
+    expect(model.correctCheckIn).not.toHaveBeenCalled();
+    // The other counts can still change.
+    model.findCheckIn.mockResolvedValueOnce(saved);
+    repairSvc.findingsState.mockResolvedValueOnce({
+      findings: [],
+      jobs: [],
+      locked: true,
+      lines: [],
+    });
+    await svc.correctCheckIn(
+      "ci1",
+      input({ failedPairs: 2, findings: undefined }),
+      QI,
+      at("2026-10-20T06:00:00.000Z"),
+    );
+    expect(repairSvc.rebuildFindings).not.toHaveBeenCalled();
+  });
+
+  it("leaves a batch from before Phase 34 without lines while its failed count stays (A-89)", async () => {
+    model.findCheckIn.mockResolvedValueOnce(saved);
+    await svc.correctCheckIn(
+      "ci1",
+      input({ failedPairs: 2, findings: undefined }),
+      QI,
+      at("2026-10-20T06:00:00.000Z"),
+    );
+    expect(repairSvc.rebuildFindings).not.toHaveBeenCalled();
+    model.findCheckIn.mockResolvedValueOnce(saved);
+    await expect(
+      svc.correctCheckIn("ci1", input({ findings: undefined }), QI, at("2026-10-20T06:00:00.000Z")),
+    ).rejects.toMatchObject({ status: 422 });
   });
 
   it("only on the day it was inspected (Dylan 2026-11-19, until Phase 35)", async () => {

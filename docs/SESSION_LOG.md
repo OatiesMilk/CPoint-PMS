@@ -5,6 +5,111 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-20 · Phase 34: Codex run 4 PASS; QA done; git commands
+
+- Codex run 4 (`qa/reports/2026-11-20-phase-34-run4.md`): **PASS**. Targeted 28 of 28; full suite 118 passed, 0
+  failed, 2 skipped, none omitted; both clean-up queries 0; the final reset ran and the clock is on Real time.
+  The optional C6 headless script timed out at sign-in (no demo password in its environment): it doesn't gate
+  the pass, and C6 stays closed from run 3's keyboard result.
+- Phase 34 QA is done (runs 1 to 4; run 1 PASS WITH ISSUES, runs 2 and 3 FAIL on test faults and one small gap,
+  all fixed, run 4 PASS). Git commands for `feature/defects-and-repairs` given to Dylan with the list file
+  `qa/phase-34-files.txt` (not committed). Left out: `docs/DEMO_SCRIPT.md`, the list file, git-ignored
+  artifacts and backups.
+
+## 2026-11-20 · Phase 34: Codex run 3 FAIL (two test faults), fixed
+
+- Codex run 3 (`qa/reports/2026-11-20-phase-34-run3.md`): C2 and both clean-up queries (0 and 0) passed;
+  targeted 25 of 28, full 111 of 120. No application fault.
+- **Fixed (specs only):** F2 `final-defects.spec.ts` expected today's whole-line `passed` to rise by exactly
+  1 while another worker's `batches.spec.ts` finished and deleted batches today (351 before, 340 after): it
+  keeps `repairedPassed` + 1 and checks `passed = max(0, finished − failed) + repairedPassed` inside one
+  response, and `production-rules.test.ts` covers the five-argument `quotaProgress`; this unblocks the six
+  serial tests after it. F1 the D-088 test in `batches.spec.ts` replayed a roster read at its start after
+  other specs removed E2E constructors (a 409): it now reads the roster and version before each save, retries
+  once on 409 and restores from the first read. `npm run check` passed (944 unit tests).
+- **C6 closed as passed:** a tooling artefact (a tool that sets the field's value without real input events
+  leaves the form's prefill; typing `1705` moved the clock); run 4 confirms with a headless script and the
+  audit rows. Run 4: `qa/CODEX_PROMPT_PHASE_34_RUN4.md`.
+
+## 2026-11-20 · Phase 34: Codex run 2 FAIL (test faults and one small gap), fixed
+
+- Codex run 2 (`qa/reports/2026-11-20-phase-34-run2.md`): 20 of 24 manual checks passed (P1 to P8,
+  C1, C3 to C7, A1, A4, A6, A7, R7, D1; Addendum 1 works); E1 targeted 20 passed, 4 failed, 3 did not
+  run; full 107 passed, 4 failed, 6 did not run.
+- **Fixed (the planning thread's run 2 list):** E1.2 and E1.3, the clean-ups of `batches.spec.ts` and
+  `inspection-queue.spec.ts` deleted check-ins that now have findings (the schema keeps `RESTRICT`
+  on purpose); both now use `tests/e2e/db-cleanup.ts` (repair jobs, findings, then only their own
+  check-ins); E1.1 `final-defects.spec.ts` read the report to today, so the demo seed's 18 Lifted sole
+  pairs were in the row: it now reads only its own Saturday and checks exact cells; E1.4
+  `stage-wip.spec.ts` found the second "E2E Constructor" by position (a locked Capture constructor left
+  by another run): it now finds `loose` by name; A3 gap, a new test ("who may do what with a repair")
+  checks a constructor's repair and board 403s, the QI, Admin and Floor Manager on the board, and the
+  stage's own Back (200, then 409); C2, the count form now checks the number before any round trip
+  (`parseStageCount`: digits only, so `x`, empty, `1.5`, `-1`, `1e3`, `0x10` are refused) and
+  shows the message as the field is left. `npm run check` passed (943 unit tests).
+- **Not changed:** C6, the demo clock form. Not a Phase 34 change; run 3 runs a decisive fetch check
+  (the request body the form sends) and reports it. Run 3: `qa/CODEX_PROMPT_PHASE_34_RUN3.md`.
+
+## 2026-11-20 · Phase 34: Codex run 1 PASS WITH ISSUES, triaged
+
+- Codex run 1 (`qa/reports/2026-11-20-phase-34-run1.md`, before Addendum 1): 41 of 47 scenarios passed,
+  2 failed, 4 blocked; targeted e2e 4 passed, 2 failed, 6 did not run (the two Phase 34 specs are
+  serial); full suite 101 passed, 5 failed, 2 skipped.
+- **Fixed:** E1.1 and E1.3, `batches.spec.ts` and `inspection-queue.spec.ts` finished batches with failed
+  pairs and no reason, which Phase 34 refuses (the dialog stayed open): both now fill a line; E1.2 the
+  hidden Fixable radio's label intercepted the click, so the input now covers its label; E1.4 the CSV
+  column is `Passed after repair` and `reports.spec.ts` expects it; E1.5 the QI board assertions are
+  scoped to the board. `npm run check` passed (938 unit tests).
+- **Triage fix F1 (planning thread):** `finish-batch-dialog.tsx` matched finding errors with a pattern
+  that had lost its backslashes, so the error summary's link for a finding line pointed at a missing id.
+  It now uses a pure `summaryFieldId` in `repair-rules.ts` (unit-tested, 940 tests), and
+  `final-defects.spec.ts` asserts the links. The run 2 prompt now says: C3, C4 and A3 from the e2e spec
+  only (the demo constructors never sign in), D1 rerun, and a C6 fallback (read the clock fields back
+  before Set clock; if typing doesn't register, POST the same body from the page).
+- **Not changed:** C6, the demo clock didn't move when set as a constructor (nothing in Phase 34
+  touches it, Phase 33 run 6 moved it); R7's after-midnight part and C3, C4, A3 were blocked by it and
+  by test accounts (the e2e spec covers C3, C4 and A3 with its own constructors). Run 2:
+  `qa/CODEX_PROMPT_PHASE_34_RUN2.md`.
+
+## 2026-11-20 · Phase 34 built: final defects, repairs and work in progress (D-130)
+
+- Built from `docs/prompts/plans/phase-34-defects-and-repairs-plan.md` (Dylan's approved choices:
+  the board is a third tab on Batches; an assigned constructor without camera access still gets My
+  stage; one stage per constructor per day; a repair that fails again has no limit). Two Claude
+  sessions started on it at once: dev-b6 wrote the schema, migration, `repair.model`,
+  `stage.model`, `repair.service`, `repair.validator` and the Settings kind, then dropped out; the
+  other session finished the server layer and wrote all of the UI, seed, CI, specs and docs.
+- Added: `src/lib/repair-rules.ts`, the repair and stage services, controllers and routes
+  (`/production/{repairs,stages,stage-counts,wip,defect-suggestions}`, `/final-defect-types`),
+  permissions `stage:assign|count|read` and `repair:update|manage`; findings on Finish batch and
+  Correct; Inspect repair in `batch-queue.service`; passed counts repaired pairs; four sections in
+  Reports → Operations and a "passed after repair" CSV column; Settings → Final defect types; the
+  Plan dialog's Who works where; Capture → My stage; Batches → Work in progress; the Overview card;
+  the demo seed (rotated findings, repairs in every state, stages and counts), the reset, CI's docker
+  checks; "Upper making" → "Construction".
+- Deviations from the plan: repairs are their own section in the Queue (not interleaved with
+  batches); a finding's lines key on defect, remedy **and stage** (the same defect fixable at two
+  stages is two answers); the origins table uses the stage the QI chose, not a later Floor Manager
+  move; final defect types have no DELETE (switch off with `{ isActive }`); a tie in the suggestion
+  goes to Fixable.
+- **Addendum 1 (Dylan, 2026-11-20, plan addendum): Capture constructors are stationed at Preparation.**
+  `stage.model` (`listStoredAssignments`, `listCaptureConstructors`, `listAssignments` now adds the
+  Capture-access people at Preparation), `stage.service` (rejects another stage with the fix, stores no
+  row for them, the Plan dialog view has `captureAccess`, the suggestion skips them, My stage has
+  `captureAccess`), `stage-assignments.tsx` (locked row under Preparation, not offered elsewhere),
+  `my-stage.tsx` (a note), the demo seed (capture constructors aren't saved; Preparation is counted by
+  one), CI (no assignee has Capture access), unit and e2e tests, the docs. No migration. A-95, A-96.
+- Checks run: `npm run check` passed (lint, typecheck, **938 unit tests**, build). Not run: e2e
+  (Codex runs `final-defects.spec.ts` and `stage-wip.spec.ts`), `demo:reset` and the CI docker SQL.
+- Handoff `qa/handoffs/2026-11-20-phase-34-defects-and-repairs.md`, prompt
+  `qa/CODEX_PROMPT_PHASE_34.md` (it starts with `docker compose stop app`). Nothing committed.
+
+## 2026-11-20 · Phase 33 merged (#55)
+
+- Dylan merged `feature/inspection-queue` (#55, e22ebb9), pulled on the laptop and rebuilt the Docker
+  app (image 14:44): `/api/health` 200, `GET /api/v1/production/batches` 401 without a session
+  (the route exists), migrations up to date (32).
+
 ## 2026-11-20 · Phase 33: Codex run 6 PASS WITH ISSUES; QA done; git commands
 
 - Codex run 6 (`qa/reports/2026-11-20-phase-33-run6.md`): R2 passed at the demo clock's 17:05

@@ -17,7 +17,7 @@ project in a state the next session can't pick up from.
 **Client:** CPoint Shoe Store Corporation, a mass-production maker of leather **school shoes** and
 **topsiders**. There are no custom-made shoes; custom orders are out of scope.
 
-**The line:** Preparation → Upper Making → Sole-ing → Finishing, with one computer-vision
+**The line:** Preparation → Construction → Sole-ing → Finishing, with one computer-vision
 checkpoint at **Preparation, before cutting**: each leather roll is photographed shot by shot on a
 Shoe Constructor's phone, and the model's verdict on each shot is final.
 
@@ -176,7 +176,7 @@ Layer rules (enforce them in code review, and with ESLint `no-restricted-imports
 </architecture>
 
 <domain_rules>
-**Production line:** Preparation → Upper Making → Sole-ing → Finishing. The system does not track
+**Production line:** Preparation → Construction → Sole-ing → Finishing. The system does not track
 stages (removed in Phase 23, D-082); it tracks rolls at Preparation and pairs at each batch's end.
 
 **Roll = one leather roll from a supplier** (`Roll` in the code, table `batches`, D-095). The Floor
@@ -227,6 +227,27 @@ Quality Inspector finishes each batch from 10 minutes before its end with the pa
 of these, the pairs that failed inspection; the Floor Manager only on a day attendance shows no QI
 present (D-088). A same-day Correct needs a reason. On-screen notices only (banner, bell, tab
 title), nothing reaches a closed app.
+
+**Final defects and repairs (Phase 34, D-130):** when pairs fail inspection the QI lists _what was
+wrong_: one line per defect (a `FinalDefectType`, a list the System Admin edits, separate from the
+camera's leather defect types), the pairs, **Fixable** or **Not fixable**, and for a fixable one the
+stage it goes back to. The lines add up to the failed pairs; `OTHER` needs a note. Each fixable line
+makes a repair job (`RP-261120-2-1`) **At stage**; the constructor assigned to that stage today (or
+the Floor Manager) marks it **Back for inspection**; the QI inspects it from the Queue: passed,
+scrapped or sent back again (no limit, a child job). The Floor Manager may move an At-stage job or
+call it Not fixable after all, with a reason. Passed repaired pairs count toward the quota on the day
+they pass (`passed = finished − failed + repaired pairs that passed that day`). After 5 findings of
+a type in 4 weeks the form suggests the usual answer, never filling it in. A correction can change
+the failed pairs and lines on the inspection day until a repair from the batch is Back or Done.
+Failed pairs from before Phase 34 have no reasons ("Reason not recorded").
+
+**Stages and work in progress (Phase 34, D-130):** the stages are Preparation, **Construction**
+(formerly "Upper making"), Sole-ing and Finishing. The Floor Manager assigns the active Shoe
+Constructors to stages for a day in the Plan dialog (one stage each, suggested from the last working
+day, editable for today and later planned days). An assigned constructor, or the Floor Manager,
+saves the pairs at a stage; the latest count of the day is the stage's count. Batches → Work in
+progress shows each stage's count, its repairs and what waits for inspection. All figures are per
+stage, never per person.
 
 **Inventory:** items with category (`LEATHER_ROLL | NAILS | ADHESIVE | THREAD | EQUIPMENT | OTHER`),
 unit, quantity on hand and reorder level; a leather item has a supplier and counts its rolls.
@@ -336,6 +357,12 @@ Prisma models (`prisma/schema.prisma` has every field and index; ids are UUIDv7,
 `AttendanceDay`, `AttendanceMark(present)`, `LunchBreak(startTime, endTime, effectiveFrom)`,
 `DayPlan(day, kind PLANNED|NON_WORKING, rollsPlanned, quota, intervalMinutes, shiftStart, shiftEnd)`,
 `ProductionCheckIn(day, slotAt, pairs, failedPairs, constructorsPresent, correction fields)` (a finished batch),
+`ProductionBatch(code B-YYMMDD-N, status, priority, …)` (Phase 33), and Phase 34 (D-130):
+`FinalDefectType(key, label, isActive, sortOrder)` (data; `OTHER` always exists),
+`InspectionFinding(checkInId, finalDefectTypeId, pairs, remedy FIXABLE|NOT_FIXABLE, returnStage?, note?)`,
+`RepairJob(code RP-YYMMDD-<batch>-<n>, findingId, parentId?, pairs, stage, status AT_STAGE|BACK_FOR_INSPECTION|DONE|CANCELLED, backAt, inspectedAt, passedPairs, scrappedPairs, resentPairs)`,
+`StageAssignment(day, stage, userId)` (unique per day and user) and `StageCount(day, stage, pairs, enteredById, batchId?)` (append-only; the latest row of a day and stage is the count),
+with the enums `ProductionStage` (PREPARATION, CONSTRUCTION, SOLE_ING, FINISHING), `Remedy` and `RepairStatus`,
 and the code sequences `RollSequence`, `RollCodeSequence`. Removed tables (procurement, review,
 repair, salvage, stages, shoe types, components) are listed in their D-entries.
 </data_model_outline>

@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import pg from "pg";
+import { removeCheckIns } from "./db-cleanup";
 import { ACCOUNTS, signIn } from "./helpers";
 
 /**
@@ -50,7 +51,7 @@ async function withDb<T>(fn: (db: pg.Client) => Promise<T>): Promise<T> {
 }
 
 async function cleanUp(db: pg.Client) {
-  await db.query(`DELETE FROM production_check_ins WHERE day = ANY($1::date[])`, [DAYS]);
+  await removeCheckIns(db, "day = ANY($1::date[])", [DAYS]);
   await db.query(`DELETE FROM production_batches WHERE day = ANY($1::date[])`, [DAYS]);
   await db.query(`DELETE FROM day_plans WHERE day = ANY($1::date[])`, [DAYS]);
 }
@@ -226,6 +227,13 @@ test("two inspectors: one starts a batch, the other sees who has it; a day-old b
   await expect(dialog).toContainText(`Finish ${SUN}`);
   await dialog.getByLabel(new RegExp(`^Pairs finished in ${SUN}`)).fill("20");
   await dialog.getByLabel("Of these, failed inspection").fill("1");
+  // What was wrong (Phase 34): failed pairs need a reason.
+  await dialog.getByLabel("Defect, line 1").selectOption({ label: "Scuffs" });
+  await dialog.getByLabel("Pairs, line 1", { exact: true }).fill("1");
+  await dialog
+    .getByRole("radiogroup", { name: "Can line 1 be fixed?" })
+    .getByLabel("Not fixable", { exact: true })
+    .check();
   await dialog.getByRole("button", { name: `Finish ${SUN}` }).click();
   await expect(dialog).toBeHidden();
   await expect(lea.getByText(`${SUN} finished.`, { exact: true })).toBeVisible();

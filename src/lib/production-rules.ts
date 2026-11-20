@@ -557,8 +557,10 @@ export function noticesFor(
 // ───────────── progress against the quota ─────────────
 
 export type QuotaProgress = {
-  /** Pairs that passed inspection so far today (C-41). */
+  /** Pairs that passed inspection so far today (C-41), repaired pairs that passed included. */
   passed: number;
+  /** Of these, pairs that passed after a repair today (Phase 34, A-64). */
+  repairedPassed: number;
   finished: number;
   failed: number;
   quota: number | null;
@@ -576,10 +578,13 @@ export function quotaProgress(
   failed: number,
   quota: number | null,
   batchesLeft: number,
+  repairedPassed = 0,
 ): QuotaProgress {
-  const passed = Math.max(0, finished - failed);
+  // A repaired pair that passes counts on the day it passes; it was never counted as finished twice.
+  const passed = Math.max(0, finished - failed) + repairedPassed;
   return {
     passed,
+    repairedPassed,
     finished,
     failed,
     quota,

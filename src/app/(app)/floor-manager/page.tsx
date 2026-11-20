@@ -14,6 +14,8 @@ import {
   TodaysBatchesCard,
 } from "@/components/features/production/production-cards";
 import { DailySummaryCard, RollsTodayCard } from "@/components/features/reports/home-cards";
+import { WipCard } from "./wip-card";
+import { wipBoard } from "@/server/services/stage.service";
 import { LowStockCard } from "@/components/features/inventory/low-stock-card";
 import { StockUpdateCard } from "@/components/features/inventory/stock-update-card";
 import { PageHeader } from "@/components/features/page-header";
@@ -31,15 +33,17 @@ export const metadata: Metadata = { title: "Overview" };
 export default async function FloorManagerHome() {
   const user = await requireRole("FLOOR_MANAGER");
   await connection();
-  const [production, lowStock, split, recent, attendance, openRolls, stock] = await Promise.all([
-    productionToday(user),
-    lowStockSummary(),
-    todaySplit(),
-    recentDays(),
-    todayWorkforce(),
-    openRollCount(),
-    stockUpdateReminder(),
-  ]);
+  const [production, lowStock, split, recent, attendance, openRolls, stock, board] =
+    await Promise.all([
+      productionToday(user),
+      lowStockSummary(),
+      todaySplit(),
+      recentDays(),
+      todayWorkforce(),
+      openRollCount(),
+      stockUpdateReminder(),
+      wipBoard(user),
+    ]);
   return (
     <>
       <PageHeader
@@ -50,6 +54,7 @@ export default async function FloorManagerHome() {
         {production.planNeeded && <PlanTodayCard day={production.day} />}
         {stock.due && <StockUpdateCard reminderDays={stock.reminderDays} />}
         <TodaysBatchesCard today={production} />
+        <WipCard board={board} />
         <AttendanceCard workforce={attendance.workforce} summary={attendance.summary} />
         <RollsTodayCard totals={split} openRolls={openRolls} />
         <LowStockCard {...lowStock} />

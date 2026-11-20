@@ -1,7 +1,7 @@
 # CPoint Product Monitoring System
 
 Product Monitoring System for **CPoint Shoe Store Corporation**'s leather-shoe production line
-(school shoes and topsiders, counted together): Preparation, Upper Making, Sole-ing and Finishing,
+(school shoes and topsiders, counted together): Preparation, Construction, Sole-ing and Finishing,
 with one camera checkpoint at Preparation, before cutting. It replaces paper tally sheets with one
 shared view of the line:
 
@@ -16,6 +16,16 @@ shared view of the line:
   passed pairs, every 4 hours or once a day, the shift). Each check-in interval is a batch, lunch
   left out. The Quality Inspector finishes each batch on a phone with the pairs finished and how
   many failed inspection, prompted by an on-screen notice.
+- **Final defects and repairs (Phase 34, D-130):** when pairs fail inspection the Quality Inspector
+  lists what was wrong (a defect type from Settings, the pairs, Fixable or Not fixable, and the stage
+  a fixable one goes back to). Each fixable line becomes a repair job with a code (RP-261120-2-1)
+  that the stage marks Back for inspection and the inspector checks from the Queue: passed,
+  scrapped or sent back again. After 5 findings of a type in 4 weeks the form suggests the usual
+  answer. The line's stages are Preparation, Construction, Sole-ing and Finishing.
+- **Work in progress (Phase 34):** the Floor Manager says in the Plan dialog who works at which
+  stage each day (a constructor with Capture access is always at Preparation, locked); the constructors there count the pairs at their stage on Capture ("My stage");
+  Batches → Work in progress shows each stage's count and its repairs. Counts are per stage, never
+  per person.
 - **Attendance and stock:** the Floor Manager marks who is present each day and updates stock on
   one sheet (Added, Used, Correction), with reminders on Wednesdays and Fridays.
 - **Reports:** Operations, Quality, Rolls (with the claim sheet for a supplier) and Materials, with
@@ -189,6 +199,10 @@ first on **Batches → Plan days** if it isn't.
    is due. Finish it now." with the bell and a "(1)" in the tab title.
 2. **Finish batch**: the pairs finished and, of these, the pairs that failed inspection. A second
    finish is refused; **Correct** the same day needs a reason, and the audit keeps both counts.
+3. **What was wrong** (Phase 34): with failed pairs, add a line per defect (Lifted sole, 2 pairs,
+   Fixable, back to Sole-ing). The lines must add up to the failed pairs; **Other** needs a
+   description. Each fixable line starts a repair; find it in the **Queue** as RP-… once the stage
+   marks it Back for inspection, then **Inspect repair**.
 
 ### 4. System Admin (2 min)
 

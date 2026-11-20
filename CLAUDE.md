@@ -1,7 +1,7 @@
 # CLAUDE.md — CPoint Product Monitoring System
 
 Capstone project (BS-IT) for CPoint Shoe Store Corporation: a Product Monitoring System for a
-leather-shoe production line (Preparation → Upper Making → Sole-ing → Finishing) with one
+leather-shoe production line (Preparation → Construction → Sole-ing → Finishing) with one
 computer-vision checkpoint at Preparation, before cutting.
 
 The rebuild from Laravel/MySQL to Next.js/PostgreSQL/Docker is complete (roadmap Phases 0–9) and
@@ -41,7 +41,7 @@ whose `slotAt` is the batch's end, under the `production.*` code and `/api/v1/pr
   → `server/models` (the only place that imports Prisma). Pages call services, never Prisma.
 - Desktop web first. The layout adapts to narrower windows (D-034): no fixed column counts,
   use auto-fit grids and `xl:`/`sm:` stacking, and never let the page scroll sideways. Phone
-  layouts only for Capture (Phase 26), Batches (Phase 27) and Find roll (Phase 32, D-128), as in
+  layouts only for Capture (Phase 26, My stage since Phase 34), Batches (Phase 27) and Find roll (Phase 32, D-128), as in
   `DESIGN.md` → "Phone layout" (D-096); every other page stays desktop.
 - No per-person workforce rankings or scores anywhere (client sensitivity, see the survey).
 - Defect types, CV thresholds and class keys are **data**, never hardcoded.
