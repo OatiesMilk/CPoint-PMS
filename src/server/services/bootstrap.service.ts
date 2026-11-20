@@ -6,6 +6,7 @@ import { logger } from "@/server/lib/logger";
 import { hashPassword } from "@/server/lib/password";
 import { runInTransaction } from "@/server/models/db";
 import { ensureCvSettings, ensureDefectType } from "@/server/models/reference-data.model";
+import { ensureFinalDefectType } from "@/server/models/repair.model";
 import { countActiveUsersWithRole, createUser, findUserByEmail } from "@/server/models/user.model";
 import { findInventoryItemBySku } from "@/server/models/inventory.model";
 import { ensureInventorySettings } from "@/server/models/stock-update.model";
@@ -17,6 +18,41 @@ import { createItem } from "./inventory.service";
 const SYSTEM = { type: "SYSTEM" } as const;
 
 export const REFERENCE_DATA = {
+  // Defects the QI finds on finished shoes (Phase 34, D-130, A-62): a separate list from the
+  // camera's leather defect types. A placeholder until CPoint gives theirs; the Admin edits it in
+  // Settings. OTHER always exists and needs a note.
+  finalDefectTypes: [
+    {
+      key: "LIFTED_SOLE",
+      label: "Lifted sole",
+      description: "The sole is coming off.",
+      sortOrder: 1,
+    },
+    {
+      key: "GLUE_MARKS",
+      label: "Glue marks",
+      description: "Glue showing on the upper or sole.",
+      sortOrder: 2,
+    },
+    {
+      key: "LOOSE_STITCHING",
+      label: "Loose stitching",
+      description: "Stitches loose or skipped.",
+      sortOrder: 3,
+    },
+    {
+      key: "SCUFFS",
+      label: "Scuffs",
+      description: "Marks or scratches on the finished shoe.",
+      sortOrder: 4,
+    },
+    {
+      key: "OTHER",
+      label: "Other",
+      description: "A defect that isn't listed. Describe it.",
+      sortOrder: 99,
+    },
+  ],
   // The model's four classes with CPoint's outcomes (DQ-7, A-13), and the two earlier placeholder
   // types, which the model never sends. Data: the Admin changes them in Settings, and a fine-tuned
   // model's new classes must be added under Settings → Defect types, or the app ignores them (D-108).
@@ -115,6 +151,8 @@ const DEMO_ACCOUNT_AGE_DAYS = 30;
 export async function ensureReferenceData(): Promise<void> {
   await runInTransaction(async (tx) => {
     for (const defectType of REFERENCE_DATA.defectTypes) await ensureDefectType(defectType, tx);
+    for (const finalType of REFERENCE_DATA.finalDefectTypes)
+      await ensureFinalDefectType(finalType, tx);
     for (const supplier of REFERENCE_DATA.suppliers) await ensureSupplierWithCode(supplier, tx);
     await ensureCvSettings(REFERENCE_DATA.cvSettings, tx);
     await ensureDefaultLunchBreak(tx);

@@ -41,6 +41,11 @@ const EXPECTED: Record<Permission, Role[]> = {
   "production:checkin": [QI, FM],
   "production:plan": [FM],
   "production:prioritise": [FM],
+  "stage:assign": [FM],
+  "stage:count": [FM, SC],
+  "stage:read": [FM, QI],
+  "repair:update": [FM, SC],
+  "repair:manage": [FM],
 };
 
 describe("permissions matrix", () => {
@@ -56,9 +61,15 @@ describe("permissions matrix", () => {
     }
   }
 
-  it("gives the Shoe Constructor only Capture and Find roll, and only with camera access (D-075, Phase 32)", () => {
+  it("gives the Shoe Constructor Capture, Find roll, and its own stage and repairs (D-075, Phase 32, Phase 34)", () => {
     const granted = Object.keys(PERMISSIONS).filter((p) => can(SC, p as Permission));
-    expect(granted.sort()).toEqual(["camera:capture", "location:read"]);
+    // Stage counts and repairs are checked against today's assignment by the service (mayCountStage).
+    expect(granted.sort()).toEqual([
+      "camera:capture",
+      "location:read",
+      "repair:update",
+      "stage:count",
+    ]);
   });
 
   it("lets the Floor Manager and a constructor with camera access find rolls, nobody else (Phase 32)", () => {

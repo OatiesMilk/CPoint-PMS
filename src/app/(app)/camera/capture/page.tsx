@@ -18,7 +18,9 @@ import { cameraStatus } from "@/server/services/camera.service";
 import { captureModelStatus } from "@/server/services/capture.service";
 import { capturePlan } from "@/server/services/production.service";
 import { openRollsForCapture, readyRollsForCapture } from "@/server/services/roll.service";
+import { myStage } from "@/server/services/stage.service";
 import { CaptureClient } from "./capture-client";
+import { MyStage } from "./my-stage";
 
 export const metadata: Metadata = { title: "Capture" };
 
@@ -26,14 +28,24 @@ export default async function CapturePage() {
   // Only Shoe Constructors capture (C-18); the QI and the Floor Manager get the forbidden page.
   const user = await requireRole("SHOE_CONSTRUCTOR");
   await connection();
+  // Phase 34 (D-130, A-73): a constructor assigned to a stage counts it here, with or without
+  // camera access.
+  const stage = await myStage(user);
 
   if (!canCaptureFor(user)) {
     return (
       <>
         <PageHeader title="Capture" />
-        <p className="text-lg" data-testid="no-camera-access">
-          Ask the System Admin for camera access.
-        </p>
+        {stage ? (
+          <MyStage stage={stage} />
+        ) : (
+          <>
+            <p className="text-lg" data-testid="no-camera-access">
+              Ask the System Admin for camera access.
+            </p>
+            <MyStage stage={null} />
+          </>
+        )}
       </>
     );
   }
@@ -58,6 +70,7 @@ export default async function CapturePage() {
           </span>
         }
       />
+      <MyStage stage={stage} />
       <CaptureClient
         initialRolls={rolls}
         initialPlan={plan}

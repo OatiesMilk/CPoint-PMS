@@ -41,6 +41,10 @@ const LABELS: Record<string, string> = {
   defectTypes: "defect types tests added",
   attendanceDays: "days of attendance (the demo week adds its own)",
   checkIns: "finished batches (the demo week adds its own)",
+  findings: "what was wrong with failed pairs (the demo week adds its own)",
+  repairJobs: "repair jobs (the demo week adds its own)",
+  stageAssignments: "who works at which stage (the demo week adds its own)",
+  stageCounts: "stage counts for the work in progress board (the demo week adds its own)",
   batches:
     "batches in the Inspection queue and their codes (made again from the demo week's plans)",
   dayPlans: "day plans and Non-working marks (the demo week plans its own days)",

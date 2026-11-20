@@ -41,6 +41,18 @@ const recordAudit = vi.fn();
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/production.model", () => model);
+// Phase 34: repairs have their own tests; here there are none in the queue.
+vi.mock("@/server/models/repair.model", () => ({
+  listRepairsByStatus: vi.fn(async () => []),
+  listFinishedRepairs: vi.fn(async () => []),
+  findRepair: vi.fn(),
+  insertRepair: vi.fn(),
+  repairCodesWithPrefix: vi.fn(async () => []),
+  transitionRepair: vi.fn(),
+}));
+vi.mock("@/server/services/repair.service", () => ({
+  findingsForCheckIns: vi.fn(async () => new Map()),
+}));
 vi.mock("@/server/models/roll.model", () => rolls);
 vi.mock("@/server/services/production.service", () => production);
 vi.mock("@/server/services/attendance.service", () => ({

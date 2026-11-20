@@ -24,7 +24,7 @@ your own role. Words in **bold** are the exact buttons and labels you see on the
 
 ## 1. What the system does
 
-CPoint makes leather shoes in four stages: Preparation, Upper Making, Sole-ing and Finishing. The
+CPoint makes leather shoes in four stages: Preparation, Construction, Sole-ing and Finishing. The
 system replaces the paper tally sheets with one shared screen.
 
 - **Before cutting**, a Shoe Constructor photographs each leather roll with a phone. The app checks
@@ -159,6 +159,23 @@ If a photo didn't reach the server (for example the Wi-Fi dropped), tap **Send a
    - **Over the limit**: the roll is **Returned to supplier**. Set it aside for the Floor Manager.
 3. Tap **Start another roll** for the next one.
 
+### 4.4a My stage: count the pairs at your stage
+
+If the Floor Manager assigned you to a stage today (Preparation, Construction, Sole-ing or
+Finishing), **My stage** is at the top of **Capture**, with or without camera access.
+
+1. Type the pairs at your stage right now in **Pairs at … now** and tap **Save count**. The number is
+   for the whole stage ("Last counted 14:05 for all of Sole-ing"), not for you. The last count
+   stands until someone counts again.
+2. When a batch has just ended the page says so ("B-261120-2 just ended. Update the count.").
+3. **Repairs at your stage** lists pairs sent back to you, with the defect and a code such as
+   RP-261120-2-1. When the repair is done, tap **Back for inspection**. The Quality Inspector then
+   checks it.
+
+If you have **Capture access**, your stage is always **Preparation**, every working day, because capture happens there. The page says so ("You have Capture access, so you work at Preparation.") and you count Preparation like any stage. The Floor Manager can't move you to another stage; to change it the System Admin first removes your Capture access.
+
+If you see "You aren't assigned to a stage today. Ask the Floor Manager.", you can't count today.
+
 ### 4.5 Picked the wrong roll?
 
 If you haven't taken a shot yet, you can undo it:
@@ -241,10 +258,38 @@ yet", remind the Floor Manager; you can still finish the batch.
 
 A batch can only be finished once.
 
+### 5.4a Say what was wrong with the failed pairs
+
+When **Of these, failed inspection** is more than 0, **What was wrong** appears. Add one line for
+each defect:
+
+1. Choose the **Defect** and type the **Pairs**.
+2. Choose **Fixable** or **Not fixable**. For a fixable one choose the stage it **Goes back to**.
+3. **Add another defect** for the next line. If the form suggests an answer ("Usually fixable at
+   Sole-ing, 14 of 17") tap **Use this**, or ignore it. It is never filled in for you.
+4. The lines must add up to the failed pairs. The form tells you what is missing ("3 of 5 failed
+   pairs have a reason") or too many ("You listed 6 for 5 failed pairs. Remove 1."). **Other** needs
+   a description.
+
+Each fixable line becomes a **repair** with a code such as **RP-261120-2-1** at its stage. A not
+fixable line is scrapped.
+
+### 5.4b Inspect a repair
+
+When the stage marks a repair **Back for inspection**, it joins the **Queue** under
+**Repairs back for inspection**, with the batch it came from, the defect and how long it has waited.
+Repairs have no due time. Tap **Inspect repair** and enter how many pairs **Passed**, were
+**Scrapped**, or are **Sent back again** (**Send some back again**, then the stage). The three must
+add up to the repair's pairs. A repair can fail again as often as needed. Passed repaired pairs count
+toward the quota on the day they pass.
+
 ### 5.5 Correct a mistake
 
 On the day you inspected the batch, tap **Correct** on the finished batch, change the numbers, and write **Why are you
 correcting it?** Then tap **Save correction**. Both the old and new counts are kept in the audit log.
+The failed pairs and the lines under **What was wrong** can change only while none of the batch's
+repairs is back for inspection; after that the dialog says so and you can still correct the other
+counts.
 
 ---
 
@@ -309,6 +354,23 @@ Once a batch is being inspected, Urgent, voided or finished, today's plan can't 
 
 **Recent days** explains each short day in one sentence, for example "Below quota by 18 pairs. 3 of
 12 Shoe Constructors were absent." It never names a person.
+
+### 6.3a Stages and work in progress
+
+- **Who works where:** in **Batches → Plan days**, open a planned day. **Who works where** lists the
+  active Shoe Constructors under each stage. A constructor with **Capture access** is already under **Preparation**, ticked and locked ("Has Capture access"), and isn't offered under the other stages: they are at Preparation every working day, and nothing is saved for them. Everyone else can go to any stage, Preparation included. Tick a person at one stage (each is at one stage a
+  day; ticking them elsewhere moves them), then **Save stages**. A day with none starts from the
+  last working day ("Same as Thu 19 Nov. Save to confirm."); nothing is saved until you do. You can
+  change today and later planned days even after the plan locks; past days are read-only. A person
+  marked absent that day is flagged **Absent**.
+- **Work in progress:** the third tab on **Batches**. Each stage shows the pairs there now ("as of
+  14:05", or "Not counted today"), its repairs and a quiet line "Assigned today: …" below. Use
+  **Update count** for a stage nobody is assigned to. On a repair at a stage use **Back for
+  inspection** (or **Change**: move it to another stage, or **Not fixable after all**, each with a
+  reason, until it is back). The Overview has a small card for it.
+- **Reports → Operations** has four new sections: **Final defects**, **Where defects come from**,
+  **Repairs** and **Work in progress**. Failed pairs from before reasons were recorded show as
+  "Reason not recorded". Nothing is by person.
 
 ### 6.4 Attendance
 
@@ -434,7 +496,12 @@ Open **More actions** (the menu on the person's row) and choose **Give camera ac
 
 ### 7.3 Settings
 
-Settings has four tabs.
+Settings has five tabs.
+
+**Final defect types** (Phase 34): the defects the Quality Inspector picks for pairs that fail
+inspection (Lifted sole, Glue marks, Loose stitching, Scuffs, Other). It is a separate list from the
+camera's **Defect types**. Add, rename or switch types off; the key can't change. **Other** always
+stays on. The five shown are examples until CPoint gives its own list.
 
 **Thresholds**
 

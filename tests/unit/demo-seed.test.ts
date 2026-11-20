@@ -198,6 +198,44 @@ const attendance = {
     },
   ),
 };
+// Phase 34 (D-130): findings, repairs and stages go through their own services.
+const FINAL_TYPES = ["LIFTED_SOLE", "GLUE_MARKS", "LOOSE_STITCHING", "SCUFFS", "OTHER"].map(
+  (key) => ({ id: `t-${key}`, key, label: key, isActive: true }),
+);
+const repairJobs = Array.from({ length: 7 }, (_, i) => ({
+  id: `j${i + 1}`,
+  pairs: 2,
+  sentAt: new Date(`2026-01-0${i + 1}T04:00:00Z`),
+  finding: { finalDefectType: { key: i === 4 ? "LOOSE_STITCHING" : "LIFTED_SOLE" } },
+}));
+const repairSvc = {
+  finalDefectTypeOptions: vi.fn(async () => FINAL_TYPES),
+  markRepairBack: vi.fn(async (_id: string, _actor: unknown, _when: Date) => ({
+    id: "j",
+    code: "RP",
+  })),
+};
+vi.mock("@/server/services/repair.service", () => repairSvc);
+vi.mock("@/server/models/repair.model", () => ({
+  listRepairsByStatus: vi.fn(async () => repairJobs),
+}));
+vi.mock("@/server/models/stage.model", () => ({
+  listActiveConstructors: vi.fn(async () =>
+    // c1 to c4 have Capture access (the demo's four capturers); the other eight don't.
+    Array.from({ length: 12 }, (_, i) => ({
+      id: `c${i + 1}`,
+      name: `Constructor ${i + 1}`,
+      canCapture: i < 4,
+    })),
+  ),
+}));
+const stages = {
+  saveStageAssignments: vi.fn(
+    async (_day: string, _input: object, _actor: unknown, _when: Date) => ({ saved: true }),
+  ),
+  saveStageCount: vi.fn(async (_input: object, _actor: unknown, _when: Date) => ({ pairs: 1 })),
+};
+vi.mock("@/server/services/stage.service", () => stages);
 const production = {
   saveDayPlan: vi.fn(async (day: string) => ({ saved: true, day })),
   markNonWorking: vi.fn(async (day: string) => ({ saved: true, day })),
@@ -212,6 +250,10 @@ const batchQueue = {
     updatedAt: "2026-01-01T09:00:00.000Z",
   })),
   setBatchPriority: vi.fn(async () => ({ id: "b1", code: "B-260101-2", saved: true })),
+  inspectRepair: vi.fn(async (_id: string, _input: object, _actor: unknown, _when: Date) => ({
+    id: "j",
+    code: "RP",
+  })),
 };
 vi.mock("@/server/services/batch-queue.service", () => batchQueue);
 vi.mock("@/server/services/attendance.service", () => attendance);
@@ -407,6 +449,104 @@ describe("seedDemoWeek", () => {
         byDay(when) === "2026-09-30" ? "manager@cpoint.local" : "inspector@cpoint.local",
       );
     expect(checkIns.some(([, actor]) => actor.id === "manager@cpoint.local")).toBe(true);
+  });
+
+  it("lists what was wrong on every failed batch, by a fixed rotation (Phase 34, D-130)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    type Finish = {
+      failedPairs: number;
+      findings: {
+        finalDefectTypeId: string;
+        pairs: number;
+        remedy: string;
+        returnStage?: string;
+      }[];
+    };
+    const inputs = (production.saveCheckIn.mock.calls as unknown as [Finish][]).map(
+      ([input]) => input,
+    );
+    for (const c of inputs) {
+      const listed = c.findings.reduce((n, f) => n + f.pairs, 0);
+      expect(listed).toBe(c.failedPairs);
+      for (const f of c.findings)
+        expect(f.remedy === "FIXABLE" ? !!f.returnStage : f.returnStage === undefined).toBe(true);
+    }
+    const lines = inputs.flatMap((c) => c.findings);
+    const count = (key: string) => lines.filter((f) => f.finalDefectTypeId === `t-${key}`).length;
+    // Enough of two types inside four weeks for the suggestion to show.
+    expect(count("LIFTED_SOLE")).toBeGreaterThanOrEqual(5);
+    expect(count("GLUE_MARKS")).toBeGreaterThanOrEqual(5);
+    expect(count("SCUFFS")).toBeGreaterThanOrEqual(1);
+    expect(count("LOOSE_STITCHING")).toBe(1);
+    expect(lines.find((f) => f.finalDefectTypeId === "t-LOOSE_STITCHING")?.returnStage).toBe(
+      "CONSTRUCTION",
+    );
+    expect(
+      lines
+        .filter((f) => f.finalDefectTypeId === "t-SCUFFS")
+        .every((f) => f.remedy === "NOT_FIXABLE"),
+    ).toBe(true);
+  });
+
+  it("assigns every demo constructor to one stage a working day and counts the stages (Phase 34)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    const saved = stages.saveStageAssignments.mock.calls as unknown as [
+      string,
+      { assignments: { stage: string; userIds: string[] }[] },
+    ][];
+    expect(saved.length).toBeGreaterThanOrEqual(8);
+    for (const [, input] of saved) {
+      expect(input.assignments.map((a) => a.stage)).toEqual([
+        "PREPARATION",
+        "CONSTRUCTION",
+        "SOLE_ING",
+        "FINISHING",
+      ]);
+      const everyone = input.assignments.flatMap((a) => a.userIds);
+      expect(new Set(everyone).size).toBe(everyone.length);
+      // The four with Capture access are at Preparation by their flag (Addendum 1, A-95): they are
+      // never saved, so the seed can't put one at another stage. The other eight are, once each.
+      expect(everyone).toHaveLength(8);
+      for (const capturer of ["c1", "c2", "c3", "c4"]) expect(everyone).not.toContain(capturer);
+    }
+    // One person changes stage from day to day, so the prefill banner isn't always right.
+    const stageOf = (i: number) =>
+      saved[i][1].assignments.find((a) => a.userIds.includes("c5"))!.stage;
+    expect(stageOf(0)).not.toBe(stageOf(1));
+    expect(stages.saveStageCount).toHaveBeenCalled();
+    const actors = stages.saveStageCount.mock.calls.map(
+      ([, actor]) => (actor as { role: string }).role,
+    );
+    expect(new Set(actors)).toEqual(new Set(["FLOOR_MANAGER", "SHOE_CONSTRUCTOR"]));
+    // Preparation is counted by the constructor with Capture access, the others by who is there.
+    const counts = stages.saveStageCount.mock.calls as unknown as [
+      { stage: string },
+      { id: string; role: string },
+    ][];
+    const byConstructor = counts.filter(([, actor]) => actor.role === "SHOE_CONSTRUCTOR");
+    expect(
+      byConstructor
+        .filter(([input]) => input.stage === "PREPARATION")
+        .every(([, a]) => a.id === "c1"),
+    ).toBe(true);
+    expect(byConstructor.some(([input]) => input.stage === "PREPARATION")).toBe(true);
+  });
+
+  it("puts repairs in every state: back, inspected, sent back again, and left at the stage (Phase 34)", async () => {
+    await seedDemoWeek({ now, seed: 1 });
+    const back = repairSvc.markRepairBack.mock.calls.map(([id]) => id);
+    expect(back).toEqual(["j1", "j2", "j3", "j6"]);
+    const inspected = batchQueue.inspectRepair.mock.calls as unknown as [
+      string,
+      { passedPairs: number; scrappedPairs: number; resend: { stage: string; pairs: number }[] },
+    ][];
+    expect(inspected.map(([id]) => id)).toEqual(["j1", "j2", "j3"]);
+    expect(inspected[0][1].passedPairs).toBe(2);
+    expect(inspected[1][1]).toMatchObject({ passedPairs: 1, scrappedPairs: 1 });
+    expect(inspected[2][1].resend).toEqual([{ stage: "FINISHING", pairs: 2 }]);
+    // The Loose stitching job and the newest one stay At stage.
+    expect(back).not.toContain("j5");
+    expect(back).not.toContain("j7");
   });
 
   it("draws defects from the active defect types only", async () => {

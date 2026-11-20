@@ -11,6 +11,7 @@ import {
 } from "@/lib/production-rules";
 import { blankToUndefined, optionalText, OUT_OF_DATE } from "./shared";
 import { attendanceDaySchema } from "./attendance.validator";
+import { findingLinesSchema } from "./repair.validator";
 
 // Batches (Phase 27, D-097 to D-099). Messages name the field and the fix (D-038). The pairs
 // fields name their batch, so they are built per batch by the factories below and shared by the
@@ -112,6 +113,8 @@ export const checkInSchema = z
     pairs: z.unknown().optional(),
     failedPairs: z.unknown().optional(),
     notes: optionalText(500, "notes"),
+    /** What was wrong with the failed pairs (Phase 34); checked against the failed count. */
+    findings: findingLinesSchema,
   })
   .refine((v) => v.batchId !== undefined || v.slotAt !== undefined, {
     message: OUT_OF_DATE,
@@ -179,6 +182,8 @@ export const correctionSchema = z.object({
   expectedUpdatedAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
   pairs: z.unknown().optional(),
   failedPairs: z.unknown().optional(),
+  /** Left out when the lines can't change (a repair is already back, A-93). */
+  findings: findingLinesSchema,
   reason: correctionReasonSchema,
 });
 export type CorrectionInput = z.infer<typeof correctionSchema>;

@@ -12,8 +12,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import type { InspectionQueue, QueueItem } from "@/server/services/batch-queue.service";
+import { FindingsSummary } from "@/components/features/production/findings-summary";
+import type { Suggestion } from "@/lib/repair-rules";
+import type { InspectionQueue, QueueItem, RepairItem } from "@/server/services/batch-queue.service";
 import { FinishBatchDialog } from "./finish-batch-dialog";
+import type { DefectOption } from "./findings-editor";
+import { RepairInspectDialog } from "./repair-inspect-dialog";
 import {
   ClearQueueFilters,
   FloorManagerBatchActions,
@@ -65,7 +69,17 @@ function StateBadges({ item }: { item: QueueItem }) {
   );
 }
 
-function QueueCard({ item, queue }: { item: QueueItem; queue: InspectionQueue }) {
+type Reasons = { finalDefectTypes: DefectOption[]; suggestions: Record<string, Suggestion> };
+
+function QueueCard({
+  item,
+  queue,
+  reasons,
+}: {
+  item: QueueItem;
+  queue: InspectionQueue;
+  reasons: Reasons;
+}) {
   const takenByOther = item.state === "INSPECTING" && !item.inspectingByMe;
   return (
     <Card aria-label={item.code} data-testid={`queue-${item.code}`}>
@@ -113,6 +127,8 @@ function QueueCard({ item, queue }: { item: QueueItem; queue: InspectionQueue })
                   times: item.times,
                   dayLabel: item.day === queue.today ? undefined : item.dayLabel,
                 }}
+                finalDefectTypes={reasons.finalDefectTypes}
+                suggestions={reasons.suggestions}
               />
             )}
           </div>
@@ -122,7 +138,71 @@ function QueueCard({ item, queue }: { item: QueueItem; queue: InspectionQueue })
   );
 }
 
-function DoneRow({ item, queue }: { item: QueueItem; queue: InspectionQueue }) {
+function RepairCard({ repair, queue }: { repair: RepairItem; queue: InspectionQueue }) {
+  return (
+    <Card aria-label={repair.code} data-testid={`repair-${repair.code}`}>
+      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <p className="font-mono text-xl font-semibold tracking-tight">{repair.code}</p>
+            <Badge tone="brand">Repair</Badge>
+          </div>
+          <p className="text-muted-foreground">
+            From {repair.batchCode} · back from {repair.stageLabel}
+            {repair.dayLabel ? ` · ${repair.dayLabel}` : ""}
+          </p>
+          <p className="text-sm">
+            {repair.defect}, {n(repair.pairs)} pair{repair.pairs === 1 ? "" : "s"}
+            {repair.note ? ` (${repair.note})` : ""}
+          </p>
+          {repair.waiting && <p className="text-sm text-muted-foreground">{repair.waiting}</p>}
+        </div>
+        {queue.canInspect && (
+          <div className="flex shrink-0 flex-col gap-2 sm:w-44">
+            <RepairInspectDialog repair={repair} />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RepairDoneRow({ repair }: { repair: RepairItem }) {
+  const r = repair.result;
+  return (
+    <li
+      className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"
+      data-testid={`done-${repair.code}`}
+    >
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <p className="flex flex-wrap items-center gap-2">
+          <span className="font-mono font-medium">{repair.code}</span>
+          <Badge tone="brand">Repair</Badge>
+        </p>
+        <p className="text-sm text-muted-foreground">
+          From {repair.batchCode} · {repair.defect}, {n(repair.pairs)} pair
+          {repair.pairs === 1 ? "" : "s"} · from {repair.stageLabel}
+        </p>
+      </div>
+      {r && (
+        <p className="text-sm sm:text-right">
+          {n(r.passedPairs)} passed, {n(r.scrappedPairs)} scrapped, {n(r.resentPairs)} sent back
+          again · {r.at}
+        </p>
+      )}
+    </li>
+  );
+}
+
+function DoneRow({
+  item,
+  queue,
+  reasons,
+}: {
+  item: QueueItem;
+  queue: InspectionQueue;
+  reasons: Reasons;
+}) {
   const f = item.finished;
   return (
     <li
@@ -137,6 +217,7 @@ function DoneRow({ item, queue }: { item: QueueItem; queue: InspectionQueue }) {
         <p className="text-sm text-muted-foreground tabular-nums">
           {item.dayLabel}, {item.times} · {item.rolls}
         </p>
+        {f && <FindingsSummary lines={f.findings.summary} failedPairs={f.failedPairs} />}
       </div>
       <div className="flex flex-col gap-2 sm:items-end">
         <p className="text-sm sm:text-right">
@@ -163,6 +244,10 @@ function DoneRow({ item, queue }: { item: QueueItem; queue: InspectionQueue }) {
                 pairs: f.pairs,
                 failedPairs: f.failedPairs,
               }}
+              finalDefectTypes={reasons.finalDefectTypes}
+              suggestions={reasons.suggestions}
+              findings={f.findings.lines}
+              findingsLockedReason={f.findings.lockedReason}
             />
           </div>
         )}
@@ -171,8 +256,13 @@ function DoneRow({ item, queue }: { item: QueueItem; queue: InspectionQueue }) {
   );
 }
 
-export function QueueList({ queue }: { queue: InspectionQueue }) {
+export function QueueList({
+  queue,
+  finalDefectTypes = [],
+  suggestions = {},
+}: { queue: InspectionQueue } & Partial<Reasons>) {
   const f = queue.filters;
+  const reasons: Reasons = { finalDefectTypes, suggestions };
   const filtered = Boolean(f.day || f.status || f.priority || f.q);
   return (
     <div className="flex flex-col gap-6">
@@ -259,12 +349,33 @@ export function QueueList({ queue }: { queue: InspectionQueue }) {
           <ul className="flex flex-col gap-3" data-testid="queue-list">
             {queue.waiting.map((item) => (
               <li key={item.id}>
-                <QueueCard item={item} queue={queue} />
+                <QueueCard item={item} queue={queue} reasons={reasons} />
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      {queue.repairs.length > 0 && (
+        <section aria-labelledby="repairs-heading" className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <h2 id="repairs-heading" className="text-lg font-semibold">
+              Repairs back for inspection
+            </h2>
+            <p className="text-muted-foreground" data-testid="repairs-summary">
+              {queue.repairs.length} repair{queue.repairs.length === 1 ? "" : "s"} waiting, the one
+              that has waited longest first. Repairs have no due time.
+            </p>
+          </div>
+          <ul className="flex flex-col gap-3" data-testid="repair-list">
+            {queue.repairs.map((r) => (
+              <li key={r.id}>
+                <RepairCard repair={r} queue={queue} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <Card>
         <CardHeader>
@@ -272,12 +383,15 @@ export function QueueList({ queue }: { queue: InspectionQueue }) {
           <CardDescription>Batches from the last 7 days that have left the queue.</CardDescription>
         </CardHeader>
         <CardContent>
-          {queue.done.length === 0 ? (
+          {queue.done.length === 0 && queue.repairsDone.length === 0 ? (
             <p className="text-muted-foreground">Nothing inspected in the last 7 days yet.</p>
           ) : (
             <ul className="divide-y" data-testid="done-list">
               {queue.done.map((item) => (
-                <DoneRow key={item.id} item={item} queue={queue} />
+                <DoneRow key={item.id} item={item} queue={queue} reasons={reasons} />
+              ))}
+              {queue.repairsDone.map((r) => (
+                <RepairDoneRow key={r.id} repair={r} />
               ))}
             </ul>
           )}

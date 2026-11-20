@@ -17,6 +17,25 @@ const ops = {
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/report.model", () => report);
 vi.mock("@/server/models/ops-report.model", () => ops);
+// Phase 34: the final defect, repair and work in progress sections have their own tests.
+vi.mock("@/server/services/repair.service", () => ({
+  repairReport: vi.fn(async () => ({
+    finalDefects: { rows: [], notRecorded: 0, totalFailed: 0 },
+    origins: { stages: [], rows: [] },
+    repairs: {
+      sent: 0,
+      back: 0,
+      passed: 0,
+      scrapped: 0,
+      sentAgain: 0,
+      stillOpen: 0,
+      averageHours: null,
+    },
+  })),
+}));
+vi.mock("@/server/services/stage.service", () => ({
+  wipReport: vi.fn(async () => ({ stages: [], perDay: [], counted: 0 })),
+}));
 const productionDay = (
   day: string,
   passed: number,
@@ -329,14 +348,18 @@ describe("operationsReport", () => {
       "attention",
       "checkpoint",
       "days",
+      "finalDefects",
       "kpis",
       "lineReturnedShare",
       "mostDefects",
+      "origins",
       "previous",
       "production",
       "range",
+      "repairs",
       "stock",
       "suppliers",
+      "wip",
     ]);
   });
 

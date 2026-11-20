@@ -3,10 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { toActionError, type ActionResult } from "@/server/lib/action-result";
 import {
+  inspectRepair,
   setBatchPriority,
   startInspection,
   voidBatch,
 } from "@/server/services/batch-queue.service";
+import { changeRepair, markRepairBack } from "@/server/services/repair.service";
+import { saveStageAssignments, saveStageCount } from "@/server/services/stage.service";
+import {
+  repairActionSchema,
+  repairInspectSchema,
+  stageAssignmentsSchema,
+  stageCountSchema,
+} from "@/server/validators/repair.validator";
 import { requirePermission } from "@/server/policies/guard";
 import {
   clearNonWorking,
@@ -29,6 +38,7 @@ import { z } from "zod";
 
 function refresh() {
   revalidatePath("/batches");
+  revalidatePath("/camera/capture");
   revalidatePath("/batches/plan");
   revalidatePath("/floor-manager");
   revalidatePath("/reports");
@@ -153,5 +163,79 @@ export async function markDayAction(
     return { ok: true, saved: result.saved, day: result.day };
   } catch (error) {
     return toActionError(error, nonWorking ? "The Non-working mark" : "Undoing the mark");
+  }
+}
+
+// ───────────── repairs, stages and counts (Phase 34, D-130) ─────────────
+
+const NO_REPAIR = "This repair doesn't exist. Refresh the page.";
+
+/** Back for inspection (the stage's constructor or the Floor Manager), or the Floor Manager's change. */
+export async function repairAction(
+  id: string,
+  input: unknown,
+): Promise<ActionResult<{ code: string }>> {
+  const user = await requirePermission("repair:update");
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: NO_REPAIR };
+  try {
+    const parsed = repairActionSchema.parse(input);
+    if (parsed.action === "back") {
+      const result = await markRepairBack(id, user);
+      refresh();
+      return { ok: true, code: result.code };
+    }
+    await requirePermission("repair:manage");
+    const result = await changeRepair(id, parsed, user);
+    refresh();
+    return { ok: true, code: result.code };
+  } catch (error) {
+    return toActionError(error, "The repair");
+  }
+}
+
+/** Inspect a repair that is back: passed, scrapped and sent back again. */
+export async function inspectRepairAction(
+  id: string,
+  input: unknown,
+): Promise<ActionResult<{ code: string; children: { code: string }[] }>> {
+  const user = await requirePermission("production:checkin");
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: NO_REPAIR };
+  try {
+    const result = await inspectRepair(id, repairInspectSchema.parse(input), user);
+    refresh();
+    return { ok: true, code: result.code, children: result.children };
+  } catch (error) {
+    return toActionError(error, "The repair inspection");
+  }
+}
+
+/** Who works at each stage on a day (Plan dialog, Floor Manager). */
+export async function saveStageAssignmentsAction(
+  day: string,
+  input: unknown,
+): Promise<ActionResult<{ day: string }>> {
+  const user = await requirePermission("stage:assign");
+  if (!planDaySchema.safeParse(day).success) return { ok: false, error: NO_DAY };
+  try {
+    const result = await saveStageAssignments(day, stageAssignmentsSchema.parse(input), user);
+    refresh();
+    return { ok: true, day: result.day };
+  } catch (error) {
+    return toActionError(error, "Who works where");
+  }
+}
+
+/** The pairs at a stage now, for today (My stage on Capture, or the Floor Manager's board). */
+export async function saveStageCountAction(
+  input: unknown,
+): Promise<ActionResult<{ stage: string; pairs: number }>> {
+  const user = await requirePermission("stage:count");
+  try {
+    const parsed = stageCountSchema.parse(input);
+    const result = await saveStageCount({ stage: parsed.stage, pairs: parsed.pairs }, user);
+    refresh();
+    return { ok: true, stage: result.stage, pairs: result.pairs };
+  } catch (error) {
+    return toActionError(error, "The count");
   }
 }

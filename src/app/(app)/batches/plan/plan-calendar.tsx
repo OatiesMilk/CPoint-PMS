@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { StageAssignments } from "./stage-assignments";
 import { useRouter } from "next/navigation";
 import { CalendarOff, CircleAlert, LoaderCircle, RefreshCw, Sparkles, Undo2 } from "lucide-react";
 import { toast } from "sonner";
@@ -415,6 +416,7 @@ function DayDialogBody({
         )}
         {changed}
         {day.lockedReason && <Alert tone="info">{day.lockedReason}</Alert>}
+        {p && <StageAssignments day={day.day} />}
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="ghost">
@@ -602,6 +604,13 @@ function DayDialogBody({
           </div>
         </DialogFooter>
       </form>
+      {p ? (
+        <StageAssignments day={day.day} />
+      ) : (
+        <p className="border-t pt-4 text-sm text-muted-foreground">
+          Plan the day first. Then you can say who works where.
+        </p>
+      )}
     </>
   );
 }

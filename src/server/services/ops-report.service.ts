@@ -20,6 +20,8 @@ import {
   supplierRolls,
 } from "@/server/models/ops-report.model";
 import { productionReport, recentProductionDays } from "./production.service";
+import { repairReport } from "./repair.service";
+import { wipReport } from "./stage.service";
 import { foundAt, qualityReport, rollFlow } from "./report.service";
 
 // Operations report (D-033): what is happening on the floor, in resources, flow, stock and supply.
@@ -48,6 +50,8 @@ export async function operationsReport(range: ReportRange, now: Date = appNow())
     supplierRows,
     supplierDefectRows,
     worstRolls,
+    repairSections,
+    wip,
   ] = await Promise.all([
     productionReport(range, now),
     productionReport(prev, now),
@@ -59,6 +63,8 @@ export async function operationsReport(range: ReportRange, now: Date = appNow())
     supplierRolls(range),
     supplierDefects(range, found),
     rollsWithMostDefects(range, ROLLS_SHOWN),
+    repairReport(range),
+    wipReport(range),
   ]);
   const mostDefects = await withDefects(worstRolls, found);
 
@@ -171,6 +177,11 @@ export async function operationsReport(range: ReportRange, now: Date = appNow())
     attention,
     /** Per day the pairs finished, failed and passed against the quota (Phase 27). */
     production,
+    /** Final defects, where they come from, repairs and work in progress (Phase 34, D-130). */
+    finalDefects: repairSections.finalDefects,
+    origins: repairSections.origins,
+    repairs: repairSections.repairs,
+    wip,
     days,
     stock,
     suppliers,

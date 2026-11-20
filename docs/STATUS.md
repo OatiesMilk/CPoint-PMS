@@ -3,12 +3,11 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-20 (Phase 33 QA passed, run 6; git commands given to Dylan)
-**Branch:** `main` at 42a2c1e (#54, Phase 32).
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`, on `main`):** Phase 33 (code, migration, tests, plan,
-handoff, prompts, reports and docs, QA passed) and the Phase 32 wrap-up edits to this file,
-ROADMAP and SESSION_LOG.
-`docs/DEMO_SCRIPT.md` stays out (Dylan).
+**Last updated:** 2026-11-20 (Phase 34 QA done, run 4 PASS; waiting for the commit)
+**Branch:** `main` at e22ebb9 (#55, Phase 33); Phase 34 is uncommitted.
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** all of Phase 34 (file list in `qa/phase-34-files.txt`),
+the Phase 33 merge notes in STATUS, ROADMAP and SESSION_LOG (they go in with Phase 34's commit), and
+`docs/DEMO_SCRIPT.md`, which stays out (Dylan).
 
 - **Phase 31 (built 2026-11-07, Dylan's go):** the master spec's context, domain rules, roles,
   data model and CV contract rewritten to the system as built, with "Changed since the rebuild";
@@ -166,6 +165,48 @@ check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
   until the notices refetched (the demo clock's existing refresh, D-125, not Phase 33). With runs 2
   to 4 every scenario has passed; Q12 not applicable. **Phase 33 QA done**; git commands for
   `feature/inspection-queue` given to Dylan.
+- **Phase 34, final defects, repairs and work in progress (built 2026-11-20, Dylan's go, D-130):**
+  a failed batch is saved with **What was wrong** (final defect type, pairs, Fixable or Not fixable,
+  the stage a fixable one goes back to); each fixable line makes a repair job (`RP-261120-2-1`) At
+  stage → Back for inspection (the stage's constructor on Capture → My stage, or the Floor Manager)
+  → inspected by the QI from the Queue (passed, scrapped, sent back again with no limit); the Floor
+  Manager moves a job or calls it Not fixable after all; passed repaired pairs count toward the
+  quota that day. After 5 findings of a type in 4 weeks the form suggests the usual answer. The
+  Floor Manager assigns constructors to stages in the Plan dialog (one stage per person per day,
+  suggested from the last working day); constructors count their stage on Capture; **Batches →
+  Work in progress** (a third tab; read-only for the QI) shows each stage and its repairs.
+  Reports → Operations has Final defects, Where defects come from, Repairs and Work in progress;
+  Settings → Final defect types (five placeholders). "Upper making" is now **Construction**.
+  Migration `20261120120000_final_defects_and_repairs`. `npm run check` passed (**938 unit
+  tests**, build OK); e2e `final-defects.spec.ts` and `stage-wip.spec.ts` written, not run. Plan
+  `docs/prompts/plans/phase-34-defects-and-repairs-plan.md`, handoff
+  `qa/handoffs/2026-11-20-phase-34-defects-and-repairs.md`, prompt `qa/CODEX_PROMPT_PHASE_34.md`
+  (starts with `docker compose stop app`).
+- **Phase 34 Codex run 4 PASS** (`qa/reports/2026-11-20-phase-34-run4.md`): targeted 28 of 28, full suite 118
+  passed, 0 failed, 2 skipped, none omitted; clean-up queries 0 and 0; final reset on Real time. The optional
+  C6 script timed out at sign-in (no demo password), non-gating; C6 stays closed from run 3. **Phase 34 QA
+  done**; git commands for `feature/defects-and-repairs` given to Dylan.
+- **Phase 34 Codex run 3 FAIL, fixed** (`qa/reports/2026-11-20-phase-34-run3.md`; C2 and the clean-up
+  queries passed): two test faults, no application fault. `final-defects.spec.ts` read today's whole-line
+  `passed` while another worker changed it (now an identity inside one response); the D-088 test in
+  `batches.spec.ts` replayed a stale roster (now read before each save). C6 (demo clock) is closed as
+  passed, a tooling artefact. `npm run check` passed (944). Next: `qa/CODEX_PROMPT_PHASE_34_RUN4.md`; a full
+  pass closes Phase 34 QA.
+- **Phase 34 Codex run 2 FAIL, fixed** (`qa/reports/2026-11-20-phase-34-run2.md`; 20 of 24 manual checks
+  passed, Addendum 1 works): the four e2e failures were test faults (clean-ups that didn't delete
+  findings first, a report range that included the seed, a positional checkbox) and are fixed; a
+  new test covers A3's constructor and board 403s; the stage count form now shows its message
+  at once for a non-whole number (C2). The demo clock form (C6) is not a Phase 34 change: run 3 has a
+  decisive fetch check. `npm run check` passed (943). Next: `qa/CODEX_PROMPT_PHASE_34_RUN3.md`.
+- **Phase 34 Codex run 1 PASS WITH ISSUES, fixed** (`qa/reports/2026-11-20-phase-34-run1.md`, before
+  Addendum 1; 41 of 47 scenarios passed): the e2e failures were `batches.spec.ts` and
+  `inspection-queue.spec.ts` finishing failed pairs with no reason (now they fill a line), the hidden
+  Fixable radio's click target (the input now covers its label), the production CSV's new column
+  (`Passed after repair`) and a QI board selector. C6 (the demo clock didn't move as a constructor, nothing
+  in this phase touches it) and the scenarios it blocked are retried. **Addendum 1** (constructors with
+  Capture access are always at Preparation, A-95, A-96) is built. `npm run check` passed (940). Also fixed from the planning thread's triage: the error summary's link for a
+  finding line (a lost-backslash pattern). The run 2 prompt has the C6 fallback and says C3, C4 and A3
+  are reported from the e2e spec. Next: `qa/CODEX_PROMPT_PHASE_34_RUN2.md`.
 - **Defense revisions (planned 2026-11-16, re-checked on the laptop 2026-11-17, waiting for Dylan's go):** the panel's four revisions
   as Phases 32 to 36 in `docs/prompts/plans/defense-revisions-plan.md`: 32 roll locations and QR
   labels, 33 the Inspection queue with batch codes, 34 final-product defects, repairs and work in
@@ -240,7 +281,9 @@ check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
 - [x] 32. Roll IDs and storage locations you can find on the floor (defense revision 4; built
       2026-11-17, D-128; QA passed, run 3; merged #54, CI green)
 - [x] 33. The Inspection queue with real batch codes (defense revision 2; built 2026-11-19, D-129;
-      QA passed, run 6; to commit as `feature/inspection-queue`)
+      QA passed, run 6; merged #55)
+- [ ] 34. Final defects, repairs and work in progress (defense revision 1; built 2026-11-20, D-130;
+      QA passed, run 4; uncommitted)
 
 ## What works right now
 
@@ -271,14 +314,14 @@ D-entries.
   suppliers with codes, the lunch break; API tokens for the simulator; the audit log.
 - **Look (Phase 30F, D-122):** tokens, shared page header, KPI tiles, states, phone layouts for
   Capture and Batches.
-- **Database:** the latest migration is `inspection_queue` (D-129, Phase 33); `prisma/migrations/` lists them all.
+- **Database:** the latest migration is `final_defects_and_repairs` (D-130, Phase 34); `prisma/migrations/` lists them all.
   UUIDv7 ids (D-018).
 
 ## Next step (exact)
 
-0. Phase 33: Dylan runs the git commands (branch `feature/inspection-queue`, list file
-   `qa/phase-33-files.txt`), opens the PR, and merges once CI is green. Rebuild the Docker app
-   (`docker compose up --build -d`) before using it again. Then Phase 34 in its own thread.
+0. Phase 34 QA is done (run 4 PASS). Dylan: run the git commands for `feature/defects-and-repairs`
+   (files from `qa/phase-34-files.txt`), open the PR, merge when CI is green; rebuild the Docker app
+   before using it.
 1. Dylan: paste `qa/CODEX_PROMPT_PHASE_31_RUN4.md` into Codex (a weekday).
 2. Dylan, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too).
@@ -297,6 +340,41 @@ D-entries.
 - None for the demo.
 
 ## Open questions / assumptions awaiting client confirmation
+
+- Decided (Dylan, 2026-11-20, D-130): the Work in progress board is a third tab on Batches; a
+  constructor assigned to a stage but without camera access still gets My stage on Capture; one
+  stage per constructor per day; a repair that fails again can be scrapped or sent back with no
+  limit. Tell CPoint. **To ask CPoint:** their real list of final defects (the five are
+  placeholders) and their rule for repairs that keep failing.
+- ASSUMPTION (A-62, D-130): final defect types are a separate list from the camera's leather defect
+  types; `OTHER` always exists and needs a note.
+- ASSUMPTION (A-63, D-130, amended): the QI decides Fixable and the stage; the Floor Manager may move
+  a job or mark it Not fixable after all until the stage marks it Back.
+- ASSUMPTION (A-64, D-130): passed = finished − failed + repaired pairs that passed that day.
+- ASSUMPTION (A-65, A-90, D-130): a repair has no due time (never Late) and is not in the tab
+  title's due count; it waits in the Queue.
+- ASSUMPTION (A-66, D-130): leather defects and the camera checkpoint are unchanged.
+- ASSUMPTION (A-72, A-73, D-130): one shared count per stage, latest wins; an assigned constructor
+  or the Floor Manager enters it; who entered it is in the audit log only.
+- ASSUMPTION (A-74, D-130): an empty day's stages are suggested from the last working day (up to two
+  weeks back) and stored only when saved.
+- ASSUMPTION (A-75, A-76, D-130): the stage is where a fixable pair goes back to; a Not fixable
+  pair has none. The hint needs 5 findings in the last 4 weeks and never fills the form (a tie goes
+  to Fixable, then the earlier stage).
+- ASSUMPTION (A-86, D-130): a constructor is at one stage a day (amended by A-95).
+- ASSUMPTION (A-95, D-130, Addendum 1): constructors with Capture access are always at Preparation; the
+  Floor Manager can't move one (to move one, the Admin first removes their Capture access).
+- ASSUMPTION (A-96, D-130): constructors without Capture access may be assigned to any stage,
+  Preparation included. **To ask CPoint:** is a capture constructor really at Preparation all day, one station per person?
+- ASSUMPTION (A-87, D-130): a Fixable finding creates its repair job at once.
+- ASSUMPTION (A-88, D-130): a repair that fails again is scrapped or sent back again, with no limit.
+- ASSUMPTION (A-89, D-130): failed pairs from before Phase 34 have no reasons and show as "Reason
+  not recorded"; nothing is backfilled.
+- ASSUMPTION (A-91, D-130): a stage count from an earlier day shows "Not counted today"; a stage
+  nobody is assigned to is counted by the Floor Manager.
+- ASSUMPTION (A-93, A-94, D-130): failed pairs and lines can be corrected on the inspection day until
+  a repair from the batch is Back for inspection; a repair's inspection can't be corrected until
+  Phase 35.
 
 - Decided (Dylan, 2026-11-19, D-129): batches keep `B-` and old `B-`/`R-` roll codes are renamed
   `LR-…` (old code kept); only Open / Inspecting / Inspected / Void is stored; every old batch gets

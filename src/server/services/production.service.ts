@@ -90,6 +90,8 @@ import {
   type DayPlanData,
   type DayPlanRow,
 } from "@/server/models/production.model";
+import { repairedPassedByDay } from "@/lib/repair-rules";
+import { repairInspectionsBetween } from "@/server/models/repair.model";
 import { checkInCoverReason, mayEnterCheckIns } from "@/server/policies/permissions";
 import {
   parseBatchCounts,
@@ -101,6 +103,15 @@ import {
 } from "@/server/validators/production.validator";
 import { qualityInspectorPresentOn, workforceByDay } from "./attendance.service";
 import { recordAudit } from "./audit.service";
+import {
+  LOCKED_MESSAGE,
+  findingsForCheckIns,
+  findingsState,
+  type CheckInFindings,
+  parseFindingLines,
+  rebuildFindings,
+  writeFindings,
+} from "./repair.service";
 import { rollOutcomesByDay, rollsScannedByDay, rollsUsedByCheckIn } from "./roll.service";
 
 type Actor = { id: string; name?: string };
@@ -347,7 +358,10 @@ export type DayRow = {
   /** Pairs finished, the pairs of them that failed inspection, and the pairs that passed (C-27). */
   finished: number;
   failed: number;
+  /** Passed = finished − failed + repaired pairs that passed that day (Phase 34, A-64). */
   passed: number;
+  /** Of the passed pairs, those that passed after a repair that day. */
+  repairedPassed: number;
   /** failed ÷ finished; null when nothing was finished. */
   failedShare: number | null;
   quota: number | null;
@@ -368,16 +382,25 @@ export type DayRow = {
 type Loaded = Plans & {
   checkIns: CheckInRow[];
   rolls: Map<string, number>;
+  /** Pairs that passed after a repair, by the day they were inspected (A-64). */
+  repaired: Map<string, number>;
 };
 
 async function load(from: string, to: string): Promise<Loaded> {
-  const [plans, lunches, checkIns, rolls] = await Promise.all([
+  const [plans, lunches, checkIns, rolls, repairs] = await Promise.all([
     listDayPlans(from, to),
     listLunchBreaks(),
     listCheckIns(from, to),
     rollsScannedByDay(from, to),
+    repairInspectionsBetween(from, to),
   ]);
-  return { plans: byDay(plans), lunches, checkIns, rolls };
+  return {
+    plans: byDay(plans),
+    lunches,
+    checkIns,
+    rolls,
+    repaired: repairedPassedByDay(repairs),
+  };
 }
 
 /** The day's quota from its plan (D-114). */
@@ -413,7 +436,8 @@ export async function productionDays(
     const missed = batches.filter((b) => batchState(b, recordFor(b), now) === "MISSED").length;
     const finished = dayCheckIns.reduce((s, c) => s + c.pairs, 0);
     const failed = dayCheckIns.reduce((s, c) => s + c.failedPairs, 0);
-    const passed = Math.max(0, finished - failed);
+    const repairedPassed = data.repaired.get(day) ?? 0;
+    const passed = Math.max(0, finished - failed) + repairedPassed;
     const quota = quotaOn(data.plans, day);
     const wf = workforce.get(day)!;
     rows.push({
@@ -425,6 +449,7 @@ export async function productionDays(
       finished,
       failed,
       passed,
+      repairedPassed,
       failedShare: failedShare(finished, failed),
       quota,
       share: quota ? passed / quota : null,
@@ -510,6 +535,8 @@ export type BatchView = {
     correction: { at: string; by: string; reason: string } | null;
     /** Rolls ticked Fully used at this finish (Phase 30A). */
     usedRolls: { id: string; code: string }[];
+    /** What was wrong with the failed pairs, and whether a correction can change it (Phase 34). */
+    findings: CheckInFindings;
   } | null;
 };
 
@@ -534,6 +561,7 @@ function batchView(
   todayPresent: number | null,
   usedRolls: { id: string; code: string }[] = [],
   queued?: BatchRow,
+  findings?: CheckInFindings,
 ): BatchView {
   const state = batchState(batch, row ?? null, now);
   const opens = finishOpensAt(batch);
@@ -578,6 +606,7 @@ function batchView(
                 }
               : null,
           usedRolls,
+          findings: findings ?? { lines: [], summary: [], lockedReason: null },
         }
       : null,
   };
@@ -600,6 +629,7 @@ export async function productionToday(viewer: { role: Role }, now: Date = appNow
   const canEnter = mayEnterCheckIns(viewer.role, qiPresent);
   // Rolls ticked Fully used before Phase 30E still show on their batch (history).
   const used = await rollsUsedByCheckIn(data.checkIns.map((c) => c.id));
+  const findings = await findingsForCheckIns(data.checkIns.map((c) => c.id));
   const rows = batches.map((b) => {
     const row = data.checkIns.find((c) => c.slotAt.getTime() === b.at.getTime());
     return batchView(
@@ -609,6 +639,7 @@ export async function productionToday(viewer: { role: Role }, now: Date = appNow
       wf.constructorsPresent,
       row ? (used.get(row.id) ?? []) : [],
       queued.get(b.at.toISOString()),
+      row ? findings.get(row.id) : undefined,
     );
   });
   const quota = quotaOn(data.plans, day);
@@ -617,7 +648,7 @@ export async function productionToday(viewer: { role: Role }, now: Date = appNow
   const left = rows.filter(
     (r) => !r.checkIn && r.state !== "MISSED" && r.queue?.status !== "VOID",
   ).length;
-  const progress = quotaProgress(finished, failed, quota, left);
+  const progress = quotaProgress(finished, failed, quota, left, data.repaired.get(day) ?? 0);
   const dayDone = rows.length > 0 && left === 0;
   const shortfall = dayDone
     ? explainShortfall({
@@ -1096,6 +1127,7 @@ export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now:
       `${batch.code} was voided${queued.voidReason ? `: ${queued.voidReason}` : ""}. It can't be finished.`,
     );
   const { pairs, failedPairs } = counts(batch.code, input);
+  const lines = await parseFindingLines(failedPairs, input.findings);
   const wf = workforce.get(day)!;
 
   try {
@@ -1126,6 +1158,10 @@ export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now:
         if (!ok)
           throw Errors.stale(`${batch.code} was changed by someone else. Refresh to see it.`);
       }
+      const written = await writeFindings(
+        { checkInId: row.id, batchCode: batch.code, lines, actorId: actor.id, now },
+        tx,
+      );
       await recordAudit(tx, {
         actor: { type: "USER", userId: actor.id },
         action: "production.checkin",
@@ -1138,12 +1174,20 @@ export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now:
           inspectedOnLaterDay: day !== manilaToday(now) ? true : undefined,
           pairs,
           failedPairs,
+          findings: written.summary,
+          repairs: written.jobs.map((j) => j.code),
           constructorsPresent: wf.constructorsPresent,
           notes: input.notes ?? null,
           ...(covering ? { coveringForQualityInspector: true } : {}),
         },
       });
-      return { id: row.id, number: batch.number, code: batch.code, time: batch.time };
+      return {
+        id: row.id,
+        number: batch.number,
+        code: batch.code,
+        time: batch.time,
+        repairs: written.jobs,
+      };
     });
   } catch (error) {
     // Two people finishing the same batch at once: the unique slot decides, the second is stale.
@@ -1187,6 +1231,23 @@ export async function correctCheckIn(
   const number = batch?.number ?? 0;
   const code = batch?.code ?? batchCode(day, number);
   const next = counts(code, input);
+  // The lines can change only while none of the batch's repairs is Back or Done (A-93).
+  const state = await findingsState(id);
+  const linesChange = input.findings !== undefined;
+  if (state.locked && next.failedPairs !== row.failedPairs) throw Errors.conflict(LOCKED_MESSAGE);
+  const lines =
+    state.locked || !linesChange
+      ? null
+      : await parseFindingLines(
+          next.failedPairs,
+          input.findings,
+          new Set(state.findings.map((f) => f.finalDefectTypeId)),
+        );
+  // A batch from before Phase 34 has no lines (A-89): its failed count may stay as it was.
+  if (!lines && !state.locked && next.failedPairs !== row.failedPairs)
+    throw Errors.validation([
+      { path: ["findings"], message: "Say what was wrong with the failed pairs. Add a defect." },
+    ]);
 
   return runInTransaction(async (tx) => {
     const ok = await correctCheckInRow(
@@ -1196,14 +1257,22 @@ export async function correctCheckIn(
       tx,
     );
     if (!ok) throw Errors.stale("This batch was changed by someone else. Refresh to see it.");
+    const rebuilt = lines
+      ? await rebuildFindings({ checkInId: id, batchCode: code, lines, actorId: actor.id, now }, tx)
+      : null;
     await recordAudit(tx, {
       actor: { type: "USER", userId: actor.id },
       action: "production.checkin.correct",
       entity: "ProductionCheckIn",
       entityId: id,
-      before: { pairs: row.pairs, failedPairs: row.failedPairs },
+      before: {
+        pairs: row.pairs,
+        failedPairs: row.failedPairs,
+        ...(rebuilt ? { findings: state.lines } : {}),
+      },
       after: {
         ...next,
+        ...(rebuilt ? { findings: rebuilt.summary, repairs: rebuilt.jobs.map((j) => j.code) } : {}),
         reason: input.reason,
         ...(covering ? { coveringForQualityInspector: true } : {}),
       },
@@ -1227,7 +1296,9 @@ export async function productionReport(range: ReportRange, now: Date = appNow())
     totals: {
       finished,
       failed,
-      passed: Math.max(0, finished - failed),
+      passed: days.reduce((s, d) => s + d.passed, 0),
+      /** Of these, passed after a repair (Phase 34, A-64). */
+      repairedPassed: days.reduce((s, d) => s + d.repairedPassed, 0),
       failedShare: failedShare(finished, failed),
       /** Passed pairs against the quota over finished days that had one (C-41). */
       share: quota > 0 ? passedOnQuotaDays / quota : null,
@@ -1250,6 +1321,7 @@ export async function productionCsv(range: ReportRange, now: Date = appNow()) {
     { header: "Failed inspection", value: (d) => d.failed },
     { header: "% failed", value: (d) => pct(d.failedShare) },
     { header: "Pairs passed", value: (d) => d.passed },
+    { header: "Passed after repair", value: (d) => d.repairedPassed },
     { header: "Daily quota", value: (d) => d.quota ?? "" },
     { header: "% of quota (passed)", value: (d) => pct(d.share) },
     { header: "Batches finished", value: (d) => d.finishedBatches },

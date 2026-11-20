@@ -65,3 +65,7 @@ export function referenceController(kind: ReferenceKind, what: string) {
 
 export const defectTypeController = referenceController("defectType", "This defect type");
 export const supplierController = referenceController("supplier", "This supplier");
+export const finalDefectTypeController = referenceController(
+  "finalDefectType",
+  "This final defect type",
+);

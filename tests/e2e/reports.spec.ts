@@ -205,7 +205,7 @@ test("the Floor Manager sees production against the quota in place of stage time
   expect((await page.request.get("/api/v1/reports/stages.csv?preset=today")).status()).toBe(404);
   const csv = await (await page.request.get("/api/v1/reports/production.csv?preset=7d")).text();
   expect(csv).toContain(
-    "Date (Manila),Pairs finished,Failed inspection,% failed,Pairs passed,Daily quota,% of quota (passed)",
+    "Date (Manila),Pairs finished,Failed inspection,% failed,Pairs passed,Passed after repair,Daily quota,% of quota (passed)",
   );
   expect(csv).not.toContain("Shoe type");
   const ops = await (await page.request.get("/api/v1/reports/operations.csv?preset=today")).text();

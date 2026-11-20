@@ -193,6 +193,24 @@ header, `min-h-11`, the current one with a 2 px `border-foreground` underline an
   rolls, then the counts and who, or the void reason.
 - Empty: a dashed box, "No batches are waiting for inspection."
 
+## Final defects, repairs and stages (Phase 34, D-130)
+
+- **Fixable / Not fixable** is a two-option segmented control: radio inputs in a `radiogroup`
+  labelled "Can line N be fixed?", each a `min-h-9` bordered label, the chosen one on the
+  `primary/10` tint with a primary border. A hint line under a defect offers "Use this"
+  (secondary, small) and is never pre-selected. Lines are bordered `bg-muted/30` cards; **Add
+  another defect** is a small secondary button, **Remove line N** a small ghost.
+- **Batches → Work in progress:** a card per stage in line order in an auto-fit grid. One big
+  number (the stage's pairs) and "as of 14:05" or "Not counted today"; repairs in a bordered list
+  with their code in mono; the people assigned in a small muted line at the bottom, never beside a
+  number. One neutral style for every stage: no red or green, no medals, no ordering by performance.
+- **My stage** (Capture, a phone card): a heading "Sole-ing · pairs here now", one 56 px numeric
+  field with **Save count**, "Last counted 14:05 for all of Sole-ing" in muted text, the reminder in
+  the caution tone, and the stage's repairs below.
+- **Who works where** (Plan dialog): a fieldset per stage with a checkbox list of the constructors;
+  **Absent** is a warning badge, "At Sole-ing" a muted word beside someone ticked elsewhere; the
+  suggestion banner is an info alert.
+
 ## Plan calendar (D-114)
 
 Batches → Plan days, desktop: a month grid, Monday to Sunday (`grid-cols-7`, the one place a fixed

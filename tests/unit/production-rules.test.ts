@@ -287,6 +287,17 @@ describe("quotaProgress and the pace on passed pairs (C-30, C-41)", () => {
     expect(p.pace).toBe("36 pairs more over 1 batch to reach the quota.");
   });
 
+  it("adds the repaired pairs that passed that day, once (A-64)", () => {
+    const p = quotaProgress(90, 6, 120, 1, 5);
+    expect(p).toMatchObject({ passed: 89, repairedPassed: 5, finished: 90, failed: 6, quota: 120 });
+    expect(p.share).toBeCloseTo(89 / 120);
+    expect(p.pace).toBe("31 pairs more over 1 batch to reach the quota.");
+    // A repaired pair passing on a day with no batch finished still counts.
+    expect(quotaProgress(0, 0, 120, 1, 2)).toMatchObject({ passed: 2, repairedPassed: 2 });
+    // Without repairs the form is unchanged.
+    expect(quotaProgress(90, 6, 120, 1).repairedPassed).toBe(0);
+  });
+
   it("says how far below once no batches are left, or when there is no quota", () => {
     expect(paceSentence(100, 120, 0)).toBe("Below quota by 20 pairs.");
     expect(paceSentence(120, 120, 2)).toBe("Quota reached.");

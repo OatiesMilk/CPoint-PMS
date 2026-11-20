@@ -901,4 +901,40 @@ Decision: D-129. Assumptions: A-57 to A-61, A-81 to A-85.
       dev-server sign-in stalls (no code fault); R2 blocked (nothing due)
 - [x] Codex QA run 6 from `qa/CODEX_PROMPT_PHASE_33_RUN6.md`: **PASS WITH ISSUES** (full suite
       104 passed, 0 failed; the demo clock's 3 s title refresh noted)
-- [ ] Committed and merged (`feature/inspection-queue`)
+- [x] Committed and merged (#55, e22ebb9)
+
+## Phase 34 — Final-product defects, repairs and work in progress (defense revision 1)
+
+The panel's revision 1. Plans: `docs/prompts/plans/defense-revisions-plan.md` and
+`docs/prompts/plans/phase-34-defects-and-repairs-plan.md` (Dylan's answers and go, 2026-11-20).
+Decision: D-130. Assumptions: A-62 to A-66, A-72 to A-76, A-86 to A-94.
+
+- [x] Migration `20261120120000_final_defects_and_repairs` (additive): `final_defect_types`,
+      `inspection_findings`, `repair_jobs`, `stage_assignments`, `stage_counts`
+- [x] Settings → Final defect types (data; Other can't be switched off)
+- [x] Finish batch and Correct: **What was wrong** (Fixable / Not fixable, the stage, sums, Other's
+      note); the usual answer after 5 findings in 4 weeks (never filled in)
+- [x] Repairs: At stage → Back for inspection → Done; the Floor Manager moves one or calls it Not
+      fixable after all; Inspect repair (passed, scrapped, sent back again, no limit); repairs in the
+      Queue; passed repaired pairs count toward the quota
+- [x] Plan dialog: Who works where (suggested from the last working day, one stage each; a
+      constructor with Capture access is always at Preparation, locked: Addendum 1, A-95, A-96);
+      Capture → My stage; Batches → Work in progress; the Overview card
+- [x] Reports → Operations: Final defects, Where defects come from, Repairs, Work in progress; the
+      per-day Passed includes repaired pairs
+- [x] "Upper making" is now "Construction"
+- [x] Demo seed, `demo:reset`, CI docker checks; e2e `final-defects.spec.ts` and `stage-wip.spec.ts`
+      written (not run by Claude)
+- [x] `npm run check` passes (938 unit tests); `docs/API.md`, DESIGN, USER_MANUAL, README, master
+      spec, DECISIONS updated
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_PHASE_34.md` (handoff
+      `qa/handoffs/2026-11-20-phase-34-defects-and-repairs.md`): PASS WITH ISSUES (41 of 47; e2e
+      failures were two specs that finished failed pairs with no reason, the CSV header, a click target and a
+      selector), fixed
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_PHASE_34_RUN2.md`: FAIL (four test faults, the A3 test gap and C2's
+      message), fixed; the demo clock form (C6) is not a Phase 34 change
+- [x] Codex QA run 3 from `qa/CODEX_PROMPT_PHASE_34_RUN3.md`: FAIL (two test faults: a whole-line total read
+      across workers, a stale roster in the D-088 test), fixed; C6 closed as passed
+- [x] Codex QA run 4 from `qa/CODEX_PROMPT_PHASE_34_RUN4.md`: **PASS** (targeted 28 of 28; full suite 118
+      passed, 0 failed, 2 skipped)
+- [ ] Committed and merged (`feature/defects-and-repairs`)

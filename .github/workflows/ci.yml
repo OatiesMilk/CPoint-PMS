@@ -154,6 +154,27 @@ jobs:
           test "$(q "select count(*) from production_batches where status in ('OPEN','INSPECTING') and \"slotAt\" < now()")" -ge 1
           test "$(q "select count(*) from production_batches where priority='URGENT' and \"priorityReason\" is not null")" -ge 1
           q "select count(*) from batches where code like 'B-%' or code like 'R-%'" | grep -qx 0
+          # Final defects and repairs (Phase 34, D-130): five or more final defect types with OTHER,
+          # every failed pair explained (findings add up to failedPairs), every Fixable finding
+          # has a stage and root repair jobs that add up to its pairs, a Not fixable one has no
+          # stage and no job, repairs in each state, a finished repair accounts for every pair,
+          # stages assigned to active constructors without Capture access once a day (those with it are
+          # at Preparation by the flag and have no row, Addendum 1), and the stage is called Construction.
+          test "$(q "select count(*) from final_defect_types")" -ge 5
+          test "$(q "select count(*) from final_defect_types where key='OTHER'")" -eq 1
+          q "select count(*) from production_check_ins c where c.\"failedPairs\" > 0 and c.\"failedPairs\" <> (select coalesce(sum(f.pairs),0) from inspection_findings f where f.\"checkInId\" = c.id)" | grep -qx 0
+          q "select count(*) from inspection_findings f where f.remedy='FIXABLE' and (f.\"returnStage\" is null or f.pairs <> (select coalesce(sum(j.pairs),0) from repair_jobs j where j.\"findingId\" = f.id and j.\"parentId\" is null))" | grep -qx 0
+          q "select count(*) from inspection_findings f where f.remedy='NOT_FIXABLE' and (f.\"returnStage\" is not null or exists (select 1 from repair_jobs j where j.\"findingId\" = f.id))" | grep -qx 0
+          test "$(q "select count(*) from inspection_findings where remedy='NOT_FIXABLE'")" -ge 1
+          for status in AT_STAGE BACK_FOR_INSPECTION DONE; do
+            test "$(q "select count(*) from repair_jobs where status='$status'")" -ge 1
+          done
+          q "select count(*) from repair_jobs where status='DONE' and \"passedPairs\" + \"scrappedPairs\" + \"resentPairs\" <> pairs" | grep -qx 0
+          test "$(q "select count(*) from stage_assignments")" -ge 1
+          q "select count(*) from stage_assignments a join users u on u.id = a.\"userId\" where not u.\"isActive\" or u.role <> 'SHOE_CONSTRUCTOR' or u.\"canCapture\"" | grep -qx 0
+          q "select count(*) from (select day, \"userId\" from stage_assignments group by day, \"userId\" having count(*) > 1) t" | grep -qx 0
+          test "$(q "select count(*) from stage_counts")" -ge 1
+          test "$(q "select count(*) from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname='ProductionStage' and e.enumlabel='CONSTRUCTION'")" -eq 1
           # Stock updates (Phase 29, D-102): the reminder days row (Wednesday and Friday), at least
           # one Update stock save with its entries, and every leather roll item has a supplier.
           test "$(q "select count(*) from inventory_settings where \"reminderDays\" = '{3,5}'")" -eq 1
