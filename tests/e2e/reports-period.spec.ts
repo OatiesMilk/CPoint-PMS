@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { addInventoryRoll } from "./cv-helpers";
 import { ACCOUNTS, signIn } from "./helpers";
 
 /**
@@ -119,6 +120,8 @@ test("a click on a column header sorts the table, both ways, and keeps the perio
 test("Rolls sorts every matching row and filters by leather item and location", async ({
   page,
 }) => {
+  // CI has no demo week: make sure one leather item has a roll, so the item filter has a result.
+  const roll = await addInventoryRoll();
   await signInAsManager(page);
   await page.goto("/reports/rolls?sort=rolls.roll&dir=asc");
   const codes = async () =>
@@ -136,15 +139,12 @@ test("Rolls sorts every matching row and filters by leather item and location", 
   // The filters are there, and picking one puts it in the URL; Clear filters empties it.
   await expect(page.getByLabel("Leather item")).toBeVisible();
   await expect(page.getByLabel("Location")).toBeVisible();
-  const items = page.getByLabel("Leather item").locator("option");
-  if ((await items.count()) > 1) {
-    await page.getByLabel("Leather item").selectOption({ index: 1 });
-    await expect(page).toHaveURL(/itemId=/);
-    // The CSV takes the same filters (and ignores the sort, A-100).
-    const csvHref = await page.getByRole("link", { name: "Download CSV" }).getAttribute("href");
-    expect(csvHref).toContain("itemId=");
-    expect(csvHref).not.toContain("sort=");
-  }
+  await page.getByLabel("Leather item").selectOption(roll.itemId);
+  await expect(page).toHaveURL(/itemId=/);
+  // The CSV takes the same filters (and ignores the sort, A-100).
+  const csvHref = await page.getByRole("link", { name: "Download CSV" }).getAttribute("href");
+  expect(csvHref).toContain("itemId=");
+  expect(csvHref).not.toContain("sort=");
   // Any time is the default; a period makes it a filter on the day a roll was added.
   await page.goto("/reports/rolls");
   await expect(page.getByRole("link", { name: "Any time" })).toHaveAttribute(
