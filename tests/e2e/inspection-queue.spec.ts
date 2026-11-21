@@ -141,6 +141,10 @@ test("the queue lists waiting batches across days by code, oldest first, with fi
   await page.getByRole("link", { name: "Clear" }).click();
   // Clear empties the fields at once, so the day picked next is filtered alone (run 3 F1).
   await expect(page.getByLabel("Batch code")).toHaveValue("");
+  // And wait for its navigation to land (the address loses the old filters) before picking a day:
+  // on a slow runner the page that arrives late rebuilds the form and empties the Day just picked, so
+  // Filter then sent no day and both batches stayed (CI on #55's main run and #56, not a Phase 34 fault).
+  await expect(page).toHaveURL(/\/batches\?tab=queue$/);
   await page.getByLabel("Day").selectOption(saturday);
   await page.getByRole("button", { name: "Filter" }).click();
   await expect(page.getByTestId(`queue-${SAT}`)).toBeVisible();
