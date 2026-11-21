@@ -261,9 +261,11 @@ test("a weekday with no plan has no batches and the Floor Manager is told to pla
   });
   try {
     const fm = await signedIn(browser, ACCOUNTS.manager.email, ACCOUNTS.manager.home);
-    await expect(fm.getByTestId("plan-notice")).toContainText("Today has no plan yet");
+    // On the Overview the Plan today row is the only prompt: the banner is hidden there (D-131).
     await expect(fm.getByTestId("plan-today-card")).toBeVisible();
+    await expect(fm.getByTestId("plan-notice")).toHaveCount(0);
     await fm.goto("/batches");
+    await expect(fm.getByTestId("plan-notice")).toContainText("Today has no plan yet");
     await expect(fm.getByTestId("no-batches")).toContainText("Today has no plan yet");
     // The bell sits in both the desktop sidebar and the phone bar; click the one on screen.
     await fm.getByTestId("batch-bell").filter({ visible: true }).click();

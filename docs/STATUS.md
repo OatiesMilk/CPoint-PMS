@@ -3,11 +3,42 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-20 (Phase 34 QA done, run 4 PASS; waiting for the commit)
-**Branch:** `main` at e22ebb9 (#55, Phase 33); Phase 34 is uncommitted.
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** all of Phase 34 (file list in `qa/phase-34-files.txt`),
-the Phase 33 merge notes in STATUS, ROADMAP and SESSION_LOG (they go in with Phase 34's commit), and
-`docs/DEMO_SCRIPT.md`, which stays out (Dylan).
+**Last updated:** 2026-11-21 (Overview clean-up: Codex run 2 PASS WITH ISSUES; waiting for the commit)
+**Branch:** `main` at 68f3c21 (#56 Phase 34, #57 its CI fix); the Overview clean-up is uncommitted.
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** the Overview clean-up (file list in the handoff,
+`qa/handoffs/2026-11-21-overview-cleanup.md` §2), `qa/phase-34-files.txt` and `docs/DEMO_SCRIPT.md`,
+which stay out (Dylan).
+
+- **Overview clean-up (built 2026-11-21, Dylan's yes to the plan's three recommendations, D-131):** the
+  Floor Manager's Overview has three zones: **Needs attention** (only when due: Plan today, Stock update
+  today, slim rows; Plan today is the filled button), **On the line now** (Today's batches beside Work in
+  progress, one height) and **Today so far** (Attendance, Rolls today, Low-stock, Daily summary, two by two,
+  four from 1536 px). The plan banner is hidden on `/floor-manager` only (the row says it); Take attendance
+  is outlined; Work in progress and Today's batches have quiet states. No data, route or migration
+  change. `npm run check` passed (**945 unit tests**, build OK); `overview-layout.spec.ts` written and the
+  no-plan test in `batches.spec.ts` edited. Plan
+  `docs/prompts/plans/floor-manager-overview-cleanup-plan.md`, handoff
+  `qa/handoffs/2026-11-21-overview-cleanup.md`, prompt `qa/CODEX_PROMPT_OVERVIEW_CLEANUP.md` (starts with
+  `docker compose stop app`). Not looked at in a browser by Claude; `docs/screenshots/manual/06-overview.png`
+  still shows the old layout.
+- **Overview clean-up Codex run 1 BLOCKED, no code fault** (`qa/reports/2026-11-21-overview-cleanup-run1.md`, a
+  Saturday): O4 (two by two at 1280, four at 1536, one column at 700), O9 (targeted 34 of 34, full suite 121
+  passed, 0 failed) and A1 passed; O1, O2, O3, O5, O6, O7, O8 blocked because the Change time form closed
+  after `POST /api/v1/demo/clock` 200 but the clock stayed on Saturday: the in-app browser tool's fill doesn't
+  reach the form's React state (the same tooling fault as Phase 34 run 3, where typing worked). No bell on
+  a Saturday is correct (nothing due, nobody to finish batches). The handoff's O7 asked the Admin to open
+  Batches, which the Admin doesn't have: fixed. No screenshot could be saved from the in-app browser. Next:
+  `qa/CODEX_PROMPT_OVERVIEW_CLEANUP_RUN2.md` (a headless script sets the clock and saves the screenshots).
+- **Overview clean-up Codex run 2 PASS WITH ISSUES** (`qa/reports/2026-11-21-overview-cleanup-run2.md`, headless
+  script, clock set by the form): O1 (one plan prompt, banner on `/batches`, `/attendance`, `/reports`, bell
+  "Notices: today has no plan, stock update due"), O2, O3 (Plan today filled, Update stock outlined; after a
+  stock save Plan today stays filled), O4, O6, O7 and O8 passed (keyboard order follows the zones; axe zero
+  violations light and dark at 768); screenshots saved. O5 partly blocked by **my handoff, not the app**: repairs,
+  work waiting for inspection and rolls still open are line-wide, so the demo's 17 pairs in repair stay on any
+  day; the empty footer is now a pure function (`wipFooterLine`) with a unit test (it caught a lost backslash
+  in my extraction), and the handoff says so. With run 1 (full suite 121 passed, 0 failed) every scenario has
+  passed. **Overview clean-up QA done**; git commands for `feature/overview-cleanup` given to Dylan (list
+  `qa/overview-cleanup-files.txt`).
 
 - **Phase 31 (built 2026-11-07, Dylan's go):** the master spec's context, domain rules, roles,
   data model and CV contract rewritten to the system as built, with "Changed since the rebuild";
@@ -288,8 +319,9 @@ check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
       2026-11-17, D-128; QA passed, run 3; merged #54, CI green)
 - [x] 33. The Inspection queue with real batch codes (defense revision 2; built 2026-11-19, D-129;
       QA passed, run 6; merged #55)
-- [ ] 34. Final defects, repairs and work in progress (defense revision 1; built 2026-11-20, D-130;
-      QA passed, run 4; uncommitted)
+- [x] 34. Final defects, repairs and work in progress (defense revision 1; built 2026-11-20, D-130;
+      QA passed, run 4; merged #56, #57)
+- [ ] Overview clean-up (the Floor Manager's home, D-131; built 2026-11-21; QA passed, run 2; uncommitted)
 
 ## What works right now
 
@@ -325,9 +357,9 @@ D-entries.
 
 ## Next step (exact)
 
-0. Phase 34 QA is done (run 4 PASS). Dylan: run the git commands for `feature/defects-and-repairs`
-   (files from `qa/phase-34-files.txt`), open the PR, merge when CI is green; rebuild the Docker app
-   before using it.
+0. Overview clean-up QA is done (run 2 PASS WITH ISSUES). Dylan: run the git commands for
+   `feature/overview-cleanup` (files from `qa/overview-cleanup-files.txt`), open the PR, merge when CI is green.
+   Then Phase 35 (reports by period). Rebuild the Docker app after Phase 34 and this change before using it.
 1. Dylan: paste `qa/CODEX_PROMPT_PHASE_31_RUN4.md` into Codex (a weekday).
 2. Dylan, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too).
@@ -346,6 +378,12 @@ D-entries.
 - None for the demo.
 
 ## Open questions / assumptions awaiting client confirmation
+
+- ASSUMPTION (A-97, D-131): the plan banner is hidden on the Floor Manager's Overview only, because the
+  Plan today row there says the same thing; every other page keeps it.
+- ASSUMPTION (A-98, D-131): Attendance's "Not taken yet today" prompt stays in its own card, not in Needs
+  attention.
+- ASSUMPTION (A-99, D-131): with both rows due, Plan today is the primary button and Update stock secondary.
 
 - Decided (Dylan, 2026-11-20, D-130): the Work in progress board is a third tab on Batches; a
   constructor assigned to a stage but without camera access still gets My stage on Capture; one

@@ -1,11 +1,13 @@
 /*
  * Intent brief (ui-craft §1)
- * Who:   the Floor Manager, at the office desk, checking the line several times a shift.
- * What:  see what needs attention on the line today (exceptions first).
- * Worst: missing a backlog (a short day, low leather stock) until it stops production.
- * Every card is live (D-025): today's batches against the quota, attendance, rolls today, stock,
- * and today's numbers (Phase 28, D-100). On a weekday with no plan, Plan today comes first (A-37);
- * on a reminder day, Stock update today until an update is saved (Phase 29, C-32).
+ * Who:   the Floor Manager, at the office desk, glancing at the Overview several times a shift.
+ * What:  see in two seconds whether anything needs doing now, then how the line is doing.
+ * Worst: a real exception (no plan, a missed stock update, low stock) sits among equal-looking
+ *        cards, or the same prompt shows twice and gets ignored.
+ * Three zones (Overview clean-up, D-131): Needs attention (only when something is due), On the
+ * line now (today's batches beside work in progress), Today so far (attendance, rolls, low
+ * stock, the daily summary). Every card is live (D-025). The plan banner is hidden here, since
+ * the Plan today row says the same thing (A-97); the bell and every other page keep it.
  */
 import type { Metadata } from "next";
 import { AttendanceCard } from "@/components/features/attendance/attendance-card";
@@ -44,17 +46,32 @@ export default async function FloorManagerHome() {
       stockUpdateReminder(),
       wipBoard(user),
     ]);
+  const needsAttention = production.planNeeded || stock.due;
   return (
     <>
       <PageHeader
         title={`Good day, ${user.name.split(" ")[0]}`}
         description="Today on the production line."
       />
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
-        {production.planNeeded && <PlanTodayCard day={production.day} />}
-        {stock.due && <StockUpdateCard reminderDays={stock.reminderDays} />}
+      {needsAttention && (
+        <section
+          aria-labelledby="needs-attention"
+          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-4"
+        >
+          <h2 id="needs-attention" className="sr-only">
+            Needs attention
+          </h2>
+          {production.planNeeded && <PlanTodayCard day={production.day} />}
+          {stock.due && (
+            <StockUpdateCard reminderDays={stock.reminderDays} primary={!production.planNeeded} />
+          )}
+        </section>
+      )}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <TodaysBatchesCard today={production} />
         <WipCard board={board} />
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <AttendanceCard workforce={attendance.workforce} summary={attendance.summary} />
         <RollsTodayCard totals={split} openRolls={openRolls} />
         <LowStockCard {...lowStock} />

@@ -521,6 +521,18 @@ export function waitingLine(batches: number, repairs: number): string {
   return `${parts.join(" and ")} waiting for inspection`;
 }
 
+/**
+ * The Overview card's muted last line (D-131): the pairs in repair, then what waits for inspection,
+ * each sentence ending in one full stop ("No repairs open. Nothing is waiting for inspection.").
+ */
+export function wipFooterLine(repairPairs: number, waiting: string): string {
+  const repairs =
+    repairPairs === 0
+      ? "No repairs open"
+      : `${repairPairs.toLocaleString("en-PH")} pair${repairPairs === 1 ? "" : "s"} in repair`;
+  return `${repairs}. ${waiting.replace(/\.$/, "")}.`;
+}
+
 export const STAGE_COUNT_MAX = 50_000;
 
 /**

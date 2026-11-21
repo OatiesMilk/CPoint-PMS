@@ -27,7 +27,7 @@ export function RollsTodayCard({ totals, openRolls }: { totals: Totals; openRoll
     },
   ];
   return (
-    <Card data-testid="rolls-today">
+    <Card data-testid="rolls-today" className="h-full">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -64,12 +64,12 @@ export function DailySummaryCard({ yesterday, today }: { yesterday: Day; today: 
     { label: "Returned to supplier", value: (d) => String(d.returned) },
   ];
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader>
         <CardTitle>Daily summary</CardTitle>
         <CardDescription>Yesterday and today so far (Manila time).</CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-1 flex-col gap-3">
         <table className="w-full text-sm">
           <thead className="text-muted-foreground">
             <tr>
@@ -90,7 +90,7 @@ export function DailySummaryCard({ yesterday, today }: { yesterday: Day; today: 
             ))}
           </tbody>
         </table>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t pt-4">
+        <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 border-t pt-4">
           <CardLink href="/reports">Reports</CardLink>
           <a
             href={`/api/v1/reports/daily.csv?preset=14d`}

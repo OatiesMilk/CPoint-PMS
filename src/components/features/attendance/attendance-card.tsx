@@ -11,7 +11,7 @@ import { CardLink } from "@/components/ui/card-link";
  */
 export function AttendanceCard({ workforce, summary }: { workforce: Workforce; summary: string }) {
   return (
-    <Card data-testid="attendance-card">
+    <Card data-testid="attendance-card" className="h-full">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -33,7 +33,7 @@ export function AttendanceCard({ workforce, summary }: { workforce: Workforce; s
               <CircleAlert aria-hidden className="size-4 text-caution" />
               Not taken yet today.
             </p>
-            <Button asChild size="sm">
+            <Button asChild size="sm" variant="secondary">
               <Link href="/attendance">Take attendance</Link>
             </Button>
           </div>

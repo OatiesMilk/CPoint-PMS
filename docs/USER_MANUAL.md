@@ -299,14 +299,19 @@ Your pages are **Overview**, **Batches**, **Attendance**, **Reports** and **Inve
 
 ### 6.1 Overview (your home page)
 
-A summary of today on the line:
+A summary of today on the line, in three groups:
 
-- **Today's batches**: passed pairs against the quota, and the next batch due.
-- **Attendance**: says "Not taken yet today." until you save it. Tap **Take attendance**.
-- **Rolls today**: rolls scanned, returned to supplier and still open.
-- **Low-stock alerts**: items at or below their reorder level.
-- **Stock update today**: shows on your reminder days (Wednesday and Friday unless you change them).
-- **Daily summary**: yesterday and today so far, with **Download 14-day CSV**.
+- **Needs attention** (only when something is due, otherwise it is not shown): **Plan today** when a
+  weekday has no plan yet, and **Stock update today** on your reminder days (Wednesday and Friday
+  unless you change them) until an update is saved. Each has one button; when both show, **Plan today**
+  is the filled one. The "Today has no plan yet" banner doesn’t show on this page (the row says it);
+  it still shows on your other pages.
+- **On the line now**: **Today’s batches** (passed pairs against the quota, and the next batch due) beside
+  **Work in progress** (pairs at each stage, the repairs open and what waits for inspection).
+- **Today so far**: **Attendance** (says "Not taken yet today." until you save it; tap **Take
+  attendance**), **Rolls today** (rolls scanned, returned to supplier and still open), **Low-stock
+  alerts** (items at or below their reorder level) and **Daily summary** (yesterday and today so far,
+  with **Download 14-day CSV**).
 
 ![The Floor Manager Overview.](screenshots/manual/06-overview.png)
 

@@ -164,11 +164,32 @@ For whoever finishes today's batches (the QI, or the Floor Manager covering, D-0
 - **Tab title** starts with "(n)" while n batches are due.
 - No sound, push or browser notification; nothing animates beyond the standard fade.
 
-**Plan today (D-114, A-37)**, for the Floor Manager on a weekday with no plan, from 00:00 until the
-day is planned or marked Non-working / Holiday: the same info banner (`border-info bg-info-soft`,
+**Plan today (D-114, A-37, D-131)**, for the Floor Manager on a weekday with no plan, from 00:00 until
+the day is planned or marked Non-working / Holiday: the same info banner (`border-info bg-info-soft`,
 `BellRing`) "Today has no plan yet, so there are no batches. Plan today." with **Plan today**
-(`size="lg"`, `h-11`), a **Plan today** card first on the FM home, and a bell item. The Quality
-Inspector reads "No batches yet today. The Floor Manager plans them first." on Batches.
+(`size="lg"`, `h-11`) on every page **except the Overview**, where the Plan today row (below) says the
+same thing; and a bell item. The Quality Inspector reads "No batches yet today. The Floor Manager plans
+them first." on Batches.
+
+## Floor Manager Overview (Overview clean-up, D-131)
+
+Three zones in the page's `gap-8` flow, with `gap-4` between cards. The DOM order is the reading and tab
+order; no CSS `order`. The first job is "does anything need me now?".
+
+- **Needs attention** (a `section` with a screen-reader-only `h2`, rendered only when a row is due):
+  `ActionCard` rows (`features/overview/action-card.tsx`): `border-info bg-info-soft`, `p-4`, the icon, the
+  title (`h2`, `text-lg`) and one muted line at the left, the button at the right; below `sm` the button
+  goes under the text, full width. Rows: **Plan today** and **Stock update today**, in the bell's order,
+  in `grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))]` (one row takes the whole width). **One
+  primary:** Plan today is the filled button; when it is also due, Update stock is `secondary`.
+- **On the line now:** `xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]`, Today's batches beside Work in
+  progress; below `xl` they stack. Both are `h-full`, so they are one height.
+- **Today so far:** Attendance, Rolls today, Low-stock alerts, Daily summary in two columns from `md`
+  and four from `2xl` (stacking breakpoints, not `auto-fit`, so no card is left alone on a row).
+  Cards are `h-full`; Daily summary's link row is `mt-auto`. Take attendance is `secondary`.
+- No visible headings for the second and third zones (the card titles do the job). Quiet states are
+  one muted line, never a dashed `EmptyState` box: Work in progress shows "–" (read as "not counted
+  today") and "No stage has been counted today."; Low-stock "Nothing to reorder right now."
 
 ## Inspection queue (Phase 33, D-129)
 
@@ -247,7 +268,7 @@ Holiday** (secondary, left).
 | `ScanThumb`            | Small scan image on cards                                     | —                                                                                                                                                                                                                                                                                                                                                                                                                    | fixed size; falls back to an icon + "No image" when the file is missing                                                                                                                                                                                      |
 | Roll page              | One roll (Reports → Rolls)                                    | —                                                                                                                                                                                                                                                                                                                                                                                                                    | Scanning passed or Returned to supplier with its Defect % and the limit; shots · passed · rejected; scanning time; shots table with photo, verdict, defects; Remove… (FM, reason required); Claim sheet; no person named                                     |
 | `StockBadge`           | Stock level of an item                                        | In stock (success), Low (warning), Out of stock (danger), Deactivated                                                                                                                                                                                                                                                                                                                                                | icon + label; next to the on-hand quantity                                                                                                                                                                                                                   |
-| `LowStockCard`         | FM home alert                                                 | —                                                                                                                                                                                                                                                                                                                                                                                                                    | count + up to 5 items (on hand · reorder at), "N more" link, empty "Nothing to reorder"                                                                                                                                                                      |
+| `LowStockCard`         | FM home, Today so far                                         | —                                                                                                                                                                                                                                                                                                                                                                                                                    | count + up to 5 items (on hand · reorder at), "N more" link, empty "Nothing to reorder"                                                                                                                                                                      |
 | Update stock sheet     | Added (+) / Used (−) / Correction                             | one row per item, the unit as an input suffix, After shows the result live; the Reason opens only with a correction                                                                                                                                                                                                                                                                                                  | errors under their field, a summary at 3 or more; one save for every filled row ("Save update (N items)"), toast "Stock updated: N items."                                                                                                                   |
 | Capture page           | Capture a roll shot by shot (Phases 26, 30E, D-120, D-121)    | Start a roll: Leather, then Roll on the table, Start scanning; Roll dropdown + chosen roll in large text; the marker card on the first shot ("Scale set at the first shot", Read the card again); live video, Capture (primary, fixed at the bottom on a phone, Space too); scanning timer; Finish roll / Put roll back (empty only); Last scan with each defect Usable / Not accepted; roll counts against the plan | no camera access (who grants it), starting, secure address needed, permission refused, no camera, busy, model missing, no roll chosen, card not found or unreadable, roll closed meanwhile, open since an earlier day, checking, failed + Send again, repeat |
 | Storage locations      | Inventory → Storage locations (Phase 32, D-128)               | table (tick, Code, Name, Kind, Rolls in it, Status) + Add/Edit dialog; Deactivate with undo toast; Print labels for the ticked ones                                                                                                                                                                                                                                                                                  | first-use empty (Add the first location); a locked code is read-only with the reason (A-79); Deactivate disabled with "Move its rolls first." while it holds rolls                                                                                           |
