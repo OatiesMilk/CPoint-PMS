@@ -19,7 +19,7 @@ type Day = {
 export function VerdictTrendChart({ days }: { days: Day[] }) {
   const lastWithData = [...days].reverse().find((d) => d.rolls > 0);
   return (
-    <figure className="flex flex-col gap-3">
+    <figure className="flex flex-col gap-3 print:hidden">
       <VerdictLegend />
       <div
         className="h-64"

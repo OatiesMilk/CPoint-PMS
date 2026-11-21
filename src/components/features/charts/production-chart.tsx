@@ -37,8 +37,10 @@ const SERIES = [
  */
 export function ProductionChart({ days }: { days: ProductionChartDay[] }) {
   const below = days.filter((d) => d.quota !== null && d.pairs < d.quota).length;
+  // Not printed: a chart is sized for the screen and came out empty or cut off on A4 (Phase 35A
+  // runs 1 and 2); the production table below it has the same numbers.
   return (
-    <figure className="flex flex-col gap-3">
+    <figure className="flex flex-col gap-3 print:hidden">
       <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" aria-label="Legend">
         {SERIES.map((s) => (
           <li key={s.key} className="flex items-center gap-1.5">

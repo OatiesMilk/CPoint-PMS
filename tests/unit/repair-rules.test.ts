@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasRepairFilters,
+  matchesFinding,
+  matchesRepair,
   captureStageMessage,
   parseStageCount,
   summaryFieldId,
@@ -461,5 +464,42 @@ describe("parseStageCount (A-72)", () => {
       ok: false,
       message: "That is more than 50,000 pairs. Check the number.",
     });
+  });
+});
+
+describe("report filters (Phase 35, A-101)", () => {
+  const finding = (key: string, remedy: string, returnStage: string | null) => ({
+    remedy,
+    returnStage,
+    finalDefectType: { key },
+  });
+
+  it("knows when a filter is on", () => {
+    expect(hasRepairFilters({})).toBe(false);
+    expect(hasRepairFilters({ stage: "FINISHING" })).toBe(true);
+  });
+
+  it("a finding must match every filter that is set", () => {
+    const f = finding("GLUE", "FIXABLE", "FINISHING");
+    expect(matchesFinding(f, {})).toBe(true);
+    expect(matchesFinding(f, { defect: "GLUE", remedy: "FIXABLE", stage: "FINISHING" })).toBe(true);
+    expect(matchesFinding(f, { defect: "STITCH" })).toBe(false);
+    expect(matchesFinding(f, { remedy: "NOT_FIXABLE" })).toBe(false);
+    expect(matchesFinding(f, { stage: "SOLE_ING" })).toBe(false);
+    // A Not fixable pair has no stage, so a stage filter leaves it out.
+    expect(matchesFinding(finding("GLUE", "NOT_FIXABLE", null), { stage: "FINISHING" })).toBe(
+      false,
+    );
+  });
+
+  it("a repair matches by its finding's defect and remedy and the stage it went to", () => {
+    const job = {
+      stage: "SOLE_ING",
+      finding: { remedy: "FIXABLE", finalDefectType: { key: "GLUE" } },
+    };
+    expect(matchesRepair(job, {})).toBe(true);
+    expect(matchesRepair(job, { defect: "GLUE", stage: "SOLE_ING" })).toBe(true);
+    expect(matchesRepair(job, { stage: "FINISHING" })).toBe(false);
+    expect(matchesRepair(job, { remedy: "NOT_FIXABLE" })).toBe(false);
   });
 });

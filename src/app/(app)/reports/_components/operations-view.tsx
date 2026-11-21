@@ -2,14 +2,7 @@ import { BarList } from "@/components/features/charts/bar-list";
 import { ProductionChart } from "@/components/features/charts/production-chart";
 import { ProductionDaysTable } from "@/components/features/production/production-parts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDayLabel, formatManilaDateTime, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AttentionList, KpiTile } from "./ops-parts";
@@ -17,8 +10,32 @@ import { Stat } from "@/components/features/kpi-tile";
 import { CardLink } from "@/components/ui/card-link";
 import { StockRiskCard, SupplierQualityCard } from "./ops-sections";
 import { DefectOriginsCard, FinalDefectsCard, RepairsCard, WipReportCard } from "./repair-sections";
-import type { OperationsReport } from "@/server/services/ops-report.service";
-import type { ReportRange } from "@/lib/report-rules";
+import { FilterForm, FilteredNote } from "@/components/features/reports/filters";
+import { SortableHeader } from "@/components/features/reports/sortable-header";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { compareLabel, type ReportRange } from "@/lib/report-rules";
+import {
+  hasRepairFilters,
+  REMEDY_LABEL,
+  STAGE_LABEL,
+  STAGES,
+  type Remedy,
+} from "@/lib/repair-rules";
+import { sortFor, type SortKey, type SortState } from "@/lib/table-sort";
+import type { OperationsReport, OpsFilters } from "@/server/services/ops-report.service";
+import { defectFilterText } from "./filter-text";
+
+const DEFECT_FILTERS = ["defect", "remedy", "stage"] as const;
+
+type DailyRow = OperationsReport["days"][number];
+const DAILY_KEYS: Record<string, SortKey<DailyRow>> = {
+  day: (d) => d.day,
+  "rolls-started": (d) => d.started,
+  "rolls-scanned": (d) => d.rolls,
+  "scanning-passed": (d) => d.passed,
+  "returned-to-supplier": (d) => d.returned,
+};
 
 /**
  * The Floor Manager's report: what is happening on the production floor in this range, and what
@@ -30,12 +47,27 @@ import type { ReportRange } from "@/lib/report-rules";
 export function OperationsView({
   report,
   range,
+  sort,
+  filters,
+  finalTypes,
+  suppliers,
 }: {
   report: OperationsReport;
   range: ReportRange;
+  sort: SortState | null;
+  filters: OpsFilters;
+  finalTypes: { key: string; label: string }[];
+  suppliers: { id: string; name: string }[];
 }) {
   const { kpis, production, checkpoint } = report;
-  const compareLabel = range.days === 1 ? "vs yesterday" : `vs previous ${range.days} days`;
+  const compare = compareLabel(range);
+  const filtered = hasRepairFilters(filters);
+  const note = filtered ? (
+    <FilteredNote owns={DEFECT_FILTERS} text={defectFilterText(filters, finalTypes)} />
+  ) : null;
+  const shownSuppliers = filters.supplierId
+    ? report.suppliers.filter((x) => x.id === filters.supplierId)
+    : report.suppliers;
   const t = checkpoint.totals;
   const ofRolls = (n: number) => `${n} of ${t.rolls} ${t.rolls === 1 ? "roll" : "rolls"} scanned`;
   const quotaNote =
@@ -54,7 +86,7 @@ export function OperationsView({
           value={(kpis.pairs.value ?? 0).toLocaleString("en-PH")}
           sub="all pairs the QI counted at Finish batch, failed ones included"
           change={kpis.pairs.change}
-          compareLabel={compareLabel}
+          compareLabel={compare}
           testid="kpi-pairs"
         />
         <KpiTile
@@ -66,7 +98,7 @@ export function OperationsView({
               : `${formatPercent(production.totals.failedShare)} of the pairs finished`
           }
           change={kpis.failedPairs.change}
-          compareLabel={compareLabel}
+          compareLabel={compare}
           testid="kpi-failed"
         />
         <KpiTile
@@ -74,7 +106,7 @@ export function OperationsView({
           value={formatPercent(kpis.ofQuota.value)}
           sub={`passed pairs; ${quotaNote}`}
           change={kpis.ofQuota.change}
-          compareLabel={compareLabel}
+          compareLabel={compare}
           testid="kpi-quota"
         />
         <KpiTile
@@ -82,7 +114,7 @@ export function OperationsView({
           value={formatPercent(kpis.rollsPassed.value)}
           sub={ofRolls(t.passed)}
           change={kpis.rollsPassed.change}
-          compareLabel={compareLabel}
+          compareLabel={compare}
           testid="kpi-rolls-passed"
         />
         <KpiTile
@@ -90,7 +122,7 @@ export function OperationsView({
           value={formatPercent(kpis.rollsReturned.value)}
           sub={ofRolls(t.returned)}
           change={kpis.rollsReturned.change}
-          compareLabel={compareLabel}
+          compareLabel={compare}
           testid="kpi-returned"
         />
       </section>
@@ -122,22 +154,67 @@ export function OperationsView({
               }))}
             />
           )}
-          <ProductionDaysTable days={production.days} testid="ops-production-table" />
+          <ProductionDaysTable days={production.days} testid="ops-production-table" sort={sort} />
         </CardContent>
       </Card>
 
-      <FinalDefectsCard report={report} />
-      <DefectOriginsCard report={report} />
-      <RepairsCard report={report} />
-      <WipReportCard report={report} />
+      <section aria-label="Defect filters" className="flex flex-col gap-2">
+        <FilterForm owns={DEFECT_FILTERS} label="Defect filters" active={filtered}>
+          <div className="flex w-full flex-col gap-1.5 sm:w-56">
+            <Label htmlFor="filter-defect">Defect type</Label>
+            <Select id="filter-defect" name="defect" defaultValue={filters.defect ?? ""}>
+              <option value="">All defect types</option>
+              {finalTypes.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex w-full flex-col gap-1.5 sm:w-44">
+            <Label htmlFor="filter-remedy">Fixable</Label>
+            <Select id="filter-remedy" name="remedy" defaultValue={filters.remedy ?? ""}>
+              <option value="">Fixable or not</option>
+              {(Object.keys(REMEDY_LABEL) as Remedy[]).map((r) => (
+                <option key={r} value={r}>
+                  {REMEDY_LABEL[r]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex w-full flex-col gap-1.5 sm:w-44">
+            <Label htmlFor="filter-stage">Stage</Label>
+            <Select id="filter-stage" name="stage" defaultValue={filters.stage ?? ""}>
+              <option value="">All stages</option>
+              {STAGES.map((st) => (
+                <option key={st} value={st}>
+                  {STAGE_LABEL[st]}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </FilterForm>
+        <p className="text-sm text-muted-foreground print:hidden">
+          Filters the three defect cards below: Final defects, Where defects come from and Repairs.
+          The key figures above stay for the whole line.
+        </p>
+      </section>
 
-      <StockRiskCard stock={report.stock} days={range.days} />
+      <FinalDefectsCard report={report} sort={sort} filtered={filtered} note={note} />
+      <DefectOriginsCard report={report} sort={sort} filtered={filtered} note={note} />
+      <RepairsCard report={report} filtered={filtered} note={note} />
+      <WipReportCard report={report} sort={sort} />
+
+      <StockRiskCard stock={report.stock} days={range.days} sort={sort} />
 
       <SupplierQualityCard
-        suppliers={report.suppliers}
+        sort={sort}
+        supplierId={filters.supplierId}
+        supplierChoices={suppliers}
+        suppliers={shownSuppliers}
         rolls={report.mostDefects}
         lineReturnedShare={report.lineReturnedShare}
-        rangeQuery={`from=${range.from}&to=${range.to}`}
+        rangeQuery={`from=${range.from}&to=${range.to}${filters.supplierId ? `&supplierId=${filters.supplierId}` : ""}`}
       />
 
       <Card data-testid="checkpoint">
@@ -190,15 +267,25 @@ export function OperationsView({
           <Table data-testid="ops-daily-table">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Day</TableHead>
-                <TableHead numeric>Rolls started</TableHead>
-                <TableHead numeric>Rolls scanned</TableHead>
-                <TableHead numeric>Scanning passed</TableHead>
-                <TableHead numeric>Returned to supplier</TableHead>
+                <SortableHeader table="daily" column="day">
+                  Day
+                </SortableHeader>
+                <SortableHeader table="daily" column="rolls-started" numeric>
+                  Rolls started
+                </SortableHeader>
+                <SortableHeader table="daily" column="rolls-scanned" numeric>
+                  Rolls scanned
+                </SortableHeader>
+                <SortableHeader table="daily" column="scanning-passed" numeric>
+                  Scanning passed
+                </SortableHeader>
+                <SortableHeader table="daily" column="returned-to-supplier" numeric>
+                  Returned to supplier
+                </SortableHeader>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {[...report.days].reverse().map((d) => (
+              {sortFor(sort, "daily", [...report.days].reverse(), DAILY_KEYS).map((d) => (
                 <TableRow
                   key={d.day}
                   aria-label={d.day}

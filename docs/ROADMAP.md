@@ -958,3 +958,29 @@ Dylan found the Overview messy (2026-11-20). Plan: `docs/prompts/plans/floor-man
 - [x] Codex QA run 2 from `qa/CODEX_PROMPT_OVERVIEW_CLEANUP_RUN2.md`: **PASS WITH ISSUES** (O1 to O4, O6 to O8
       passed; O5's empty footer is covered by a unit test, the handoff had expected it on a day it can't occur)
 - [ ] Committed and merged (`feature/overview-cleanup`)
+
+## Phase 35 — Reports by period you can sort, filter, print and correct (defense revision 3)
+
+Plan: `docs/prompts/plans/phase-35-reports-and-corrections-plan.md` (Dylan's go, all three
+recommendations, 2026-11-21). Decision: D-132. Two sessions.
+
+**35A: periods, sort, filter, print (read-only)**
+
+- [x] Period picker (Day, Week of the month, Month, Custom up to 366 days) on Operations, Quality and
+      Rolls; old links work; future and invalid values handled
+- [x] Sortable tables (eleven report tables and every Rolls column); CSVs follow the period and filters
+- [x] Filters: defect cards, Supplier quality, Quality defects, Rolls leather item and location
+- [x] Print layout on Operations, Quality, Rolls and Materials (header, prepared by, remarks, signatures,
+      A4, Rolls up to 500 rows)
+- [x] `npm run check` passes (970 unit tests); `reports-period.spec.ts` and `reports-print.spec.ts` written
+      (not run by Claude); DESIGN and API docs updated
+- [x] QA handoff `qa/handoffs/2026-11-21-phase-35a-reports-by-period.md`, Codex prompt
+      `qa/CODEX_PROMPT_PHASE_35A.md`
+- [x] Codex QA: run 1 FAIL (print), run 2 FAIL (blank print charts), run 3 **PASS** (charts no longer print)
+- [ ] Committed and merged (`feature/reports-by-period`)
+
+**35B: corrections (later session)**
+
+- [ ] A past batch corrected by the Floor Manager on any day (A-70, A-103)
+- [ ] A roll's details edited by the Floor Manager (A-104)
+- [ ] A repair's inspection corrected while its sent-back pairs are At stage (A-105)

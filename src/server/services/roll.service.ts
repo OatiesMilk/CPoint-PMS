@@ -22,7 +22,8 @@ import {
   type LunchOn,
 } from "@/lib/roll-timer";
 import type { RollScale } from "@/lib/scale-marker";
-import { addDays, manilaDayStart, toCsv } from "@/lib/report-rules";
+import { addDays, manilaDayStart, parseRange, toCsv } from "@/lib/report-rules";
+import { parseSort, sortRows, type SortKey } from "@/lib/table-sort";
 import { PAGE_SIZE } from "@/lib/pagination";
 import {
   formatRollCode,
@@ -42,7 +43,7 @@ import { rollShare } from "@/lib/measure";
 import { AppError, Errors } from "@/server/lib/errors";
 import { getCvSettings } from "@/server/models/cv-settings.model";
 import { runInTransaction } from "@/server/models/db";
-import { findInventoryItem } from "@/server/models/inventory.model";
+import { findInventoryItem, listInventoryItems } from "@/server/models/inventory.model";
 import { listLunchBreaks } from "@/server/models/production.model";
 import { findSupplier, listActiveSuppliers } from "@/server/models/reference-data.model";
 import {
@@ -89,7 +90,11 @@ import {
   whereText,
   LOCATION_MESSAGES,
 } from "@/lib/location-rules";
-import { findLocation, findLocationByCode } from "@/server/models/location.model";
+import {
+  findLocation,
+  findLocationByCode,
+  listLocations as listLocationRows,
+} from "@/server/models/location.model";
 import type { MoveRollsValues } from "@/server/validators/location.validator";
 import { recordAudit } from "./audit.service";
 import { toLocation, type Location } from "./location.service";
@@ -139,12 +144,24 @@ async function withVerdicts(rows: RollListRow[]): Promise<RollListItem[]> {
 }
 
 function reportFilters(query: RollListQuery, now: Date) {
+  const base = {
+    reportStatus: query.status,
+    supplierId: query.supplierId,
+    itemId: query.itemId,
+    locationId: query.locationId,
+    q: query.q,
+  };
+  // The period picker (Phase 35) filters on the day a roll was added; no period means any time.
+  if (query.period || query.preset || query.from || query.to) {
+    const range = parseRange(query, now);
+    return { ...base, since: range.start, until: range.end };
+  }
   const since = query.days
     ? new Date(
         `${manilaToday(new Date(now.getTime() - (query.days - 1) * 86_400_000))}T00:00:00+08:00`,
       )
     : undefined;
-  return { reportStatus: query.status, supplierId: query.supplierId, since, q: query.q };
+  return { ...base, since };
 }
 
 /** The average scanning time of every roll the filters match, over all pages (D-121). */
@@ -157,6 +174,23 @@ async function averageScanning(query: RollListQuery, now: Date) {
   return { averageMs: averageMs(ms), count: ms.filter((t) => t !== null).length };
 }
 
+/** A printed Rolls report holds up to this many rows; past it the header says so (A-102). */
+export const PRINT_MAX_ROLLS = 500;
+
+/** The columns of Reports → Rolls a click on the header sorts by (table "rolls"). */
+const ROLL_SORT: Record<string, SortKey<RollListItem>> = {
+  roll: (r) => r.code,
+  supplier: (r) => r.supplier?.name ?? null,
+  area: (r) => r.areaSqFt,
+  scanned: (r) => r.finishedAt?.getTime() ?? null,
+  "scanning-time": (r) => r.scanningMs,
+  shots: (r) => r._count.scans,
+  passed: (r) => r.passed,
+  rejected: (r) => r.rejected,
+  defect: (r) => r.defectSharePct,
+  status: (r) => rollStatusText(r),
+};
+
 export async function listRollsForReport(
   query: RollListQuery,
   now: Date = appNow(),
@@ -166,18 +200,57 @@ export async function listRollsForReport(
   page: number;
   pageCount: number;
   scanning: { averageMs: number | null; count: number };
+  /** The printed list stopped at PRINT_MAX_ROLLS of a longer one. */
+  printCut: boolean;
 }> {
-  const page = query.page ?? 1;
+  const filters = reportFilters(query, now);
+  const sort = parseSort(query.sort, query.dir);
+  const sorted = sort?.table === "rolls" && Object.hasOwn(ROLL_SORT, sort.column) ? sort : null;
+  const size = query.print ? PRINT_MAX_ROLLS : PAGE_SIZE;
+  const page = query.print ? 1 : (query.page ?? 1);
+  const scanningP = averageScanning(query, now);
+  if (sorted) {
+    // shortcut: a sorted list sorts the newest CSV_MAX_ROLLS matches in memory (scanning time and
+    // status aren't columns); narrow the filters past that.
+    const [{ rows, total }, scanning] = await Promise.all([
+      listRolls(filters, { skip: 0, take: CSV_MAX_ROLLS }),
+      scanningP,
+    ]);
+    const ordered = sortRows(await withVerdicts(rows), ROLL_SORT, sorted.column, sorted.dir);
+    return {
+      rows: ordered.slice((page - 1) * size, page * size),
+      total,
+      page,
+      pageCount: query.print ? 1 : Math.max(1, Math.ceil(total / size)),
+      scanning,
+      printCut: Boolean(query.print) && total > size,
+    };
+  }
   const [{ rows, total }, scanning] = await Promise.all([
-    listRolls(reportFilters(query, now), { skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE }),
-    averageScanning(query, now),
+    listRolls(filters, { skip: (page - 1) * size, take: size }),
+    scanningP,
   ]);
   return {
     rows: await withVerdicts(rows),
     total,
     page,
-    pageCount: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    pageCount: query.print ? 1 : Math.max(1, Math.ceil(total / size)),
     scanning,
+    printCut: Boolean(query.print) && total > size,
+  };
+}
+
+/** The leather items and storage places the Rolls filters offer (Phase 35). */
+export async function rollFilterOptions() {
+  const [suppliers, items, locations] = await Promise.all([
+    listActiveSuppliers(),
+    listInventoryItems({ category: "LEATHER_ROLL" }, { skip: 0, take: 200 }),
+    listLocationRows({}),
+  ]);
+  return {
+    suppliers,
+    items: items.rows.map((i) => ({ id: i.id, name: i.name })),
+    locations: locations.map((l) => ({ id: l.id, name: `${l.code} · ${l.name}` })),
   };
 }
 

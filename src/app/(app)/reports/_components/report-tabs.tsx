@@ -16,7 +16,7 @@ export function ReportTabs({ current, qs }: { current: ReportTab; qs?: string })
     { id: "materials", label: "Materials", href: "/reports/materials" },
   ] as const;
   return (
-    <nav aria-label="Report" className="flex gap-6 border-b">
+    <nav aria-label="Report" className="flex gap-6 border-b print:hidden">
       {tabs.map((tab) => (
         <Link
           key={tab.id}

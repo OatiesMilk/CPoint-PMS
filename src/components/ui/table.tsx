@@ -99,7 +99,7 @@ export function TableActionsHead({ className, ...props }: React.ComponentProps<"
 // accessible name for screen readers, e.g. "View roll LR-MLT-008".
 export function TableViewLink({ href, what }: { href: string; what: string }) {
   return (
-    <Button asChild variant="ghost" size="sm">
+    <Button asChild variant="ghost" size="sm" className="print:hidden">
       <Link href={href}>
         <Eye aria-hidden />
         View<span className="sr-only"> {what}</span>

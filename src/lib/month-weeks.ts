@@ -1,4 +1,4 @@
-import { addDays } from "./report-rules";
+import { addDays } from "./day-math";
 
 /**
  * Weeks of a month for Reports → Materials (Dylan, 2026-11-02, D-109), pure and client-safe.

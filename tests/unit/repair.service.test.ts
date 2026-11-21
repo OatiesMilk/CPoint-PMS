@@ -396,6 +396,27 @@ describe("repairReport (A-89)", () => {
     ]);
   });
 
+  it("filters narrow the rows and keep every share a share of all failed pairs (A-101)", async () => {
+    model.findingsBetween.mockResolvedValueOnce([
+      finding("t1", "Lifted sole", 3, "FIXABLE", "SOLE_ING"),
+      finding("t1", "Lifted sole", 2, "NOT_FIXABLE", null),
+      finding("t2", "Glue marks", 4, "FIXABLE", "FINISHING"),
+    ]);
+    model.unexplainedFailedPairs.mockResolvedValueOnce(1);
+    const r = await svc.repairReport(
+      { from: "2026-11-01", to: "2026-11-30" },
+      { defect: "GLUE MARKS", stage: "FINISHING" },
+    );
+    expect(r.finalDefects.rows).toHaveLength(1);
+    expect(r.finalDefects.rows[0]).toMatchObject({ label: "Glue marks", pairs: 4 });
+    // 4 of all 10 failed pairs, not of the filtered 4.
+    expect(r.finalDefects.rows[0].shareOfFailed).toBeCloseTo(0.4);
+    expect(r.finalDefects.totalFailed).toBe(10);
+    // A pair with no reason has no defect type to match, so a filter leaves it out.
+    expect(r.finalDefects.notRecorded).toBe(0);
+    expect(r.origins.rows).toHaveLength(1);
+  });
+
   it("sums the repairs and the time to inspection", async () => {
     const t = (h: number) => new Date(NOW.getTime() + h * 3_600_000);
     model.repairsBetween.mockResolvedValueOnce([

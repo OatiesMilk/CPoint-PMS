@@ -253,6 +253,7 @@ export function repairsBetween(from: string, to: string, db: Db = defaultDb()) {
       passedPairs: true,
       scrappedPairs: true,
       resentPairs: true,
+      finding: { select: { remedy: true, finalDefectType: { select: { key: true } } } },
     },
   });
 }

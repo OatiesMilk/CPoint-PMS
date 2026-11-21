@@ -11,6 +11,10 @@ export type RollListFilters = {
   supplierId?: string;
   /** Rolls added on or after this instant (the "days" filter). */
   since?: Date;
+  /** Rolls added before this instant (the period picker, Phase 35). */
+  until?: Date;
+  /** Where the roll is kept now (Phase 35). */
+  locationId?: string;
   q?: string;
   /** One leather item's rolls (Inventory → the item, Phase 30A). */
   itemId?: string;
@@ -67,7 +71,10 @@ function listWhere(filters: RollListFilters): Prisma.RollWhereInput {
     status: filters.status,
     supplierId: filters.supplierId,
     itemId: filters.itemId,
-    ...(filters.since ? { createdAt: { gte: filters.since } } : {}),
+    locationId: filters.locationId,
+    ...(filters.since || filters.until
+      ? { createdAt: { gte: filters.since, lt: filters.until } }
+      : {}),
     ...(q
       ? {
           OR: [

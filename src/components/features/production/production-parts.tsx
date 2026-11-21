@@ -1,8 +1,10 @@
 import { CircleCheck, CircleDashed, CircleSlash, Clock, Hourglass, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHeader } from "@/components/features/reports/sortable-header";
 import { formatAttendanceDay } from "@/lib/attendance-rules";
 import { formatPercent } from "@/lib/format";
+import { sortFor, type SortKey, type SortState } from "@/lib/table-sort";
 import {
   BATCH_STATE_LABELS,
   type BatchState,
@@ -113,6 +115,19 @@ export type DayRowView = {
   shortfall: string | null;
 };
 
+const DAY_KEYS: Record<string, SortKey<DayRowView>> = {
+  day: (d) => d.day,
+  finished: (d) => d.finished,
+  "failed-inspection": (d) => d.failed,
+  passed: (d) => d.passed,
+  "of-quota": (d) => d.share,
+  batches: (d) => d.finishedBatches,
+  "rolls-planned": (d) => d.rollsPlanned,
+  "rolls-scanned": (d) => d.rollsScanned,
+  "constructors-present": (d) => d.constructorsPresent,
+  "pairs-per-constructor": (d) => d.pairsPerConstructor,
+};
+
 // Headers of a wide table wrap onto two lines so it fits at 1280 px (Phase 30F-2).
 const wrapHead = "h-auto py-2 align-bottom whitespace-normal";
 
@@ -123,10 +138,14 @@ const wrapHead = "h-auto py-2 align-bottom whitespace-normal";
 export function ProductionDaysTable({
   days,
   testid = "production-days",
+  sort,
 }: {
   days: DayRowView[];
   testid?: string;
+  /** Reports → Operations (Phase 35): the page's sort. Without it the headers don't sort. */
+  sort?: SortState | null;
 }) {
+  const sortable = sort !== undefined;
   if (days.length === 0)
     return (
       <p className="rounded-lg border border-dashed px-5 py-8 text-center text-muted-foreground">
@@ -137,39 +156,114 @@ export function ProductionDaysTable({
     <Table label="Production by day" data-testid={testid}>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <TableHead>Day</TableHead>
-          <TableHead numeric className={wrapHead}>
-            Finished
-          </TableHead>
-          <TableHead numeric className={wrapHead}>
-            Failed inspection
-          </TableHead>
-          <TableHead numeric className={wrapHead}>
-            Passed
-          </TableHead>
-          <TableHead numeric className={wrapHead}>
-            Of quota
-          </TableHead>
-          <TableHead numeric className={wrapHead}>
-            Batches
-          </TableHead>
-          <TableHead numeric className={wrapHead}>
-            Rolls planned
-          </TableHead>
-          <TableHead numeric className={wrapHead}>
-            Rolls scanned
-          </TableHead>
-          <TableHead numeric className={wrapHead}>
-            Constructors present
-          </TableHead>
-          <TableHead numeric className={wrapHead}>
-            Pairs per constructor
-          </TableHead>
+          {sortable ? (
+            <SortableHeader table="production" column="day">
+              Day
+            </SortableHeader>
+          ) : (
+            <TableHead>Day</TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader table="production" column="finished" numeric className={wrapHead}>
+              Finished
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Finished
+            </TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader
+              table="production"
+              column="failed-inspection"
+              numeric
+              className={wrapHead}
+            >
+              Failed inspection
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Failed inspection
+            </TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader table="production" column="passed" numeric className={wrapHead}>
+              Passed
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Passed
+            </TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader table="production" column="of-quota" numeric className={wrapHead}>
+              Of quota
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Of quota
+            </TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader table="production" column="batches" numeric className={wrapHead}>
+              Batches
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Batches
+            </TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader table="production" column="rolls-planned" numeric className={wrapHead}>
+              Rolls planned
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Rolls planned
+            </TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader table="production" column="rolls-scanned" numeric className={wrapHead}>
+              Rolls scanned
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Rolls scanned
+            </TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader
+              table="production"
+              column="constructors-present"
+              numeric
+              className={wrapHead}
+            >
+              Constructors present
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Constructors present
+            </TableHead>
+          )}
+          {sortable ? (
+            <SortableHeader
+              table="production"
+              column="pairs-per-constructor"
+              numeric
+              className={wrapHead}
+            >
+              Pairs per constructor
+            </SortableHeader>
+          ) : (
+            <TableHead numeric className={wrapHead}>
+              Pairs per constructor
+            </TableHead>
+          )}
         </TableRow>
       </TableHeader>
       {/* One body per day: the day's figures, then its shortfall sentence across the table, so
           the long sentence doesn't widen the table past 1280 px (Phase 30F-2). */}
-      {[...days].reverse().map((d) => (
+      {sortFor(sort ?? null, "production", [...days].reverse(), DAY_KEYS).map((d) => (
         <tbody
           key={d.day}
           className="border-b transition-colors duration-(--dur-fast) last:border-0 hover:bg-accent/50"

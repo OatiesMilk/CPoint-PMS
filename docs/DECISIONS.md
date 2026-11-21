@@ -2677,3 +2677,32 @@ is the primary button and Update stock secondary.
 action-card.tsx` (new), `production-cards.tsx`, `stock-update-card.tsx`, `attendance-card.tsx`,
 `home-cards.tsx`, `low-stock-card.tsx`, `batch-notices.tsx` (`PlanNoticeBanner`), `src/app/(app)/
 layout.tsx`, `DESIGN.md` → "Floor Manager Overview".
+
+### D-132 · 2026-11-21 · Accepted — Reports by Day, Week, Month or Custom, with sort, filters and print (Phase 35A)
+
+**Context.** The panel's revision 3: reports by period, sortable, filtered and printable, with
+corrections to past records. Dylan approved the plan on 2026-11-21 with all three recommendations: two
+sessions (35A reports, 35B corrections), a week is a week of the month, and a repair's inspection
+is correctable. 35A is read-only.
+
+**Decision.**
+
+- **Period** (Operations, Quality, Rolls): Day, Week of the month (as Materials, D-109), Month, Custom up
+  to 366 days, in the URL; the old `preset` and `from`/`to` links work. A future period ends at today;
+  an invalid one is today's. A month or week compares with the one before. Rolls adds Any time (default)
+  and filters on the day a roll was added; its `days=` link still works.
+- **Sort:** one sort per page, `?sort=<table>.<column>&dir=`, each table a whitelist; CSVs ignore it.
+- **Filters** only where they mean something: Operations' defect cards (defect, fixable, stage) and Supplier
+  quality (supplier), Quality's defect, Rolls' leather item and location; the matching CSVs take them.
+- **Print:** header with "Prepared by" (the person printing), repeated table header, no split rows,
+  Remarks and signatures, light colours; Rolls prints every matching row up to 500.
+
+**Assumptions** (not confirmed by CPoint): **A-67** a week is a week of the month, as Materials;
+**A-68** a custom range may be 366 days; **A-69** Remarks and signatures print only, nothing is saved;
+**A-100** CSVs follow the period and filters, not the sort; **A-101** the defect filters change the three
+defect cards, not the key figures; **A-102** a printed Rolls report holds up to 500 rows. A-70 and A-103
+to A-105 belong to 35B.
+
+**Where:** `src/lib/{report-rules,table-sort,day-math,repair-rules}.ts`,
+`src/components/features/reports/*`, `src/app/(app)/reports/**`, the report, roll and repair services,
+`globals.css`, `tokens.css`, `DESIGN.md` → "Reports", `docs/API.md` → Reports.

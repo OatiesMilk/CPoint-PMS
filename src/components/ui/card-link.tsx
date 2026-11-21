@@ -20,7 +20,7 @@ export function CardLink({
     <Link
       href={href}
       className={cn(
-        "group -mx-2 inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-medium whitespace-nowrap",
+        "group -mx-2 inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-sm font-medium whitespace-nowrap print:hidden",
         "text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-accent hover:text-foreground",
         className,
       )}

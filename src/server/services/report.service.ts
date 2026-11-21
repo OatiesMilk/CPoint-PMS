@@ -1,6 +1,7 @@
 import { appNow } from "@/lib/clock";
 import { fillDays, parseRange, toCsv, type ReportRange } from "@/lib/report-rules";
 import { getCvSettings } from "@/server/models/cv-settings.model";
+import { listDefectTypes } from "@/server/models/reference-data.model";
 import {
   dailyProduction,
   dailyRollStats,
@@ -84,12 +85,18 @@ export async function dailyCsv(range: ReportRange) {
   ]);
 }
 
-export async function defectsCsv(range: ReportRange) {
+export async function defectsCsv(range: ReportRange, defect?: string) {
   const r = await qualityReport(range);
-  return toCsv(r.defects, [
+  return toCsv(defect ? r.defects.filter((d) => d.key === defect) : r.defects, [
     { header: "Defect type", value: (d) => d.label },
     { header: "Class key", value: (d) => d.key },
     { header: "Rolls found on", value: (d) => d.rolls },
     { header: "Returned to supplier", value: (d) => d.returned },
   ]);
+}
+
+/** The leather defect types Quality's Defect filter offers (data, never hardcoded). */
+export async function defectOptions() {
+  const types = await listDefectTypes();
+  return types.filter((t) => t.isActive).map((t) => ({ key: t.key, label: t.label }));
 }

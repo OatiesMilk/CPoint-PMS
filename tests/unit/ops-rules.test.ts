@@ -28,7 +28,7 @@ describe("compare / describeChange", () => {
 describe("previousRange", () => {
   it("is the same length, ending the day before", () => {
     const now = new Date("2026-10-08T04:00:00.000Z");
-    const prev = previousRange(parseRange({ preset: "7d" }, now), now);
+    const prev = previousRange(parseRange({ preset: "7d" }, now));
     expect(prev).toMatchObject({ from: "2026-09-25", to: "2026-10-01", days: 7 });
   });
 });

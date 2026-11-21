@@ -129,6 +129,7 @@ export type RollDefectRow = {
 export async function rollsWithMostDefects(
   range: Range,
   limit: number,
+  supplierId?: string,
   db: Db = defaultDb(),
 ): Promise<RollDefectRow[]> {
   const rows = await db.$queryRaw<Record<string, string | number | boolean | null>[]>`
@@ -140,6 +141,7 @@ export async function rollsWithMostDefects(
     LEFT JOIN suppliers sp ON sp.id = b."supplierId"
     WHERE b.status IN ('FINISHED', 'USED', 'RETURNED')
       AND b."defectSharePct" > 0
+      AND (${supplierId ?? null}::uuid IS NULL OR b."supplierId" = ${supplierId ?? null}::uuid)
       AND b."finishedAt" >= (${iso(range.start)}::timestamptz AT TIME ZONE 'UTC')
       AND b."finishedAt" <  (${iso(range.end)}::timestamptz AT TIME ZONE 'UTC')
     ORDER BY b."defectSharePct" DESC, b.code
