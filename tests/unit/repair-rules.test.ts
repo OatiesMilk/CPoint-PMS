@@ -19,6 +19,7 @@ import {
   STAGES,
   suggestFor,
   waitingLine,
+  wipFooterLine,
   wipTotals,
   type Assignment,
   type PastFinding,
@@ -283,6 +284,17 @@ describe("repairs", () => {
     expect(waitingLine(1, 0)).toBe("1 batch waiting for inspection");
     expect(waitingLine(0, 2)).toBe("2 repairs waiting for inspection");
     expect(waitingLine(0, 0)).toBe("Nothing is waiting for inspection.");
+  });
+  it("words the Overview card's last line with one full stop each (D-131)", () => {
+    expect(wipFooterLine(0, waitingLine(0, 0))).toBe(
+      "No repairs open. Nothing is waiting for inspection.",
+    );
+    expect(wipFooterLine(1, waitingLine(1, 0))).toBe(
+      "1 pair in repair. 1 batch waiting for inspection.",
+    );
+    expect(wipFooterLine(17, waitingLine(1, 1))).toBe(
+      "17 pairs in repair. 1 batch and 1 repair waiting for inspection.",
+    );
   });
 });
 

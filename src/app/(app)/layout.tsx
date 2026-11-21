@@ -43,7 +43,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-10 lg:py-8 print:p-0">
           <div className="flex flex-col gap-8">
             {planDue && (
-              <div className="print:hidden">
+              <div className="empty:hidden print:hidden">
                 <PlanNoticeBanner day={manilaToday()} />
               </div>
             )}

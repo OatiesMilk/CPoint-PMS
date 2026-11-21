@@ -17,7 +17,7 @@ type Item = {
 /** Materials at or below their reorder level (FM home). Late leather rolls have stopped the line before. */
 export function LowStockCard({ count, items }: { count: number; items: Item[] }) {
   return (
-    <Card data-testid="low-stock-card">
+    <Card data-testid="low-stock-card" className="h-full">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>

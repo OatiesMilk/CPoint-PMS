@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Workforce } from "@/lib/attendance-rules";
 import type { BatchState, QuotaProgress as Progress } from "@/lib/production-rules";
+import { ActionCard } from "@/components/features/overview/action-card";
 import { QuotaProgress } from "./production-parts";
 import { CardLink } from "@/components/ui/card-link";
 
@@ -32,7 +33,8 @@ type BatchesToday = {
 
 function nextLine(today: BatchesToday): string {
   const n = today.next;
-  if (today.planNeeded) return "Today has no plan yet, so there are no batches.";
+  // The Plan today row says the rest; no second call to action here (D-131).
+  if (today.planNeeded) return "Nothing to count until today is planned.";
   if (today.nonWorking) return "Today is marked Non-working / Holiday.";
   if (!today.workingDay) return "Today isn’t a working day.";
   if (!n) return "Every batch for today is finished.";
@@ -48,7 +50,7 @@ function nextLine(today: BatchesToday): string {
  */
 export function TodaysBatchesCard({ today }: { today: BatchesToday }) {
   return (
-    <Card className="xl:col-span-2" data-testid="todays-batches-card">
+    <Card className="h-full" data-testid="todays-batches-card">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -82,30 +84,25 @@ export function TodaysBatchesCard({ today }: { today: BatchesToday }) {
 }
 
 /**
- * The Floor Manager's start-of-day notice on the home (A-37, D-114): first, from 00:00 on a weekday
- * with no plan, until today is planned or marked Non-working / Holiday.
+ * The Floor Manager's start-of-day notice on the home (A-37, D-114): the first "needs attention"
+ * row, from 00:00 on a weekday with no plan, until today is planned or marked Non-working /
+ * Holiday. On the Overview it is the only plan prompt; the banner is hidden there (D-131).
  */
 export function PlanTodayCard({ day }: { day: string }) {
   return (
-    <Card data-testid="plan-today-card" className="border-info bg-info-soft">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <BellRing aria-hidden className="size-5 text-info" />
-          Plan today
-        </CardTitle>
-        <CardDescription>
-          Today has no plan yet, so there are no batches. Set the rolls to be used, the quota and
-          the check-in interval.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button asChild>
+    <ActionCard
+      testId="plan-today-card"
+      icon={<BellRing />}
+      title="Plan today"
+      description="No plan yet, so there are no batches. Set the rolls to be used, the quota and the check-in interval."
+      action={
+        <Button asChild className="max-sm:w-full">
           <Link href={`/batches/plan?day=${day}`}>
             <CalendarCog aria-hidden />
             Plan today
           </Link>
         </Button>
-      </CardContent>
-    </Card>
+      }
+    />
   );
 }

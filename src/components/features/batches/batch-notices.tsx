@@ -274,11 +274,14 @@ export function BatchBell({
 }
 
 /**
- * The Floor Manager's start-of-day notice (A-37, D-114) on every page: on a weekday with no plan,
- * from 00:00 until today is planned or marked Non-working / Holiday. Worked out by the server on
- * each page load; saving the plan clears it.
+ * The Floor Manager's start-of-day notice (A-37, D-114) on every page but the Overview: on a
+ * weekday with no plan, from 00:00 until today is planned or marked Non-working / Holiday. Worked
+ * out by the server on each page load; saving the plan clears it. The Overview's own Plan today
+ * row says the same thing, so the banner stays off it (D-131, A-97).
  */
 export function PlanNoticeBanner({ day }: { day: string }) {
+  const pathname = usePathname();
+  if (pathname === "/floor-manager") return null;
   return (
     <div
       role="status"

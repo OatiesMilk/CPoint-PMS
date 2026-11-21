@@ -937,4 +937,24 @@ Decision: D-130. Assumptions: A-62 to A-66, A-72 to A-76, A-86 to A-94.
       across workers, a stale roster in the D-088 test), fixed; C6 closed as passed
 - [x] Codex QA run 4 from `qa/CODEX_PROMPT_PHASE_34_RUN4.md`: **PASS** (targeted 28 of 28; full suite 118
       passed, 0 failed, 2 skipped)
-- [ ] Committed and merged (`feature/defects-and-repairs`)
+- [x] Committed and merged (#56, def75b1; CI fix #57, 68f3c21)
+
+## Overview clean-up (the Floor Manager’s home; un-numbered, between Phases 34 and 35)
+
+Dylan found the Overview messy (2026-11-20). Plan: `docs/prompts/plans/floor-manager-overview-cleanup-plan.md`
+(Dylan’s yes to its three recommendations, 2026-11-21). Decision: D-131. Assumptions: A-97 to A-99.
+
+- [x] Three zones: Needs attention (only when due: Plan today, Stock update today), On the line now
+      (Today’s batches beside Work in progress), Today so far (Attendance, Rolls today, Low-stock,
+      Daily summary, two by two, four from 1536 px); cards one height per row
+- [x] The plan banner is hidden on the Overview only (the Plan today row says it); one primary button
+      per view; Work in progress and Today’s batches quiet states
+- [x] `npm run check` passes (945 unit tests); `overview-layout.spec.ts` written and the no-plan test in
+      `batches.spec.ts` edited (not run by Claude); DESIGN, USER_MANUAL, DECISIONS updated
+- [x] QA handoff `qa/handoffs/2026-11-21-overview-cleanup.md`, Codex prompt
+      `qa/CODEX_PROMPT_OVERVIEW_CLEANUP.md`
+- [x] Codex QA run 1 from `qa/CODEX_PROMPT_OVERVIEW_CLEANUP.md`: BLOCKED (O4, O9, A1 passed; the rest needed
+      the demo clock, which the in-app browser could not set); full suite 121 passed, 0 failed
+- [x] Codex QA run 2 from `qa/CODEX_PROMPT_OVERVIEW_CLEANUP_RUN2.md`: **PASS WITH ISSUES** (O1 to O4, O6 to O8
+      passed; O5's empty footer is covered by a unit test, the handoff had expected it on a day it can't occur)
+- [ ] Committed and merged (`feature/overview-cleanup`)

@@ -5,6 +5,63 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-21 · Overview clean-up: Codex run 2 PASS WITH ISSUES; QA done; git commands
+
+- Codex run 2 (`qa/reports/2026-11-21-overview-cleanup-run2.md`): a headless script set the demo clock to Wed
+  25 Nov 09:00 through the form and saved the screenshots. O1, O2, O3, O4, O6, O7, O8 passed; with run 1 (full
+  suite 121 passed, 0 failed; A1) every scenario has passed. Keyboard order follows the zones; axe found nothing
+  in light or dark at 768 px.
+- O5 stayed partly open because of the handoff: it expected "No repairs open…" and 0 open rolls on a future day,
+  but repairs, work waiting for inspection and open rolls are line-wide, so the seeded 17 pairs in repair stay.
+  Fixed the handoff. Made the Overview card's last line a pure function, `wipFooterLine` in
+  `src/lib/repair-rules.ts`, with a unit test for the empty, singular and seeded wording; the test caught a
+  lost backslash in my extraction (`/.$/` stripped any character), fixed before it shipped.
+  `npm run check` passed (**945 unit tests**, build OK).
+- Git commands for `feature/overview-cleanup` given to Dylan with the list `qa/overview-cleanup-files.txt`
+  (not committed). Left out: `docs/DEMO_SCRIPT.md`, `qa/phase-34-files.txt`, the list file, the git-ignored
+  report artifacts (database dumps included).
+
+## 2026-11-21 · Overview clean-up: Codex run 1 BLOCKED (demo clock), run 2 prompt
+
+- Codex run 1 (`qa/reports/2026-11-21-overview-cleanup-run1.md`, run on a Saturday): 3 passed (O4, O9, A1), 0
+  failed, 7 blocked. Targeted e2e 34 passed, 2 skipped; full suite 121 passed, 0 failed, 4 skipped; role
+  access (A1) and the lower cards' two-by-two, four-in-a-row and one-column layouts held.
+- Blocked: O1, O2, O3, O5, O6, O7, O8 all needed the demo clock. The Change time form closed and the server
+  logged `POST /api/v1/demo/clock` 200, but the clock stayed on Sat 21 Nov. The form's boxes are controlled
+  inputs and the form refuses empty fields, so this is the in-app browser's fill not reaching React state, as
+  in Phase 34 run 3 (typing worked). I changed no application code.
+- Also from the report: the bell wasn't found because on a Saturday nothing is due and nobody can finish
+  batches, so it isn't rendered (correct); the handoff's O7 sent the Admin to Batches, which the Admin has no
+  access to (fixed in the handoff); no screenshot could be saved from the in-app browser.
+- Run 2 prompt `qa/CODEX_PROMPT_OVERVIEW_CLEANUP_RUN2.md`: a headless Playwright script sets the clock (fill,
+  or POST the same body as the form, reporting the full response if that fails too), saves the screenshots
+  as files and runs the blocked scenarios on one clock setting (Wed 25 Nov 09:00), then O2 and O6.
+
+## 2026-11-21 · Overview clean-up: the Floor Manager's home in three zones (D-131)
+
+- Built from `docs/prompts/plans/floor-manager-overview-cleanup-plan.md` after Dylan's yes to its three
+  recommendations (hide the plan banner on the Overview only, keep "Not taken yet today" in the Attendance
+  card, no zone headings). Phase 34 was merged (#56, #57), so the plan's wait condition was met.
+- **Page:** Needs attention (a labelled `section`, only when a row is due: `PlanTodayCard` and
+  `StockUpdateCard` rebuilt on the new `ActionCard`; Plan today primary, Update stock secondary when both
+  show via a `primary` prop), On the line now (`xl:` 2fr/1fr, Today's batches beside Work in progress), Today
+  so far (`md:` two, `2xl:` four columns). Cards are `h-full`; Daily summary's links `mt-auto`; Take attendance
+  secondary. Work in progress: auto-fit stage figures, "–" with a screen-reader "not counted today", a quiet
+  line, and a muted footer (which also fixes the old double full stop in "Nothing is waiting for
+  inspection.."). Today's batches on an unplanned day: "Nothing to count until today is planned."
+- **Banner:** `PlanNoticeBanner` returns nothing on `/floor-manager` (`usePathname`); the layout's wrapper
+  got `empty:hidden` so no 32 px gap is left. The bell and every other page are unchanged.
+- **Tests:** `batches.spec.ts` no-plan test (no `plan-notice` on the Overview, banner on `/batches`); new
+  read-only `overview-layout.spec.ts` (order, one primary, equal heights, 2 × 2 and 1 × 4, no sideways scroll,
+  axe). Not run by Claude.
+- **Checks:** `npm run check` passed (lint, typecheck, **944 unit tests**, build). A first typecheck failed on a
+  corrupt generated `.next/dev/types/routes.d.ts` (a stale tail from a concurrent write, git-ignored); deleting
+  `.next/dev/types` fixed it, no code change. Nothing was looked at in a browser.
+- **Docs:** D-131 (A-97 to A-99), DESIGN (Plan today paragraph, new "Floor Manager Overview"), USER_MANUAL 6.1,
+  ROADMAP, STATUS. Handoff `qa/handoffs/2026-11-21-overview-cleanup.md`, prompt
+  `qa/CODEX_PROMPT_OVERVIEW_CLEANUP.md`. The manual's `06-overview.png` was not retaken.
+- Next: Codex run 1; on a full pass Claude gives the git commands for `feature/overview-cleanup`.
+
 ## 2026-11-20 · Phase 34 CI: e2e failed on PR #56 (and main), two tests, fix
 
 - PR #56 (9af5d2e) was merged at 16:31 UTC; CI `check`, `station` and `docker` passed (the new Phase 34 data

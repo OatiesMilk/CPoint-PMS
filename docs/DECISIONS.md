@@ -2641,3 +2641,39 @@ only (leather defects and the camera checkpoint are unchanged, A-66).
 `production.service.ts`, `ops-report.service.ts`, `src/app/api/v1/production/{repairs,stages,
 stage-counts,wip,defect-suggestions}`, `src/app/api/v1/final-defect-types`,
 `src/app/(app)/batches/*`, `…/camera/capture/my-stage.tsx`, `docs/API.md` → Batches.
+
+### D-131 · 2026-11-21 · Accepted — The Floor Manager's Overview has three zones, and the plan banner is hidden on it (Overview clean-up)
+
+**Context.** Dylan found the Floor Manager's Overview messy: the plan banner above the page title and
+the Plan today card said the same sentence (a third time in Today's batches), two alert cards left an
+empty third column, the cards had ragged heights, and three solid buttons could show at once. The
+plan is `docs/prompts/plans/floor-manager-overview-cleanup-plan.md`; Dylan accepted its three
+recommendations on 2026-11-21 (the banner hidden on the Overview only, Attendance's "Not taken yet
+today" kept inside its card, no zone headings).
+
+**Decision.**
+
+- **Three zones**, 32 px apart, 16 px between cards: **Needs attention** (only when something is due:
+  the Plan today and Stock update today rows, slim and full width of their share, not rendered
+  otherwise), **On the line now** (Today's batches beside Work in progress, one height) and **Today so
+  far** (Attendance, Rolls today, Low-stock alerts, Daily summary, two by two, four in a row from
+  1536 px, one height per row). No visible zone headings; Needs attention has a screen-reader heading.
+- **The plan banner is hidden on `/floor-manager` only** (amends D-114's "banner on every page"; D-098
+  and A-37 otherwise stand). Everywhere else it stays, the bell item stays, and the batch banner
+  (D-098) is unchanged.
+- **One primary button per view:** Plan today is the filled button when both rows are due; Update stock
+  is outlined then; Take attendance is outlined always.
+- Today's batches on an unplanned day reads "Nothing to count until today is planned." (no repeat of the
+  plan sentence); Work in progress shows "–" for a stage not counted today and says so in one muted line.
+- No data, rule, route, permission or migration changes; numbers, thresholds and reminder days are
+  untouched.
+
+**Assumptions** (not confirmed by CPoint, they are layout only): **A-97** the banner is hidden on the
+Overview only, because the Plan today row there says the same thing; **A-98** Attendance's "Not taken
+yet today" prompt stays in its own card, not in Needs attention; **A-99** with both rows due, Plan today
+is the primary button and Update stock secondary.
+
+**Where:** `src/app/(app)/floor-manager/{page,wip-card}.tsx`, `src/components/features/overview/
+action-card.tsx` (new), `production-cards.tsx`, `stock-update-card.tsx`, `attendance-card.tsx`,
+`home-cards.tsx`, `low-stock-card.tsx`, `batch-notices.tsx` (`PlanNoticeBanner`), `src/app/(app)/
+layout.tsx`, `DESIGN.md` → "Floor Manager Overview".
