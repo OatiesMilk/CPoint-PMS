@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { periodQuerySchema, sortQuerySchema } from "./report.validator";
 import { RollStatus } from "@/lib/domain";
 import { LOCATION_MESSAGES } from "@/lib/location-rules";
 import {
@@ -87,7 +88,14 @@ export const rollListQuerySchema = z.object({
     .optional()
     .catch(undefined),
   q: z.string().trim().max(50).optional().catch(undefined),
+  /** Phase 35: the leather item and where the roll is kept. */
+  itemId: z.uuid().optional().catch(undefined),
+  locationId: z.uuid().optional().catch(undefined),
   page: z.coerce.number().int().min(1).max(10_000).optional().catch(undefined),
+  /** The printed list: every matching row, up to PRINT_MAX_ROLLS (A-102). */
+  print: z.literal("1").optional().catch(undefined),
+  ...periodQuerySchema.shape,
+  ...sortQuerySchema.shape,
 });
 
 export type RollListQuery = z.infer<typeof rollListQuerySchema>;

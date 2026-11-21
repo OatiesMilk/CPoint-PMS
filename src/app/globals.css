@@ -190,3 +190,29 @@
     }
   }
 }
+
+/* Printed reports (Phase 35): Operations, Quality, Rolls and Materials. The page size and margin
+   come from the report page itself (a <style> in PrintPage), so the label sheets' own @page stays. */
+@media print {
+  body {
+    background: white;
+  }
+
+  /* A table's header repeats on every page, and a row never splits across two. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+
+  /* A wide table prints in full instead of scrolling inside its box. */
+  .overflow-x-auto {
+    overflow: visible;
+  }
+
+  [data-slot="card"] {
+    box-shadow: none;
+  }
+}

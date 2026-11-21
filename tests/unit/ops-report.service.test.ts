@@ -273,7 +273,7 @@ describe("operationsReport", () => {
 
   it("lists the rolls with the most defects, with what was found on them", async () => {
     const r = await svc.operationsReport(range, now);
-    expect(ops.rollsWithMostDefects).toHaveBeenCalledWith(range, 5);
+    expect(ops.rollsWithMostDefects).toHaveBeenCalledWith(range, 5, undefined);
     expect(rolls.countDefectsForRolls).toHaveBeenCalledWith(["b9"], 0.6);
     expect(r.mostDefects).toEqual([
       {
@@ -410,6 +410,18 @@ describe("CSV", () => {
     expect(lines[1]).toBe("Tannery A,10,4,6,60.0,Hole,yes");
   });
 
+  it("the supplier filter narrows the worst rolls and both supplier CSVs (A-101)", async () => {
+    await svc.operationsReport(range, now, { supplierId: "sp-x" });
+    expect(ops.rollsWithMostDefects).toHaveBeenLastCalledWith(range, 5, "sp-x");
+    await svc.supplierRollsCsv(range, "sp-x");
+    expect(ops.rollsWithMostDefects).toHaveBeenLastCalledWith(range, 100, "sp-x");
+    const none = (await svc.suppliersCsv(range, "no-such-supplier"))
+      .replace(/^﻿/, "")
+      .trim()
+      .split("\r\n");
+    expect(none).toHaveLength(1); // the header only
+  });
+
   it("supplier-rolls CSV lists the rolls with the most defects", async () => {
     const lines = (await svc.supplierRollsCsv(range))
       .replace(/^\uFEFF/, "")
@@ -417,6 +429,6 @@ describe("CSV", () => {
       .split("\r\n");
     expect(lines[0]).toBe("Roll,Tag number,Supplier,Defect %,Status,Defects");
     expect(lines[1]).toBe("LR-MLT-009,R-0412,Tannery A,16.7,Returned to supplier,Hole 4 · Cut 2");
-    expect(ops.rollsWithMostDefects).toHaveBeenCalledWith(range, 100);
+    expect(ops.rollsWithMostDefects).toHaveBeenCalledWith(range, 100, undefined);
   });
 });

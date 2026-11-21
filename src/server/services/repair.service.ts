@@ -18,6 +18,10 @@ import {
   SUGGEST_WINDOW_DAYS,
   type FindingLine,
   type Stage,
+  type RepairFilters,
+  hasRepairFilters,
+  matchesFinding,
+  matchesRepair,
   type Suggestion,
 } from "@/lib/repair-rules";
 import type { Role } from "@/lib/domain";
@@ -339,12 +343,19 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  * defect type and stage, never per person (D-008). Failed pairs from before Phase 34 have no
  * reasons; they appear as "Reason not recorded" so the totals reconcile.
  */
-export async function repairReport(range: { from: string; to: string }) {
-  const [findings, repairs, unexplained] = await Promise.all([
+export async function repairReport(
+  range: { from: string; to: string },
+  filters: RepairFilters = {},
+) {
+  const [allFindings, allRepairs, unexplained] = await Promise.all([
     findingsBetween(range.from, range.to),
     repairsBetween(range.from, range.to),
     unexplainedFailedPairs(range.from, range.to),
   ]);
+  // Filters (A-101) narrow the cards, not the whole line: shares stay shares of every failed pair.
+  const filtered = hasRepairFilters(filters);
+  const findings = allFindings.filter((f) => matchesFinding(f, filters));
+  const repairs = allRepairs.filter((j) => matchesRepair(j, filters));
   type Acc = {
     id: string;
     key: string;
@@ -380,8 +391,7 @@ export async function repairReport(range: { from: string; to: string }) {
   const rows = [...byType.values()].sort(
     (a, b) => b.pairs - a.pairs || a.sortOrder - b.sortOrder || a.label.localeCompare(b.label),
   );
-  const found = rows.reduce((s, r) => s + r.pairs, 0);
-  const total = found + unexplained;
+  const total = allFindings.reduce((s, f) => s + f.pairs, 0) + unexplained;
   const share = (part: number, whole: number) => (whole > 0 ? part / whole : null);
   const finalDefects = {
     rows: rows.map((r) => ({
@@ -393,7 +403,7 @@ export async function repairReport(range: { from: string; to: string }) {
       scrapped: r.scrapped,
     })),
     /** Failed pairs with no reason: batches from before Phase 34 (A-89). */
-    notRecorded: unexplained,
+    notRecorded: filtered ? 0 : unexplained,
     totalFailed: total,
   };
   const origins = {

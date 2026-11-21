@@ -5,6 +5,52 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-21 · Phase 35A: Codex run 3 PASS; QA done; git commands
+
+- Codex run 3 (`qa/reports/2026-11-21-phase-35a-run3.md`): P10 and P15 passed. All 39 PDF pages reviewed: the Production and Quality charts are absent with no blank plot, the tables fit with repeated headers, the Materials warning lists all 45 names with no control, header, remark and signatures print; the charts and "Show all" still work on screen. Print and period specs 7 and 7, full suite 135 passed, 0 failed, 4 skipped. With runs 1 and 2 every scenario has passed.
+- Git commands for `feature/reports-by-period` given to Dylan with the list `qa/phase-35a-files.txt` (nothing committed). Left out: `docs/DEMO_SCRIPT.md`, `qa/phase-34-files.txt`, `qa/overview-cleanup-files.txt`, the git-ignored report artifacts.
+
+## 2026-11-21 · Phase 35A: Codex run 2 FAIL on P10 (print charts), fixed; run 3 prompt
+
+- Codex run 2 (`qa/reports/2026-11-21-phase-35a-run2.md`): P6, P9, P15 passed (isolated 23 passed, full suite 135 passed, 0 failed, 4 skipped); the run-1 fixes for card links, View links and the pager held. P10 failed: the Operations and Quality charts printed blank. In print the wrapper and SVG measured 0 × 0 although the parents were 1,238 px: my run-1 rule (`.recharts-wrapper { width: 100%; height: auto }`) collapsed them. Materials also printed the closed "Show all 26" control.
+- Fixed: the rule is removed and the charts are not printed (`print:hidden` on the production figure and on Quality's "Rolls scanned per day" card; the tables beside them hold the same numbers) rather than guess again at a chart's print size without a browser; Materials prints the full at-risk list by name and hides the disclosure. DESIGN updated. Charts on paper can come back as a static SVG if Dylan wants them.
+- `npm run check` passed (970). Run 3 prompt `qa/CODEX_PROMPT_PHASE_35A_RUN3.md`.
+
+## 2026-11-21 · Phase 35A: Codex run 1 FAIL, fixed; run 2 prompt
+
+- Codex run 1 (`qa/reports/2026-11-21-phase-35a-run1.md`): 13 passed, 4 failed. Periods, reconciliation, sort, filters, access and the old links held; the demo was reset (135 s).
+- Fixed: F1 charts clipped in print (`.recharts-wrapper` scales to the page in `globals.css`); F2 card links, View links, the Claim sheet button and the pager buttons are now `print:hidden` (`CardLink`, `TableViewLink`, `TablePager`, `ops-sections`); F4 `reports-print.spec.ts` uses `getByRole("textbox", { name: "Remarks" })`; F5 the sort header's hidden text reads "Select to sort", so the Rolls no-person check (`/by|person|constructor/`) no longer matches it.
+- Not code faults: F3 (`from=2026-02-30` shows the default 14 days, since `isDay` now rejects it) and F7 (worst-rolls card 5, its CSV 100, unchanged since D-117): the handoff is reworded. F6, F8, F9: sign-in stalls and time-outs in the 12.6-minute full run, each passing alone (the dev-server load of Phases 32 and 33).
+- `npm run check` passed (970). Not seen in a browser by Claude. Run 2 prompt `qa/CODEX_PROMPT_PHASE_35A_RUN2.md`.
+
+## 2026-11-21 · Phase 35A: reports by period, sort, filter and print (D-132)
+
+- Built 35A of `docs/prompts/plans/phase-35-reports-and-corrections-plan.md` (Dylan's go on all three
+  recommendations: two sessions, weeks of the month, repair inspections correctable in 35B). Read-only, no
+  migration.
+- **Period:** `parseRange` takes `period=day|week|month` beside the old `preset` and `from`/`to` (which
+  still work); a week is a week of the month (`resolveWeek`, D-109); a future or invalid value ends at
+  today or falls back to today's; the cap is 366 days; `previousRange` compares a month with the month
+  before and a week with the week before; `compareLabel` words it. `isDay` now checks the day is real
+  (`2026-02-30` used to throw in `toISOString`). `addDays` moved to `day-math.ts` (re-exported) so
+  `month-weeks` and `report-rules` don't import each other.
+- **Sort:** `table-sort.ts` (`parseSort`, `sortRows`, `sortFor`, `sortText`) and a client
+  `SortableHeader` that only edits `?sort=`/`&dir=`. Eleven report tables sort; Rolls sorts the newest
+  5,000 matches in memory (scanning time and status aren't columns), a stated shortcut.
+- **Filters:** Operations' defect cards (defect, fixable, stage) and Supplier quality (supplier, its two
+  CSVs and the worst rolls, through the SQL), Quality's defect (and the Defects CSV), Rolls' leather item
+  and location. Plain GET forms (`FilterForm`) with a "Filtered: …" line and Clear; shares stay shares of
+  every failed pair.
+- **Print:** `PrintHeader`, `ReportFooter` (remarks, signatures), `PrintButton` (moved from the claim
+  sheet; Rolls opens `?print=1&autoprint=1`), print CSS in `globals.css`, and the dark token block wrapped
+  in `@media not print`. A4 and the 12 mm margin come from a `<style>` only report pages render, because
+  the label sheets' `@page` (margin 0) is global.
+- The planning thread had started two files; I replaced `table-sort.ts` with mine and deleted the unused
+  `report-period.ts`.
+- `npm run check` passed (**970 unit tests**, build OK). e2e `reports-period.spec.ts` and
+  `reports-print.spec.ts` written, not run. Not opened in a browser by Claude (the print layout is
+  unverified until Codex's PDFs). Handoff `qa/handoffs/2026-11-21-phase-35a-reports-by-period.md`, prompt
+  `qa/CODEX_PROMPT_PHASE_35A.md`. Next: Codex run 1, then 35B (corrections).
 ## 2026-11-21 · Overview clean-up: Codex run 2 PASS WITH ISSUES; QA done; git commands
 
 - Codex run 2 (`qa/reports/2026-11-21-overview-cleanup-run2.md`): a headless script set the demo clock to Wed

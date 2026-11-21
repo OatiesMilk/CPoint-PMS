@@ -232,6 +232,25 @@ header, `min-h-11`, the current one with a 2 px `border-foreground` underline an
   **Absent** is a warning badge, "At Sole-ing" a muted word beside someone ticked elsewhere; the
   suggestion banner is an info alert.
 
+## Reports: periods, sort, filters and print (Phase 35A, D-132)
+
+- **Period picker** (`PeriodPicker`, above the report): a segmented row of links, **Day · Week ·
+  Month · Custom** (Rolls adds **Any time**), then the controls for the chosen one: a date, Year +
+  Month + Week selects (a week that hasn't started is disabled), Year + Month, or From + To with
+  **Show** and "Up to 366 days". The four quick links (Today, 7 days, 14 days, 30 days) sit beside it
+  on Operations and Quality. Everything is in the URL; the range line says the period in words.
+- **Sortable header** (`SortableHeader`): the label is a link; the active column shows an arrow and
+  `aria-sort`, a second click reverses; one sort per page. No sort control on a table that is
+  chronological by nature without a reason to reorder it.
+- **Filters:** a plain GET form (select, **Apply**, **Clear**) above the cards it narrows, with a
+  line saying which ("Filters the three defect cards below"); each narrowed card shows
+  "Filtered: …" with Clear and has its own no-match sentence.
+- **Print:** the **Print** button; the header (company, report, period, printed, **Prepared by**,
+  filters and sort in words) is hidden on screen. A4 portrait, 12 mm margin; the table header
+  repeats, rows don't split, controls and navigation are hidden, the light tokens apply (the dark
+  block is `@media not print`). **Remarks** (a textarea that prints as text, or three ruled lines)
+  and Prepared by / Checked by lines end the page. **Charts do not print** (`print:hidden`; they came out blank or cut off on A4); the table under each has the same numbers. Rolls prints every matching row (up to 500).
+
 ## Plan calendar (D-114)
 
 Batches → Plan days, desktop: a month grid, Monday to Sunday (`grid-cols-7`, the one place a fixed

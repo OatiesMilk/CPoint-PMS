@@ -11,44 +11,68 @@
  */
 import { appNow } from "@/lib/clock";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { connection } from "next/server";
 import { Download } from "lucide-react";
 import { OperationsView } from "./_components/operations-view";
+import { defectFilterText } from "./_components/filter-text";
 import { QualityView } from "./_components/quality-view";
 import { ReportTabs } from "./_components/report-tabs";
 import { PageHeader } from "@/components/features/page-header";
+import { PeriodPicker } from "@/components/features/reports/period-picker";
+import { PrintButton } from "@/components/features/reports/print-button";
+import { PrintHeader, PrintPage } from "@/components/features/reports/print-header";
+import { ReportFooter } from "@/components/features/reports/report-footer";
 import { Button } from "@/components/ui/button";
-import { formatDayLabel, formatManilaDateTime } from "@/lib/format";
-import { PRESETS, parseRange } from "@/lib/report-rules";
-import { cn } from "@/lib/utils";
+import { ROLE_LABELS } from "@/lib/domain";
+import { formatManilaDateTime, manilaToday } from "@/lib/format";
+import { PERIOD_PARAMS, parseRange } from "@/lib/report-rules";
+import { hasRepairFilters } from "@/lib/repair-rules";
+import { parseSort, sortText } from "@/lib/table-sort";
 import { requirePermission } from "@/server/policies/guard";
 import { operationsReport } from "@/server/services/ops-report.service";
-import { qualityReport } from "@/server/services/report.service";
+import { finalDefectTypeOptions } from "@/server/services/repair.service";
+import { supplierOptions } from "@/server/services/roll.service";
+import { defectOptions, qualityReport } from "@/server/services/report.service";
 import { reportQuerySchema } from "@/server/validators/report.validator";
 
 export const metadata: Metadata = { title: "Reports" };
 
 export default async function ReportsPage({ searchParams }: PageProps<"/reports">) {
-  await requirePermission("report:production");
+  const user = await requirePermission("report:production");
   await connection();
   const query = reportQuerySchema.parse(await searchParams);
   const range = parseRange(query);
   // The Floor Manager lands on Operations; Quality is the other tab.
   const view = query.view === "quality" ? "quality" : "operations";
   const now = appNow();
+  const sort = parseSort(query.sort, query.dir);
+  const filters = {
+    defect: query.defect,
+    remedy: query.remedy,
+    stage: query.stage,
+    supplierId: query.supplierId,
+  };
 
-  const [operations, quality] = await Promise.all([
-    view === "operations" ? operationsReport(range, now) : null,
+  const [operations, quality, finalTypes, suppliers, leatherDefects] = await Promise.all([
+    view === "operations" ? operationsReport(range, now, filters) : null,
     view === "quality" ? qualityReport(range) : null,
+    view === "operations" ? finalDefectTypeOptions() : [],
+    view === "operations" ? supplierOptions() : [],
+    view === "quality" ? defectOptions() : [],
   ]);
 
+  // The period's own params, so another tab or a CSV shows the same period.
+  const periodQs = new URLSearchParams();
+  for (const k of PERIOD_PARAMS) {
+    const v = query[k as keyof typeof query];
+    if (typeof v === "string" && v) periodQs.set(k, v);
+  }
   const qs = `from=${range.from}&to=${range.to}`;
-  const title =
-    range.days === 1
-      ? formatDayLabel(range.from)
-      : `${formatDayLabel(range.from)} – ${formatDayLabel(range.to)}`;
-  const keep = (extra: string) => `/reports?view=${view}&${extra}`;
+  const csvQs = (extra: Record<string, string | undefined>) => {
+    const next = new URLSearchParams(qs);
+    for (const [k, v] of Object.entries(extra)) if (v) next.set(k, v);
+    return next.toString();
+  };
   const csvLinks =
     view === "operations"
       ? [
@@ -58,11 +82,28 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
         ]
       : [
           { href: `/api/v1/reports/daily.csv?${qs}`, label: "Daily CSV" },
-          { href: `/api/v1/reports/defects.csv?${qs}`, label: "Defects CSV" },
+          {
+            href: `/api/v1/reports/defects.csv?${csvQs({ defect: query.defect })}`,
+            label: "Defects CSV",
+          },
         ];
+
+  const notes = [
+    view === "operations" && hasRepairFilters(filters)
+      ? `Filtered (defect cards): ${defectFilterText(filters, finalTypes)}`
+      : null,
+    view === "operations" && filters.supplierId
+      ? `Filtered (Supplier quality): ${suppliers.find((x) => x.id === filters.supplierId)?.name ?? "supplier"}`
+      : null,
+    view === "quality" && query.defect
+      ? `Filtered (defects): ${leatherDefects.find((d) => d.key === query.defect)?.label ?? query.defect}`
+      : null,
+    sortText(sort),
+  ].filter((x): x is string => Boolean(x));
 
   return (
     <>
+      <PrintPage />
       <PageHeader
         title="Reports"
         description={
@@ -71,7 +112,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
             : "The checkpoint before cutting: Pass, Reject and the defects. Never per person."
         }
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 print:hidden">
             {csvLinks.map((l) => (
               <Button key={l.href} asChild variant="secondary">
                 <a href={l.href} download>
@@ -80,63 +121,48 @@ export default async function ReportsPage({ searchParams }: PageProps<"/reports"
                 </a>
               </Button>
             ))}
+            <PrintButton label="Print" variant="secondary" />
           </div>
         }
       />
 
-      <ReportTabs current={view} qs={qs} />
+      <ReportTabs current={view} qs={periodQs.toString()} />
 
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <nav aria-label="Report range" className="flex gap-1 rounded-md border p-1">
-          {PRESETS.map((p) => (
-            <Link
-              key={p.id}
-              href={keep(`preset=${p.id}`)}
-              aria-current={range.preset === p.id ? "page" : undefined}
-              className={cn(
-                "rounded-sm px-3 py-1.5 text-sm font-medium",
-                range.preset === p.id
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {p.label}
-            </Link>
-          ))}
-        </nav>
-        <form method="get" className="flex items-end gap-2" aria-label="Custom range">
-          <input type="hidden" name="view" value={view} />
-          <label className="flex flex-col gap-1 text-sm">
-            From
-            <input
-              type="date"
-              name="from"
-              defaultValue={range.from}
-              max={range.to}
-              className="h-9 rounded-md border border-input bg-card px-3"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            To
-            <input
-              type="date"
-              name="to"
-              defaultValue={range.to}
-              className="h-9 rounded-md border border-input bg-card px-3"
-            />
-          </label>
-          <Button type="submit" variant="secondary">
-            Show
-          </Button>
-        </form>
-      </div>
+      <PrintHeader
+        report={view === "operations" ? "Operations" : "Quality"}
+        period={`${range.label} · ${range.days} day${range.days === 1 ? "" : "s"}`}
+        preparedBy={{ name: user.name, roleLabel: ROLE_LABELS[user.role] }}
+        notes={notes}
+        printedAt={now}
+      />
+
+      <PeriodPicker range={range} today={manilaToday(now)} fixed={{ view }} />
 
       <p className="text-sm text-muted-foreground" data-testid="report-range">
-        {title} · {range.days} day{range.days === 1 ? "" : "s"} · as of {formatManilaDateTime(now)}
+        {range.label} · {range.days} day{range.days === 1 ? "" : "s"} · as of{" "}
+        {formatManilaDateTime(now)}
       </p>
 
-      {operations && <OperationsView report={operations} range={range} />}
-      {quality && <QualityView quality={quality} />}
+      {operations && (
+        <OperationsView
+          report={operations}
+          range={range}
+          sort={sort}
+          filters={filters}
+          finalTypes={finalTypes}
+          suppliers={suppliers.map((x) => ({ id: x.id, name: x.name }))}
+        />
+      )}
+      {quality && (
+        <QualityView
+          quality={quality}
+          sort={sort}
+          defect={query.defect}
+          defectChoices={leatherDefects}
+        />
+      )}
+
+      <ReportFooter />
     </>
   );
 }

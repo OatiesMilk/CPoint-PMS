@@ -14,7 +14,12 @@ import {
   TableActionsHead,
   TableViewLink,
 } from "@/components/ui/table";
+import { FilterForm, FilteredNote } from "@/components/features/reports/filters";
+import { SortableHeader } from "@/components/features/reports/sortable-header";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { formatPercent } from "@/lib/format";
+import { sortFor, type SortKey, type SortState } from "@/lib/table-sort";
 import { CATEGORY_LABELS, formatQuantity } from "@/lib/inventory-rules";
 import type { InventoryCategory } from "@/lib/domain";
 import type { OperationsReport } from "@/server/services/ops-report.service";
@@ -23,8 +28,44 @@ import { CardLink } from "@/components/ui/card-link";
 
 const STOCK_ROWS = 8;
 
+type StockRow = OperationsReport["stock"]["atRisk"][number];
+const LEVEL_ORDER: Record<string, number> = { OUT: 0, LOW: 1, OK: 2 };
+const STOCK_KEYS: Record<string, SortKey<StockRow>> = {
+  item: (i) => i.item,
+  "on-hand": (i) => i.onHand,
+  used: (i) => i.used,
+  cover: (i) => i.coverDays,
+  status: (i) => LEVEL_ORDER[i.level],
+};
+
+type SupplierRow = OperationsReport["suppliers"][number];
+const SUPPLIER_KEYS: Record<string, SortKey<SupplierRow>> = {
+  supplier: (s) => s.supplier,
+  rolls: (s) => s.rolls,
+  "scanning-passed": (s) => s.passed,
+  returned: (s) => s.returned,
+  "returned-share": (s) => s.returnedShare,
+  "top-defect": (s) => s.topDefect,
+};
+
+type WorstRoll = OperationsReport["mostDefects"][number];
+const WORST_KEYS: Record<string, SortKey<WorstRoll>> = {
+  roll: (r) => r.rollCode,
+  supplier: (r) => r.supplier,
+  defect: (r) => r.defectSharePct,
+  status: (r) => (r.returned ? 1 : 0),
+};
+
 /** Items out, low, or running out at the recent pace, with days of cover. */
-export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"]; days: number }) {
+export function StockRiskCard({
+  stock,
+  days,
+  sort,
+}: {
+  stock: OperationsReport["stock"];
+  days: number;
+  sort: SortState | null;
+}) {
   return (
     <Card data-testid="stock-risk">
       <CardHeader>
@@ -62,37 +103,49 @@ export function StockRiskCard({ stock, days }: { stock: OperationsReport["stock"
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Item</TableHead>
-                <TableHead numeric>On hand</TableHead>
-                <TableHead numeric>Used</TableHead>
-                <TableHead numeric>Cover</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableHeader table="stock" column="item">
+                  Item
+                </SortableHeader>
+                <SortableHeader table="stock" column="on-hand" numeric>
+                  On hand
+                </SortableHeader>
+                <SortableHeader table="stock" column="used" numeric>
+                  Used
+                </SortableHeader>
+                <SortableHeader table="stock" column="cover" numeric>
+                  Cover
+                </SortableHeader>
+                <SortableHeader table="stock" column="status">
+                  Status
+                </SortableHeader>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {stock.atRisk.slice(0, STOCK_ROWS).map((i) => (
-                <TableRow key={i.id}>
-                  <TableCell>
-                    <span className="font-medium">{i.item}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {CATEGORY_LABELS[i.category as InventoryCategory]}
-                    </span>
-                  </TableCell>
-                  <TableCell numeric>
-                    {formatQuantity(i.onHand, i.unit)}
-                    <span className="block text-xs text-muted-foreground">
-                      reorder at {formatQuantity(i.reorderLevel)}
-                    </span>
-                  </TableCell>
-                  <TableCell numeric>{formatQuantity(i.used)}</TableCell>
-                  <TableCell numeric>
-                    {i.coverDays === null ? "—" : `${Math.round(i.coverDays * 10) / 10} d`}
-                  </TableCell>
-                  <TableCell>
-                    <StockBadge level={i.level} />
-                  </TableCell>
-                </TableRow>
-              ))}
+              {sortFor(sort, "stock", stock.atRisk, STOCK_KEYS)
+                .slice(0, STOCK_ROWS)
+                .map((i) => (
+                  <TableRow key={i.id}>
+                    <TableCell>
+                      <span className="font-medium">{i.item}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {CATEGORY_LABELS[i.category as InventoryCategory]}
+                      </span>
+                    </TableCell>
+                    <TableCell numeric>
+                      {formatQuantity(i.onHand, i.unit)}
+                      <span className="block text-xs text-muted-foreground">
+                        reorder at {formatQuantity(i.reorderLevel)}
+                      </span>
+                    </TableCell>
+                    <TableCell numeric>{formatQuantity(i.used)}</TableCell>
+                    <TableCell numeric>
+                      {i.coverDays === null ? "—" : `${Math.round(i.coverDays * 10) / 10} d`}
+                    </TableCell>
+                    <TableCell>
+                      <StockBadge level={i.level} />
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         )}
@@ -116,8 +169,15 @@ export function SupplierQualityCard({
   rolls,
   lineReturnedShare,
   rangeQuery,
+  sort,
+  supplierId,
+  supplierChoices,
 }: {
   suppliers: OperationsReport["suppliers"];
+  sort: SortState | null;
+  /** The supplier filter: the card shows this supplier only (A-101). */
+  supplierId?: string;
+  supplierChoices: { id: string; name: string }[];
   rolls: OperationsReport["mostDefects"];
   lineReturnedShare: number | null;
   /** `from=…&to=…`, so the CSVs cover the range on screen. */
@@ -142,26 +202,59 @@ export function SupplierQualityCard({
             <CardLink href={`/api/v1/reports/supplier-rolls.csv?${rangeQuery}`}>Rolls CSV</CardLink>
           </div>
         </div>
+        <FilterForm owns={["supplierId"]} label="Supplier filter" active={Boolean(supplierId)}>
+          <div className="flex w-full flex-col gap-1.5 sm:w-64">
+            <Label htmlFor="filter-supplier">Supplier</Label>
+            <Select id="filter-supplier" name="supplierId" defaultValue={supplierId ?? ""}>
+              <option value="">All suppliers</option>
+              {supplierChoices.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </FilterForm>
+        {supplierId && (
+          <FilteredNote
+            owns={["supplierId"]}
+            text={`Supplier: ${supplierChoices.find((c) => c.id === supplierId)?.name ?? "unknown"}`}
+          />
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         {suppliers.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No roll was finished at Capture in this range, so there is nothing to compare yet.
+            {supplierId
+              ? "No supplier matches this filter in this range."
+              : "No roll was finished at Capture in this range, so there is nothing to compare yet."}
           </p>
         ) : (
           <Table data-testid="supplier-table">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Supplier</TableHead>
-                <TableHead numeric>Rolls</TableHead>
-                <TableHead numeric>Scanning passed</TableHead>
-                <TableHead numeric>Returned to supplier</TableHead>
-                <TableHead numeric>Returned %</TableHead>
-                <TableHead>Top defect</TableHead>
+                <SortableHeader table="suppliers" column="supplier">
+                  Supplier
+                </SortableHeader>
+                <SortableHeader table="suppliers" column="rolls" numeric>
+                  Rolls
+                </SortableHeader>
+                <SortableHeader table="suppliers" column="scanning-passed" numeric>
+                  Scanning passed
+                </SortableHeader>
+                <SortableHeader table="suppliers" column="returned" numeric>
+                  Returned to supplier
+                </SortableHeader>
+                <SortableHeader table="suppliers" column="returned-share" numeric>
+                  Returned %
+                </SortableHeader>
+                <SortableHeader table="suppliers" column="top-defect">
+                  Top defect
+                </SortableHeader>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {suppliers.map((s) => (
+              {sortFor(sort, "suppliers", suppliers, SUPPLIER_KEYS).map((s) => (
                 <TableRow key={s.id ?? "none"}>
                   <TableCell className="font-medium">
                     <span className="inline-flex flex-wrap items-center gap-2">
@@ -192,22 +285,32 @@ export function SupplierQualityCard({
           <h3 className="font-semibold">Rolls with the most defects</h3>
           {rolls.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No roll finished in this range has a measured Defect % above 0.
+              {supplierId
+                ? "No roll of this supplier finished in this range has a measured Defect % above 0."
+                : "No roll finished in this range has a measured Defect % above 0."}
             </p>
           ) : (
             <Table data-testid="most-defects-rolls">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Roll · tag</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead numeric>Defect %</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortableHeader table="most-defects" column="roll">
+                    Roll · tag
+                  </SortableHeader>
+                  <SortableHeader table="most-defects" column="supplier">
+                    Supplier
+                  </SortableHeader>
+                  <SortableHeader table="most-defects" column="defect" numeric>
+                    Defect %
+                  </SortableHeader>
+                  <SortableHeader table="most-defects" column="status">
+                    Status
+                  </SortableHeader>
                   <TableHead>Defects</TableHead>
                   <TableActionsHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rolls.map((r) => (
+                {sortFor(sort, "most-defects", rolls, WORST_KEYS).map((r) => (
                   <TableRow key={r.rollId}>
                     <TableCell className="font-mono whitespace-nowrap">
                       {r.rollCode}
@@ -224,7 +327,7 @@ export function SupplierQualityCard({
                       {r.defects.map((d) => `${d.label} ${d.detections}`).join(" · ") || "None"}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2 print:hidden">
                         <TableViewLink
                           href={`/reports/rolls/${r.rollId}`}
                           what={`roll ${r.rollCode}`}

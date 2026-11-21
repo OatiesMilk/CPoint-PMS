@@ -579,3 +579,37 @@ export function summaryFieldId(key: string): string | null {
   if (key === "findings") return "findings-error";
   return null;
 }
+
+// ───────────── report filters (Phase 35) ─────────────
+
+/** Reports → Operations → the three defect cards (A-101): a defect type, Fixable or not, a stage. */
+export type RepairFilters = { defect?: string; remedy?: Remedy; stage?: Stage };
+
+export const hasRepairFilters = (f: RepairFilters) => Boolean(f.defect || f.remedy || f.stage);
+
+type FindingFacts = {
+  remedy: string;
+  returnStage: string | null;
+  finalDefectType: { key: string };
+};
+
+/** A finding passes when it has the defect, the remedy and (for a fixable one) the stage asked for. */
+export function matchesFinding(f: FindingFacts, filters: RepairFilters): boolean {
+  return (
+    (!filters.defect || f.finalDefectType.key === filters.defect) &&
+    (!filters.remedy || f.remedy === filters.remedy) &&
+    (!filters.stage || f.returnStage === filters.stage)
+  );
+}
+
+/** A repair job passes by its finding's defect and remedy and the stage it was sent to. */
+export function matchesRepair(
+  job: { stage: string; finding: Omit<FindingFacts, "returnStage"> },
+  filters: RepairFilters,
+): boolean {
+  return (
+    (!filters.defect || job.finding.finalDefectType.key === filters.defect) &&
+    (!filters.remedy || job.finding.remedy === filters.remedy) &&
+    (!filters.stage || job.stage === filters.stage)
+  );
+}

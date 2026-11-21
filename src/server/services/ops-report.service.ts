@@ -9,6 +9,7 @@ import {
   supplierIsHigh,
 } from "@/lib/ops-rules";
 import { previousRange, toCsv, type ReportRange } from "@/lib/report-rules";
+import type { RepairFilters } from "@/lib/repair-rules";
 import { belowQuotaAttention, ATTENTION_DAYS } from "@/lib/production-rules";
 import { countDefectsForRolls } from "@/server/models/roll.model";
 import {
@@ -29,6 +30,8 @@ import { foundAt, qualityReport, rollFlow } from "./report.service";
 // email (D-008); tests/unit/ops-report.service.test.ts checks that. Since D-117 the camera's side
 // counts whole leather rolls, Scanning passed or Returned to supplier, never sections.
 
+export type OpsFilters = RepairFilters & { supplierId?: string };
+
 const share = (part: number, whole: number) => (whole > 0 ? part / whole : null);
 /** Rolls with the most defects under Supplier quality, and in its CSV. */
 const ROLLS_SHOWN = 5;
@@ -36,8 +39,13 @@ const ROLLS_CSV = 100;
 
 // ───────────── operations ─────────────
 
-export async function operationsReport(range: ReportRange, now: Date = appNow()) {
-  const prev = previousRange(range, now);
+/** The Operations report; its filters (Phase 35, A-101) narrow the defect cards and Supplier quality only. */
+export async function operationsReport(
+  range: ReportRange,
+  now: Date = appNow(),
+  filters: OpsFilters = {},
+) {
+  const prev = previousRange(range);
   const found = await foundAt();
   const [
     production,
@@ -62,8 +70,8 @@ export async function operationsReport(range: ReportRange, now: Date = appNow())
     stockPosition(range),
     supplierRolls(range),
     supplierDefects(range, found),
-    rollsWithMostDefects(range, ROLLS_SHOWN),
-    repairReport(range),
+    rollsWithMostDefects(range, ROLLS_SHOWN, filters.supplierId),
+    repairReport(range, filters),
     wipReport(range),
   ]);
   const mostDefects = await withDefects(worstRolls, found);
@@ -228,9 +236,9 @@ export async function operationsCsv(range: ReportRange) {
   ]);
 }
 
-export async function suppliersCsv(range: ReportRange) {
+export async function suppliersCsv(range: ReportRange, supplierId?: string) {
   const r = await operationsReport(range);
-  return toCsv(r.suppliers, [
+  return toCsv(supplierId ? r.suppliers.filter((s) => s.id === supplierId) : r.suppliers, [
     { header: "Supplier", value: (s) => s.supplier },
     { header: "Rolls", value: (s) => s.rolls },
     { header: "Scanning passed", value: (s) => s.passed },
@@ -242,8 +250,11 @@ export async function suppliersCsv(range: ReportRange) {
 }
 
 /** The rolls with the highest Defect %, as on the report (D-008: per roll, never per person). */
-export async function supplierRollsCsv(range: ReportRange) {
-  const rolls = await withDefects(await rollsWithMostDefects(range, ROLLS_CSV), await foundAt());
+export async function supplierRollsCsv(range: ReportRange, supplierId?: string) {
+  const rolls = await withDefects(
+    await rollsWithMostDefects(range, ROLLS_CSV, supplierId),
+    await foundAt(),
+  );
   return toCsv(rolls, [
     { header: "Roll", value: (r) => r.rollCode },
     { header: "Tag number", value: (r) => r.tagCode ?? "" },

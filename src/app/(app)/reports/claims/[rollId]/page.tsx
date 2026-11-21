@@ -23,7 +23,7 @@ import { requirePermission } from "@/server/policies/guard";
 import { claimSheet } from "@/server/services/ops-report.service";
 import { getRollDetail } from "@/server/services/roll.service";
 import { isRollId } from "@/server/validators/roll.validator";
-import { PrintButton } from "./print-button";
+import { PrintButton } from "@/components/features/reports/print-button";
 
 export const metadata: Metadata = { title: "Claim sheet" };
 

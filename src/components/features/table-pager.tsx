@@ -68,7 +68,7 @@ export function TablePager({
           : `${count} ${word}${tail}`}
       </span>
       {pageCount > 1 && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 print:hidden">
           {page > 1 &&
             step(
               page - 1,

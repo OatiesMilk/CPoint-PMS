@@ -3,30 +3,58 @@ import { VerdictTrendChart } from "@/components/features/charts/verdict-trend-ch
 import { KpiTile } from "@/components/features/kpi-tile";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { FilterForm, FilteredNote } from "@/components/features/reports/filters";
+import { SortableHeader } from "@/components/features/reports/sortable-header";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { formatDayLabel, formatPercent } from "@/lib/format";
 import { paretoShares } from "@/lib/ops-rules";
+import { sortFor, type SortKey, type SortState } from "@/lib/table-sort";
 import { cn } from "@/lib/utils";
 import type { QualityReport } from "@/server/services/report.service";
 
 const DEFECT_ROWS = 8;
 const share = (part: number, whole: number) => (whole > 0 ? part / whole : null);
 
+type DefectRow = QualityReport["defects"][number] & { share: number; cumulative: number };
+const DEFECT_KEYS: Record<string, SortKey<DefectRow>> = {
+  defect: (d) => d.label,
+  "rolls-found-on": (d) => d.rolls,
+  returned: (d) => d.returned,
+  share: (d) => d.share,
+  cumulative: (d) => d.cumulative,
+};
+
+type DayRow = QualityReport["days"][number];
+const DAY_KEYS: Record<string, SortKey<DayRow>> = {
+  day: (d) => d.day,
+  "rolls-scanned": (d) => d.rolls,
+  "scanning-passed": (d) => d.passed,
+  "returned-to-supplier": (d) => d.returned,
+};
+
 /**
  * The quality report: the leather rolls checked before cutting, each Scanning passed or Returned
  * to supplier (D-116, counted per roll since D-117), and the defects the camera found on them. A
  * tab for the Floor Manager.
  */
-export function QualityView({ quality }: { quality: QualityReport }) {
+export function QualityView({
+  quality,
+  sort,
+  defect,
+  defectChoices,
+}: {
+  quality: QualityReport;
+  sort: SortState | null;
+  /** The Defect filter (a leather defect type's key): the defects table shows it alone. */
+  defect?: string;
+  defectChoices: { key: string; label: string }[];
+}) {
   const t = quality.totals;
-  const defects = paretoShares(quality.defects);
+  // Shares are worked out over every type first, so a filtered row keeps its real share.
+  const everyDefect = paretoShares(quality.defects);
+  const defects = defect ? everyDefect.filter((d) => d.key === defect) : everyDefect;
 
   return (
     <>
@@ -72,7 +100,8 @@ export function QualityView({ quality }: { quality: QualityReport }) {
         </div>
       ) : (
         <>
-          <Card>
+          {/* Not printed: it holds only the chart; the Daily summary table has the numbers. */}
+          <Card className="print:hidden">
             <CardHeader>
               <CardTitle>Rolls scanned per day</CardTitle>
               <CardDescription>
@@ -94,31 +123,64 @@ export function QualityView({ quality }: { quality: QualityReport }) {
                 share (Pareto): the top few types usually cause most of the defects. Returned counts
                 those rolls that were returned to supplier.
               </CardDescription>
+              <FilterForm owns={["defect"]} label="Defect filter" active={Boolean(defect)}>
+                <div className="flex w-full flex-col gap-1.5 sm:w-56">
+                  <Label htmlFor="filter-defect">Defect type</Label>
+                  <Select id="filter-defect" name="defect" defaultValue={defect ?? ""}>
+                    <option value="">All defect types</option>
+                    {defectChoices.map((c) => (
+                      <option key={c.key} value={c.key}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </FilterForm>
+              {defect && (
+                <FilteredNote
+                  owns={["defect"]}
+                  text={`Defect: ${defectChoices.find((c) => c.key === defect)?.label ?? defect}`}
+                />
+              )}
             </CardHeader>
             <CardContent>
               {defects.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No defects found in this range.</p>
+                <p className="text-sm text-muted-foreground">
+                  {defect ? "No defects match this filter." : "No defects found in this range."}
+                </p>
               ) : (
                 <Table aria-label="Defects by type">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>Defect</TableHead>
-                      <TableHead numeric>Rolls found on</TableHead>
-                      <TableHead numeric>Returned</TableHead>
-                      <TableHead numeric>Share</TableHead>
-                      <TableHead numeric>Cumulative</TableHead>
+                      <SortableHeader table="defects" column="defect">
+                        Defect
+                      </SortableHeader>
+                      <SortableHeader table="defects" column="rolls-found-on" numeric>
+                        Rolls found on
+                      </SortableHeader>
+                      <SortableHeader table="defects" column="returned" numeric>
+                        Returned
+                      </SortableHeader>
+                      <SortableHeader table="defects" column="share" numeric>
+                        Share
+                      </SortableHeader>
+                      <SortableHeader table="defects" column="cumulative" numeric>
+                        Cumulative
+                      </SortableHeader>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {defects.slice(0, DEFECT_ROWS).map((d) => (
-                      <TableRow key={d.key}>
-                        <TableCell className="font-medium">{d.label}</TableCell>
-                        <TableCell numeric>{d.rolls}</TableCell>
-                        <TableCell numeric>{d.returned}</TableCell>
-                        <TableCell numeric>{formatPercent(d.share)}</TableCell>
-                        <TableCell numeric>{formatPercent(d.cumulative)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {sortFor(sort, "defects", defects.slice(0, DEFECT_ROWS), DEFECT_KEYS).map(
+                      (d) => (
+                        <TableRow key={d.key}>
+                          <TableCell className="font-medium">{d.label}</TableCell>
+                          <TableCell numeric>{d.rolls}</TableCell>
+                          <TableCell numeric>{d.returned}</TableCell>
+                          <TableCell numeric>{formatPercent(d.share)}</TableCell>
+                          <TableCell numeric>{formatPercent(d.cumulative)}</TableCell>
+                        </TableRow>
+                      ),
+                    )}
                   </TableBody>
                 </Table>
               )}
@@ -143,14 +205,22 @@ export function QualityView({ quality }: { quality: QualityReport }) {
           <Table data-testid="daily-table">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Day</TableHead>
-                <TableHead numeric>Rolls scanned</TableHead>
-                <TableHead numeric>Scanning passed</TableHead>
-                <TableHead numeric>Returned to supplier</TableHead>
+                <SortableHeader table="daily" column="day">
+                  Day
+                </SortableHeader>
+                <SortableHeader table="daily" column="rolls-scanned" numeric>
+                  Rolls scanned
+                </SortableHeader>
+                <SortableHeader table="daily" column="scanning-passed" numeric>
+                  Scanning passed
+                </SortableHeader>
+                <SortableHeader table="daily" column="returned-to-supplier" numeric>
+                  Returned to supplier
+                </SortableHeader>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {[...quality.days].reverse().map((d) => (
+              {sortFor(sort, "daily", [...quality.days].reverse(), DAY_KEYS).map((d) => (
                 <TableRow
                   key={d.day}
                   aria-label={d.day}

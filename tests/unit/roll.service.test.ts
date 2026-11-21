@@ -506,6 +506,63 @@ describe("Reports → Rolls and a leather item's rolls (D-008)", () => {
       expect(key).not.toMatch(/user|createdBy|finishedBy|cancelledBy|usedBy|email/i);
   });
 
+  it("filters on the day a roll was added by the period picker, any filter combining (Phase 35)", async () => {
+    rolls.listRolls.mockResolvedValue({ rows: [listRow], total: 1 });
+    await svc.listRollsForReport(
+      {
+        period: "month",
+        year: "2026",
+        month: "10",
+        itemId: "it1",
+        locationId: "loc1",
+        supplierId: "sp1",
+      },
+      now,
+    );
+    const [filters] = rolls.listRolls.mock.calls.at(-1)!;
+    expect(filters).toMatchObject({ itemId: "it1", locationId: "loc1", supplierId: "sp1" });
+    expect(filters.since.toISOString()).toBe("2026-09-30T16:00:00.000Z"); // 1 Oct, Manila
+    expect(filters.until.toISOString()).toBe("2026-10-26T16:00:00.000Z"); // through today, 26 Oct
+    // No period (and no old days link) means any time.
+    await svc.listRollsForReport({}, now);
+    const [any] = rolls.listRolls.mock.calls.at(-1)!;
+    expect(any.since).toBeUndefined();
+    expect(any.until).toBeUndefined();
+  });
+
+  it("sorts by a column on every matching row, then pages the result (Phase 35)", async () => {
+    const at = (min: number) => ({
+      startedAt: new Date("2026-10-26T01:00:00Z"),
+      finishedAt: new Date(new Date("2026-10-26T01:00:00Z").getTime() + min * 60_000),
+    });
+    const rows = [
+      { ...listRow, id: "a", code: "LR-MLT-001", ...at(10) },
+      { ...listRow, id: "b", code: "LR-MLT-002", ...at(30) },
+      { ...listRow, id: "c", code: "LR-MLT-003", startedAt: null, finishedAt: null },
+    ];
+    rolls.listRolls.mockResolvedValue({ rows, total: 3 });
+    const order = async (q: object) =>
+      (await svc.listRollsForReport(q, now)).rows.map((r) => r.id).join("");
+    expect(await order({ sort: "rolls.scanning-time", dir: "desc" })).toBe("bac");
+    expect(await order({ sort: "rolls.scanning-time", dir: "asc" })).toBe("abc"); // none last
+    expect(await order({ sort: "rolls.roll", dir: "desc" })).toBe("cba");
+    // A sort on another table or column is ignored: the database order stays.
+    expect(await order({ sort: "stock.item", dir: "desc" })).toBe("abc");
+    expect(await order({ sort: "rolls.nonsense" })).toBe("abc");
+    // The sorted list reads the newest 5,000 so the sort sees every row.
+    await svc.listRollsForReport({ sort: "rolls.roll" }, now);
+    expect(rolls.listRolls.mock.calls.at(-1)![1]).toEqual({ skip: 0, take: 5000 });
+  });
+
+  it("prints every matching row up to 500 and says when it was cut (A-102)", async () => {
+    rolls.listRolls.mockResolvedValue({ rows: [listRow], total: 620 });
+    const result = await svc.listRollsForReport({ print: "1", page: 3 }, now);
+    expect(rolls.listRolls.mock.calls.at(-1)![1]).toEqual({ skip: 0, take: 500 });
+    expect(result).toMatchObject({ page: 1, pageCount: 1, printCut: true });
+    rolls.listRolls.mockResolvedValue({ rows: [listRow], total: 40 });
+    expect((await svc.listRollsForReport({ print: "1" }, now)).printCut).toBe(false);
+  });
+
   it("gives each roll its scanning time and the average over every page (D-121)", async () => {
     // 10:40 to 12:20 Manila with lunch 11:00 to 12:00: 40 minutes.
     const timed = {

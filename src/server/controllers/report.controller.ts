@@ -13,9 +13,12 @@ import { productionCsv, productionReport } from "@/server/services/production.se
 import { dailyCsv, defectsCsv, qualityReport } from "@/server/services/report.service";
 import { reportQuerySchema } from "@/server/validators/report.validator";
 
+function queryOf(request: Request) {
+  return reportQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
+}
+
 function rangeFrom(request: Request) {
-  const params = reportQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));
-  return parseRange(params);
+  return parseRange(queryOf(request));
 }
 
 /** A CSV download (UTF-8 with BOM, opens correctly in Excel). */
@@ -69,10 +72,11 @@ export const reportController = {
     return json({ data: await productionReport(rangeFrom(request)) });
   }),
 
-  /** GET /api/v1/reports/operations?preset=|from=&to= (Floor Manager) */
+  /** GET /api/v1/reports/operations?preset=|period=|from=&to= and the defect / remedy / stage / supplierId filters (Floor Manager) */
   operations: handle(async (request: Request) => {
     await requireApiPermission("report:production");
-    return json({ data: await operationsReport(rangeFrom(request)) });
+    const q = queryOf(request);
+    return json({ data: await operationsReport(parseRange(q), undefined, q) });
   }),
 
   operationsCsv: handle(async (request: Request) => {
@@ -84,13 +88,13 @@ export const reportController = {
   suppliersCsv: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     const range = rangeFrom(request);
-    return csv(await suppliersCsv(range), "suppliers", range);
+    return csv(await suppliersCsv(range, queryOf(request).supplierId), "suppliers", range);
   }),
 
   supplierRollsCsv: handle(async (request: Request) => {
     await requireApiPermission("report:production");
     const range = rangeFrom(request);
-    return csv(await supplierRollsCsv(range), "supplier-rolls", range);
+    return csv(await supplierRollsCsv(range, queryOf(request).supplierId), "supplier-rolls", range);
   }),
 
   stockCsv: handle(async (request: Request) => {
@@ -108,7 +112,7 @@ export const reportController = {
   defectsCsv: handle(async (request: Request) => {
     await requireApiPermission("report:quality");
     const range = rangeFrom(request);
-    return csv(await defectsCsv(range), "defects", range);
+    return csv(await defectsCsv(range, queryOf(request).defect), "defects", range);
   }),
 
   /** One row a day: pairs finished, failed and passed, the quota, batches, constructors present. */

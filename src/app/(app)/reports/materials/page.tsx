@@ -29,6 +29,11 @@ import {
   TableViewLink,
 } from "@/components/ui/table";
 import { formatDelta, formatQuantity } from "@/lib/inventory-rules";
+import { PrintButton } from "@/components/features/reports/print-button";
+import { PrintHeader, PrintPage } from "@/components/features/reports/print-header";
+import { ReportFooter } from "@/components/features/reports/report-footer";
+import { appNow } from "@/lib/clock";
+import { ROLE_LABELS } from "@/lib/domain";
 import { clampPage, pageCountFor, pageOf } from "@/lib/pagination";
 import { weekRangeText, workingDaysLabel } from "@/lib/month-weeks";
 import { describeReminderDays } from "@/lib/stock-rules";
@@ -64,8 +69,9 @@ function Change({ row }: { row: MaterialsReport["rows"][number] }) {
 export default async function MaterialsReportPage({
   searchParams,
 }: PageProps<"/reports/materials">) {
-  await requirePermission("report:production");
+  const user = await requirePermission("report:production");
   await connection();
+  const now = appNow();
   const params = await searchParams;
   const report = await materialsReport(params);
   const pageParam = Number(params.page);
@@ -90,19 +96,30 @@ export default async function MaterialsReportPage({
 
   return (
     <>
+      <PrintPage />
       <PageHeader
         title="Reports"
         description="What each material was used for, from the Used entries on Update stock. Corrections aren't counted as use."
         actions={
-          <Button asChild variant="secondary">
-            <a href={`/api/v1/reports/materials-used.csv?${choice.toString()}`} download>
-              <Download aria-hidden />
-              Materials CSV
-            </a>
-          </Button>
+          <div className="flex flex-wrap gap-2 print:hidden">
+            <Button asChild variant="secondary">
+              <a href={`/api/v1/reports/materials-used.csv?${choice.toString()}`} download>
+                <Download aria-hidden />
+                Materials CSV
+              </a>
+            </Button>
+            <PrintButton label="Print" variant="secondary" />
+          </div>
         }
       />
       <ReportTabs current="materials" />
+      <PrintHeader
+        report="Materials"
+        period={`Week ${selected.week} · ${weekRangeText(selected)}`}
+        preparedBy={{ name: user.name, roleLabel: ROLE_LABELS[user.role] }}
+        notes={report.q ? [`Find: ${report.q}`] : []}
+        printedAt={now}
+      />
 
       {report.itemCount === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-16 text-center">
@@ -125,16 +142,26 @@ export default async function MaterialsReportPage({
             >
               <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-caution" />
               <div>
-                {atRisk.length === 1
-                  ? `${atRisk[0].name} may run out before the next update.`
-                  : atRisk.length <= AT_RISK_SHOWN
-                    ? `${atRisk.length} materials may run out before the next update: ${atRisk.map((r) => r.name).join(", ")}.`
-                    : `${atRisk.length} materials may run out before the next update: ${atRisk
+                {atRisk.length === 1 ? (
+                  `${atRisk[0].name} may run out before the next update.`
+                ) : atRisk.length <= AT_RISK_SHOWN ? (
+                  `${atRisk.length} materials may run out before the next update: ${atRisk.map((r) => r.name).join(", ")}.`
+                ) : (
+                  <>
+                    <span className="print:hidden">
+                      {`${atRisk.length} materials may run out before the next update: ${atRisk
                         .slice(0, AT_RISK_SHOWN)
                         .map((r) => r.name)
                         .join(", ")}, …`}
+                    </span>
+                    {/* Paper has no "Show all": a print lists every material. */}
+                    <span className="hidden print:inline">
+                      {`${atRisk.length} materials may run out before the next update: ${atRisk.map((r) => r.name).join(", ")}.`}
+                    </span>
+                  </>
+                )}
                 {atRisk.length > AT_RISK_SHOWN && (
-                  <details className="group mt-1">
+                  <details className="group mt-1 print:hidden">
                     <summary className="w-fit cursor-pointer text-sm font-medium underline underline-offset-4">
                       Show all {atRisk.length}
                     </summary>
@@ -156,13 +183,15 @@ export default async function MaterialsReportPage({
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <MaterialFilters
-                year={selected.year}
-                month={selected.month}
-                week={selected.week}
-                years={report.years}
-                today={report.today}
-              />
+              <div className="print:hidden">
+                <MaterialFilters
+                  year={selected.year}
+                  month={selected.month}
+                  week={selected.week}
+                  years={report.years}
+                  today={report.today}
+                />
+              </div>
               <p className="text-sm" role="status" data-testid="materials-week">
                 <span className="font-medium">
                   {selected.label.split(" · ")[0]}: {weekRangeText(selected)}
@@ -331,6 +360,8 @@ export default async function MaterialsReportPage({
           </Card>
         </>
       )}
+
+      <ReportFooter />
     </>
   );
 }

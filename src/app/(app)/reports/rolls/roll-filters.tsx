@@ -7,14 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { ROLL_REPORT_STATUSES, ROLL_REPORT_STATUS_LABELS } from "@/lib/roll-rules";
-const DAYS = [
-  { value: "7", label: "Last 7 days" },
-  { value: "30", label: "Last 30 days" },
-  { value: "90", label: "Last 90 days" },
-];
 
 /** Filters live in the URL so they survive reloads and can be shared. Changing one resets to page 1. */
-export function RollFilters({ suppliers }: { suppliers: { id: string; name: string }[] }) {
+export function RollFilters({
+  suppliers,
+  items,
+  locations,
+}: {
+  suppliers: { id: string; name: string }[];
+  items: { id: string; name: string }[];
+  locations: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -33,7 +36,7 @@ export function RollFilters({ suppliers }: { suppliers: { id: string; name: stri
   useEffect(() => () => clearTimeout(debounce.current), []);
 
   return (
-    <div className="flex flex-wrap items-end gap-3" aria-busy={pending}>
+    <div className="flex flex-wrap items-end gap-3 print:hidden" aria-busy={pending}>
       <div className="flex w-full flex-col gap-1.5 sm:w-64">
         <Label htmlFor="filter-q">Find</Label>
         <div className="relative">
@@ -94,17 +97,32 @@ export function RollFilters({ suppliers }: { suppliers: { id: string; name: stri
           ))}
         </Select>
       </div>
-      <div className="flex w-full flex-col gap-1.5 sm:w-40">
-        <Label htmlFor="filter-days">Added</Label>
+      <div className="flex w-full flex-col gap-1.5 sm:w-56">
+        <Label htmlFor="filter-item">Leather item</Label>
         <Select
-          id="filter-days"
-          value={params.get("days") ?? ""}
-          onChange={(e) => update("days", e.target.value)}
+          id="filter-item"
+          value={params.get("itemId") ?? ""}
+          onChange={(e) => update("itemId", e.target.value)}
         >
-          <option value="">Any time</option>
-          {DAYS.map((d) => (
-            <option key={d.value} value={d.value}>
-              {d.label}
+          <option value="">All leather items</option>
+          {items.map((it) => (
+            <option key={it.id} value={it.id}>
+              {it.name}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="flex w-full flex-col gap-1.5 sm:w-56">
+        <Label htmlFor="filter-location">Location</Label>
+        <Select
+          id="filter-location"
+          value={params.get("locationId") ?? ""}
+          onChange={(e) => update("locationId", e.target.value)}
+        >
+          <option value="">All locations</option>
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
             </option>
           ))}
         </Select>
