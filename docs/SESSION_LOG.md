@@ -5,6 +5,20 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-20 · Phase 34 CI: e2e failed on PR #56 (and main), two tests, fix
+
+- PR #56 (9af5d2e) was merged at 16:31 UTC; CI `check`, `station` and `docker` passed (the new Phase 34 data
+  checks included), `e2e` failed: 106 passed, 2 failed, 6 skipped, 6 did not run, the same on `main`
+  (run 44774265002).
+- `batches.spec.ts:344` ("the Quality Inspector on a phone gets the notice…"): no `batch-notice` within 10 s.
+  The run started at 16:31 UTC, 00:31 Manila, inside the known 00:00 to 01:00 Manila window (STATUS "Known
+  test observations", Phase 30A run 5): no batch is due then. No change; rerun after 01:00.
+- `inspection-queue.spec.ts:114` (the queue filters): after Clear the test picked a Day and pressed Filter
+  without waiting for Clear's navigation; a late page rebuilds the form and empties the Day (Filter sent no
+  day, both batches stayed). It failed the same way on Phase 33's `main` run (44689397781), so it isn't a
+  Phase 34 fault. Fixed in the test: wait for the address to lose the old filters first.
+  `npm run check` passed. Re-check prompt `qa/CODEX_PROMPT_CI_RECHECK_feature-defects-and-repairs.md`.
+
 ## 2026-11-20 · Phase 34: Codex run 4 PASS; QA done; git commands
 
 - Codex run 4 (`qa/reports/2026-11-20-phase-34-run4.md`): **PASS**. Targeted 28 of 28; full suite 118 passed, 0

@@ -182,6 +182,12 @@ check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
   `docs/prompts/plans/phase-34-defects-and-repairs-plan.md`, handoff
   `qa/handoffs/2026-11-20-phase-34-defects-and-repairs.md`, prompt `qa/CODEX_PROMPT_PHASE_34.md`
   (starts with `docker compose stop app`).
+- **Phase 34 CI (PR #56 merged 16:31 UTC; `main` CI red on `e2e` only):** `check`, `station` and `docker`
+  passed. `e2e`: 106 passed, 2 failed. `batches.spec.ts` "the Quality Inspector on a phone gets the
+  notice…" is the known 00:00 to 01:00 Manila window (the run was 00:31 Manila): rerun after 01:00, no
+  change. `inspection-queue.spec.ts` "the queue lists waiting batches…" is a race in the test (Clear's
+  navigation landing after the Day was picked; it failed the same way on Phase 33's `main` run): fixed in
+  the test. Re-check prompt `qa/CODEX_PROMPT_CI_RECHECK_feature-defects-and-repairs.md`.
 - **Phase 34 Codex run 4 PASS** (`qa/reports/2026-11-20-phase-34-run4.md`): targeted 28 of 28, full suite 118
   passed, 0 failed, 2 skipped, none omitted; clean-up queries 0 and 0; final reset on Real time. The optional
   C6 script timed out at sign-in (no demo password), non-gating; C6 stays closed from run 3. **Phase 34 QA
