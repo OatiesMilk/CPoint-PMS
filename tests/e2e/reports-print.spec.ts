@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { addInventoryRoll, withDb } from "./cv-helpers";
 import { ACCOUNTS, signIn } from "./helpers";
 
 /**
@@ -93,10 +94,15 @@ test("an empty Remarks box prints three ruled lines, and dark mode prints on whi
 test("Rolls prints every matching row, past one page, and says when it cut the list", async ({
   page,
 }) => {
+  // The screen list is 15 to a page; the print list is the whole result (up to 500). CI has no demo
+  // week, so the test makes sure there are more than 15 rolls itself (In stock rolls, left behind
+  // as other specs leave theirs).
+  const have = await withDb(
+    async (db) => (await db.query(`SELECT count(*)::int n FROM batches`)).rows[0].n as number,
+  );
+  for (let i = have; i < 16; i++) await addInventoryRoll();
   await signInAsManager(page);
   await page.goto("/reports/rolls?print=1");
-  // The screen list is 15 to a page; the print list is the whole result (up to 500). The demo
-  // week has far more than 15 rolls.
   expect(await page.getByTestId("roll-row").count()).toBeGreaterThan(15);
   await page.emulateMedia({ media: "print" });
   await expect(page.getByTestId("print-header")).toContainText("Reports · Rolls");
