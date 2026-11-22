@@ -124,7 +124,8 @@ D-128, A-71). Every other page stays desktop first.
   semibold), e.g. "Roll R-2026-0012 · Marikina Leather Trading · 6 shots", right above the action.
 - **Forms:** one column, labels above, `h-11` inputs, native `<select>` (the phone's own picker).
 - **Never** a sideways scroll at 390px; long words wrap, tables stay off phone pages.
-- **Batches (Phase 27):** one card per batch ("Batch 2 10:00–13:00", the lunch line, a status badge
+- **Batches (Phase 27, history: since Phase 33 every title is the batch's code, "B-261116-2", not
+  "Batch 2"):** one card per batch ("Batch 2 10:00–13:00", the lunch line, a status badge
   with icon and word); the batch that can be finished now is the page's bottom action, with
   "Batch 2 · 10:00–13:00" in `text-xl` above **Finish batch 2**. The Finish batch dialog opens as a
   bottom sheet (`max-sm:bottom-0`, no bottom radius, safe-area padding) with `h-12` numeric fields

@@ -659,9 +659,9 @@ export async function seedDemoWeek(
   //    returned roll a day after it was set aside ──
   const moveDay = workingDays.filter((d) => d < today).at(-1) ?? workingDays[0];
   const moveAt = at(moveDay, 14);
-  const toMove = (shelfRolls.get("LR-001") ?? [])
-    .filter((r) => r.addedAt.getTime() <= moveAt.getTime())
-    .slice(-2);
+  // The item with the most rolls left: the busiest item runs out of rolls by the last working day.
+  const shelfItem = [...shelfRolls.values()].sort((a, b) => b.length - a.length)[0] ?? [];
+  const toMove = shelfItem.filter((r) => r.addedAt.getTime() <= moveAt.getTime()).slice(-2);
   const moveTo = bins.findLast((b) => toMove.every((r) => r.locationId !== b));
   if (past(moveAt) && toMove.length > 0 && moveTo)
     await moveRolls(

@@ -29,10 +29,14 @@ system replaces the paper tally sheets with one shared screen.
 
 - **Before cutting**, a Shoe Constructor photographs each leather roll with a phone. The app checks
   every photo for defects (holes, scratches, creases and cuts) and says **Pass** or **Reject**.
+- **In the store**, every leather roll has a code, a sticker with a QR code, and a place (a rack, a
+  bin or an area). Anyone allowed can look a roll up and see where it is.
 - **During the day**, the Quality Inspector records how many pairs were finished and how many
-  failed inspection, once per batch.
-- **The Floor Manager** plans each day, marks attendance, keeps stock up to date and reads the
-  reports.
+  failed inspection, once per batch. Every batch waits in a **queue** until it is inspected, so none
+  is forgotten.
+- **The Floor Manager** plans each day, marks attendance, keeps stock and the storage places up to
+  date, reads and prints the reports by day, week, month or any dates, and can correct past records
+  with a reason.
 - **The System Admin** creates accounts and sets the rules the camera uses.
 
 Every role sees only its own pages. Figures are always for the whole line, a roll, a day or a
@@ -42,19 +46,23 @@ supplier. **The system never ranks or scores individual workers.**
 
 ## 2. Words to know
 
-| Word                      | What it means                                                                                                                                             |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Roll**                  | One leather roll from a supplier. Each roll has its own code, such as `LR-BSA-001`, and its own area in square feet.                                      |
-| **Shot**                  | One photo of part of a roll. A roll is scanned in several shots, edge to edge.                                                                            |
-| **Pass**                  | This part of the roll can go on to cutting. Shown in green.                                                                                               |
-| **Reject**                | This part of the roll is not for cutting. Set it aside. Shown in red.                                                                                     |
-| **Usable / Not accepted** | Each defect the camera finds is either Usable (the shot can still pass) or Not accepted (the shot is rejected). A cut 3 inches or longer is Not accepted. |
-| **Defect %**              | How much of the roll's area has defects. Worked out when the roll is finished.                                                                            |
-| **Returned to supplier**  | A roll whose defects cover more than the limit (10% by default) of its area. It goes back to the supplier with a claim sheet.                             |
-| **Scanning passed**       | A roll that was scanned and stayed within the limit.                                                                                                      |
-| **Marker card**           | A printed card you lay on the leather in the first shot of each roll. It tells the app the real size in inches.                                           |
-| **Batch**                 | One check-in period of the working day, for example 08:00 to 12:00. At the end of each batch the Quality Inspector counts the pairs.                      |
-| **Quota**                 | The number of pairs that should pass inspection in a day.                                                                                                 |
+| Word                      | What it means                                                                                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Roll**                  | One leather roll from a supplier. Each roll has its own code, such as `LR-BSA-001`, and its own area in square feet.                                                     |
+| **Shot**                  | One photo of part of a roll. A roll is scanned in several shots, edge to edge.                                                                                           |
+| **Pass**                  | This part of the roll can go on to cutting. Shown in green.                                                                                                              |
+| **Reject**                | This part of the roll is not for cutting. Set it aside. Shown in red.                                                                                                    |
+| **Usable / Not accepted** | Each defect the camera finds is either Usable (the shot can still pass) or Not accepted (the shot is rejected). A cut 3 inches or longer is Not accepted.                |
+| **Defect %**              | How much of the roll's area has defects. Worked out when the roll is finished.                                                                                           |
+| **Returned to supplier**  | A roll whose defects cover more than the limit (10% by default) of its area. It goes back to the supplier with a claim sheet.                                            |
+| **Scanning passed**       | A roll that was scanned and stayed within the limit.                                                                                                                     |
+| **Marker card**           | A printed card you lay on the leather in the first shot of each roll. It tells the app the real size in inches.                                                          |
+| **Batch**                 | One check-in period of the working day, for example 08:00 to 13:00. It has a code such as `B-261116-2`. At the end of each batch the Quality Inspector counts the pairs. |
+| **Queue**                 | The list of batches that have ended and wait for inspection, from any day. Urgent ones come first, then the oldest.                                                      |
+| **Repair**                | A job to fix pairs that failed inspection and can be fixed, with a code such as `RP-261120-2-1`. It waits At stage, then Back for inspection.                            |
+| **Storage location**      | A rack, a bin or an area where leather rolls are kept, with a code such as `R1-B3`.                                                                                      |
+| **Label**                 | A sticker with a roll's code or a location's code and a QR code. Find roll and Capture read it with the phone camera.                                                    |
+| **Quota**                 | The number of pairs that should pass inspection in a day.                                                                                                                |
 
 The camera's verdict is **final**. Nobody changes Pass or Reject afterwards.
 
@@ -123,8 +131,11 @@ Your only page is **Capture**. You use it on your phone to photograph each roll 
 ### 4.2 Start a roll
 
 1. Under **Choose the leather of this roll**, pick the leather type.
-2. Under **Roll on the table**, pick the roll. Match the code on the roll's label.
+2. Under **Roll on the table**, pick the roll. Match the code on the roll's label. Or tap **Scan the
+   roll's label** and point the camera at the sticker: the roll is picked for you.
 3. Tap **Start scanning**.
+
+When a roll is picked, it leaves its rack or bin in the system. Put the roll on the table.
 
 ![Capture on a phone, with a roll being scanned. Before a roll is started, this card shows the leather and roll pickers.](screenshots/manual/03-capture-start.png)
 
@@ -156,7 +167,9 @@ If a photo didn't reach the server (for example the Wi-Fi dropped), tap **Send a
 1. When all of the roll is in, tap **Finish roll**.
 2. The roll is taken off stock, and the app shows its **Defect %** against the limit:
    - **Within the limit**: the roll is **Scanning passed**.
-   - **Over the limit**: the roll is **Returned to supplier**. Set it aside for the Floor Manager.
+   - **Over the limit**: the roll is **Returned to supplier**. The page asks **Where did you put it?**:
+     choose the place where you set it aside, then tap **Set aside**, so the Floor Manager can find
+     it when the supplier comes. (**Skip** leaves it for the Floor Manager to place.)
 3. Tap **Start another roll** for the next one.
 
 ### 4.4a My stage: count the pairs at your stage
@@ -180,7 +193,9 @@ If you see "You aren't assigned to a stage today. Ask the Floor Manager.", you c
 
 If you haven't taken a shot yet, you can undo it:
 
-- **Put roll back**: the roll goes back to the list of rolls waiting to be scanned.
+- **Put roll back**: the roll goes back to the list of rolls waiting to be scanned. The page asks
+  **Where did you put it?**, with the place it was taken from already chosen; choose another place,
+  or **Not placed**.
 - **Cancel roll**: use this if the roll was started by mistake.
 
 Once a roll has shots, it can only be finished.
@@ -197,6 +212,25 @@ screen. After each capture a big coloured band shows the result:
 
 Press **Space** to capture. Press **Esc** to leave Floor view. The browser remembers Floor view, so
 the station opens straight into it next time (press F11 for full screen).
+
+### 4.7 Find roll: where is that roll?
+
+If the System Admin gave you camera access, **Find roll** is in your menu next to **Capture**. It works
+on a phone.
+
+1. Type the roll's code (for example `LR-MLT-004`, or part of it) or the supplier's tag number in
+   **Roll code or tag number**, then tap **Find**. Or tap **Scan label** and point the camera at the QR
+   code on the roll or on a rack.
+2. The roll's page shows **Where it is** in large text (for example "R1-B3 · Rack 1, bin 3"), its
+   leather, supplier, area and status, and its **Location history**: each move with its time and
+   a note. The history never names a person.
+3. A rack's label shows the rolls kept there. Tap a roll to open it. If several rolls match, pick one
+   from the list.
+
+![Find roll on a phone: where the roll is, in large text, and its Location history.](screenshots/manual/17-find-roll.png)
+
+You can only look rolls up. The Floor Manager places and moves rolls. If the page says "No roll or
+location has the code … Check the label or type the code.", check the sticker or type the code again.
 
 ---
 
@@ -219,6 +253,8 @@ Floor Manager's reason is shown), or **Being inspected** (by whom).
 1. Tap **Start inspection** on the batch you are counting. Others then see that you have it.
 2. Tap **Inspect**, enter the **Pairs finished** and how many **failed inspection**, then tap
    **Finish B-…**. The batch leaves the queue.
+
+![The Inspection queue: the Urgent batch first, then the repairs back for inspection, then the batches already inspected.](screenshots/manual/19-inspection-queue.png)
 
 A batch no longer closes at midnight: yesterday's batch stays in the queue until you inspect it.
 Use **Batch code**, **Day**, **Status** and **Priority** at the top to find one, then **Filter**.
@@ -274,6 +310,8 @@ each defect:
 Each fixable line becomes a **repair** with a code such as **RP-261120-2-1** at its stage. A not
 fixable line is scrapped.
 
+![Finish batch with failed pairs: What was wrong, one line per defect.](screenshots/manual/20-finish-failed.png)
+
 ### 5.4b Inspect a repair
 
 When the stage marks a repair **Back for inspection**, it joins the **Queue** under
@@ -282,6 +320,8 @@ Repairs have no due time. Tap **Inspect repair** and enter how many pairs **Pass
 **Scrapped**, or are **Sent back again** (**Send some back again**, then the stage). The three must
 add up to the repair's pairs. A repair can fail again as often as needed. Passed repaired pairs count
 toward the quota on the day they pass.
+
+![A repair back for inspection, with its Inspect dialog.](screenshots/manual/22-repair-inspection.png)
 
 ### 5.5 Correct a mistake
 
@@ -376,6 +416,10 @@ audit log.
   share and the return mark were worked out from it. The supplier and the leather item don't change;
   use **Move** for its place.
 
+![Correct a batch: the pairs, each line of what was wrong, and the reason for the correction.](screenshots/manual/25-correction.png)
+
+![Edit details on a roll that hasn't been finished yet.](screenshots/manual/26-edit-roll-details.png)
+
 **Recent days** explains each short day in one sentence, for example "Below quota by 18 pairs. 3 of
 12 Shoe Constructors were absent." It never names a person.
 
@@ -392,6 +436,9 @@ audit log.
   **Update count** for a stage nobody is assigned to. On a repair at a stage use **Back for
   inspection** (or **Change**: move it to another stage, or **Not fixable after all**, each with a
   reason, until it is back). The Overview has a small card for it.
+
+![Work in progress: each stage's pairs and its repairs.](screenshots/manual/21-work-in-progress.png)
+
 - **Reports → Operations** has four new sections: **Final defects**, **Where defects come from**,
   **Repairs** and **Work in progress**. Failed pairs from before reasons were recorded show as
   "Reason not recorded". Nothing is by person.
@@ -426,8 +473,12 @@ others. Use the filters to find an item or to see only **Low or out** of stock.
 
 1. Open the leather item and tap **Add rolls**.
 2. Enter **Arrived on** (the delivery date).
-3. Enter each roll's area in **sq ft**. Tap **Add another roll** for each extra roll.
-4. Tap **Save** (for example **Save 3 rolls**). Each roll gets its code when you save.
+3. Choose **Kept in** (optional): where the rolls are stored. The place you used last time is
+   chosen for you.
+4. Enter each roll's area in **sq ft**, and the **Supplier's tag** if the supplier gave one. Tap
+   **Add another roll** for each extra roll.
+5. Tap **Save** (for example **Save 3 rolls**). Each roll gets its code when you save. The message
+   offers **Print its label** (or **Print their labels**).
 
 ![A leather item with its rolls, each with its status and Defect %.](screenshots/manual/14-inventory-rolls.png)
 
@@ -436,6 +487,48 @@ Capture, or when you remove it.
 
 **Remove a damaged roll** (for example water damage): open the roll and choose **Remove roll…**. It
 leaves stock and can't be scanned. Any shots it already has stay on record.
+
+**Storage locations**
+
+Under **Inventory**, tap **Storage locations** to set up where rolls are kept. CPoint chooses its own
+codes; the demo uses placeholders such as `R1-B3` and `RETURN`.
+
+1. Tap **Add location**. Enter the **Code** (2 to 20 letters, numbers or dashes, like R1-B3), an
+   optional **Name** ("Rack 1, bin 3") and **Notes**, and choose whether it is a **Rack**, a **Bin** or
+   an **Area**. Save.
+2. The table shows each location's **Rolls in it** and its **Status**. Use the pencil to **Edit** one.
+   A location's **code** can't change once rolls were kept there (it is printed on labels); its name
+   can. A location with rolls in it can't be deactivated: move the rolls first.
+3. Tick locations and tap **Print labels** (for example **Print 2 labels**) to print their stickers.
+
+![Storage locations: each place with the rolls in it.](screenshots/manual/15-storage-locations.png)
+
+**Print roll labels**
+
+1. On a leather item, tap **Print labels** for every roll not scanned yet, or use **Print its label**
+   right after **Add rolls**.
+2. The page shows an A4 sheet of 3 × 7 stickers: the roll's code in large letters, a QR code, the
+   leather, supplier, area and tag. Tap **Print** and print at **actual size (100%)** on sticker paper.
+3. Stick each label on its roll. A location's sticker goes on its rack or bin.
+
+![A sheet of roll labels: code, QR code, leather, supplier, area and tag.](screenshots/manual/16-roll-labels.png)
+
+**Place or move rolls**
+
+1. On the leather item, tap **Move rolls**. Tick the rolls, choose **Move to** (a location), add a **Note**
+   if useful ("Rack 1 was full"), then tap **Move 3 rolls** (the number you ticked).
+2. For one roll, open it (**Reports → Rolls**) or use **Find roll**: **Move**, or **Place it** for a roll
+   with no place yet. Every move is added to the roll's **Location history**; nothing is erased.
+3. When a Shoe Constructor picks a roll at **Capture**, it leaves its place automatically. A roll put
+   back is placed again.
+
+![A roll's page: where it is kept, its Location history and the Move button.](screenshots/manual/18-roll-location.png)
+
+**A roll Returned to supplier**
+
+The constructor sets it aside in a place after **Finish roll** (the demo uses `RETURN`). It stays there
+until the supplier collects it. Then open the roll (or find it in **Find roll**) and tap **Picked up by
+supplier**. The place is free again. If nobody set it aside, tap **Set aside** and choose a place.
 
 **Update stock for other materials**
 
@@ -452,10 +545,45 @@ Mistakes are never edited away. Fix them with a Correction; every change stays i
 
 ![The Update stock sheet.](screenshots/manual/09-update-stock.png)
 
+### 6.5a Find roll
+
+**Find roll** is in your menu. It works like the constructors' version (see
+[section 4.7](#47-find-roll-where-is-that-roll)), and you can also **Move** a roll, **Place it**, or mark it
+**Picked up by supplier** from the result. **Open the roll's page** goes to its report.
+
 ### 6.6 Reports
 
-Open **Reports**. Choose the **Report range** (or a **Custom range**) at the top. Reports never show
-figures per person.
+Open **Reports**. Reports never show figures per person.
+
+**Choose the period.** Operations, Quality and Rolls have the same picker at the top:
+
+- **Day**: pick the date in the **Day** box.
+- **Week**: pick the **Year**, **Month** and **Week** of the month (week 1 starts on the first of the month,
+  as on Materials).
+- **Month**: pick the **Year** and **Month**. The figures are compared with the month before.
+- **Custom**: type **From** and **To** (up to 366 days) and tap **Show**.
+- Beside the tabs, the quick links **Today**, **7 days**, **14 days** and **30 days** set a range at once.
+- On **Rolls**, **Any time** (the default) shows every roll; choose a period to filter by the day the
+  roll was added.
+
+A future date can't be chosen. The page address holds the period, so a link, a CSV and a printout all show the same dates.
+
+![Reports → Operations with the period picker, a sorted table and the Print button.](screenshots/manual/23-report-period.png)
+
+**Sort a table.** Click a column header: the arrow shows the direction; click again to reverse. The
+Rolls table, Supplier quality and the other tables sort this way. The CSV ignores the sort.
+
+**Filter.** **Operations** has **Defect filters** (a defect type, **Fixable or not**, a stage) for its defect
+cards and a **Supplier filter** on Supplier quality; **Quality** filters by defect; **Rolls** by leather item
+and location. **Clear** removes a filter. A card that is filtered says "Filtered:" and what the filter is.
+
+**Print.** Tap **Print** on a report. The printout has the report's name and period, **Printed** and **Prepared
+by** (your name), the filters and sort in words, and tables that repeat their heading on every page. At
+the bottom, **Remarks** and two signature lines (**Prepared by**, **Checked by**). Type the remarks first if you
+want them printed; they are **not saved** and the paper is the record. Charts do not print. **Rolls**
+prints every matching roll, up to 500. In the print window choose **Save as PDF** to keep a file.
+
+![A printed Operations report: Prepared by, the period, Remarks and signature lines.](screenshots/manual/24-report-print.png)
 
 | Report         | What it shows                                                                                                                                                                              |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -468,7 +596,7 @@ figures per person.
 least 5 rolls and its share of returned rolls is at least 10 points above the whole line's.
 
 **Download for Excel:** tap any **CSV** button (for example **Operations CSV**, **Rolls CSV** or
-**Materials CSV**) and open the file in Excel.
+**Materials CSV**) and open the file in Excel. The file follows the period and filters you chose.
 
 ![Reports, Operations tab.](screenshots/manual/10-reports.png)
 
@@ -587,6 +715,9 @@ Filter by action or record type, or paste a record id to see its full history.
 | "… is already inspecting B-…. Pick another batch."                     | Someone else is counting that batch. Take another one from the queue.         |
 | "B-… was voided: …. It can't be finished."                             | The Floor Manager voided it. Nothing to count.                                |
 | "A batch can only be corrected on the day it was inspected."           | Ask the Floor Manager: they can correct a batch from any past day.            |
+| "No roll or location has the code … Check the label or type the code." | Check the sticker, or type the code again on **Find roll**.                   |
+| "Add a storage location first." (the Move button is off)               | The Floor Manager adds places under **Inventory → Storage locations**.        |
+| "Move its rolls first." (a location can't be deactivated)              | Move the rolls to another place, then deactivate it.                          |
 
 ---
 
@@ -598,7 +729,8 @@ Filter by action or record type, or paste a record id to see its full history.
 2. Marker card in the first shot → **Capture**.
 3. Green Pass: cut it. Red Reject: set it aside.
 4. Move the roll, capture again, until all of it is in.
-5. **Finish roll**.
+5. **Finish roll**. Over the limit? Say **Where did you put it?** and **Set aside**.
+6. Lost a roll? **Find roll**: type or scan its code.
 
 **Quality Inspector**
 
@@ -611,9 +743,12 @@ Filter by action or record type, or paste a record id to see its full history.
 
 1. Plan each weekday on **Batches → Plan days**.
 2. Every morning: **Attendance → Mark everyone present**, untick the absent, **Save attendance**.
-3. When a delivery arrives: **Inventory → leather item → Add rolls**.
+3. When a delivery arrives: **Inventory → leather item → Add rolls** (choose **Kept in**), then **Print
+   its label** and stick it on.
 4. On reminder days: **Inventory → Update stock**.
-5. Check **Reports**. Send returned rolls back with the **Claim sheet**.
+5. Check **Reports**: pick the period, sort, filter, **Print**. Send returned rolls back with the
+   **Claim sheet**, and tap **Picked up by supplier** when they collect them.
+6. Urgent batch? **Batches → Queue → Mark Urgent**. Mistake in a past record? **Correct**, with a reason.
 
 **System Admin**
 

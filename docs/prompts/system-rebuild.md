@@ -56,8 +56,19 @@ findings that still shape the system:
   whole rolls (D-117); roll counts against the plan (Phase 30D, D-118).
 - Weekdays only, 08:00 to 17:00 (D-105). Unknown model classes are ignored (D-108).
 - A printed marker card sets the scale, read on a roll's first shot; a scanning timer per roll
-(D-120, D-121). The System Admin keeps only the administration modules (D-119). A polished look
-(Phase 30F, D-122).
+  (D-120, D-121). The System Admin keeps only the administration modules (D-119). A polished look
+  (Phase 30F, D-122).
+- Demo data and tools for a panel: small demo rolls, varied damage, two weeks of data, 300 pairs a
+  day from 25 rolls, and a **demo clock** that moves the app's time (D-123 to D-127).
+- **The panel's four revisions (Phases 32 to 35, from the defense of 16 November):** (4) **storage
+  locations** (racks, bins, areas), A4 **QR labels** for rolls and locations, and **Find roll**
+  (Phase 32, D-128); (2) the **Inspection queue**, with a code on every batch (`B-YYMMDD-N`), Urgent
+  and Void, across days (Phase 33, D-129); (1) **final defects** with Fixable or Not fixable, **repair
+  jobs**, **stages** and **Work in progress** (Phase 34, D-130); (3) **reports by period** (Day,
+  Week, Month, Custom) with sort, filters and print (Phase 35A, D-132) and the Floor Manager's
+  **corrections to past records** (Phase 35B, D-133). The Floor Manager's Overview is in three zones
+  (D-131).
+- Phase 36 (D-134) brought the docs, the figures and the CI checks up to this list.
 </context>
 
 <read_first>
@@ -79,7 +90,8 @@ At the start of **every** session, before doing anything else:
 - **Commits:** small Conventional Commits (`feat(batches): ...`, `fix(cv): ...`, `docs(status): ...`).
   Commit at every green checkpoint, not one giant commit per phase.
 - **Scope:** desktop web first; the layout adapts to narrower windows without sideways scroll
-  (D-034). Phone layouts only for Capture and Batches (D-096). Custom shoes are out of scope.
+  (D-034). Phone layouts only for Capture (My stage included), Batches and Find roll (D-096,
+  D-128). Custom shoes are out of scope.
 - **One phase per session.** Finish the phase's acceptance criteria, run the quality gates, update
   the docs (see `<documentation_protocol>`), commit, push, then **stop and report**. Don't start
   the next phase unless the user says so.
@@ -141,9 +153,11 @@ src/
     (app)/layout.tsx                # sidebar shell, role-aware nav, theme toggle
     (app)/floor-manager/            # FM home
     (app)/admin/...                 # Admin home, users, settings, tokens, audit
-    (app)/batches/...               # today, Plan days (FM, QI)
-    (app)/camera/capture/           # Capture and Floor view (constructors)
+    (app)/batches/...               # Queue, Today, Work in progress, Plan days (FM, QI)
+    (app)/camera/capture/           # Capture, My stage and Floor view (constructors)
+    (app)/find/                     # Find roll (FM, constructors with camera access)
     (app)/attendance/  inventory/  reports/  scans/[id]/
+                                    # inventory/ also holds storage locations and roll labels
     api/
       health/route.ts
       v1/                           # ROUTES: REST API, versioned (docs/API.md lists every one)
@@ -181,11 +195,27 @@ stages (removed in Phase 23, D-082); it tracks rolls at Preparation and pairs at
 
 **Roll = one leather roll from a supplier** (`Roll` in the code, table `batches`, D-095). The Floor
 Manager adds rolls to a Leather roll item in Inventory with the day they arrived, each roll's
-**area** in sq ft (0.1 to 200) and the supplier's tag (D-103). Codes `LR-<supplier code>-001`;
-older rolls keep `R-`/`B-`. Statuses: **Not scanned** (`IN_STOCK`, +1 on its item) → **Being
-scanned** (`OPEN`, picked at Capture) → **Scanned** (`FINISHED`, Finish roll, −1 off stock,
-D-112); **Removed** (`CANCELLED`) by the Floor Manager with a reason. `USED` and `RETURNED` are
-history from Phases 30A and 30C. An empty roll picked by mistake is put back.
+**area** in sq ft (0.1 to 200) and the supplier's tag (D-103). Codes `LR-<supplier code>-001`; the
+old `B-`/`R-` roll codes were renamed in Phase 33 and are kept as `formerCode` so Find roll and old
+labels still find them (`B-` now means a batch only, D-129). Statuses: **Not scanned** (`IN_STOCK`,
++1 on its item) → **Being scanned** (`OPEN`, picked at Capture) → **Scanned** (`FINISHED`, Finish
+roll, −1 off stock, D-112); **Removed** (`CANCELLED`) by the Floor Manager with a reason. `USED` and
+`RETURNED` are history from Phases 30A and 30C. An empty roll picked by mistake is put back.
+
+**Storage locations, labels and Find roll (Phase 32, D-128):** a **location** is data (a code of 2 to
+20 letters, numbers or dashes such as `R1-B3`, an optional name, a kind Rack, Bin or Area, notes, an
+active flag); the Floor Manager manages them under Inventory → Storage locations, and CPoint's own
+rack layout is still unconfirmed (A-53). A roll in storage is in at most one location; a roll picked
+at Capture leaves it (A-55) and **Put back** asks where it went; a roll **Returned to supplier** is
+**set aside** in a place right after Finish roll, stays there, and the Floor Manager marks **Picked up
+by supplier**, which frees the place (A-77). Every change is one `RollMove` row (Placed, Moved, Taken
+for scanning, Put back, Removed, Set aside for return, Picked up by supplier) shown in the roll's
+**Location history** without names (A-78); stock counts don't change. A location's code is fixed once
+rolls were kept there (A-79); a location with rolls can't be deactivated. **Labels** are A4 sheets of
+3 × 7 stickers (A-54) with a QR that holds the plain code (`LR-MLT-004`, or `LOC:R1-B3`, A-80), read by
+the app's own scanner. **Find roll** (`/find`) takes a roll code, part of one, a tag number or a scanned
+label and shows where the roll is in large text and where it has been; the Floor Manager can move it
+or mark it picked up from there.
 
 **Computer vision (Preparation only, before cutting):**
 
@@ -221,12 +251,25 @@ rolls to be used (an estimate), the quota of **passed** pairs, the check-in inte
 or once at the end of the day) and the shift (inside 08:00 to 17:00, Monday to Friday, D-105), or
 marks it **Non-working / Holiday**. A day with no plan has no batches. Each interval is a batch;
 working time leaves out lunch (the System Admin's setting, default 11:00 to 12:00, from tomorrow),
-so the defaults give 08:00–13:00 and 13:00–17:00. Status is worked out from the clock: Upcoming,
-In progress (Paused for lunch), Due, Late after 30 minutes, Finished, Missed at midnight. The
-Quality Inspector finishes each batch from 10 minutes before its end with the pairs finished and,
-of these, the pairs that failed inspection; the Floor Manager only on a day attendance shows no QI
-present (D-088). A Correct needs a reason: on the inspection day for the QI (or the Floor Manager covering), and on any past day for the Floor Manager (Phase 35B). On-screen notices only (banner, bell, tab
-title), nothing reaches a closed app.
+so the defaults give 08:00–13:00 and 13:00–17:00. Every batch has a stored row and a **code**,
+`B-YYMMDD-N` (A-57), made from the plan when it is saved. Only what people did is stored (Open, Being
+inspected, Inspected, Void; Normal or Urgent); Upcoming, In progress (Paused for lunch), Due, Waiting
+and Late (30 minutes after the end) come from the clock, so the demo clock moves them.
+
+**The Inspection queue (Phase 33, D-129):** Batches → **Queue** is the Quality Inspector's home. A
+batch no longer closes at midnight: it waits, across days, until it is inspected or the Floor Manager
+**voids** it with a reason (A-59); Urgent first, then the oldest (A-58). A row shows the code, the day
+and times, the rolls finished inside the batch (A-83), how long it has waited and who is inspecting
+it; filters by code, day, status and priority; **Inspected and void** lists the recent ones.
+**Start inspection** is optional (A-60). The Floor Manager marks Urgent (with a reason) and voids
+(A-84) and inspects only when covering. Who may inspect follows today's attendance (A-82, D-088); a
+batch inspected late counts on its own day (A-81). A plan change can't move a batch someone has
+acted on. The Quality Inspector finishes (inspects) a batch from 10 minutes before its end with the
+pairs finished and, of these, the pairs that failed inspection; the Floor Manager only on a day
+attendance shows no QI present (D-088). A Correct needs a reason: on the inspection day for the QI
+(or the Floor Manager covering), and on any past day for the Floor Manager (Phase 35B). On-screen
+notices only (banner, bell, tab title), named by code ("B-261116-2 ends at 17:00. Get ready to count
+the finished pairs."), nothing reaches a closed app.
 
 **Final defects and repairs (Phase 34, D-130):** when pairs fail inspection the QI lists _what was
 wrong_: one line per defect (a `FinalDefectType`, a list the System Admin edits, separate from the
@@ -269,6 +312,18 @@ Friday by default) until a save that day. Low stock when quantity ≤ reorder le
 **Attendance:** the Floor Manager ticks who is present, today and 7 days back; the only worker
 count is constructors present over the roster, which explains a short day. No per-person history.
 
+**Reports (D-116, D-117, Phase 35A, D-132):** Operations, Quality, Rolls and Materials, for the Floor
+Manager. Operations, Quality and Rolls take a **period** in the URL: Day, Week of the month (as
+Materials, A-67), Month or Custom up to 366 days (A-68); a month or week compares with the one before;
+Rolls also has Any time. Tables **sort** by a header (`?sort=<table>.<column>&dir=`, one sort per page,
+each table a whitelist); **filters** exist only where they mean something (the defect cards, Supplier
+quality, Quality's defect, Rolls' item and location); CSVs follow the period and filters, not the sort
+(A-100). Every report **prints**: header with "Prepared by", repeated table header, Remarks and
+signature lines that are not saved (A-69), light colours; Rolls prints every matching row up to 500
+(A-102); charts don't print. Operations also reports final defects, where defects come from,
+repairs and work in progress, and marks a day **Corrected**. Figures count whole rolls, batches, days,
+stages, materials or suppliers, never people.
+
 **Workforce:** no per-person metrics anywhere. Aggregates are per batch, day, roll, material or
 supplier only. A scan never names who captured it (the audit log does).
 
@@ -279,32 +334,40 @@ supplier only. A scan never names who captured it (the audit log does).
 Seed one demo account per role (password from `.env`, documented in README).
 
 Each role sees only its modules (Phase 28, D-100, C-18). Sidebars, in order: Shoe Constructor
-**Capture**; Quality Inspector **Batches**; Floor Manager **Overview, Batches, Attendance, Reports,
-Inventory**; System Admin **Overview, Users, Settings, API tokens, Audit log** (D-119). Everything
-else answers 403; removed pages answer 404. The matrix is `src/server/policies/permissions.ts`.
+**Capture** and, with camera access, **Find roll**; Quality Inspector **Batches**; Floor Manager
+**Overview, Batches, Attendance, Reports, Inventory, Find roll**; System Admin **Overview, Users,
+Settings, API tokens, Audit log** (D-119). Everything else answers 403; removed pages answer 404. The
+matrix is `src/server/policies/permissions.ts`; the sidebars are `navigation.ts`.
 
-| Module                                                                   | Floor Manager              | Quality Inspector | System Admin | Shoe Constructor   |
-| ------------------------------------------------------------------------ | -------------------------- | ----------------- | ------------ | ------------------ |
-| Overview (role home)                                                     | ✅                         | — (Batches)       | ✅           | — (Capture)        |
-| Capture and Floor view: pick leather and roll, capture, finish, put back | —                          | —                 | —            | if allowed (D-075) |
-| Reports → Rolls, a roll's page and its shots, the claim sheet, Remove    | ✅ (`roll:*`, `scan:read`) | —                 | —            | —                  |
-| Batches: today                                                           | ✅                         | ✅ (home)         | —            | —                  |
-| Batches: finish and correct a batch                                      | no QI present (D-088)      | ✅                | —            | —                  |
-| Batches: Plan days calendar, quota, Recent days                          | ✅                         | —                 | —            | —                  |
-| Attendance                                                               | ✅                         | —                 | —            | —                  |
-| Inventory, Add rolls, Update stock, reminder days                        | ✅                         | —                 | —            | —                  |
-| Reports: Operations, Quality, Rolls, Materials, CSV                      | ✅                         | —                 | —            | —                  |
-| Users (add, edit, deactivate, reset password, unlock, camera access)     | —                          | —                 | ✅           | —                  |
-| Settings: defect types, thresholds, suppliers, lunch break               | —                          | —                 | ✅           | —                  |
-| API tokens (create, revoke; shown once)                                  | —                          | —                 | ✅           | —                  |
-| Audit log                                                                | —                          | —                 | ✅           | —                  |
+| Module                                                                                                        | Floor Manager              | Quality Inspector | System Admin | Shoe Constructor                     |
+| ------------------------------------------------------------------------------------------------------------- | -------------------------- | ----------------- | ------------ | ------------------------------------ |
+| Overview (role home)                                                                                          | ✅                         | — (Batches)       | ✅           | — (Capture)                          |
+| Capture, My stage and Floor view: pick leather and roll, capture, finish, put back, set a returned roll aside | —                          | —                 | —            | if allowed (D-075)                   |
+| Find roll (`location:read`)                                                                                   | ✅                         | —                 | —            | if allowed (D-128)                   |
+| Inventory: Storage locations, roll labels, Move rolls, Picked up by supplier (`location:manage`, `roll:move`) | ✅                         | —                 | —            | —                                    |
+| Reports → Rolls, a roll's page and its shots, the claim sheet, Remove, Edit details                           | ✅ (`roll:*`, `scan:read`) | —                 | —            | —                                    |
+| Batches: Queue and Today (read, `production:read`)                                                            | ✅                         | ✅ (home)         | —            | —                                    |
+| Batches: inspect a batch, inspect a repair, correct on the inspection day                                     | no QI present (D-088)      | ✅                | —            | —                                    |
+| Batches: Mark Urgent, Void, correct a batch from any past day, correct a repair's inspection                  | ✅                         | —                 | —            | —                                    |
+| Batches: Plan days calendar, quota, Recent days, Who works where                                              | ✅                         | —                 | —            | —                                    |
+| Batches: Work in progress (read, `stage:read`)                                                                | ✅                         | ✅                | —            | —                                    |
+| Stage counts and a repair marked Back for inspection (`stage:count`, `repair:update`)                         | ✅                         | —                 | —            | the stage they are assigned to today |
+| Attendance                                                                                                    | ✅                         | —                 | —            | —                                    |
+| Inventory, Add rolls, Update stock, reminder days                                                             | ✅                         | —                 | —            | —                                    |
+| Reports: Operations, Quality, Rolls, Materials, periods, sort, filters, print, CSV                            | ✅                         | —                 | —            | —                                    |
+| Users (add, edit, deactivate, reset password, unlock, camera access)                                          | —                          | —                 | ✅           | —                                    |
+| Settings: defect types, final defect types, thresholds, suppliers, lunch break                                | —                          | —                 | ✅           | —                                    |
+| API tokens (create, revoke; shown once)                                                                       | —                          | —                 | ✅           | —                                    |
+| Audit log                                                                                                     | —                          | —                 | ✅           | —                                    |
 
-**Floor Manager overview:** today's batches against the quota, today's attendance, Rolls today
-(rolls scanned, returned to supplier, open), low stock, the stock update reminder and the daily
-summary. **System Admin overview:** system health, users, the lunch break, the audit log and the
+**Floor Manager overview (D-131):** three zones. **Needs attention** (only when due: Plan today, Stock
+update today), **On the line now** (today's batches against the quota beside Work in progress) and
+**Today so far** (attendance, Rolls today, low stock, the daily summary); the plan banner is hidden on
+this page only (A-97). **System Admin overview:** system health, users, the lunch break, the audit log and the
 camera API tokens.
 **Demo tools (D-101):** with `DEMO_LOGIN_TOOLS=true` and `SEED_DEMO_USERS=true` the login page has
-a demo sign-in per role and Reset demo data, and every page shows a Demo mode band.
+a demo sign-in per role and Reset demo data, and every page shows a Demo mode band with the **demo
+clock** (D-125): Change time moves the whole app to a Manila date and time and Back to real time undoes it.
 **Camera administration (D-119):** there is no Camera page. The System Admin gives camera access
 (Users → More actions), sets defect types, thresholds and the early-model notice (Settings), and
 manages device tokens (API tokens).
@@ -367,18 +430,22 @@ Prisma models (`prisma/schema.prisma` has every field and index; ids are UUIDv7,
 `AttendanceDay`, `AttendanceMark(present)`, `LunchBreak(startTime, endTime, effectiveFrom)`,
 `DayPlan(day, kind PLANNED|NON_WORKING, rollsPlanned, quota, intervalMinutes, shiftStart, shiftEnd)`,
 `ProductionCheckIn(day, slotAt, pairs, failedPairs, constructorsPresent, correction fields)` (a finished batch),
-`ProductionBatch(code B-YYMMDD-N, status, priority, …)` (Phase 33), and Phase 34 (D-130):
+`ProductionBatch(code B-YYMMDD-N, status OPEN|INSPECTING|INSPECTED|VOID, priority NORMAL|URGENT, priorityReason, voidReason, …)` and `InspectionQueueStart` (Phase 33, D-129),
+`StorageLocation(code, name?, kind RACK|BIN|AREA, notes?, isActive, sortOrder)` and
+`RollMove(rollId, fromLocationId?, toLocationId?, reason, note?, byId, at)` with `Roll.locationId`,
+`Roll.pickedUpAt` and `Roll.formerCode` (Phase 32, D-128), `DemoClock` (D-125), and Phase 34 (D-130):
 `FinalDefectType(key, label, isActive, sortOrder)` (data; `OTHER` always exists),
 `InspectionFinding(checkInId, finalDefectTypeId, pairs, remedy FIXABLE|NOT_FIXABLE, returnStage?, note?)`,
 `RepairJob(code RP-YYMMDD-<batch>-<n>, findingId, parentId?, pairs, stage, status AT_STAGE|BACK_FOR_INSPECTION|DONE|CANCELLED, backAt, inspectedAt, passedPairs, scrappedPairs, resentPairs)`,
 `StageAssignment(day, stage, userId)` (unique per day and user) and `StageCount(day, stage, pairs, enteredById, batchId?)` (append-only; the latest row of a day and stage is the count),
-with the enums `ProductionStage` (PREPARATION, CONSTRUCTION, SOLE_ING, FINISHING), `Remedy` and `RepairStatus`,
+with the enums `ProductionStage` (PREPARATION, CONSTRUCTION, SOLE_ING, FINISHING), `Remedy`, `RepairStatus`,
+`LocationKind`, `RollMoveReason`, `BatchStatus` and `BatchPriority`,
 and the code sequences `RollSequence`, `RollCodeSequence`. Removed tables (procurement, review,
 repair, salvage, stages, shoe types, components) are listed in their D-entries.
 </data_model_outline>
 
 <phases>
-The authoritative list with acceptance criteria is `docs/ROADMAP.md`; Phases 9 to 31 and the
+The authoritative list with acceptance criteria is `docs/ROADMAP.md`; Phases 9 to 36 and the
 follow-ups are there. The rebuild's first phases, as history (several were removed later, see
 "Changed since the rebuild"):
 0. **Foundation:** branch, DESIGN.md from the legacy identity, remove Laravel, scaffold Next.js +

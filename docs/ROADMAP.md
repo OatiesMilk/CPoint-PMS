@@ -580,7 +580,7 @@ check` passed (708). Plan `docs/prompts/plans/phase-30f3-plan.md`, handoff
         `qa/handoffs/2026-11-07-phase-30f-3.md`, prompt `qa/CODEX_PROMPT_PHASE_30F_3.md`; Codex run 1
         PASS WITH ISSUES (weekday checks blocked; the picture moved up again); run 2 FAIL (the picture a few px short, fixed); run 3 PASS for Capture. **Still to do:** run 4, the Batches checks, the
         plan line and the full suite on a weekday with today planned (Plan days #44 included)
-- [ ] Phase 31: the documentation and the paper's figures match the system. Built 2026-11-07
+- [x] Phase 31 (merged #46; superseded in part by Phase 36): the documentation and the paper's figures match the system. Built 2026-11-07
       (docs only; plan `docs/prompts/plans/phase-31-plan.md`): the master spec's context, rules,
       roles, data model and CV contract; README, `docs/API.md` (every route, checked against
       `src/app/api`), DESIGN, STATION_SETUP, `cv/` docs, CLAUDE.md, removed phases marked here;
@@ -994,4 +994,30 @@ recommendations, 2026-11-21). Decision: D-132. Two sessions.
 - [x] Codex QA run 3: FAIL on a test fixture assumption (C11 passed 36 of 36; fixed)
 - [x] Codex QA run 4: FAIL on test-level causes (toast under the pointer, a concurrent repeat, sign-in stalls; fixed)
 - [x] Codex QA run 5: **PASS WITH ISSUES** (one full-suite sign-in stall passing alone; every scenario has passed)
-- [ ] Committed and merged
+- [x] Committed and merged (#61, `dec06e7`)
+
+## Phase 36 — The documentation, the figures and the demo match the system (defense revision 5, docs only)
+
+Plan: `docs/prompts/plans/phase-36-docs-plan.md` (Dylan's answers, 2026-11-22: figures redrawn, Codex
+takes the new manual screenshots and the PDF is rebuilt, D-134, and the demo script updated). Decision:
+D-134. No behaviour change.
+
+- [x] Master spec (`docs/prompts/system-rebuild.md`): "Changed since the rebuild" to D-133; rules and data
+      model for storage locations and labels, the Inspection queue, reports by period and print;
+      roles table against `permissions.ts` and `navigation.ts`
+- [x] README: features, the ER diagram (the eight revision tables), the demo script by role with the new
+      steps, the demo week's new data, CI line
+- [x] `docs/USER_MANUAL.md`: storage locations, labels, Find roll, set aside and Picked up, report periods,
+      sort, filter and print, the Batch definition; new screenshots 15 to 26 and the PDF rebuilt (2026-11-22)
+- [x] `docs/API.md` checked against every route in `src/app/api` (no gaps); STATION_SETUP gets "Roll and
+      location labels"; CLAUDE.md, DESIGN.md swept
+- [x] `docs/DEMO_SCRIPT.md` updated for the revisions (untracked, Dylan's file); acts and a rehearsal list
+- [x] CI `docker` job: SQL checks for storage locations and roll moves; one stale comment fixed
+      (`production-rules.ts`); the demo seed moves two rolls of the item with most rolls left (run 1 F1)
+- [x] Figures redrawn (architecture, modules) and `docs/prompts/paper-figures.md` updated
+- [x] STATUS rewritten short; history stays in SESSION_LOG
+- [x] `npm run check` passes
+- [x] QA handoff `qa/handoffs/2026-11-22-phase-36-docs.md`, Codex prompts `qa/CODEX_PROMPT_PHASE_36.md`
+      and `qa/CODEX_PROMPT_PHASE_36_SCREENSHOTS.md`
+- [ ] Codex QA: manual steps, demo rehearsal, API spot-check, docker SQL checks (run 1 done; run 2 and the hand rehearsal pending)
+- [ ] Committed and merged (`docs/phase-36`, list in `qa/phase-36-files.txt`)

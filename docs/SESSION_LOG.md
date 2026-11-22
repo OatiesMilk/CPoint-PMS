@@ -5,6 +5,58 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-22 · Phase 36: Codex run 2 PASS WITH ISSUES
+
+- Codex run 2 (`qa/reports/2026-11-22-phase-36-run2.md`): **D8 PASS** (all 15 storage SQL checks, `MOVED` 2, LR-BSB-050's history shows "Moved" with "The first bin was full."); D9 PASS WITH ISSUES (the three figures are legible with the five module titles and the NEW chips); D10 skipped as instructed.
+- F1 (Low): Codex couldn't confirm the architecture figure's "92 handlers" from `paper-figures.md`. Counted: 92 exported route handlers in 77 `route.ts` files (45 GET, 27 POST, 10 PATCH, 9 PUT, 1 DELETE). `docs/API.md` lists 82 rows because some rows cover two methods (`GET / PUT`). The count and how to recount it are now in `docs/prompts/paper-figures.md`. No figure change.
+- Phase 36 automated and Codex QA is done; the hand rehearsal and the git commands remain.
+
+## 2026-11-22 · Phase 36: the 12 manual screenshots and the PDF
+
+- Dylan asked why he should take the screenshots by hand, so Claude took them instead of Codex. Setup: a local
+  PostgreSQL 16 with the demo week, `next dev`, headless Chromium (1366 px desktop and 390 px phone, both at 2x,
+  the look of files 01 to 14, the Next.js dev badge hidden). Files 15 to 26 are in `docs/screenshots/manual/`:
+  storage locations, roll labels, Find roll (phone), a roll's location history, the Inspection queue, Finish
+  batch with failed pairs (phone), Work in progress (demo clock Fri 20 Nov 15:00, then back to real time), a
+  repair's inspection, Operations by month sorted by failed inspection, the printed report (a real Chromium
+  A4 PDF, pages 1 and 5 side by side), Correct a batch, Edit details on a roll. Three were cropped (19, 20, 23).
+- `docs/USER_MANUAL.pdf` rebuilt from `USER_MANUAL.md` (Python-Markdown, Chromium print, 35 pages, A4, page
+  numbers in the footer); the old one had 23 pages. Captions of 19 and 25 corrected to match what the shots show.
+- Not checked: how the pages look on paper (checked as page images only); the PDF's layout differs a little from
+  the old one (more pages; images are kept whole, so some pages end early).
+- Next: Codex run 2 (`qa/CODEX_PROMPT_PHASE_36_RUN2_MINI.md`), Dylan's hand rehearsal, then the git commands.
+
+## 2026-11-22 · Phase 36: Codex run 1 PASS WITH ISSUES; seed fix; run 2 prompt
+
+- Codex run 1 (`qa/reports/2026-11-22-phase-36-run1.md`): D7 passed (14 API calls, wrong roles 403); D2 to D6 and A1 passed with limits (no physical QR and marker card, print preview blocked the in-app browser, no stopwatch, a Sunday run with the demo clock on Monday 23 Nov); **D8 FAIL**: `roll_moves` has no `MOVED` row after `demo:reset`; D9 blocked (the figures weren't on the laptop); D10 blocked (no Mermaid renderer).
+- D8 reproduced on a local PostgreSQL 16 with the demo seed: LR-001 has 0 rolls in stock by the last working day, so the seed's "move two shelf rolls" (hard-coded to LR-001) did nothing. It now takes the item with the most rolls left; after a fresh seed `MOVED` is 2 and the whole storage block passes (run as `set -e`). The demo script's claim that two shelf rolls moved is now true. `demo-seed` and `demo-reset` unit tests pass, ESLint, typecheck and Prettier clean.
+- D10 rendered by Claude: both README Mermaid blocks render with mermaid 11 in Chromium.
+- D9: the figures copied to the vault's `Inbox/figures-2026-11-22/`. Run 2 prompt `qa/CODEX_PROMPT_PHASE_36_RUN2.md`. The 12 manual screenshots were taken afterwards by Claude (see the next entry).
+
+## 2026-11-22 · Phase 36: the docs, the figures and the demo match the system (D-134)
+
+- Built Phase 36 of `docs/prompts/plans/phase-36-docs-plan.md` (Dylan's answers: figures redrawn, new manual
+  screenshots by Codex and a rebuilt PDF, D-134, and the demo script updated). Docs only; no behaviour change.
+- **Master spec:** "Changed since the rebuild" to D-133; rules and data model for storage locations, labels
+  and Find roll, the Inspection queue, reports by period and print, the demo clock; the roles table redone
+  against `permissions.ts` and `navigation.ts`; the sidebars; the Floor Manager's three-zone Overview.
+- **README:** features, the demo script by role (Floor Manager 1 to 9, constructor 1 to 4, Quality Inspector's
+  Queue), the demo week, the ER diagram (eight relationships and six attribute blocks), CI line.
+  **USER_MANUAL:** Storage locations, labels, Find roll, set aside and Picked up, report periods, sort, filter
+  and print, the batch queue and repairs; image references to files 15 to 26 (Codex captures them).
+  **STATION_SETUP:** "Roll and location labels". `docs/API.md` checked against every route in `src/app/api`
+  with a script: no gaps. CLAUDE.md gets the D-134 rule; DESIGN.md's old "Batch 2" line marked as history.
+- **Demo script** (`docs/DEMO_SCRIPT.md`, untracked, Dylan's file) rewritten for the four revisions; the demo
+  clock is set to 17:05 so today's batch is Due and waiting in the Queue, and the act ends with Reset demo data.
+- **Figures** (architecture, conceptual framework 1 and 2) redrawn in HTML and rendered with Chromium, dated
+  2026-11-22, NEW chips on the new parts; facts in `docs/prompts/paper-figures.md`.
+- **CI:** the `docker` job gains SQL checks for storage locations, roll moves and the returned rolls' places;
+  the YAML parses, the job was not run. One stale comment in `src/lib/production-rules.ts` now quotes the
+  batch-code notices.
+- The 12 manual screenshots and the rebuilt `USER_MANUAL.pdf` were first left for Codex
+  (`qa/CODEX_PROMPT_PHASE_36_SCREENSHOTS.md`); Dylan asked why he should take them by hand, so Claude took them
+  (2026-11-22): see the entry above.
+
 ## 2026-11-22 · Phase 35B: Codex run 5 PASS WITH ISSUES; QA done; git commands
 
 - Codex run 5 (`qa/reports/2026-11-22-phase-35b-run5.md`): C12 passed: `inspection-queue.spec.ts` three separate one-worker runs, `corrections.spec.ts` and the six related specs all passed. The one issue: the full suite (two workers) had a `reports.spec.ts` quality-report sign-in stall that passed alone (3 of 3, dev-server load, as in Phases 32, 33 and runs 2 to 4). With runs 1 to 4 every scenario has passed (C11 36 of 36).

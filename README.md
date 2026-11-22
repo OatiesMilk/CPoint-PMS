@@ -12,10 +12,18 @@ shared view of the line:
 - **Rolls:** the Floor Manager adds each leather roll in Inventory with its area. At Finish roll
   the roll leaves stock; if its defects cover more than 10% of its area it is **Returned to
   supplier**, otherwise **Scanning passed** (D-116). Each roll's scanning time is recorded (D-121).
-- **Batches:** the Floor Manager plans each weekday on a calendar (rolls to be used, the quota of
-  passed pairs, every 4 hours or once a day, the shift). Each check-in interval is a batch, lunch
-  left out. The Quality Inspector finishes each batch on a phone with the pairs finished and how
-  many failed inspection, prompted by an on-screen notice.
+- **Storage locations, labels and Find roll (Phase 32, D-128):** the Floor Manager sets up the racks,
+  bins and areas where rolls are kept (Inventory → Storage locations), prints A4 sticker sheets with
+  a QR code for each roll and each location, and places or moves rolls. **Find roll** (on a phone,
+  for the Floor Manager and constructors with camera access) takes a roll's code, tag number or
+  scanned label and shows where it is and where it has been; Capture can pick a roll by its label.
+  A roll Returned to supplier is set aside in a place until the supplier picks it up.
+- **Batches and the Inspection queue (Phases 27 and 33, D-129):** the Floor Manager plans each
+  weekday on a calendar (rolls to be used, the quota of passed pairs, every 4 hours or once a day,
+  the shift). Each check-in interval is a batch with a code (`B-261116-2`), lunch left out. Every
+  batch waits in the **Queue**, across days, until the Quality Inspector inspects it on a phone
+  (pairs finished and how many failed); the Floor Manager marks one **Urgent** or **Void**s it, each
+  with a reason. On-screen notices call a batch by its code.
 - **Final defects and repairs (Phase 34, D-130):** when pairs fail inspection the Quality Inspector
   lists what was wrong (a defect type from Settings, the pairs, Fixable or Not fixable, and the stage
   a fixable one goes back to). Each fixable line becomes a repair job with a code (RP-261120-2-1)
@@ -28,8 +36,13 @@ shared view of the line:
   per person.
 - **Attendance and stock:** the Floor Manager marks who is present each day and updates stock on
   one sheet (Added, Used, Correction), with reminders on Wednesdays and Fridays.
-- **Reports:** Operations, Quality, Rolls (with the claim sheet for a supplier) and Materials, with
-  CSV for Excel. Figures are by batch, day, roll, material or supplier, never per person.
+- **Reports (Phase 35A, D-132):** Operations, Quality, Rolls (with the claim sheet for a supplier)
+  and Materials, by **Day, Week, Month or a Custom range**, with sortable tables, filters and a
+  **Print** layout (Prepared by, Remarks, signatures), and CSV for Excel. Figures are by batch, day,
+  roll, material or supplier, never per person.
+- **Corrections (Phase 35B, D-133):** the Floor Manager can correct a batch from any past day, a
+  roll's details and a repair's inspection, always with a reason; the audit log keeps the old and
+  the new value, and Operations marks a corrected day.
 
 > BS-IT capstone project. Progress is in [`docs/STATUS.md`](docs/STATUS.md), the plan in
 > [`docs/ROADMAP.md`](docs/ROADMAP.md), and every design decision with its reason in
@@ -38,7 +51,7 @@ shared view of the line:
 ## Contents
 
 - [Quick start: demo / factory machine](#quick-start-demo--factory-machine) (Docker only)
-- [Demo script](#demo-script) (10 minutes, per role)
+- [Demo script](#demo-script) (about 15 minutes, per role)
 - [Architecture](#architecture) and [data model](#data-model)
 - [Quick start: development](#quick-start-development)
 - [Environment](#environment), [Camera and simulator](#camera-and-simulator),
@@ -126,11 +139,12 @@ them, who capture its rolls.
 
 ## Demo script
 
-About ten minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). Use two browser windows (or
-one normal and one private) to show two roles side by side, and a phone-sized window for Capture
-and Batches. Each role sees only its own pages (D-100, D-119): the Floor Manager Overview, Batches,
+About fifteen minutes with the demo week loaded (`SEED_DEMO_WEEK=true`). It includes what changed
+since the defense: locations and Find roll, the Inspection queue, defects and repairs, report
+periods and corrections. Use two browser windows (or one normal and one private) to show two roles
+side by side, and a phone-sized window for Capture, Batches and Find roll. Each role sees only its own pages (D-100, D-119): the Floor Manager Overview, Batches,
 Attendance, Reports and Inventory; the Quality Inspector Batches; the System Admin Overview, Users,
-Settings, API tokens and Audit log; a constructor Capture.
+Settings, API tokens and Audit log; a constructor Capture and Find roll.
 
 **Demo tools (optional, D-101):** with `DEMO_LOGIN_TOOLS=true` (and `SEED_DEMO_USERS=true`) the
 login page has **Demo sign-in**, one button per role, and **Reset demo data** (type RESET; 2 to 3
@@ -144,7 +158,7 @@ Reset. Never turn the demo tools on for real use.
 The batch steps need a weekday with today planned; the demo week plans its own days, so plan today
 first on **Batches → Plan days** if it isn't.
 
-### 1. Floor Manager (4 min)
+### 1. Floor Manager (6 min)
 
 1. **Home** (`manager@cpoint.local`): **Today's batches** (passed pairs against the quota), the
    **Attendance** card ("Not taken yet today."), **Rolls today** (rolls scanned, returned to the
@@ -158,26 +172,41 @@ first on **Batches → Plan days** if it isn't.
    with one sentence, for example "Below quota by 18 pairs. 3 of 12 Shoe Constructors were absent."
    Nothing names a person.
 3. **Inventory → Black cowhide (school shoes):** the item's **Rolls**, each with its code
-   (`LR-BSA-001`), area, status (Not yet scanned, Being scanned, Scanning passed, Returned to
-   supplier, Removed), shots and Defect %. **Add rolls**: the day they arrived, then each roll's
-   area. The count on hand follows the rolls (D-103). **Update stock** opens the one sheet for every
-   other item (Added, Used, Correction with a reason).
-4. **Reports → Rolls:** every roll with its supplier, area, shots, Defect %, scanning time and
+   (`LR-BSA-001`), where it is kept, area, status (Not yet scanned, Being scanned, Scanning passed,
+   Returned to supplier, Removed), shots and Defect %. **Add rolls**: the day they arrived, **Kept
+   in** a location, then each roll's area; **Print its label** follows. The count on hand follows
+   the rolls (D-103). **Update stock** opens the one sheet for every other item (Added, Used,
+   Correction with a reason).
+4. **Inventory → Storage locations** (Phase 32): the demo's placeholder racks and bins (`R1-B1` to
+   `R2-B3`) and `RETURN`, with how many rolls each holds; tick two and **Print 2 labels** (an A4
+   sheet of 3 × 7 stickers; print at 100%). Back on the item, **Move rolls** takes a few rolls to
+   another place with a note. Then **Find roll** in the menu, on a phone-sized window: type a roll's
+   code (or **Scan label**) and read where it is and its **Location history**, which names nobody.
+5. **Reports → Rolls:** every roll with its supplier, area, shots, Defect %, scanning time and
    status: **Scanning passed** or **Returned to supplier**. Three demo rolls have a long cut on
    every shot and are over the 10% limit. Open one: each shot with its photo, verdict and defects,
-   "Returned to supplier: defects cover N% of this roll, over the 10% limit.", and a **Claim
-   sheet** to **Save as PDF** for the supplier. No constructor is named.
-5. **Attendance:** **Mark everyone present**, untick two people, **Save attendance**. The summary
+   "Returned to supplier: defects cover N% of this roll, over the 10% limit.", a **Claim
+   sheet** to **Save as PDF** for the supplier, and where the roll waits for the supplier (the
+   return area, until **Picked up by supplier**). No constructor is named.
+6. **Attendance:** **Mark everyone present**, untick two people, **Save attendance**. The summary
    reads "N of M Shoe Constructors present" (the demo roster has 13). It is a one-day log book: no
    per-person history or counts anywhere (D-008, D-077).
-6. **Reports → Operations, Quality, Materials:** pairs finished, failed inspection and the share of
+7. **Reports → Operations, Quality, Materials:** pairs finished, failed inspection and the share of
    the quota; rolls scanned per day and defects by type; supplier quality, worst first, with
    **High** on a supplier with at least 5 rolls whose returned share is at least 10 points above the
    whole line's (the demo data's Marikina Supplier A, with its returned rolls, shows
-   it); each material's use per week and the leather rolls used and returned. Download a CSV and
-   open it in Excel.
+   it); each material's use per week and the leather rolls used and returned. Pick the period
+   (**Day, Week, Month** or **Custom**), click a column header to sort, filter the defect cards,
+   then **Print** (the header says who prepared it; the layout leaves room for Remarks and two
+   signatures) or download a CSV and open it in Excel.
+8. **Batches → Queue** (Phase 33): every batch waiting for inspection, by its code, **Urgent** first;
+   **Mark Urgent** or **Void** one with a reason. **Work in progress** (third tab) shows the pairs at
+   each stage and the repairs at them (Phase 34).
+9. **A correction** (Phase 35B): **Queue → Inspected and void**, pick a **Batch date**, **Correct**
+   a batch with a reason; **Reports → Operations** now marks that day **Corrected**. On a roll's
+   page, **Edit details**. Every correction is in the audit log with the old and the new value.
 
-### 2. Shoe Constructor (2 min)
+### 2. Shoe Constructor (3 min)
 
 1. **Capture on a phone** (`constructor@cpoint.local`, phone-sized window, or a real phone through
    the tunnel): **Leather**, then **Roll on the table**, then **Start scanning**. Lay the printed
@@ -189,14 +218,20 @@ first on **Batches → Plan days** if it isn't.
 2. **Capture**: green Pass or red Reject for each shot, each defect Usable or Not accepted with its
    length. A cut from 3 in is Not accepted (C-37). The card above the roll shows today's rolls
    scanned against the plan, and the timer runs while the roll is being scanned.
+   **Scan the roll's label** picks the roll from its sticker.
 3. **Finish roll**: the roll leaves stock, and the constructor reads its Defect % against the limit.
-   **Floor view** shows the same with a coloured band for a monitor at a fixed station.
+   A roll over the limit asks **Where did you put it?** (**Set aside for the supplier**). **Floor
+   view** shows the same with a coloured band for a monitor at a fixed station.
+4. **My stage** (Phase 34): a constructor the Floor Manager assigned to a stage counts the pairs
+   there and marks a repair **Back for inspection**; **Find roll** looks a roll up by code.
 
-### 3. Quality Inspector (2 min)
+### 3. Quality Inspector (3 min)
 
-1. **Batches on a phone** (`inspector@cpoint.local`): ten minutes before a batch's end a banner
-   reads "Batch 2 ends at 17:00. Get ready to count the finished pairs.", and at the end "Batch 2
-   is due. Finish it now." with the bell and a "(1)" in the tab title.
+1. **Batches on a phone** (`inspector@cpoint.local`) opens on the **Queue**: each waiting batch by
+   its code (for example `B-261116-2`), its day, the rolls scanned in it and how long it waited;
+   **Start inspection**, then **Inspect**. Ten minutes before a batch's end a banner reads
+   "B-261116-2 ends at 17:00. Get ready to count the finished pairs.", and at the end "B-261116-2 is
+   due. Finish it now." with the bell and a "(1)" in the tab title (the code is that day's).
 2. **Finish batch**: the pairs finished and, of these, the pairs that failed inspection. A second
    finish is refused; **Correct** the same day needs a reason, and the audit keeps both counts (the
    Floor Manager can also correct a batch from any past day, under Queue → Inspected and void).
@@ -229,8 +264,13 @@ first on **Batches → Plan days** if it isn't.
   with a claim sheet as evidence (C-9, D-116, D-117).
 - **No per-person rankings or scores** anywhere (from the client survey). A short day is explained
   by how many were absent, never who.
-- **Nothing is deleted:** stock moves through a ledger, a removed roll keeps its shots, and every
-  change is in the audit log.
+- **Nothing is deleted:** stock moves through a ledger, a removed roll keeps its shots, a roll's
+  moves are a history, and every change, corrections included, is in the audit log with the old and
+  the new value.
+- **Rolls you can find (D-128):** every roll has a code and a place; the QR on its sticker holds the
+  plain code, so Find roll and Capture read it without a network address that could change.
+- **A queue, not "Batch 1" and "Batch 2" (D-129):** every batch has a code and waits until it is
+  inspected or voided, so nothing disappears at midnight.
 
 ## Architecture
 
@@ -277,7 +317,10 @@ flowchart LR
 
 ## Data model
 
-The core tables (`prisma/schema.prisma` has all of them, with indexes). Ids are UUIDv7.
+The core tables (`prisma/schema.prisma` has all 31, with indexes). Ids are UUIDv7. The tables of
+the panel's revisions (storage locations, the Inspection queue, final defects and repairs, stages)
+are in the diagram too; supporting tables (audit log, sessions, sequences, the demo clock,
+attendance marks) are left out of it.
 
 ```mermaid
 erDiagram
@@ -290,6 +333,16 @@ erDiagram
   Scan ||--o{ Detection : contains
   DefectType |o--o{ Detection : classifies
   DayPlan ||--o{ ProductionCheckIn : "batches of the day"
+  StorageLocation |o--o{ Roll : "keeps (Phase 32)"
+  Roll ||--o{ RollMove : "location history"
+  StorageLocation |o--o{ RollMove : "from / to"
+  ProductionBatch |o--o| ProductionCheckIn : "inspection result (Phase 33)"
+  ProductionCheckIn ||--o{ InspectionFinding : "what was wrong (Phase 34)"
+  FinalDefectType ||--o{ InspectionFinding : classifies
+  InspectionFinding ||--o{ RepairJob : "fixable line starts"
+  RepairJob |o--o{ RepairJob : "sent back again"
+  ProductionBatch |o--o{ StageCount : "count after a batch"
+  User ||--o{ StageAssignment : "stage of the day"
   AttendanceDay ||--o{ AttendanceMark : marks
   User ||--o{ AuditLog : "acts in"
 
@@ -330,6 +383,34 @@ erDiagram
   CvSettings {
     float foundAtOrAbove "0.5"
     float returnSharePct "10"
+  }
+  StorageLocation {
+    string code "R1-B3, printed on its label"
+    enum kind "RACK, BIN, AREA"
+    bool isActive "only an empty one can be switched off"
+  }
+  RollMove {
+    enum reason "PLACED, MOVED, TAKEN_FOR_USE, PUT_BACK, REMOVED, SET_ASIDE_FOR_RETURN, PICKED_UP_BY_SUPPLIER"
+    string note "optional"
+  }
+  ProductionBatch {
+    string code "B-261116-2"
+    enum status "OPEN, INSPECTING, INSPECTED, VOID"
+    enum priority "NORMAL, URGENT (a reason)"
+  }
+  InspectionFinding {
+    int pairs "the lines add up to the failed pairs"
+    enum remedy "FIXABLE, NOT_FIXABLE"
+    enum returnStage "where a fixable one goes back to"
+  }
+  RepairJob {
+    string code "RP-261120-2-1"
+    enum status "AT_STAGE, BACK_FOR_INSPECTION, DONE, CANCELLED"
+    int passedPairs "counted on the day they pass"
+  }
+  StageCount {
+    enum stage "PREPARATION, CONSTRUCTION, SOLE_ING, FINISHING"
+    int pairs "latest row of the day is the count"
   }
 ```
 
@@ -497,6 +578,12 @@ adds the demo inventory items the first time. `npm run db:seed` runs the same st
   with a random mix of holes, scratches, creases and long cuts are over 10% (11% to 16%) and
   Returned to supplier, all Marikina Supplier A's, and two with many defects stay just under (7%
   to 9%); the newest roll is still being scanned; one shelf roll is removed for water damage;
+- six placeholder bins (`R1-B1` to `R2-B3`) and a `RETURN` area: every roll starts in a bin,
+  the returned ones are set aside in `RETURN`, two shelf rolls move to another bin and the oldest
+  returned roll is picked up by the supplier (CPoint's real rack layout is unconfirmed, A-53);
+- the batch the shortest-handed day missed waits in the Inspection queue, Urgent with a reason;
+  failed batches carry what was wrong, and the repairs they started are in every state (At stage,
+  Back for inspection, passed, scrapped, sent back again); stages have constructors and counts;
 - stock updates on each past Wednesday and Friday (four in the two weeks);
 - attendance for the working days before today, a few constructors absent on some days (today is
   left for you to take); the days with two or more absent end below quota.
@@ -737,13 +824,14 @@ src/
 prisma/                schema, migrations, seed
 tests/unit, tests/e2e  Vitest and Playwright tests (including a smoke test per role)
 docker/                container entrypoint
-docs/                  status, roadmap, decisions, API, UI audit, client survey, screenshots
+docs/                  status, roadmap, decisions, API, user manual, demo guides, UI audit, client survey, screenshots
 ```
 
 ## Quality checks
 
 - **CI** (GitHub Actions) runs lint, typecheck, unit tests, the build and the e2e suite. It also
-  builds the Docker stack, checks the demo week seeds once, and checks the stock ledger adds up.
+  builds the Docker stack, checks the demo week seeds once, and checks the stock ledger, the batch
+  codes, the findings and repairs, and the storage locations and roll moves add up.
 - **Accessibility:** the e2e smoke test runs axe (WCAG 2.1 A/AA) on every page of every role.
 - **UI audit:** the findings and their fixes are in [`docs/UI_AUDIT.md`](docs/UI_AUDIT.md).
 

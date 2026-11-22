@@ -126,7 +126,8 @@ area; its code is on the list, like `LR-MLT-001` (write it on the roll's label).
 5. **Finish roll.** The app asks "Is all of LR-MLT-001 scanned?" with the number of shots. A
    finished roll can't take more shots, and it comes off the leather stock (Phase 30E). The app
    then says how much of the roll has defects against the 10% limit. Over it, the roll is
-   **Returned to supplier**: set it aside for the Floor Manager.
+   **Returned to supplier**: the app asks **Where did you put it?**; choose the place where you set
+   it aside (the Floor Manager marks it picked up when the supplier collects it).
 
 Picked the wrong roll? While it has no shots, **Put roll back** at Capture: it waits on the list
 again. A roll with shots is removed only by the Floor Manager, with a reason. Nothing is deleted.
@@ -134,6 +135,30 @@ again. A roll with shots is removed only by the Floor Manager, with a reason. No
 The Floor Manager reads every roll, its shots, its rejects and its defect share in **Reports →
 Rolls**; a roll over the limit reads **Returned to supplier**, and its claim sheet carries the
 findings for the supplier.
+
+## Roll and location labels (Phase 32, D-128)
+
+Every roll and every rack, bin or area can carry a sticker with its code and a QR code, so a roll is
+found in the store and picked at Capture by pointing the phone at it. The Floor Manager prints them;
+the constructor only reads them.
+
+- **Paper:** plain **A4 sticker paper** from an office printer; there is no label printer (A-54).
+  The sheet is **3 × 7 stickers (70 × 42.3 mm)**, a placeholder until CPoint names its paper.
+- **Print:** **Inventory → leather item → Print labels** (every roll not scanned yet), **Print its
+  label** right after **Add rolls**, or **Inventory → Storage locations**, tick places, **Print
+  labels**. In the browser's print window choose **A4**, **Margins: None** and **Scale: 100%
+  (actual size)**, and turn headers and footers off. A different scale or margin shifts the stickers
+  off the paper's grid.
+- **Stick:** a roll's label on the roll's core or wrapping, where it shows when the roll is on its
+  rack; a location's label on its rack or bin at eye height. Keep labels flat and away from wet
+  leather.
+- **What the QR holds:** the plain code (`LR-MLT-004`, or `LOC:R1-B3` for a place), not a web
+  address, because the tunnel's address changes (D-076, A-80). The app reads it itself: **Find roll**
+  and **Capture → Scan the roll's label**. If a label won't scan, type the code printed under the
+  QR.
+- **Rack layout:** CPoint hasn't confirmed its racks and bins (A-53). The demo's codes (`R1-B1` to
+  `R2-B3`, `RETURN`) are placeholders; choose real ones under Storage locations before printing for
+  real.
 
 ## Floor view (a station PC)
 
@@ -152,6 +177,7 @@ The page (or the band in Floor view) says what happened and what to do.
 | "Choose the roll this shot belongs to."                         | Pick the roll under **Roll**, or **Scan another roll**              |
 | "LR-… isn't being scanned any more, so this shot wasn't saved." | Choose another roll, or scan a new one                              |
 | "No rolls are waiting to be scanned."                           | Ask the Floor Manager to add the rolls in Inventory                 |
+| "No roll or location has the code …"                            | Check the label, or type the code printed under the QR              |
 | "Not sent: the server didn't answer."                           | Check the Wi-Fi, then press **Send again**. Nothing is saved twice  |
 | "Another app is using this camera."                             | Close the other app, then press **Try again**                       |
 | "The camera only works on a secure address."                    | Open the site through its `https://` tunnel address                 |
