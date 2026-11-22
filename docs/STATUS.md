@@ -3,288 +3,37 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-22 (Phase 35B: Codex run 5 PASS WITH ISSUES; QA done; waiting for the commit)
-**Branch:** `main` at 64af196 (#60, the 35A e2e CI fix); Phase 35B is uncommitted.
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 35B (the file list is in the handoff,
-`qa/handoffs/2026-11-21-phase-35b-corrections.md` §2); `qa/phase-34-files.txt`,
-`qa/overview-cleanup-files.txt`, `qa/phase-35a-files.txt` and `docs/DEMO_SCRIPT.md` stay out (Dylan).
+**Last updated:** 2026-11-22 (Phase 36: docs, figures and demo script built; waiting for Codex QA)
+**Branch:** `main` at dec06e7 (#61, Phase 35B merged). Phase 36 is uncommitted on the laptop
+(`C:\dev\CPoint-PMS`, list in `qa/phase-36-files.txt`); `docs/DEMO_SCRIPT.md` is Dylan's file and stays out of git.
 
-- **Phase 35B Codex run 5 PASS WITH ISSUES** (`qa/reports/2026-11-22-phase-35b-run5.md`): `inspection-queue.spec.ts` three runs at one worker, `corrections.spec.ts` and the six related specs passed; one `reports.spec.ts` sign-in stall in the full suite passed alone (dev-server load). With runs 1 to 4 (C11 36 of 36) every scenario has passed. **Phase 35B QA done**; git commands for `feature/corrections` given to Dylan (list `qa/phase-35b-files.txt`).
-- **Phase 35B Codex run 4 FAIL on test-level causes, fixed** (`qa/reports/2026-11-22-phase-35b-run4.md`): the toast stayed up because the pointer sat over it where Finish was (Sonner pauses on hover; the spec now moves the pointer away); `--repeat-each=2` at two workers was my prompt's fault (two copies on the same fixtures); two reports sign-in stalls in the full run pass alone (dev-server load). Next: `qa/CODEX_PROMPT_PHASE_35B_RUN5.md`.
-- **Phase 35B Codex run 3 FAIL on a test, fixed** (`qa/reports/2026-11-22-phase-35b-run3.md`): C11 passed 36 of 36 (the dialog focus fix works for all six dialogs); the e2e `inspection-queue.spec.ts` assumed the last Saturday is older than the last Sunday, wrong on a Sunday run (now compares the dates); the Admin `ECONNRESET` and the report sign-in stall pass alone. Next: `qa/CODEX_PROMPT_PHASE_35B_RUN4.md`.
-- **Phase 35B Codex run 2 FAIL, fixed** (`qa/reports/2026-11-21-phase-35b-run2.md`; C10 and the print check passed): Remove roll still lost focus (its Reason box is `autoFocus`; `ui/dialog.tsx` now restores the last element focused outside any dialog); two timeouts in broad runs, each passing alone, fixed in the tests (`inspection-queue.spec.ts` waits for the toast to go; `corrections.spec.ts` clicks until the dialog opens). `npm run check` passed (1001). Next: `qa/CODEX_PROMPT_PHASE_35B_RUN3.md`.
-- **Phase 35B Codex run 1 FAIL, fixed** (`qa/reports/2026-11-21-phase-35b-run1.md`; C1 to C9, A1 to A3 passed): the e2e read two `timestamp` columns as the laptop's local time (8 hours off), so the stale guard answered STALE (now UTC text); focus fell to the page when a dialog closed with Escape (`ui/dialog.tsx` now restores it, for every dialog); the Corrected badge widened Operations' first column in print (now under the date); C10's handoff wording. `npm run check` passed (1001). Next: `qa/CODEX_PROMPT_PHASE_35B_RUN2.md`.
-- **Phase 35B, corrections to past records (built 2026-11-21, plan approved with all three recommendations, D-133):**
-  the **Floor Manager** only, always with a reason and an audit row (old and new value), **no migration**.
-  **A batch from any past day:** Batches → Queue → Inspected and void has a **Batch date** picker (`doneDay`);
-  every rule of a same-day correction holds (stale check, both counts in the audit, the lock once a repair from
-  the batch is Back, A-93) and no QI-present cover is needed for a past day; the QI still corrects only on the
-  inspection day ("Ask the Floor Manager to correct it."); a corrected batch shows "Corrected by …, when, why";
-  Operations' production by day marks a day **Corrected** (a batch of it corrected on a later day) with a **See
-  batches** link. **A roll's details:** Edit details on the roll page (`PATCH /api/v1/rolls/{id}`): tag, received
-  day, return note (once a decision exists) and the **area only before Finish roll**; supplier and item never
-  change; a removed roll can't be edited. **A repair's inspection:** Correct on an inspected repair (`PATCH
-/api/v1/production/repairs/{id}/inspect`): the split between passed, scrapped and sent back again (same
-  total) **while every job it sent back is still At stage**; those jobs follow. `npm run check` passed
-  (**1001 unit tests**, build OK); `corrections.spec.ts` written, not run; not looked at in a browser by Claude.
-  Handoff `qa/handoffs/2026-11-21-phase-35b-corrections.md`, prompt `qa/CODEX_PROMPT_PHASE_35B.md` (short:
-  `qa/CODEX_PROMPT_PHASE_35B_MINI.md`). A repair's correction is marked only in the audit log (no column).
-
-- **Main CI after #59 (run 44897069011): `e2e` red, two 35A tests, fixed in the tests (uncommitted).** `check`, `station`
-  and `docker` passed; `e2e` 130 passed, 2 failed, 7 skipped. CI has no demo week, so `reports-print.spec.ts` ("Rolls
-  prints every matching row": expected more than 15 rolls, saw 11) and `reports-period.spec.ts` ("Rolls sorts … and
-  filters by leather item": the first item had no rolls, so no Download CSV link) made wrong assumptions about the data.
-  Both now add their own rolls (`addInventoryRoll`); no app change. `npm run check` passed (1001). Re-check prompt
-  `qa/CODEX_PROMPT_CI_RECHECK_feature-reports-by-period.md`. **Codex re-check PASS** (`qa/reports/2026-11-21-ci-recheck-feature-reports-by-period.md`): the full `test:e2e` as CI runs it (6 workers, one retry) 138 passed, 1 flaky, 0 failed; the two specs 14 of 14 on the dev database and on a fresh empty one (a throwaway stack, removed afterwards). The one flaky test, `admin.spec.ts:136` (the camera settings Save button not enabled in time), passed on its retry and is not from this change. Dylan commits the two specs on their own small branch.
-- **Phase 35A, reports by period (built 2026-11-21, D-132, merged #59):** Operations, Quality and Rolls take a
-  period (Day, Week of the month, Month or Custom up to 366 days, A-67, A-68); tables sort by a header
-  (`?sort=<table>.<column>`); filters on the defect cards, Supplier quality, Quality's defect, Rolls' item and
-  location; every report prints (Prepared by, repeated table header, Remarks, signatures; Rolls up to 500 rows;
-  **charts do not print**, a decision to revisit with a static chart if wanted). CSVs follow period and filters,
-  not the sort. Read-only, no migration. QA passed in 3 Codex runs (`qa/reports/2026-11-21-phase-35a-run3.md`);
-  the run-by-run detail is in SESSION_LOG.
-
-- **Overview clean-up (built 2026-11-21, Dylan's yes to the plan's three recommendations, D-131):** the
-  Floor Manager's Overview has three zones: **Needs attention** (only when due: Plan today, Stock update
-  today, slim rows; Plan today is the filled button), **On the line now** (Today's batches beside Work in
-  progress, one height) and **Today so far** (Attendance, Rolls today, Low-stock, Daily summary, two by two,
-  four from 1536 px). The plan banner is hidden on `/floor-manager` only (the row says it); Take attendance
-  is outlined; Work in progress and Today's batches have quiet states. No data, route or migration
-  change. `npm run check` passed (**945 unit tests**, build OK); `overview-layout.spec.ts` written and the
-  no-plan test in `batches.spec.ts` edited. Plan
-  `docs/prompts/plans/floor-manager-overview-cleanup-plan.md`, handoff
-  `qa/handoffs/2026-11-21-overview-cleanup.md`, prompt `qa/CODEX_PROMPT_OVERVIEW_CLEANUP.md` (starts with
-  `docker compose stop app`). Not looked at in a browser by Claude; `docs/screenshots/manual/06-overview.png`
-  still shows the old layout.
-- **Overview clean-up Codex run 1 BLOCKED, no code fault** (`qa/reports/2026-11-21-overview-cleanup-run1.md`, a
-  Saturday): O4 (two by two at 1280, four at 1536, one column at 700), O9 (targeted 34 of 34, full suite 121
-  passed, 0 failed) and A1 passed; O1, O2, O3, O5, O6, O7, O8 blocked because the Change time form closed
-  after `POST /api/v1/demo/clock` 200 but the clock stayed on Saturday: the in-app browser tool's fill doesn't
-  reach the form's React state (the same tooling fault as Phase 34 run 3, where typing worked). No bell on
-  a Saturday is correct (nothing due, nobody to finish batches). The handoff's O7 asked the Admin to open
-  Batches, which the Admin doesn't have: fixed. No screenshot could be saved from the in-app browser. Next:
-  `qa/CODEX_PROMPT_OVERVIEW_CLEANUP_RUN2.md` (a headless script sets the clock and saves the screenshots).
-- **Overview clean-up Codex run 2 PASS WITH ISSUES** (`qa/reports/2026-11-21-overview-cleanup-run2.md`, headless
-  script, clock set by the form): O1 (one plan prompt, banner on `/batches`, `/attendance`, `/reports`, bell
-  "Notices: today has no plan, stock update due"), O2, O3 (Plan today filled, Update stock outlined; after a
-  stock save Plan today stays filled), O4, O6, O7 and O8 passed (keyboard order follows the zones; axe zero
-  violations light and dark at 768); screenshots saved. O5 partly blocked by **my handoff, not the app**: repairs,
-  work waiting for inspection and rolls still open are line-wide, so the demo's 17 pairs in repair stay on any
-  day; the empty footer is now a pure function (`wipFooterLine`) with a unit test (it caught a lost backslash
-  in my extraction), and the handoff says so. With run 1 (full suite 121 passed, 0 failed) every scenario has
-  passed. **Overview clean-up QA done**; git commands for `feature/overview-cleanup` given to Dylan (list
-  `qa/overview-cleanup-files.txt`).
-
-- **Phase 31 (built 2026-11-07, Dylan's go):** the master spec's context, domain rules, roles,
-  data model and CV contract rewritten to the system as built, with "Changed since the rebuild";
-  README (features, accounts, the demo script by role, the diagrams, the demo week), `docs/API.md`
-  (every route checked against `src/app/api`; two `PATCH` rows made explicit), DESIGN, STATION_SETUP,
-  `cv/README.md`, `cv/MODEL_CARD.md`, CLAUDE.md, AGENTIC_WORKFLOW, UI_AUDIT; removed phases marked
-  in ROADMAP; this file shortened (the long "What works right now" list is in git history at
-  c5b1848 and in SESSION_LOG). One code comment: `cv/cpoint_cv/preview.py`'s docstring (D-108).
-  The paper's figures dated 2026-11-07 already match; their facts are in
-  `docs/prompts/paper-figures.md`.
-- Checks: `npm run check` passed (**708 unit tests**, build OK); `cv/` ruff, ruff format, mypy and
-  pytest (102) passed. The brief's sweep: every remaining hit is history (DECISIONS, SESSION_LOG,
-  old briefs and plans, the visit notes, "removed" notes) or the old-scan note on a scan's page.
-- **Review of the latest changes (2026-11-07):** 30F's 97 files read; no guard changed, no raw
-  colours outside the tokens; no fault found.
-- **Codex run 1 FAIL** (`qa/reports/2026-11-07-phase-31-run1.md`): the in-app browser was
-  unavailable, so 8 of 9 were blocked; D3 failed on README's "19.2 in across", which was an
-  example (the width depends on the camera's height; the fake camera gives 16.0 in). README and
-  STATION_SETUP now say so. Run 2 runs every scenario headless: `qa/CODEX_PROMPT_PHASE_31_RUN2.md`.
-- **Codex run 2 FAIL, fixed** (`qa/reports/2026-11-07-phase-31-run2.md`, headless): D1, D3, D7,
-  D8, D9 passed; D2, D5, D6 failed on wording (Attendance card, roll statuses, the roster count,
-  when High shows, the cut row, STATION_SETUP's fixed 19.2 in); D4 blocked (Saturday). README and
-  STATION_SETUP now quote the app. Next: `qa/CODEX_PROMPT_PHASE_31_RUN3.md` (D2, D5, D6; D4 on a
-  weekday).
-- **Codex run 3 FAIL, fixed** (`qa/reports/2026-11-07-phase-31-run3.md`, Sunday): D5 and D6
-  passed; D2 failed only on Plan days' "3 of 5 rolls scanned", now an example ("a count such as 2
-  of 3 rolls scanned · 1 returned"); D4 blocked. Next: `qa/CODEX_PROMPT_PHASE_31_RUN4.md` on a
-  weekday (D2 step 2 and D4).
-- **Codex run 4 PASS WITH ISSUES** (`qa/reports/2026-11-08-phase-31-run4.md`, Sunday): D2's Plan
-  days example matches the calendar exactly; D4 blocked (weekends have no batches). Every scenario
-  but D4 has now passed.
-- **Small demo rolls (D-123, merged #47):** the demo week's rolls are 4 to 7 sq ft, scanned in 1
-  to 3 minutes, 3 to 6 shots of 16 × 12 in; the demo suppliers are Marikina Supplier A and B,
-  Bulacan Supplier A and B.
-- **Varied damage on the demo rolls (D-124, built 2026-11-09, uncommitted):** the three damaged
-  rolls get a random mix of holes, scratches, creases and long cuts up to 11% to 16% (worked out
-  with the app's own measuring code), and one roll stays just under at 7% to 9%. `npm run check`
-  passed. Handoff `qa/handoffs/2026-11-09-small-demo-rolls.md` (S7), prompt
-  `qa/CODEX_PROMPT_SMALL_DEMO_ROLLS.md`.
-- **Two weeks of demo data (D-126, merged #49):** the seed fills today and the 13
-  days before (10 working days); four short days, four stock updates, three returned rolls spread
-  over both weeks. `npm run check` passed (725 unit tests).
-- **Demo output (D-127, built 2026-11-09, uncommitted):** quota 300 pairs, 25 rolls a working
-  day, about 12 pairs a roll; a reset takes 2 to 3 minutes.
-- **A tidier claim sheet (built 2026-11-09, uncommitted):** key figures in a card, two tables,
-  a Claim details card; the roll page shares the tables. `npm run check` passed.
-- **PR #50 (claim sheet + D-127):** CI `docker` failed on its day_plans check (quota 128); now
-  checks 300 in `.github/workflows/ci.yml`. `check`, `station`, `e2e` passed. Codex re-check:
-  `qa/CODEX_PROMPT_CI_RECHECK_feature-claim-sheet-and-demo-output.md`. **Codex re-check run 1
-  PASS** (`qa/reports/2026-11-14-ci-recheck-pr50-run1.md`): the local `docker` job passed all 28
-  checks, the quota-300 check and the restart included. Next: push the fix to PR #50 and merge.
-- **Demo clock (D-125, merged #48):** Change time in the Demo mode band moves the
-  whole app to a Manila date and time and keeps ticking; Back to real time. One migration
-  (`demo_clock`). `npm run check` passed. Handoff `qa/handoffs/2026-11-09-demo-clock.md`.
-  Codex run 1 FAIL (the migration wasn't applied on the PC; setup, not code). Run 2 **PASS WITH
-  ISSUES** (`qa/reports/2026-11-09-demo-clock-run2.md`): C4, C5, C7 to C10 passed; C6's shot
-  blocked (no camera in the in-app browser; the timer followed the clock); the full e2e run had 8
-  dev-server time-outs, each spec passed alone. Next: Dylan takes one shot on his phone with the
-  clock moved, then the git commands.
-- **User manual + Inventory wording (2026-11-14, uncommitted):** `docs/USER_MANUAL.md` for CPoint
-  staff, by role; the Inventory roll card and Add item hint now say a roll leaves stock at Finish
-  roll (D-112). ESLint and Prettier passed; `npm run check` still to run on Windows.
-- **Next:** Codex D4 only (README "3. Quality Inspector") on a weekday, with 30F-3 run 4; Codex run 4 for 30F-3 on a weekday with today
-  planned; then git commands for Phase 31.
-- **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks
-  included; Codex only tests and reports; every agent reads the Obsidian vault first.
-- **Overall:** every planned phase is built (0 to 31); Phase 31 waits for QA.
-- **Phase 32, roll locations (built 2026-11-17, Dylan's go, D-128):** storage locations (racks,
-  bins, areas) managed by the Floor Manager under Inventory; A4 QR label sheets for rolls (their
-  code) and locations (`LOC:<code>`); Add rolls into a place and Move one or many; Find roll
-  (`/find`, FM and constructors with camera access) by code, tag or a scanned label, with the
-  location history (no names); Capture shows each roll's place, picks a roll by its label, Put back
-  asks where, a roll Returned to supplier is set aside; Picked up by supplier frees its place.
-  Migration `20261117090000_roll_locations` (applied on the laptop for run 1). Packages
-  `qrcode` 1.5.4 and `jsqr` 1.4.0. `npm run check` passed (**787 unit tests**, build OK). Plan
-  `docs/prompts/plans/phase-32-roll-locations-plan.md`, handoff
-  `qa/handoffs/2026-11-17-roll-locations.md`, prompt `qa/CODEX_PROMPT_PHASE_32.md`.
-- **Phase 32 Codex run 1 FAIL, fixed** (`qa/reports/2026-11-19-phase-32-run1.md`; 14 of 17
-  passed): F1 a 21-label sheet printed on two pages (the print page's 12.9 mm top margin), now no
-  page margin and a 0.45 mm offset; F2 the bulk `roll.move` audit had no Before, now each roll's old
-  place; F3 the e2e suite: one real locator clash in `returns.spec.ts` (claim sheet "Over the 10%
-  limit", exact now), the other failures time-outs and stuck sign-ins with six workers on one dev
-  server; the single-roll button's accessible name now follows its word ("Set aside LR-…"). The
-  roll page loads its history and lunch together. `npm run check` passed (787). Next:
-  `qa/CODEX_PROMPT_PHASE_32_RUN2.md` (L4, L10, the observation, L12).
-- **Phase 32 Codex run 2 FAIL on L12 only** (`qa/reports/2026-11-19-phase-32-run2.md`): L4 (one A4
-  page, 21 QR codes read), L10 (Before in the audit) and the Set aside name passed, so every
-  scenario has now passed. The six targeted specs passed 30 of 30; the full suite (six workers on
-  one `next dev`) had 5 failures, and the reruns started right after it failed on demo sign-ins
-  hanging on "Signing in…" or a blank `/`. No code fault found (the same specs pass on a fresh
-  server; the server answered in 0.1 s afterwards). Next: `qa/CODEX_PROMPT_PHASE_32_RUN3.md`
-  (a fresh dev server, the full suite with `--workers=2`).
-- **Phase 32 Codex run 3 PASS** (`qa/reports/2026-11-19-phase-32-run3.md`): the full e2e suite with
-  two workers passed, 100 passed and 2 skipped (5.3 min); with the default six workers on one
-  `next dev` 14 tests timed out or stalled on sign-in, each passing in the two-worker run (an
-  observation, as in run 2). With runs 1 and 2, all 17 scenarios have passed. **Merged #54**
-  (42a2c1e); CI on `main` green: check, station, e2e (97 passed, 5 skipped), docker. The PR's own
-  run, and every run from 14 Nov (#51 to #53), was never started: GitHub's billing block
-  ("recent account payments have failed or your spending limit…"); it cleared for the main run.
-- **Phase 33, the Inspection queue (built 2026-11-19, Dylan's go, D-129):** every batch has a code
-  `B-YYMMDD-N` and a row (`production_batches`); Batches → **Queue** (the QI's home: waiting
-  batches across days, Urgent first then oldest, rolls in each, wait, filters, Inspected and void
-  for 7 days) and **Today**; Start inspection, Inspect a batch from an earlier day (no midnight
-  close), the FM's Urgent and Void with reasons; correction on the inspection day; codes in every
-  notice, card and message. Old batches get codes (unfinished old ones Void "from before the
-  queue"); old `B-`/`R-` roll codes renamed `LR-…` with `formerCode` kept for Find roll.
-  Migration `20261119090000_inspection_queue` (applied on the laptop 2026-11-19 14:02 by a slip in a shell command; no roll needed renaming).
-  `npm run check` passed (**822 unit tests**, build OK); e2e written, not run. Plan
-  `docs/prompts/plans/phase-33-inspection-queue-plan.md`, handoff
-  `qa/handoffs/2026-11-19-phase-33-inspection-queue.md`, prompt `qa/CODEX_PROMPT_PHASE_33.md`.
-- **Phase 33 Codex run 1 FAIL, environment** (`qa/reports/2026-11-19-phase-33-run1.md`; 1 passed,
-  15 failed, 2 blocked): port 3000 was the old Docker container `cpoint-pms-app-1` (built before
-  Phases 32 and 33) plus another project's Vite server, so the Queue, the codes and the new routes
-  (404) were missing, and the auth and capture e2e failures were Phase 32 items missing too. The
-  CPoint dev server on 3001 was started before the Phase 33 schema was generated: its in-memory
-  client had no `productionBatch` (its log). No code fault in Q2 to Q14 or A1 to A4. Fixed: Add
-  rolls' transaction gets 30 s (`demo:reset` after the e2e suite failed twice at 5.0 s). Q6 was
-  blocked (no second QI; run 2 creates one), Q12 not applicable (no old roll codes). `npm run
-check` passed (822). Next: `qa/CODEX_PROMPT_PHASE_33_RUN2.md` (Dylan stops the Docker app, the
-  Vite server and the old dev server first).
-- **Phase 33 Codex run 2 FAIL, fixed** (`qa/reports/2026-11-19-phase-33-run2.md`; 13 passed, 4
-  failed, 1 not applicable): the right app this time. Q1 passed on run 1's restored data (17 finishes
-  linked, 2 old batches Void "from before the queue"), and so did the queue, codes, Urgent, Void, two
-  inspectors, the overnight carry-over and every access check; the final `demo:reset` finished
-  (77 s). Fixed: F1 Clear kept the old code in the field (the filter form now starts fresh when the
-  filters change); F2 no Correct for an earlier-day batch inspected today (now under Inspected and
-  void, until Phase 35); F3 Inspect was 36 px on a phone (now 44 px); F4 `batches.spec.ts`'s
-  no-plan test now opens the QI's Today tab. Q12 not applicable (no old roll codes). `npm run
-check` passed (**823 unit tests**). Next: `qa/CODEX_PROMPT_PHASE_33_RUN3.md` (Q3, Q9, Q13, Q14).
-- **Phase 33 Codex run 3 FAIL on Q14 only, fixed** (`qa/reports/2026-11-19-phase-33-run3.md`,
-  run 2026-11-20): Q3, Q9 and Q13 passed (Clear, Correct from the list, 44 px on a phone). The e2e
-  failed on two real issues, both fixed: F1 Clear emptied the fields only when the reload arrived,
-  so a Day picked at once still sent the old code (Clear now empties them on click); F2 the tab
-  title lost its "(n)" going from Queue to Today (Next.js puts a new `<title>` in; the count now
-  watches the whole head). F3 an Inventory `ECONNRESET` passed alone (no change). `npm run
-check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
-- **Phase 33 Codex run 4 FAIL on one e2e, fixed** (`qa/reports/2026-11-20-phase-33-run4.md`): R1
-  (Clear then a Day at once) and R2 (the title's "(n)") passed; the targeted specs passed 11 of 11;
-  the full suite 102 passed, 1 failed. The failure was a clash between specs: `batches.spec.ts`'s
-  clean-up deleted every check-in entered during its run, including `inspection-queue.spec.ts`'s,
-  so its Correct said "This batch was not found"; it now removes only today's. Also fixed: the head
-  could hold two `<title>` elements, one reading "(1) (1)"; the count now goes on each once.
-  `npm run check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN5.md` (R2, Q14).
-- **Phase 33 Codex run 5 FAIL, no code fault** (`qa/reports/2026-11-20-phase-33-run5.md`): the
-  targeted specs passed 11 of 11 (the due-count title included); the full suite 102 passed, 2
-  failed: `reports.spec.ts` and `returns.spec.ts`'s Floor Manager sign-in stayed on `/` for
-  10 s. `/` is a one-line redirect and both passed in run 4 with the same code; it is the
-  dev-server stall of Phase 32 runs 2 and 3. R2 was blocked (no batch due after the reset). No code
-  change. Next: `qa/CODEX_PROMPT_PHASE_33_RUN6.md` (R2 with the demo clock at 17:05; the two specs
-  alone, then the full suite).
-- **Phase 33 Codex run 6 PASS WITH ISSUES** (`qa/reports/2026-11-20-phase-33-run6.md`): R2
-  passed (exactly one "(1)" across Queue → Today four times at the demo clock's 17:05, one
-  `<title>`); the two run 5 specs passed alone (7) and the full suite passed (104 passed, 0 failed,
-  2 skipped). The one issue: after Back to real time, the old "(1)" and notice stayed about 3 s
-  until the notices refetched (the demo clock's existing refresh, D-125, not Phase 33). With runs 2
-  to 4 every scenario has passed; Q12 not applicable. **Phase 33 QA done**; git commands for
-  `feature/inspection-queue` given to Dylan.
-- **Phase 34, final defects, repairs and work in progress (built 2026-11-20, Dylan's go, D-130):**
-  a failed batch is saved with **What was wrong** (final defect type, pairs, Fixable or Not fixable,
-  the stage a fixable one goes back to); each fixable line makes a repair job (`RP-261120-2-1`) At
-  stage → Back for inspection (the stage's constructor on Capture → My stage, or the Floor Manager)
-  → inspected by the QI from the Queue (passed, scrapped, sent back again with no limit); the Floor
-  Manager moves a job or calls it Not fixable after all; passed repaired pairs count toward the
-  quota that day. After 5 findings of a type in 4 weeks the form suggests the usual answer. The
-  Floor Manager assigns constructors to stages in the Plan dialog (one stage per person per day,
-  suggested from the last working day); constructors count their stage on Capture; **Batches →
-  Work in progress** (a third tab; read-only for the QI) shows each stage and its repairs.
-  Reports → Operations has Final defects, Where defects come from, Repairs and Work in progress;
-  Settings → Final defect types (five placeholders). "Upper making" is now **Construction**.
-  Migration `20261120120000_final_defects_and_repairs`. `npm run check` passed (**938 unit
-  tests**, build OK); e2e `final-defects.spec.ts` and `stage-wip.spec.ts` written, not run. Plan
-  `docs/prompts/plans/phase-34-defects-and-repairs-plan.md`, handoff
-  `qa/handoffs/2026-11-20-phase-34-defects-and-repairs.md`, prompt `qa/CODEX_PROMPT_PHASE_34.md`
-  (starts with `docker compose stop app`).
-- **Phase 34 CI (PR #56 merged 16:31 UTC; `main` CI red on `e2e` only):** `check`, `station` and `docker`
-  passed. `e2e`: 106 passed, 2 failed. `batches.spec.ts` "the Quality Inspector on a phone gets the
-  notice…" is the known 00:00 to 01:00 Manila window (the run was 00:31 Manila): rerun after 01:00, no
-  change. `inspection-queue.spec.ts` "the queue lists waiting batches…" is a race in the test (Clear's
-  navigation landing after the Day was picked; it failed the same way on Phase 33's `main` run): fixed in
-  the test. Re-check prompt `qa/CODEX_PROMPT_CI_RECHECK_feature-defects-and-repairs.md`.
-- **Phase 34 Codex run 4 PASS** (`qa/reports/2026-11-20-phase-34-run4.md`): targeted 28 of 28, full suite 118
-  passed, 0 failed, 2 skipped, none omitted; clean-up queries 0 and 0; final reset on Real time. The optional
-  C6 script timed out at sign-in (no demo password), non-gating; C6 stays closed from run 3. **Phase 34 QA
-  done**; git commands for `feature/defects-and-repairs` given to Dylan.
-- **Phase 34 Codex run 3 FAIL, fixed** (`qa/reports/2026-11-20-phase-34-run3.md`; C2 and the clean-up
-  queries passed): two test faults, no application fault. `final-defects.spec.ts` read today's whole-line
-  `passed` while another worker changed it (now an identity inside one response); the D-088 test in
-  `batches.spec.ts` replayed a stale roster (now read before each save). C6 (demo clock) is closed as
-  passed, a tooling artefact. `npm run check` passed (944). Next: `qa/CODEX_PROMPT_PHASE_34_RUN4.md`; a full
-  pass closes Phase 34 QA.
-- **Phase 34 Codex run 2 FAIL, fixed** (`qa/reports/2026-11-20-phase-34-run2.md`; 20 of 24 manual checks
-  passed, Addendum 1 works): the four e2e failures were test faults (clean-ups that didn't delete
-  findings first, a report range that included the seed, a positional checkbox) and are fixed; a
-  new test covers A3's constructor and board 403s; the stage count form now shows its message
-  at once for a non-whole number (C2). The demo clock form (C6) is not a Phase 34 change: run 3 has a
-  decisive fetch check. `npm run check` passed (943). Next: `qa/CODEX_PROMPT_PHASE_34_RUN3.md`.
-- **Phase 34 Codex run 1 PASS WITH ISSUES, fixed** (`qa/reports/2026-11-20-phase-34-run1.md`, before
-  Addendum 1; 41 of 47 scenarios passed): the e2e failures were `batches.spec.ts` and
-  `inspection-queue.spec.ts` finishing failed pairs with no reason (now they fill a line), the hidden
-  Fixable radio's click target (the input now covers its label), the production CSV's new column
-  (`Passed after repair`) and a QI board selector. C6 (the demo clock didn't move as a constructor, nothing
-  in this phase touches it) and the scenarios it blocked are retried. **Addendum 1** (constructors with
-  Capture access are always at Preparation, A-95, A-96) is built. `npm run check` passed (940). Also fixed from the planning thread's triage: the error summary's link for a
-  finding line (a lost-backslash pattern). The run 2 prompt has the C6 fallback and says C3, C4 and A3
-  are reported from the e2e spec. Next: `qa/CODEX_PROMPT_PHASE_34_RUN2.md`.
-- **Defense revisions (planned 2026-11-16, re-checked on the laptop 2026-11-17, waiting for Dylan's go):** the panel's four revisions
-  as Phases 32 to 36 in `docs/prompts/plans/defense-revisions-plan.md`: 32 roll locations and QR
-  labels, 33 the Inspection queue with batch codes, 34 final-product defects, repairs and work in
-  progress, 35 reports by day / week / month / custom with sort, filter, print and corrections,
-  36 the docs and figures. Proposed assumptions A-52 to A-76 are in the plan and move here when
-  each phase is approved. WIP decided 2026-11-17: stage assignments in the plan, constructors enter counts; the stage is Construction. Return stage learned from the QI's findings (suggestion after 5 in 4 weeks).
+- **Phase 36 (built 2026-11-22, D-134, docs only; the one code change is demo data, see run 1):** the master spec, README (features,
+  demo script, ER diagram), `docs/USER_MANUAL.md`, STATION_SETUP, CLAUDE.md and DESIGN swept for Phases 32
+  to 35B; `docs/API.md` checked against every route (no gaps); `docs/DEMO_SCRIPT.md` rewritten for the four
+  revisions (demo clock at 17:05, ends with Reset demo data); the architecture and conceptual-framework
+  figures redrawn (2026-11-22, NEW chips; facts in `docs/prompts/paper-figures.md`); the `docker` CI job has
+  SQL checks for storage locations and roll moves; one stale comment fixed. Plan
+  `docs/prompts/plans/phase-36-docs-plan.md`, handoff `qa/handoffs/2026-11-22-phase-36-docs.md`, prompt
+  `qa/CODEX_PROMPT_PHASE_36.md`.
+- **Phase 36 Codex run 1 PASS WITH ISSUES** (`qa/reports/2026-11-22-phase-36-run1.md`; D7 passed; 7 scenarios with limits; D8 FAIL, D9 and D10 blocked): D8's one failure was real, the demo seed made no `MOVED` roll move (LR-001 has no rolls left by the last working day), fixed in `demo-seed.service.ts` and the storage block passes on a fresh seed; D10's two Mermaid blocks render (Claude); D9's figures weren't on the laptop (copied to the vault's `Inbox/figures-2026-11-22/`); timing, camera capture and print preview need a hand rehearsal on a weekday with phones. Next: `qa/CODEX_PROMPT_PHASE_36_RUN2.md`.
+- **Manual screenshots and PDF done (2026-11-22, Claude, no Codex needed):** the 12 screenshots (files 15 to 26)
+  were taken from the demo data in the cloud container with headless Chromium (1366 px desktop, 390 px phone, both at 2x, the
+  existing manual's look; the print one is a real Chromium A4 PDF), saved to `docs/screenshots/manual/`, and
+  `docs/USER_MANUAL.pdf` was rebuilt from the manual (35 pages, Chromium print). `qa/CODEX_PROMPT_PHASE_36_SCREENSHOTS.md`
+  is no longer needed. Two captions were corrected to match the shots (19 and 25).
+- **Phase 36 Codex run 2 PASS WITH ISSUES** (`qa/reports/2026-11-22-phase-36-run2.md`): D8 passed (15 of 15, `MOVED` 2), D9 figures fine; F1 (the "92 handlers" source) answered in `docs/prompts/paper-figures.md` (92 route handlers in 77 files).
+- **Still to do for Phase 36:** Dylan rehearses the demo once by hand with phones, the marker card and a stopwatch; then the git commands.
+- **Last merged features:** 35B corrections to past records (#61, D-133), 35A reports by period (#59, D-132),
+  the Overview clean-up (#58, D-131), Phase 34 final defects, repairs and work in progress (#56, #57, D-130),
+  Phase 33 the Inspection queue (#55, D-129), Phase 32 roll locations (#54, D-128). The run-by-run QA detail
+  is in `SESSION_LOG.md`.
+- **Main CI:** the last known runs were green after #54; the `e2e` flake `admin.spec.ts:136` and the
+  `batches.spec.ts` 00:00 to 01:00 Manila window are known (see Known test observations).
+- **Older items still open:** Phase 31's Codex run for D4 (README "3. Quality Inspector") on a weekday and the
+  30F-3 Batches checks (run 4); Phase 31's docs were merged (#46) and Phase 36 supersedes part of them.
+- **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks included; Codex
+  only tests and reports; every agent reads the Obsidian vault first.
+- **Overall:** every planned phase is built (0 to 36); Phase 36 waits for QA.
 
 ## Phase progress
 
@@ -348,8 +97,8 @@ check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
 - [x] 30F. A polished look on shadcn/ui and Radix (D-122): 30F-1 (#42), 30F-2 (#43), 30F-3 (#45)
       and the Plan days follow-up (#44) merged; the 30F-3 Batches checks (Codex run 4) wait for a
       weekday
-- [ ] 31. The documentation and the paper's figures match the system (built 2026-11-07,
-      uncommitted; Codex run 1 next)
+- [x] 31. The documentation and the paper's figures match the system (built 2026-11-07; merged #46;
+      superseded in part by Phase 36)
 - [x] 32. Roll IDs and storage locations you can find on the floor (defense revision 4; built
       2026-11-17, D-128; QA passed, run 3; merged #54, CI green)
 - [x] 33. The Inspection queue with real batch codes (defense revision 2; built 2026-11-19, D-129;
@@ -358,7 +107,9 @@ check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
       QA passed, run 4; merged #56, #57)
 - [x] Overview clean-up (the Floor Manager's home, D-131; QA passed, run 2; merged #58)
 - [x] 35A. Reports by period, sort, filter and print (D-132; built 2026-11-21; QA passed, run 3; merged #59)
-- [x] 35B. Corrections to past records (D-133; built 2026-11-21; QA passed, run 5; uncommitted)
+- [x] 35B. Corrections to past records (D-133; built 2026-11-21; QA passed, run 5; merged #61)
+- [ ] 36. The documentation, the figures and the demo match the system (D-134; built 2026-11-22,
+      uncommitted; the manual's screenshots and PDF are done; Codex run 2 and the hand rehearsal next)
 
 ## What works right now
 
@@ -394,16 +145,15 @@ D-entries.
 
 ## Next step (exact)
 
-0. Dylan: run the git commands for `feature/corrections` (files from `qa/phase-35b-files.txt`), open the PR, merge when CI is green. Rebuild the Docker app after Phase 34, the
-   Overview clean-up, 35A and 35B before using it.
-1. Dylan: paste `qa/CODEX_PROMPT_PHASE_31_RUN4.md` into Codex (a weekday).
-2. Dylan, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
-   (Batches, the plan line, the full suite; the Plan days cells from #44 too).
-3. After both pass: Claude gives the Phase 31 git commands.
-4. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.
-5. Dylan, at the station: capture a few real knife cuts on scrap leather (2.5, 3 and 4 in) with
+0. Dylan: paste `qa/CODEX_PROMPT_PHASE_36_RUN2_MINI.md` into Codex (D8 and D9 again), rehearse the demo by hand
+   (a weekday, phones, the marker card, a stopwatch, the print preview), then Claude gives the git commands
+   for `docs/phase-36` (list `qa/phase-36-files.txt`; `docs/DEMO_SCRIPT.md` stays out).
+1. Optional, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
+   (Batches, the plan line, the full suite; the Plan days cells from #44 too). Phase 31 merged (#46).
+2. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.
+3. Dylan, at the station: capture a few real knife cuts on scrap leather (2.5, 3 and 4 in) with
    the card to check the 3-inch line on real cuts.
-6. Optional: fresh screenshots for README (the ones in `docs/screenshots/` predate Phase 25 and
+4. Optional: fresh screenshots for README (the ones in `docs/screenshots/` predate Phase 25 and
    30F, so README no longer embeds them); delete `%TEMP%\cpoint-qa-uploads-phase26` and the two
    Phase 25 folders. Done 2026-11-08: the 15 older backups (only
    `before-reset-2026-11-04.dump` is kept), `certs/`, `mkcert -uninstall`, the Phase 26 temp

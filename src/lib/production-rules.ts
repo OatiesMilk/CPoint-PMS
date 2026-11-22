@@ -514,9 +514,10 @@ export function syncBatches(
 
 /**
  * The on-screen notices for today's batches, worked out in the browser from the clock (no
- * scheduler, push or sound, C-31): at 10 minutes before a batch's end "Batch 2 ends at 13:00. Get
- * ready to count the finished pairs.", and at its end "Batch 2 is due. Finish it now.", until it is
- * finished or the day is over. `nextAt` is when the next notice comes, for a timer.
+ * scheduler, push or sound, C-31): at 10 minutes before a batch's end "B-261116-2 ends at 13:00.
+ * Get ready to count the finished pairs.", and at its end "B-261116-2 is due. Finish it now.", until
+ * it is finished or the day is over (a batch is named by its code since Phase 33, D-129). `nextAt`
+ * is when the next notice comes, for a timer.
  */
 export function noticesFor(
   batches: readonly { number: number; at: Date; time: string }[],

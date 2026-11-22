@@ -5,9 +5,11 @@ leather-shoe production line (Preparation → Construction → Sole-ing → Fini
 computer-vision checkpoint at Preparation, before cutting.
 
 The rebuild from Laravel/MySQL to Next.js/PostgreSQL/Docker is complete (roadmap Phases 0–9) and
-lives on `main`, and so are CPoint's follow-ups through Phase 31 (the factory visit's changes, the
-polished look, the docs). The master spec's `<context>` lists what changed since the rebuild. New
-work is client follow-ups and new features, each added as a roadmap phase.
+lives on `main`, and so are CPoint's follow-ups through Phase 35 (the factory visit's changes, the
+polished look, and the defense panel's four revisions: storage locations and Find roll, the
+Inspection queue, final defects and repairs, report periods and corrections). Phase 36 brought the
+docs and figures up to date. The master spec's `<context>` lists what changed since the rebuild.
+New work is client follow-ups and new features, each added as a roadmap phase.
 
 Next.js 16 and Prisma 7 have breaking changes from older versions. Read the bundled docs before
 writing framework code:
@@ -50,6 +52,10 @@ whose `slotAt` is the batch's end, under the `production.*` code and `/api/v1/pr
   route calls `requireApiPermission`. The proxy is only an optimistic cookie check.
 - Every mutation runs in `runInTransaction` and writes `recordAudit` with the same `tx`.
 - When a module ships, remove its `phase` in `src/server/policies/navigation.ts` so the nav links it.
+- **Docs with the feature (D-134):** a feature's own session updates the user-facing docs it
+  touches (README features and demo script, `docs/USER_MANUAL.md`, `docs/API.md`, the master spec's
+  rules and data model, `docs/DEMO_SCRIPT.md` when the demo changes) and lists any it left out and
+  why; Phase 36 found that Phase 32 and 35A had skipped them.
 - Never claim a check passed without running it. If you couldn't run it, say so.
 
 ## Roles, CI fixes and the vault (D-089, D-092)

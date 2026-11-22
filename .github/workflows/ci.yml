@@ -175,6 +175,26 @@ jobs:
           q "select count(*) from (select day, \"userId\" from stage_assignments group by day, \"userId\" having count(*) > 1) t" | grep -qx 0
           test "$(q "select count(*) from stage_counts")" -ge 1
           test "$(q "select count(*) from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname='ProductionStage' and e.enumlabel='CONSTRUCTION'")" -eq 1
+          # Storage locations and roll moves (Phase 32, D-128): the six demo bins and the RETURN
+          # area exist and stay active, every roll in storage is in an active place and is a roll
+          # in stock or a returned roll still waiting for the supplier, every roll in stock has a
+          # place, every placed roll has a history whose last move is its place, each kind of move
+          # the demo makes is there (Placed, Moved, Taken for scanning, Set aside for return, Picked
+          # up by supplier), every returned roll is set aside or picked up, and the one roll the
+          # supplier took no longer has a place and was the oldest set aside.
+          test "$(q "select count(*) from storage_locations")" -ge 7
+          test "$(q "select count(*) from storage_locations where code='RETURN' and \"isActive\"")" -eq 1
+          q "select count(*) from batches b join storage_locations l on l.id = b.\"locationId\" where not l.\"isActive\"" | grep -qx 0
+          q "select count(*) from batches where \"locationId\" is not null and not (status='IN_STOCK' or (status='FINISHED' and \"markedForReturn\" and \"pickedUpAt\" is null))" | grep -qx 0
+          q "select count(*) from batches where status='IN_STOCK' and \"locationId\" is null" | grep -qx 0
+          q "select count(*) from batches b where b.\"locationId\" is not null and (select m.\"toLocationId\" from roll_moves m where m.\"rollId\" = b.id order by m.at desc, m.id desc limit 1) is distinct from b.\"locationId\"" | grep -qx 0
+          for reason in PLACED MOVED TAKEN_FOR_USE SET_ASIDE_FOR_RETURN PICKED_UP_BY_SUPPLIER; do
+            test "$(q "select count(*) from roll_moves where reason='$reason'")" -ge 1
+          done
+          q "select count(*) from batches where status='FINISHED' and \"markedForReturn\" and \"pickedUpAt\" is null and \"locationId\" is null" | grep -qx 0
+          test "$(q "select count(*) from batches where \"pickedUpAt\" is not null")" -eq 1
+          q "select count(*) from batches where \"pickedUpAt\" is not null and \"locationId\" is not null" | grep -qx 0
+          q "select count(*) from batches p where p.\"pickedUpAt\" is not null and exists (select 1 from batches o where o.\"markedForReturn\" and o.\"finishedAt\" < p.\"finishedAt\")" | grep -qx 0
           # Stock updates (Phase 29, D-102): the reminder days row (Wednesday and Friday), at least
           # one Update stock save with its entries, and every leather roll item has a supplier.
           test "$(q "select count(*) from inventory_settings where \"reminderDays\" = '{3,5}'")" -eq 1

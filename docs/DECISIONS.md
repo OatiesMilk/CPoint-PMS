@@ -2748,3 +2748,31 @@ emptied (Keep needs a reason, C-36).
 the repair and roll controllers and validators, `src/app/(app)/batches/**`,
 `src/components/features/rolls/edit-roll-details.tsx`, `DESIGN.md` → "Corrections to past records",
 `docs/API.md`.
+
+### D-134 · 2026-11-22 · Accepted — A feature's own session updates the docs it touches; Phase 36 brings them up to date
+
+**Context:** The defense revisions (Phases 32 to 35) changed what staff see, but Phases 32 and 35A never
+reached the README, the user manual, the master spec or the demo script, and the paper's figures still
+showed the system as of 7 November. Phase 36's audit found the gaps; they should not recur.
+**Decision (Dylan, 2026-11-22, the Phase 36 plan's four yes answers):**
+
+- **Docs with the feature.** A feature's session updates, in the same branch, the user-facing docs it
+  touches: README (features, demo script, ER diagram when tables change), `docs/USER_MANUAL.md` (and its
+  screenshots), `docs/API.md`, the master spec's rules and data model, `docs/DEMO_SCRIPT.md` when the demo
+  changes. The session's report lists any it left out and why. Written into `CLAUDE.md`'s non-negotiables.
+- **Figures redrawn** (architecture, conceptual framework 1 and 2, dated 2026-11-22) with the new parts
+  marked NEW; the five module titles stay.
+- **User manual** gets 12 new screenshots (files 15 to 26, captured by Codex) and a rebuilt
+  `USER_MANUAL.pdf` once they exist.
+- **Demo script** (`docs/DEMO_SCRIPT.md`, kept out of git by Dylan) rewritten to show the four revisions in
+  the order the panel asked; it sets the demo clock to 17:05 so today's batch is Due and waiting in the
+  Queue, and ends with Reset demo data.
+- **CI:** the `docker` job checks the seeded storage locations, roll moves and the returned rolls' places
+  (SQL checks only, no new service).
+
+**Consequences:** No application behaviour changes (one code comment in `production-rules.ts` now quotes
+the batch-code notices). Codex run 1 found the demo seed made no `MOVED` roll move (the item it moved
+rolls from, LR-001, is used up by the last working day), so the seed now moves two rolls of the item with
+the most rolls left: demo data only. The PDF stays pending until Codex's screenshots are in `docs/screenshots/manual/`.
+Assumptions the docs had to state (none new in rules): the demo seeds six bins and `RETURN`; labels are A4
+3 x 7 (A-54).
