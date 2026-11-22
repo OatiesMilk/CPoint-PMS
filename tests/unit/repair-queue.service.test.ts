@@ -17,6 +17,8 @@ const back = (over: object = {}) => ({
   passedPairs: null as number | null,
   scrappedPairs: null as number | null,
   resentPairs: null as number | null,
+  updatedAt: new Date("2026-11-20T06:00:00Z"),
+  children: [] as { id: string; code: string; status: string; stage: string; pairs: number }[],
   finding: {
     id: "f1",
     pairs: 5,
@@ -33,6 +35,10 @@ const repairModel = {
   insertRepair: vi.fn(async () => ({ id: "child" })),
   repairCodesWithPrefix: vi.fn(async () => ["RP-261120-2-1"]),
   transitionRepair: vi.fn(async () => true),
+  // Phase 35B: the Floor Manager's correction
+  correctRepairResult: vi.fn(async () => true),
+  reshapeRepair: vi.fn(async () => true),
+  deleteAtStageRepairs: vi.fn(async () => true),
 };
 const production = {
   ensureBatchRows: vi.fn(async () => ({ inserted: 0, linked: 0 })),
@@ -41,13 +47,14 @@ const production = {
 const recordAudit = vi.fn();
 
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
-vi.mock("@/server/models/production.model", () => ({
+const doneModel = {
   listOpenBatchRows: vi.fn(async () => []),
-  listDoneBatchRows: vi.fn(async () => []),
+  listDoneBatchRows: vi.fn(async (..._args: unknown[]) => [] as unknown[]),
   findBatch: vi.fn(),
   findBatchBySlot: vi.fn(),
   updateBatch: vi.fn(),
-}));
+};
+vi.mock("@/server/models/production.model", () => doneModel);
 vi.mock("@/server/models/repair.model", () => repairModel);
 vi.mock("@/server/services/repair.service", () => ({
   findingsForCheckIns: vi.fn(async () => new Map()),
@@ -74,6 +81,9 @@ beforeEach(() => {
   repairModel.findRepair.mockResolvedValue(back());
   repairModel.transitionRepair.mockResolvedValue(true);
   repairModel.repairCodesWithPrefix.mockResolvedValue(["RP-261120-2-1"]);
+  repairModel.correctRepairResult.mockResolvedValue(true);
+  repairModel.reshapeRepair.mockResolvedValue(true);
+  repairModel.deleteAtStageRepairs.mockResolvedValue(true);
 });
 
 describe("repairs in the queue (A-65, A-90)", () => {
@@ -134,6 +144,207 @@ describe("repairs in the queue (A-65, A-90)", () => {
       scrappedPairs: 1,
       resentPairs: 1,
       at: "Fri, 20 Nov 15:00",
+      resend: [],
+    });
+  });
+
+  it("lets only the Floor Manager correct an inspection, and says why one is locked (A-105)", async () => {
+    const done = back({
+      status: "DONE",
+      inspectedAt: new Date("2026-11-20T07:00:00Z"),
+      passedPairs: 3,
+      scrappedPairs: 0,
+      resentPairs: 2,
+      children: [
+        {
+          id: "c1",
+          code: "RP-261120-2-2",
+          status: "BACK_FOR_INSPECTION",
+          stage: "FINISHING",
+          pairs: 2,
+        },
+      ],
+    });
+    repairModel.listFinishedRepairs.mockResolvedValue([done]);
+    const asQi = (await svc.inspectionQueue(VIEWER, {}, NOW)).repairsDone[0];
+    expect(asQi.correctable).toBe(false);
+    const fm = { id: "fm1", role: "FLOOR_MANAGER" as const };
+    const asFm = (await svc.inspectionQueue(fm, {}, NOW)).repairsDone[0];
+    expect(asFm).toMatchObject({
+      correctable: true,
+      lockedReason:
+        "RP-261120-2-2, sent back from RP-261120-2-1, is already back for inspection, so this inspection can't change.",
+    });
+  });
+
+  it("looks up a past day: that day's batches and the repairs inspected on it", async () => {
+    await svc.inspectionQueue(VIEWER, { doneDay: "2026-11-10" }, NOW);
+    expect(doneModel.listDoneBatchRows).toHaveBeenCalledWith("2026-11-10", "2026-11-10");
+    // The repairs inspected between that day's start and the next day's start (Manila).
+    expect(repairModel.listFinishedRepairs).toHaveBeenCalledWith(
+      new Date("2026-11-09T16:00:00.000Z"),
+      new Date("2026-11-10T16:00:00.000Z"),
+    );
+    // A day after today is ignored: the last 7 days as before.
+    await svc.inspectionQueue(VIEWER, { doneDay: "2026-12-30" }, NOW);
+    expect(doneModel.listDoneBatchRows).toHaveBeenLastCalledWith("2026-11-13", undefined);
+  });
+});
+
+describe("correctRepairInspection (Phase 35B, A-105)", () => {
+  const FM = { id: "fm1", role: "FLOOR_MANAGER" as const };
+  const done = (over: object = {}) =>
+    back({
+      status: "DONE",
+      inspectedAt: new Date("2026-11-20T07:00:00Z"),
+      passedPairs: 3,
+      scrappedPairs: 0,
+      resentPairs: 2,
+      children: [
+        { id: "c1", code: "RP-261120-2-2", status: "AT_STAGE", stage: "FINISHING", pairs: 2 },
+      ],
+      ...over,
+    });
+  const input = (over: object = {}) => ({
+    expectedUpdatedAt: "2026-11-20T06:00:00.000Z",
+    passedPairs: 4,
+    scrappedPairs: 0,
+    resend: [{ stage: "FINISHING", pairs: 1 }],
+    reason: "One pair passed after all",
+    ...over,
+  });
+  beforeEach(() => repairModel.findRepair.mockResolvedValue(done()));
+
+  it("changes the split, keeps the child job and its code, and audits both results with the reason", async () => {
+    const r = await svc.correctRepairInspection("j1", input(), FM, NOW);
+    expect(r).toMatchObject({ code: "RP-261120-2-1", passedPairs: 4, children: ["RP-261120-2-2"] });
+    expect(repairModel.correctRepairResult).toHaveBeenCalledWith(
+      "j1",
+      new Date("2026-11-20T06:00:00Z"),
+      { passedPairs: 4, scrappedPairs: 0, resentPairs: 1 },
+      "tx",
+    );
+    expect(repairModel.reshapeRepair).toHaveBeenCalledWith(
+      "c1",
+      { stage: "FINISHING", pairs: 1 },
+      "tx",
+    );
+    expect(repairModel.insertRepair).not.toHaveBeenCalled();
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "repair.inspect.correct",
+        before: {
+          passedPairs: 3,
+          scrappedPairs: 0,
+          resentPairs: 2,
+          sentBack: [{ code: "RP-261120-2-2", stage: "FINISHING", pairs: 2 }],
+        },
+        after: expect.objectContaining({
+          passedPairs: 4,
+          resentPairs: 1,
+          reason: "One pair passed after all",
+          sentBack: [{ code: "RP-261120-2-2", stage: "FINISHING", pairs: 1 }],
+        }),
+      }),
+    );
+  });
+
+  it("removes the child when nothing is sent back any more, and adds one when more are", async () => {
+    await svc.correctRepairInspection("j1", input({ passedPairs: 5, resend: [] }), FM, NOW);
+    expect(repairModel.deleteAtStageRepairs).toHaveBeenCalledWith(["c1"], "tx");
+    vi.clearAllMocks();
+    repairModel.findRepair.mockResolvedValue(done());
+    repairModel.correctRepairResult.mockResolvedValue(true);
+    repairModel.deleteAtStageRepairs.mockResolvedValue(true);
+    repairModel.reshapeRepair.mockResolvedValue(true);
+    repairModel.repairCodesWithPrefix.mockResolvedValue(["RP-261120-2-1", "RP-261120-2-2"]);
+    const r = await svc.correctRepairInspection(
+      "j1",
+      input({
+        passedPairs: 1,
+        resend: [
+          { stage: "FINISHING", pairs: 2 },
+          { stage: "SOLE_ING", pairs: 2 },
+        ],
+      }),
+      FM,
+      NOW,
+    );
+    expect(r.children).toEqual(["RP-261120-2-2", "RP-261120-2-3"]);
+    expect(repairModel.insertRepair).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "RP-261120-2-3",
+        parentId: "j1",
+        stage: "SOLE_ING",
+        pairs: 2,
+      }),
+      "tx",
+    );
+  });
+
+  it("is locked once a job it sent back is Back, inspected or marked Not fixable", async () => {
+    for (const status of ["BACK_FOR_INSPECTION", "DONE", "CANCELLED"]) {
+      repairModel.findRepair.mockResolvedValue(
+        done({
+          children: [{ id: "c1", code: "RP-261120-2-2", status, stage: "FINISHING", pairs: 2 }],
+        }),
+      );
+      await expect(svc.correctRepairInspection("j1", input(), FM, NOW)).rejects.toMatchObject({
+        status: 409,
+        message: expect.stringContaining("so this inspection can't change"),
+      });
+    }
+    expect(repairModel.correctRepairResult).not.toHaveBeenCalled();
+  });
+
+  it("keeps the total, needs a change, and only corrects an inspected job", async () => {
+    await expect(
+      svc.correctRepairInspection("j1", input({ passedPairs: 5 }), FM, NOW),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [{ path: ["result"], message: expect.stringContaining("add up to") }],
+    });
+    await expect(
+      svc.correctRepairInspection(
+        "j1",
+        input({ passedPairs: 3, resend: [{ stage: "FINISHING", pairs: 2 }] }),
+        FM,
+        NOW,
+      ),
+    ).rejects.toMatchObject({
+      details: [
+        { path: ["result"], message: "Nothing changed. Change a number, or close this window." },
+      ],
+    });
+    repairModel.findRepair.mockResolvedValue(back());
+    await expect(svc.correctRepairInspection("j1", input(), FM, NOW)).rejects.toMatchObject({
+      status: 409,
+      message: "RP-261120-2-1 hasn't been inspected yet. Inspect it from the queue.",
+    });
+    repairModel.findRepair.mockResolvedValue(null);
+    await expect(svc.correctRepairInspection("j1", input(), FM, NOW)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(repairModel.correctRepairResult).not.toHaveBeenCalled();
+  });
+
+  it("is stale when someone saved first, before or during the save", async () => {
+    await expect(
+      svc.correctRepairInspection(
+        "j1",
+        input({ expectedUpdatedAt: "2026-11-20T05:00:00.000Z" }),
+        FM,
+        NOW,
+      ),
+    ).rejects.toMatchObject({ code: "STALE" });
+    repairModel.correctRepairResult.mockResolvedValueOnce(false);
+    await expect(svc.correctRepairInspection("j1", input(), FM, NOW)).rejects.toMatchObject({
+      code: "STALE",
+    });
+    repairModel.reshapeRepair.mockResolvedValueOnce(false);
+    await expect(svc.correctRepairInspection("j1", input(), FM, NOW)).rejects.toMatchObject({
+      code: "STALE",
     });
   });
 });

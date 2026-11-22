@@ -225,7 +225,7 @@ so the defaults give 08:00–13:00 and 13:00–17:00. Status is worked out from 
 In progress (Paused for lunch), Due, Late after 30 minutes, Finished, Missed at midnight. The
 Quality Inspector finishes each batch from 10 minutes before its end with the pairs finished and,
 of these, the pairs that failed inspection; the Floor Manager only on a day attendance shows no QI
-present (D-088). A same-day Correct needs a reason. On-screen notices only (banner, bell, tab
+present (D-088). A Correct needs a reason: on the inspection day for the QI (or the Floor Manager covering), and on any past day for the Floor Manager (Phase 35B). On-screen notices only (banner, bell, tab
 title), nothing reaches a closed app.
 
 **Final defects and repairs (Phase 34, D-130):** when pairs fail inspection the QI lists _what was
@@ -238,8 +238,18 @@ scrapped or sent back again (no limit, a child job). The Floor Manager may move 
 call it Not fixable after all, with a reason. Passed repaired pairs count toward the quota on the day
 they pass (`passed = finished − failed + repaired pairs that passed that day`). After 5 findings of
 a type in 4 weeks the form suggests the usual answer, never filling it in. A correction can change
-the failed pairs and lines on the inspection day until a repair from the batch is Back or Done.
+the failed pairs and lines until a repair from the batch is Back or Done.
 Failed pairs from before Phase 34 have no reasons ("Reason not recorded").
+
+**Corrections to past records (Phase 35B, D-133):** only the Floor Manager corrects what is past, always
+with a reason (5 characters or more) and an audit row holding the old and the new value: a **batch from
+any past day** (Batches → Queue → Inspected and void has a Batch date picker; every rule of a same-day
+correction still holds, including the lock once a repair from the batch is Back); a **roll's details**
+(tag number, received day, return note once a decision exists, and the area only until Finish roll,
+because the defect share and the return mark are worked out from it; the supplier and the item never
+change); and a **repair's inspection** (how its pairs split between passed, scrapped and sent back
+again, the same total, while every job it sent back is still At stage; those jobs follow). The
+Quality Inspector still corrects only on the inspection day. No migration: the audit log is the record.
 
 **Stages and work in progress (Phase 34, D-130):** the stages are Preparation, **Construction**
 (formerly "Upper making"), Sole-ing and Finishing. The Floor Manager assigns the active Shoe

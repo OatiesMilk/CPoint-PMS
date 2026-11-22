@@ -7,7 +7,10 @@ import {
   oldestOpenRoll,
   openSinceLine,
   parseArea,
+  areaEditable,
   planFinish,
+  planRollEdit,
+  type RollEditCurrent,
   planPutBack,
   planRemove,
   planStart,
@@ -169,5 +172,110 @@ describe("messages", () => {
     expect(rollClosedMessage("LR-MLT-003")).toBe(
       "LR-MLT-003 isn’t being scanned any more, so this shot wasn’t saved. Choose another roll, or scan a new one.",
     );
+  });
+});
+
+describe("planRollEdit: the Floor Manager's corrections (Phase 35B, A-104)", () => {
+  const roll = (over: Partial<RollEditCurrent> = {}): RollEditCurrent => ({
+    status: "IN_STOCK",
+    fromInventory: true,
+    tagCode: "T-1",
+    receivedOn: "2026-10-20",
+    areaSqFt: 24.5,
+    returnDecision: null,
+    returnNote: null,
+    ...over,
+  });
+  const TODAY = "2026-10-26";
+
+  it("returns just what changes, with the old values", () => {
+    expect(
+      planRollEdit(roll(), { tagCode: " T-9 ", receivedOn: "2026-10-20", areaSqFt: "30" }, TODAY),
+    ).toEqual({
+      ok: true,
+      changes: { tagCode: "T-9", areaSqFt: 30 },
+      before: { tagCode: "T-1", areaSqFt: 24.5 },
+    });
+    // An empty tag clears it; a field left out is untouched.
+    expect(planRollEdit(roll(), { tagCode: "  " }, TODAY)).toEqual({
+      ok: true,
+      changes: { tagCode: null },
+      before: { tagCode: "T-1" },
+    });
+  });
+
+  it("says nothing changed rather than saving an empty correction", () => {
+    expect(planRollEdit(roll(), {}, TODAY)).toEqual({
+      ok: false,
+      errors: { form: "Nothing changed. Change a field, or close this window." },
+    });
+    expect(planRollEdit(roll(), { tagCode: "T-1", areaSqFt: 24.5 }, TODAY)).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("checks the tag, the day and the area, each naming its field and the fix", () => {
+    const r = planRollEdit(
+      roll(),
+      { tagCode: "x".repeat(41), receivedOn: "2026-10-27", areaSqFt: "abc" },
+      TODAY,
+    );
+    expect(r).toEqual({
+      ok: false,
+      errors: {
+        tagCode: "The supplier’s tag can be up to 40 characters.",
+        receivedOn: "The day the rolls arrived can’t be after today.",
+        areaSqFt: "Enter the area as a number of square feet, like 24.5.",
+      },
+    });
+    expect(planRollEdit(roll(), { receivedOn: "yesterday" }, TODAY)).toMatchObject({
+      errors: { receivedOn: "Enter the day the rolls arrived, like 2026-10-26." },
+    });
+    expect(planRollEdit(roll(), { areaSqFt: "500" }, TODAY)).toMatchObject({
+      errors: {
+        areaSqFt: "The area must be between 0.1 and 200 sq ft. Check the stamp or the receipt.",
+      },
+    });
+  });
+
+  it("allows the area only before Finish roll, and only for a roll from Inventory (A-104)", () => {
+    expect(areaEditable({ status: "IN_STOCK", fromInventory: true })).toBe(true);
+    expect(areaEditable({ status: "OPEN", fromInventory: true })).toBe(true);
+    for (const status of ["FINISHED", "USED", "RETURNED", "CANCELLED"] as const)
+      expect(areaEditable({ status, fromInventory: true })).toBe(false);
+    expect(areaEditable({ status: "IN_STOCK", fromInventory: false })).toBe(false);
+    expect(planRollEdit(roll({ status: "FINISHED" }), { areaSqFt: "30" }, TODAY)).toEqual({
+      ok: false,
+      errors: {
+        areaSqFt:
+          "The area can't change after Finish roll: the defect share and the return mark were worked out from it.",
+      },
+    });
+    // Sending the area it already has is not a change, so it is not refused.
+    expect(
+      planRollEdit(roll({ status: "FINISHED" }), { areaSqFt: "24.5", tagCode: "T-2" }, TODAY),
+    ).toMatchObject({ ok: true, changes: { tagCode: "T-2" } });
+    expect(
+      planRollEdit(roll({ fromInventory: false, areaSqFt: null }), { areaSqFt: "10" }, TODAY),
+    ).toMatchObject({ errors: { areaSqFt: "Only a roll from Inventory has an area to correct." } });
+  });
+
+  it("changes the return note only after a decision, and a kept roll keeps its reason", () => {
+    expect(planRollEdit(roll(), { returnNote: "Sent" }, TODAY)).toMatchObject({
+      errors: { returnNote: expect.stringContaining("no return decision") },
+    });
+    const returned = roll({ returnDecision: "RETURNED", returnNote: "Sent Monday" });
+    expect(planRollEdit(returned, { returnNote: "" }, TODAY)).toEqual({
+      ok: true,
+      changes: { returnNote: null },
+      before: { returnNote: "Sent Monday" },
+    });
+    const kept = roll({ returnDecision: "KEPT", returnNote: "Within tolerance" });
+    expect(planRollEdit(kept, { returnNote: "  " }, TODAY)).toMatchObject({
+      errors: { returnNote: expect.stringContaining("needs the reason") },
+    });
+    expect(planRollEdit(kept, { returnNote: "x".repeat(201) }, TODAY)).toMatchObject({
+      errors: { returnNote: "Keep the note under 200 characters." },
+    });
   });
 });

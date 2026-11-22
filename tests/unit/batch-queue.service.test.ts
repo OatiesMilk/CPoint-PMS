@@ -307,3 +307,79 @@ describe("the Done list's Correct (run 2 F2)", () => {
     ]);
   });
 });
+
+describe("Correct on a past day and corrections shown (Phase 35B, A-70, A-103)", () => {
+  const finished = (enteredAt: string, over: object = {}) => ({
+    id: "ci1",
+    updatedAt: STAMP,
+    enteredAt: new Date(enteredAt),
+    pairs: 20,
+    failedPairs: 1,
+    enteredBy: { name: "Lea Santos" },
+    correctedAt: null as Date | null,
+    correctionReason: null as string | null,
+    correctedBy: null as { name: string } | null,
+    ...over,
+  });
+  const batches = () => [
+    row({ id: "today", status: "INSPECTED", checkIn: finished("2026-11-17T01:10:00.000Z") }),
+    row({
+      id: "lastweek",
+      code: "B-261110-1",
+      day: "2026-11-10",
+      status: "INSPECTED",
+      checkIn: finished("2026-11-10T09:10:00.000Z"),
+    }),
+    row({
+      id: "void",
+      code: "B-261110-2",
+      day: "2026-11-10",
+      status: "VOID",
+      voidReason: "Line stopped",
+    }),
+  ];
+
+  it("offers the Floor Manager Correct on any past day, and on today only when covering (D-088)", async () => {
+    model.listDoneBatchRows.mockResolvedValueOnce(batches());
+    const q = await svc.inspectionQueue(FM, {}, NEXT_MORNING);
+    // A Quality Inspector is present today, so today's stays with them; last week's is the Floor Manager's.
+    expect(q.done.map((d) => [d.id, d.finished?.correctable])).toEqual([
+      ["today", false],
+      ["lastweek", true],
+      ["void", undefined],
+    ]);
+    model.listDoneBatchRows.mockResolvedValueOnce(batches());
+    const asQi = await svc.inspectionQueue(QI, {}, NEXT_MORNING);
+    expect(asQi.done.map((d) => d.finished?.correctable)).toEqual([true, false, undefined]);
+  });
+
+  it("looks up a past day by its batch date, and ignores a day that hasn't come", async () => {
+    await svc.inspectionQueue(FM, { doneDay: "2026-11-10" }, NEXT_MORNING);
+    expect(model.listDoneBatchRows).toHaveBeenLastCalledWith("2026-11-10", "2026-11-10");
+    const q = await svc.inspectionQueue(FM, { doneDay: "2026-12-01" }, NEXT_MORNING);
+    expect(model.listDoneBatchRows).toHaveBeenLastCalledWith("2026-11-10", undefined);
+    expect(q.doneDay).toBeNull();
+    const day = await svc.inspectionQueue(FM, { doneDay: "2026-11-10" }, NEXT_MORNING);
+    expect(day).toMatchObject({ doneDay: "2026-11-10", doneDayLabel: "Tue, 10 Nov" });
+  });
+
+  it("shows who corrected a batch, when and why, on any day", async () => {
+    model.listDoneBatchRows.mockResolvedValueOnce([
+      row({
+        id: "lastweek",
+        status: "INSPECTED",
+        checkIn: finished("2026-11-10T09:10:00.000Z", {
+          correctedAt: new Date("2026-11-17T02:05:00.000Z"),
+          correctionReason: "Counted a rack twice",
+          correctedBy: { name: "Rodel Pascual" },
+        }),
+      }),
+    ]);
+    const q = await svc.inspectionQueue(FM, {}, NEXT_MORNING);
+    expect(q.done[0].finished?.correction).toEqual({
+      by: "Rodel Pascual",
+      at: "Tue, 17 Nov 10:05",
+      reason: "Counted a rack twice",
+    });
+  });
+});

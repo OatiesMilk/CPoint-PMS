@@ -24,7 +24,7 @@ import {
   QUEUE_STATE_LABELS,
   type QueueState,
 } from "@/lib/production-rules";
-import { addDays } from "@/lib/report-rules";
+import { addDays, manilaDayStart } from "@/lib/report-rules";
 import { Errors } from "@/server/lib/errors";
 import { runInTransaction } from "@/server/models/db";
 import {
@@ -37,8 +37,11 @@ import {
 } from "@/server/models/production.model";
 import { listRollsFinishedWithItem } from "@/server/models/roll.model";
 import {
+  correctRepairResult,
+  deleteAtStageRepairs,
   insertRepair,
   listFinishedRepairs,
+  reshapeRepair,
   listRepairsByStatus,
   repairCodesWithPrefix,
   transitionRepair,
@@ -49,13 +52,18 @@ import {
   REPAIR_STATUS_LABEL,
   STAGE_LABEL,
   compareWaiting,
+  inspectionLockedReason,
+  planChildChanges,
   nextRepairSeq,
   nextRepairState,
   parseRepairResult,
   repairCodeForBatch,
   type Stage,
 } from "@/lib/repair-rules";
-import type { RepairInspectInput } from "@/server/validators/repair.validator";
+import type {
+  RepairCorrectionInput,
+  RepairInspectInput,
+} from "@/server/validators/repair.validator";
 import { findingsForCheckIns, type CheckInFindings } from "./repair.service";
 import { can, checkInCoverReason, mayEnterCheckIns } from "@/server/policies/permissions";
 import type {
@@ -103,8 +111,13 @@ export type QueueItem = {
     failedPairs: number;
     by: string;
     at: string;
-    /** Inspected today, so it can still be corrected (Phase 33, until Phase 35). */
+    /**
+     * This viewer may correct it: on the day it was inspected, whoever may inspect; on a past day,
+     * the Floor Manager (Phase 35B, A-70).
+     */
     correctable: boolean;
+    /** "Sat, 21 Nov 14:05", who and why, once it was corrected (any day). */
+    correction: { by: string; at: string; reason: string } | null;
     /** What was wrong with the failed pairs, and whether it can change (Phase 34). */
     findings: CheckInFindings;
   } | null;
@@ -141,6 +154,7 @@ function toItem(
   viewerId: string,
   now: Date,
   findings: Map<string, CheckInFindings> = new Map(),
+  mayCorrect: { sameDay: boolean; pastDay: boolean } = { sameDay: false, pastDay: false },
 ): QueueItem {
   const state = queueState(r, now);
   const lunchFree = { startTime: clockTime(r.startAt), time: clockTime(r.slotAt), lunch: null };
@@ -172,7 +186,18 @@ function toItem(
       ? {
           checkInId: r.checkIn.id,
           updatedAt: r.checkIn.updatedAt.toISOString(),
-          correctable: manilaDayOf(r.checkIn.enteredAt) === manilaDayOf(now),
+          correctable:
+            manilaDayOf(r.checkIn.enteredAt) === manilaDayOf(now)
+              ? mayCorrect.sameDay
+              : mayCorrect.pastDay,
+          correction:
+            r.checkIn.correctedAt && r.checkIn.correctionReason
+              ? {
+                  by: r.checkIn.correctedBy?.name ?? "Someone",
+                  at: `${formatAttendanceDay(manilaDayOf(r.checkIn.correctedAt))} ${clockTime(r.checkIn.correctedAt)}`,
+                  reason: r.checkIn.correctionReason,
+                }
+              : null,
           findings: findings.get(r.checkIn.id) ?? noFindings,
           pairs: r.checkIn.pairs,
           failedPairs: r.checkIn.failedPairs,
@@ -209,9 +234,11 @@ export async function inspectionQueue(
   const today = manilaToday(now);
   await ensureBatchRows(addDays(today, -QUEUE_LOOKBACK_DAYS), today, now);
   const doneFrom = addDays(today, -DONE_DAYS);
+  // A past day the Floor Manager looked up replaces the last 7 days (Phase 35B); today or later is ignored.
+  const doneDay = query.doneDay && query.doneDay <= today ? query.doneDay : undefined;
   const [open, done, qiPresent] = await Promise.all([
     listOpenBatchRows(),
-    listDoneBatchRows(doneFrom),
+    listDoneBatchRows(doneDay ?? doneFrom, doneDay),
     qualityInspectorPresentOn(today),
   ]);
   // Only batches whose end has come are in the queue; upcoming ones are on the Today tab.
@@ -225,9 +252,13 @@ export async function inspectionQueue(
     .sort(compareQueue)
     .map((r) => toItem(r, rolls.get(r.id) ?? "", viewer.id, now));
   const waiting = all.filter((i) => matches(i, query));
-  const repairRows = await repairQueue(query, now);
+  const repairRows = await repairQueue(query, now, viewer.role, doneDay);
+  const mayCorrect = {
+    sameDay: mayEnterCheckIns(viewer.role, qiPresent),
+    pastDay: can(viewer.role, "production:prioritise"),
+  };
   const finished = done
-    .map((r) => toItem(r, rolls.get(r.id) ?? "", viewer.id, now, findings))
+    .map((r) => toItem(r, rolls.get(r.id) ?? "", viewer.id, now, findings, mayCorrect))
     .filter((i) => (!query.day || i.day === query.day) && (!query.q || matches(i, { q: query.q })));
   const days = [...new Set(all.map((i) => i.day))].sort();
   return {
@@ -239,6 +270,9 @@ export async function inspectionQueue(
     repairsDone: repairRows.done,
     /** Repairs waiting before the filters; they are not in the tab title's due count (A-90). */
     repairsTotal: repairRows.total,
+    /** The past day shown under Inspected and void, or null for the last 7 days (Phase 35B). */
+    doneDay: doneDay ?? null,
+    doneDayLabel: doneDay ? formatAttendanceDay(doneDay) : null,
     /** Counts before the filters, for the tab badge and the empty state. */
     total: all.length,
     urgent: all.filter((i) => i.priority === "URGENT").length,
@@ -273,11 +307,23 @@ export type RepairItem = {
   dayLabel: string | null;
   /** "Waiting 2 hours 5 minutes", while it waits. */
   waiting: string | null;
-  /** A repair that was inspected: what happened to its pairs. */
-  result: { passedPairs: number; scrappedPairs: number; resentPairs: number; at: string } | null;
+  /** A repair that was inspected: what happened to its pairs, and where the ones sent back went. */
+  result: {
+    passedPairs: number;
+    scrappedPairs: number;
+    resentPairs: number;
+    at: string;
+    resend: { stage: Stage; pairs: number }[];
+  } | null;
+  updatedAt: string;
+  /** The Floor Manager may correct its inspection (Phase 35B, A-105). */
+  correctable: boolean;
+  /** Why it can't be corrected now (a job it sent back has moved on), or null. */
+  lockedReason: string | null;
 };
 
-function toRepairItem(r: RepairRow, now: Date): RepairItem {
+function toRepairItem(r: RepairRow, now: Date, canCorrect = false): RepairItem {
+  const children = r.children.slice().sort((a, b) => a.code.localeCompare(b.code));
   const day = r.backAt ? manilaDayOf(r.backAt) : null;
   return {
     id: r.id,
@@ -300,8 +346,12 @@ function toRepairItem(r: RepairRow, now: Date): RepairItem {
             scrappedPairs: r.scrappedPairs ?? 0,
             resentPairs: r.resentPairs ?? 0,
             at: `${formatAttendanceDay(manilaDayOf(r.inspectedAt))} ${clockTime(r.inspectedAt)}`,
+            resend: children.map((c) => ({ stage: c.stage, pairs: c.pairs })),
           }
         : null,
+    updatedAt: r.updatedAt.toISOString(),
+    correctable: canCorrect && r.status === "DONE",
+    lockedReason: r.status === "DONE" ? inspectionLockedReason(r, children) : null,
   };
 }
 
@@ -311,11 +361,13 @@ function toRepairItem(r: RepairRow, now: Date): RepairItem {
  * day the repair came back; Urgent and Waiting filters are about batches, so a repair shows for
  * "Waiting" and not for Late, Inspecting or Urgent.
  */
-async function repairQueue(query: QueueQuery, now: Date) {
-  const doneFrom = new Date(now.getTime() - DONE_DAYS * 86_400_000);
+async function repairQueue(query: QueueQuery, now: Date, role: Role, doneDay?: string) {
+  const canCorrect = can(role, "repair:manage");
   const [back, finished] = await Promise.all([
     listRepairsByStatus(["BACK_FOR_INSPECTION"]),
-    listFinishedRepairs(doneFrom),
+    doneDay
+      ? listFinishedRepairs(manilaDayStart(doneDay), manilaDayStart(addDays(doneDay, 1)))
+      : listFinishedRepairs(new Date(now.getTime() - DONE_DAYS * 86_400_000)),
   ]);
   const items = back
     .slice()
@@ -334,7 +386,7 @@ async function repairQueue(query: QueueQuery, now: Date) {
     total: items.length,
     waiting: applies ? items.filter(keep) : [],
     done: finished
-      .map((r) => toRepairItem(r, now))
+      .map((r) => toRepairItem(r, now, canCorrect))
       .filter((i) => (!query.q || keep(i)) && !query.priority),
   };
 }
@@ -498,6 +550,20 @@ export async function queuedBatchAt(day: string, slotAt: Date) {
   return row ? { id: row.id, code: row.code, updatedAt: row.updatedAt.toISOString() } : null;
 }
 
+/** The QI's result checked against the job's pairs, or a 422 whose messages name each field. */
+function checkedResult(jobPairs: number, input: RepairInspectInput) {
+  const parsed = parseRepairResult(jobPairs, input);
+  if (parsed.ok) return parsed.result;
+  const details: { path: string[]; message: string }[] = [];
+  if (parsed.passedPairs) details.push({ path: ["passedPairs"], message: parsed.passedPairs });
+  if (parsed.scrappedPairs)
+    details.push({ path: ["scrappedPairs"], message: parsed.scrappedPairs });
+  for (const [i, message] of Object.entries(parsed.resend ?? {}))
+    details.push({ path: ["resend", i], message });
+  if (parsed.form) details.push({ path: ["result"], message: parsed.form });
+  throw Errors.validation(details);
+}
+
 /**
  * Inspect a repair that is back (Phase 34, A-64, A-88): the QI enters the pairs that passed, the
  * pairs scrapped and the pairs sent back again (with the stage of each), adding up to the job's
@@ -515,18 +581,7 @@ export async function inspectRepair(
   if (!job) throw Errors.notFound("This repair");
   const step = nextRepairState(job.status, "inspect");
   if (!step.ok) throw Errors.conflict(`${job.code}: ${step.reason} Refresh to see it.`);
-  const parsed = parseRepairResult(job.pairs, input);
-  if (!parsed.ok) {
-    const details: { path: string[]; message: string }[] = [];
-    if (parsed.passedPairs) details.push({ path: ["passedPairs"], message: parsed.passedPairs });
-    if (parsed.scrappedPairs)
-      details.push({ path: ["scrappedPairs"], message: parsed.scrappedPairs });
-    for (const [i, message] of Object.entries(parsed.resend ?? {}))
-      details.push({ path: ["resend", i], message });
-    if (parsed.form) details.push({ path: ["result"], message: parsed.form });
-    throw Errors.validation(details);
-  }
-  const { passedPairs, scrappedPairs, resend } = parsed.result;
+  const { passedPairs, scrappedPairs, resend } = checkedResult(job.pairs, input);
   const resentPairs = resend.reduce((s, r) => s + r.pairs, 0);
   return runInTransaction(async (tx) => {
     const ok = await transitionRepair(
@@ -585,5 +640,122 @@ export async function inspectRepair(
       },
     });
     return { id, code: job.code, passedPairs, scrappedPairs, children };
+  });
+}
+
+/**
+ * The Floor Manager corrects a repair's inspection (Phase 35B, A-105): how its pairs split between
+ * passed, scrapped and sent back again (the total stays), with a reason. Allowed while every job it
+ * sent back is still At stage; those jobs follow (kept, changed, removed or added), and the audit
+ * keeps both results. The passed pairs stay on the day of the original inspection (A-64).
+ */
+export async function correctRepairInspection(
+  id: string,
+  input: RepairCorrectionInput,
+  actor: Actor,
+  now: Date = appNow(),
+) {
+  const job = await findRepair(id);
+  if (!job) throw Errors.notFound("This repair");
+  if (job.status !== "DONE")
+    throw Errors.conflict(
+      job.status === "CANCELLED"
+        ? `${job.code} was marked not fixable, so it has no inspection to correct.`
+        : `${job.code} hasn't been inspected yet. Inspect it from the queue.`,
+    );
+  if (job.updatedAt.toISOString() !== new Date(input.expectedUpdatedAt).toISOString())
+    throw Errors.stale(`${job.code} was changed by someone else. Refresh to see it.`);
+  const children = job.children.slice().sort((a, b) => a.code.localeCompare(b.code));
+  const locked = inspectionLockedReason(job, children);
+  if (locked) throw Errors.conflict(locked);
+  const next = checkedResult(job.pairs, input);
+  const resentPairs = next.resend.reduce((s, r) => s + r.pairs, 0);
+  const changes = planChildChanges(children, next.resend);
+  if (
+    next.passedPairs === job.passedPairs &&
+    next.scrappedPairs === job.scrappedPairs &&
+    changes.update.length + changes.remove.length + changes.create.length === 0
+  )
+    throw Errors.validation([
+      { path: ["result"], message: "Nothing changed. Change a number, or close this window." },
+    ]);
+  return runInTransaction(async (tx) => {
+    const ok = await correctRepairResult(
+      id,
+      job.updatedAt,
+      { passedPairs: next.passedPairs, scrappedPairs: next.scrappedPairs, resentPairs },
+      tx,
+    );
+    if (!ok) throw Errors.stale(`${job.code} was changed by someone else. Refresh to see it.`);
+    const moved = `${job.code}'s pairs sent back again changed meanwhile. Refresh to see them.`;
+    if (!(await deleteAtStageRepairs(changes.remove, tx))) throw Errors.stale(moved);
+    for (const c of changes.update)
+      if (!(await reshapeRepair(c.id, { stage: c.stage, pairs: c.pairs }, tx)))
+        throw Errors.stale(moved);
+    const batchCode = job.finding.checkIn.batch?.code ?? "";
+    const prefix = repairCodeForBatch(batchCode, 0).slice(0, -1);
+    let seq = nextRepairSeq(await repairCodesWithPrefix(prefix, tx));
+    const created: { code: string; pairs: number; stage: Stage }[] = [];
+    for (const line of changes.create) {
+      const code = repairCodeForBatch(batchCode, seq++);
+      const child = await insertRepair(
+        {
+          code,
+          findingId: job.finding.id,
+          parentId: job.id,
+          pairs: line.pairs,
+          stage: line.stage,
+          sentAt: now,
+        },
+        tx,
+      );
+      created.push({ code, pairs: line.pairs, stage: line.stage });
+      await recordAudit(tx, {
+        actor: { type: "USER", userId: actor.id },
+        action: "repair.create",
+        entity: "RepairJob",
+        entityId: child.id,
+        after: { code, from: job.code, batch: batchCode, pairs: line.pairs, stage: line.stage },
+      });
+    }
+    const gone = new Set(changes.remove);
+    const changed = new Map(changes.update.map((c) => [c.id, c]));
+    const sentBack = [
+      ...children
+        .filter((c) => !gone.has(c.id))
+        .map((c) => ({
+          code: c.code,
+          stage: changed.get(c.id)?.stage ?? c.stage,
+          pairs: changed.get(c.id)?.pairs ?? c.pairs,
+        })),
+      ...created,
+    ];
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: "repair.inspect.correct",
+      entity: "RepairJob",
+      entityId: id,
+      before: {
+        passedPairs: job.passedPairs,
+        scrappedPairs: job.scrappedPairs,
+        resentPairs: job.resentPairs,
+        sentBack: children.map((c) => ({ code: c.code, stage: c.stage, pairs: c.pairs })),
+      },
+      after: {
+        code: job.code,
+        passedPairs: next.passedPairs,
+        scrappedPairs: next.scrappedPairs,
+        resentPairs,
+        sentBack,
+        reason: input.reason,
+      },
+    });
+    return {
+      id,
+      code: job.code,
+      passedPairs: next.passedPairs,
+      scrappedPairs: next.scrappedPairs,
+      children: sentBack.map((c) => c.code),
+    };
   });
 }

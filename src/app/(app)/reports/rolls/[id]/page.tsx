@@ -32,7 +32,7 @@ import {
   TableViewLink,
 } from "@/components/ui/table";
 import { OUTCOME_LABELS, outcomeFor, readSnapshot } from "@/lib/decision-engine";
-import { formatCalendarDate, formatManilaDateTime } from "@/lib/format";
+import { formatCalendarDate, formatManilaDateTime, manilaToday } from "@/lib/format";
 import { formatPct, rollFindings } from "@/lib/roll-findings";
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
@@ -40,7 +40,8 @@ import { getRollDetail } from "@/server/services/roll.service";
 import { isRollId } from "@/server/validators/roll.validator";
 import { RemoveRoll } from "@/components/features/rolls/remove-roll";
 import { formatArea, isReturnedToSupplier } from "@/lib/roll-rules";
-import { removeRollAction } from "../actions";
+import { removeRollAction, updateRollAction } from "../actions";
+import { EditRollDetails } from "@/components/features/rolls/edit-roll-details";
 import { LocationHistory } from "@/components/features/rolls/location-history";
 import { MoveRollsDialog } from "@/components/features/rolls/move-rolls-dialog";
 import { PickedUpButton } from "@/components/features/rolls/picked-up-button";
@@ -63,6 +64,8 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
   const roll = await getRollDetail(id);
   if (!roll) notFound();
   const canRemove = roll.canRemove && can(user.role, "roll:manage");
+  // The Floor Manager's corrections (Phase 35B): not on a removed roll.
+  const canEdit = can(user.role, "roll:manage") && roll.status !== "CANCELLED";
   const fromInventory = !!roll.item;
   const canClaim = can(user.role, "report:production") && roll.scans.length > 0;
   const shots = roll.scans.length;
@@ -198,8 +201,25 @@ export default async function RollReportPage({ params }: PageProps<"/reports/rol
             of the reports.
           </Alert>
         )}
-        {(canRemove || canMove || canPickUp) && (
+        {(canEdit || canRemove || canMove || canPickUp) && (
           <div className="flex flex-wrap gap-2">
+            {canEdit && (
+              <EditRollDetails
+                code={roll.code}
+                updatedAt={roll.updatedAt.toISOString()}
+                today={manilaToday()}
+                current={{
+                  status: roll.status,
+                  fromInventory,
+                  tagCode: roll.tagCode,
+                  receivedOn: roll.receivedAt ? roll.receivedAt.toISOString().slice(0, 10) : null,
+                  areaSqFt: roll.areaSqFt,
+                  returnDecision: roll.returnDecision,
+                  returnNote: roll.returnNote,
+                }}
+                action={updateRollAction.bind(null, roll.id)}
+              />
+            )}
             {canMove && (
               <MoveRollsDialog
                 rolls={[

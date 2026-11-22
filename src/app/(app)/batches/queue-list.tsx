@@ -5,7 +5,17 @@
  * or voided in the last 7 days, so one can still be found after it leaves the queue.
  * Figures are per batch for the whole line (D-008).
  */
-import { Ban, CircleCheck, Clock, Flag, Hourglass, Search, UserCheck } from "lucide-react";
+import Link from "next/link";
+import {
+  Ban,
+  CalendarSearch,
+  CircleCheck,
+  Clock,
+  Flag,
+  Hourglass,
+  Search,
+  UserCheck,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -169,6 +179,8 @@ function RepairCard({ repair, queue }: { repair: RepairItem; queue: InspectionQu
 
 function RepairDoneRow({ repair }: { repair: RepairItem }) {
   const r = repair.result;
+  // The Floor Manager may correct an inspection until a job it sent back moves on (Phase 35B, A-105).
+  const canCorrect = repair.correctable && !!r && !repair.lockedReason;
   return (
     <li
       className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -185,10 +197,30 @@ function RepairDoneRow({ repair }: { repair: RepairItem }) {
         </p>
       </div>
       {r && (
-        <p className="text-sm sm:text-right">
-          {n(r.passedPairs)} passed, {n(r.scrappedPairs)} scrapped, {n(r.resentPairs)} sent back
-          again · {r.at}
-        </p>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <p className="text-sm sm:text-right">
+            {n(r.passedPairs)} passed, {n(r.scrappedPairs)} scrapped, {n(r.resentPairs)} sent back
+            again · {r.at}
+          </p>
+          {canCorrect && (
+            <div className="sm:w-44">
+              <RepairInspectDialog
+                repair={repair}
+                correction={{
+                  updatedAt: repair.updatedAt,
+                  passedPairs: r.passedPairs,
+                  scrappedPairs: r.scrappedPairs,
+                  resend: r.resend,
+                }}
+              />
+            </div>
+          )}
+          {repair.correctable && repair.lockedReason && (
+            <p className="max-w-sm text-sm text-muted-foreground sm:text-right">
+              {repair.lockedReason}
+            </p>
+          )}
+        </div>
       )}
     </li>
   );
@@ -218,6 +250,14 @@ function DoneRow({
           {item.dayLabel}, {item.times} · {item.rolls}
         </p>
         {f && <FindingsSummary lines={f.findings.summary} failedPairs={f.failedPairs} />}
+        {f?.correction && (
+          <p className="text-sm" data-testid="batch-correction">
+            <span className="text-muted-foreground">
+              Corrected by {f.correction.by}, {f.correction.at}:{" "}
+            </span>
+            {f.correction.reason}
+          </p>
+        )}
       </div>
       <div className="flex flex-col gap-2 sm:items-end">
         <p className="text-sm sm:text-right">
@@ -227,7 +267,7 @@ function DoneRow({
               ? `${item.voidReason}${item.voidedBy ? ` (${item.voidedBy})` : ""}`
               : ""}
         </p>
-        {f && f.correctable && queue.canInspect && (
+        {f && f.correctable && (
           <div className="sm:w-44">
             <FinishBatchDialog
               mode="correct"
@@ -293,6 +333,7 @@ export function QueueList({
           aria-label="Filter the queue"
         >
           <input type="hidden" name="tab" value="queue" />
+          {queue.doneDay && <input type="hidden" name="doneDay" value={queue.doneDay} />}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="queue-q">Batch code</Label>
             <Input id="queue-q" name="q" defaultValue={f.q ?? ""} placeholder="e.g. B-261116-2" />
@@ -379,12 +420,53 @@ export function QueueList({
 
       <Card>
         <CardHeader>
-          <CardTitle>Inspected and void</CardTitle>
-          <CardDescription>Batches from the last 7 days that have left the queue.</CardDescription>
+          <CardTitle id="inspected-heading">Inspected and void</CardTitle>
+          <CardDescription data-testid="done-description">
+            {queue.doneDayLabel
+              ? `Batches of ${queue.doneDayLabel} that have left the queue.`
+              : "Batches from the last 7 days that have left the queue."}
+            {queue.canPrioritise &&
+              " You can correct any batch from a past day, and a repair's inspection while the pairs it sent back are still at their stage. Every correction needs a reason and is kept in the audit log."}
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          <form
+            method="get"
+            action="/batches"
+            className="flex flex-wrap items-end gap-3"
+            aria-label="Look up older batches"
+          >
+            <input type="hidden" name="tab" value="queue" />
+            {(["q", "day", "status", "priority"] as const).map(
+              (key) => f[key] && <input key={key} type="hidden" name={key} value={f[key]} />,
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="done-day">Batch date</Label>
+              <Input
+                id="done-day"
+                type="date"
+                name="doneDay"
+                max={queue.today}
+                defaultValue={queue.doneDay ?? ""}
+                required
+              />
+            </div>
+            <Button type="submit" variant="secondary" className="max-sm:h-11">
+              <CalendarSearch aria-hidden />
+              Show this date
+            </Button>
+            {queue.doneDay && (
+              <Button asChild variant="ghost" className="max-sm:h-11">
+                <Link href="/batches?tab=queue">Last 7 days</Link>
+              </Button>
+            )}
+          </form>
           {queue.done.length === 0 && queue.repairsDone.length === 0 ? (
-            <p className="text-muted-foreground">Nothing inspected in the last 7 days yet.</p>
+            <p className="text-muted-foreground">
+              {queue.doneDayLabel
+                ? `No batch of ${queue.doneDayLabel} was inspected or voided.`
+                : "Nothing inspected in the last 7 days yet."}
+            </p>
           ) : (
             <ul className="divide-y" data-testid="done-list">
               {queue.done.map((item) => (

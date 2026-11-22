@@ -29,6 +29,8 @@ const rolls = {
   findRollsByCodeOrTag: vi.fn(async (): Promise<unknown[]> => []),
   listRollsInLocation: vi.fn(async (): Promise<unknown[]> => []),
   listInStockRollIds: vi.fn(async (): Promise<string[]> => []),
+  // Phase 35B: the Floor Manager's corrections.
+  updateRollDetails: vi.fn(async (..._args: unknown[]) => true),
 };
 const locations = {
   findLocation: vi.fn(async (): Promise<unknown> => null),
@@ -106,6 +108,7 @@ beforeEach(() => {
   rolls.findRollState.mockResolvedValue(state());
   rolls.nextRollCodeNumber.mockResolvedValue(7);
   rolls.rollCodeTaken.mockResolvedValue(false);
+  rolls.updateRollDetails.mockResolvedValue(true);
   inventory.findInventoryItem.mockResolvedValue(LEATHER);
 });
 
@@ -312,6 +315,149 @@ describe("picking and finishing at Capture", () => {
 
   it("won't put back a roll with shots", async () => {
     await expect(svc.putBackRoll("r1", SC, now)).rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("updateRoll: the Floor Manager's corrections (Phase 35B, A-104)", () => {
+  const STAMP = new Date("2026-10-25T08:00:00.000Z");
+  const input = (over: object = {}) => ({
+    expectedUpdatedAt: STAMP.toISOString(),
+    reason: "Read the tag upside down",
+    ...over,
+  });
+  const rollRow = (over: object = {}) =>
+    state({
+      status: "IN_STOCK",
+      receivedAt: new Date("2026-10-20T00:00:00Z"),
+      returnNote: null,
+      updatedAt: STAMP,
+      tagCode: "T-1",
+      ...over,
+    });
+  beforeEach(() => rolls.findRollState.mockResolvedValue(rollRow()));
+
+  it("saves only what changed, and audits the old and the new value with the reason", async () => {
+    const r = await svc.updateRoll(
+      "r1",
+      input({ tagCode: "T-9", receivedOn: "2026-10-20", areaSqFt: "30" }),
+      FM,
+      now,
+    );
+    expect(r).toEqual({ id: "r1", code: "LR-MLT-007", changed: ["tagCode", "areaSqFt"] });
+    // The received day was the same, so it is not written.
+    expect(rolls.updateRollDetails).toHaveBeenCalledWith(
+      "r1",
+      STAMP,
+      { tagCode: "T-9", areaSqFt: 30 },
+      "tx",
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "roll.update",
+        entity: "Roll",
+        before: { tagCode: "T-1", areaSqFt: 24.5 },
+        after: {
+          code: "LR-MLT-007",
+          tagCode: "T-9",
+          areaSqFt: 30,
+          reason: "Read the tag upside down",
+        },
+      }),
+    );
+  });
+
+  it("changes the received day as a date, never after today", async () => {
+    await svc.updateRoll("r1", input({ receivedOn: "2026-10-22" }), FM, now);
+    expect(rolls.updateRollDetails).toHaveBeenCalledWith(
+      "r1",
+      STAMP,
+      { receivedAt: new Date("2026-10-22T00:00:00Z") },
+      "tx",
+    );
+    await expect(
+      svc.updateRoll("r1", input({ receivedOn: "2026-10-27" }), FM, now),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [
+        { path: ["receivedOn"], message: "The day the rolls arrived can’t be after today." },
+      ],
+    });
+  });
+
+  it("refuses the area once the roll is finished, and names why", async () => {
+    for (const status of ["FINISHED", "USED", "RETURNED"]) {
+      rolls.findRollState.mockResolvedValue(rollRow({ status }));
+      await expect(svc.updateRoll("r1", input({ areaSqFt: "30" }), FM, now)).rejects.toMatchObject({
+        status: 422,
+        details: [
+          {
+            path: ["areaSqFt"],
+            message:
+              "The area can't change after Finish roll: the defect share and the return mark were worked out from it.",
+          },
+        ],
+      });
+    }
+    // The tag still changes after Finish roll.
+    rolls.findRollState.mockResolvedValue(rollRow({ status: "FINISHED" }));
+    await svc.updateRoll("r1", input({ tagCode: "T-2" }), FM, now);
+    expect(rolls.updateRollDetails).toHaveBeenCalledTimes(1);
+    // A roll being scanned can still have its area corrected.
+    rolls.findRollState.mockResolvedValue(rollRow({ status: "OPEN" }));
+    await svc.updateRoll("r1", input({ areaSqFt: "26.25" }), FM, now);
+    expect(rolls.updateRollDetails).toHaveBeenCalledTimes(2);
+  });
+
+  it("changes the return note only once a decision exists, and a kept roll keeps a reason", async () => {
+    await expect(
+      svc.updateRoll("r1", input({ returnNote: "Sent Monday" }), FM, now),
+    ).rejects.toMatchObject({
+      details: [{ path: ["returnNote"], message: expect.stringContaining("no return decision") }],
+    });
+    rolls.findRollState.mockResolvedValue(
+      rollRow({ status: "FINISHED", returnDecision: "RETURNED", returnNote: "Sent Monday" }),
+    );
+    await svc.updateRoll("r1", input({ returnNote: "Sent Tuesday" }), FM, now);
+    expect(rolls.updateRollDetails).toHaveBeenCalledWith(
+      "r1",
+      STAMP,
+      { returnNote: "Sent Tuesday" },
+      "tx",
+    );
+    rolls.findRollState.mockResolvedValue(
+      rollRow({ status: "FINISHED", returnDecision: "KEPT", returnNote: "Within tolerance" }),
+    );
+    await expect(svc.updateRoll("r1", input({ returnNote: " " }), FM, now)).rejects.toMatchObject({
+      details: [{ path: ["returnNote"], message: expect.stringContaining("needs the reason") }],
+    });
+  });
+
+  it("is a 422 when nothing changes, 409 on a removed roll, and stale when someone saved first", async () => {
+    await expect(svc.updateRoll("r1", input({ tagCode: "T-1" }), FM, now)).rejects.toMatchObject({
+      details: [
+        { path: ["form"], message: "Nothing changed. Change a field, or close this window." },
+      ],
+    });
+    rolls.findRollState.mockResolvedValue(rollRow({ status: "CANCELLED" }));
+    await expect(svc.updateRoll("r1", input({ tagCode: "T-9" }), FM, now)).rejects.toMatchObject({
+      status: 409,
+      message: "LR-MLT-007 was removed, so its details can't change.",
+    });
+    rolls.findRollState.mockResolvedValue(rollRow({ updatedAt: new Date("2026-10-25T09:00:00Z") }));
+    await expect(svc.updateRoll("r1", input({ tagCode: "T-9" }), FM, now)).rejects.toMatchObject({
+      code: "STALE",
+    });
+    rolls.findRollState.mockResolvedValue(rollRow());
+    rolls.updateRollDetails.mockResolvedValueOnce(false);
+    await expect(svc.updateRoll("r1", input({ tagCode: "T-9" }), FM, now)).rejects.toMatchObject({
+      code: "STALE",
+    });
+    rolls.findRollState.mockResolvedValue(null);
+    await expect(svc.updateRoll("r1", input({ tagCode: "T-9" }), FM, now)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(recordAudit).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   hasRepairFilters,
+  inspectionLockedReason,
+  planChildChanges,
   matchesFinding,
   matchesRepair,
   captureStageMessage,
@@ -501,5 +503,65 @@ describe("report filters (Phase 35, A-101)", () => {
     expect(matchesRepair(job, { defect: "GLUE", stage: "SOLE_ING" })).toBe(true);
     expect(matchesRepair(job, { stage: "FINISHING" })).toBe(false);
     expect(matchesRepair(job, { remedy: "NOT_FIXABLE" })).toBe(false);
+  });
+});
+
+describe("correcting a repair's inspection (Phase 35B, A-105)", () => {
+  const job = { code: "RP-261120-2-1" };
+
+  it("is open while every job it sent back is still At stage, or it sent none", () => {
+    expect(inspectionLockedReason(job, [])).toBeNull();
+    expect(
+      inspectionLockedReason(job, [
+        { code: "RP-261120-2-2", status: "AT_STAGE" },
+        { code: "RP-261120-2-3", status: "AT_STAGE" },
+      ]),
+    ).toBeNull();
+  });
+
+  it("is locked once a job it sent back is Back, inspected or marked Not fixable, naming it", () => {
+    const at = (status: "BACK_FOR_INSPECTION" | "DONE" | "CANCELLED") =>
+      inspectionLockedReason(job, [
+        { code: "RP-261120-2-2", status: "AT_STAGE" },
+        { code: "RP-261120-2-3", status },
+      ]);
+    expect(at("BACK_FOR_INSPECTION")).toBe(
+      "RP-261120-2-3, sent back from RP-261120-2-1, is already back for inspection, so this inspection can't change.",
+    );
+    expect(at("DONE")).toContain("is already inspected");
+    expect(at("CANCELLED")).toContain("is marked not fixable");
+  });
+
+  it("keeps a job for each line in order, changes it, removes the extra ones, adds the new ones", () => {
+    const existing = [
+      { id: "a", stage: "FINISHING" as const, pairs: 2 },
+      { id: "b", stage: "SOLE_ING" as const, pairs: 1 },
+    ];
+    // Same lines: nothing to do.
+    expect(
+      planChildChanges(existing, [
+        { stage: "FINISHING", pairs: 2 },
+        { stage: "SOLE_ING", pairs: 1 },
+      ]),
+    ).toEqual({ update: [], remove: [], create: [] });
+    // Fewer pairs on the first, none on the second.
+    expect(planChildChanges(existing, [{ stage: "FINISHING", pairs: 1 }])).toEqual({
+      update: [{ id: "a", stage: "FINISHING", pairs: 1 }],
+      remove: ["b"],
+      create: [],
+    });
+    // A different stage on the second and a third line.
+    expect(
+      planChildChanges(existing, [
+        { stage: "FINISHING", pairs: 2 },
+        { stage: "CONSTRUCTION", pairs: 1 },
+        { stage: "PREPARATION", pairs: 3 },
+      ]),
+    ).toEqual({
+      update: [{ id: "b", stage: "CONSTRUCTION", pairs: 1 }],
+      remove: [],
+      create: [{ stage: "PREPARATION", pairs: 3 }],
+    });
+    expect(planChildChanges([], [{ stage: "SOLE_ING", pairs: 2 }]).create).toHaveLength(1);
   });
 });

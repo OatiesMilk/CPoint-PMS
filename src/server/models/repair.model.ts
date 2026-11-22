@@ -133,6 +133,8 @@ const jobInclude = {
   },
   backBy: { select: { name: true } },
   inspectedBy: { select: { name: true } },
+  /** The jobs it sent back again, to tell whether its inspection may still be corrected (Phase 35B). */
+  children: { select: { id: true, code: true, status: true, stage: true, pairs: true } },
 } satisfies Prisma.RepairJobInclude;
 
 export type RepairRow = Prisma.RepairJobGetPayload<{ include: typeof jobInclude }>;
@@ -150,9 +152,9 @@ export function listRepairsByStatus(statuses: RepairStatus[], db: Db = defaultDb
 }
 
 /** Repairs inspected (or cancelled) since `from`, for the queue's Inspected and void list. */
-export function listFinishedRepairs(from: Date, db: Db = defaultDb()) {
+export function listFinishedRepairs(from: Date, until?: Date, db: Db = defaultDb()) {
   return db.repairJob.findMany({
-    where: { status: "DONE", inspectedAt: { gte: from } },
+    where: { status: "DONE", inspectedAt: { gte: from, ...(until ? { lt: until } : {}) } },
     include: jobInclude,
     orderBy: { inspectedAt: "desc" },
   });
@@ -203,6 +205,42 @@ export async function transitionRepair(
     data,
   });
   return count === 1;
+}
+
+/**
+ * Rewrites an inspected job's result only if nobody changed it since the caller loaded it (the Floor
+ * Manager's correction, Phase 35B). Returns false when someone else saved first.
+ */
+export async function correctRepairResult(
+  id: string,
+  expectedUpdatedAt: Date,
+  data: { passedPairs: number; scrappedPairs: number; resentPairs: number },
+  db: Db,
+): Promise<boolean> {
+  const { count } = await db.repairJob.updateMany({
+    where: { id, status: "DONE", updatedAt: expectedUpdatedAt },
+    data,
+  });
+  return count === 1;
+}
+
+/** Changes a sent-back job's stage and pairs while it is still At stage; false when it moved on. */
+export async function reshapeRepair(
+  id: string,
+  data: { stage: Stage; pairs: number },
+  db: Db,
+): Promise<boolean> {
+  const { count } = await db.repairJob.updateMany({ where: { id, status: "AT_STAGE" }, data });
+  return count === 1;
+}
+
+/** Removes sent-back jobs that are still At stage; false when one had moved on. */
+export async function deleteAtStageRepairs(ids: string[], db: Db): Promise<boolean> {
+  if (ids.length === 0) return true;
+  const { count } = await db.repairJob.deleteMany({
+    where: { id: { in: ids }, status: "AT_STAGE" },
+  });
+  return count === ids.length;
 }
 
 /** Jobs per stage that are at the stage now, with their defect, for the board and My stage. */

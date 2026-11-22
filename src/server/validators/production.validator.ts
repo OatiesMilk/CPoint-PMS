@@ -174,10 +174,15 @@ export const queueQuerySchema = z.object({
   status: z.enum(["WAITING", "LATE", "INSPECTING"]).optional().catch(undefined),
   priority: z.enum(["NORMAL", "URGENT"]).optional().catch(undefined),
   q: z.string().trim().max(20).optional().catch(undefined),
+  /** Inspected and void: the batches of this past day, instead of the last 7 days (Phase 35B). */
+  doneDay: attendanceDaySchema.optional().catch(undefined),
 });
 export type QueueQuery = z.infer<typeof queueQuerySchema>;
 
-/** PATCH /api/v1/production/check-ins/{id}: a correction on the day it was inspected, with a reason. */
+/**
+ * PATCH /api/v1/production/check-ins/{id}: a correction with a reason, on the day it was inspected
+ * (the Quality Inspector, or the Floor Manager covering) or, for the Floor Manager, on any past day.
+ */
 export const correctionSchema = z.object({
   expectedUpdatedAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
   pairs: z.unknown().optional(),

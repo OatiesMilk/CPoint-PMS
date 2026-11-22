@@ -198,7 +198,8 @@ first on **Batches → Plan days** if it isn't.
    reads "Batch 2 ends at 17:00. Get ready to count the finished pairs.", and at the end "Batch 2
    is due. Finish it now." with the bell and a "(1)" in the tab title.
 2. **Finish batch**: the pairs finished and, of these, the pairs that failed inspection. A second
-   finish is refused; **Correct** the same day needs a reason, and the audit keeps both counts.
+   finish is refused; **Correct** the same day needs a reason, and the audit keeps both counts (the
+   Floor Manager can also correct a batch from any past day, under Queue → Inspected and void).
 3. **What was wrong** (Phase 34): with failed pairs, add a line per defect (Lifted sole, 2 pairs,
    Fixable, back to Sole-ing). The lines must add up to the failed pairs; **Other** needs a
    description. Each fixable line starts a repair; find it in the **Queue** as RP-… once the stage

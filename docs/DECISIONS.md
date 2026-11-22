@@ -2706,3 +2706,45 @@ to A-105 belong to 35B.
 **Where:** `src/lib/{report-rules,table-sort,day-math,repair-rules}.ts`,
 `src/components/features/reports/*`, `src/app/(app)/reports/**`, the report, roll and repair services,
 `globals.css`, `tokens.css`, `DESIGN.md` → "Reports", `docs/API.md` → Reports.
+
+### D-133 · 2026-11-21 · Accepted — The Floor Manager corrects past records, always with a reason and an audit row (Phase 35B)
+
+**Context.** The second half of the panel's revision 3, from the plan Dylan approved on 2026-11-21 (all
+three recommendations, including that a repair's inspection is correctable). Until now a batch could be
+corrected only on the day it was inspected (Phase 33), and a roll's details and a repair's inspection
+could not be corrected at all.
+
+**Decision.**
+
+- **A batch from any past day**, by the Floor Manager only. `correctCheckIn` keeps every rule it had
+  (the stale check, the reason, both counts in the audit, the lock on the failed pairs and lines once a
+  repair from the batch is Back or Done, A-93) and drops the same-day limit for the Floor Manager, with
+  no "no Quality Inspector present" cover for a past day. The Quality Inspector still corrects only on the
+  day they inspected it. Batches → Queue → Inspected and void has a Batch date picker (`doneDay`) that
+  reaches any past day; a corrected batch shows "Corrected by …, when, why"; Operations' production by
+  day marks a day Corrected when a batch of it was corrected on a later day.
+- **A roll's details**, by the Floor Manager: tag number, received day (not after today), return note
+  (only once a decision exists) and the area **only before Finish roll**. `PATCH /api/v1/rolls/{id}`,
+  `expectedUpdatedAt`, only the changed fields in the audit. Supplier and leather item never change; the
+  place stays with Move.
+- **A repair's inspection**, by the Floor Manager: how its pairs split between passed, scrapped and sent
+  back again (the same total) **while every job it sent back is still At stage**; those jobs follow (a line
+  keeps its job and code, extra jobs are removed, extra lines add one). `PATCH
+/api/v1/production/repairs/{id}/inspect`.
+- Every write runs in `runInTransaction` with `recordAudit` on the same `tx`; each needs a reason. No
+  migration: the audit log is the record.
+
+**Assumptions** (not confirmed by CPoint): **A-70** only the Floor Manager corrects past records; the
+Quality Inspector only on the inspection day; **A-103** a corrected batch shows "Corrected" on its day in
+Operations, with who and why on the batch and in the audit; **A-104** a roll's area changes only before
+Finish roll; **A-105** a repair's inspection can be corrected while the pairs it sent back are At stage;
+**A-106** a removed roll's details can't change; **A-107** a roll from before Phase 30A has no area to
+correct; **A-108** a repair's correction keeps the original inspection time and inspector (passed pairs
+stay on the day first inspected) and is marked only in the audit; **A-109** the Floor Manager corrects a
+past batch even when a Quality Inspector is present today; **A-110** a kept roll's return note can't be
+emptied (Keep needs a reason, C-36).
+
+**Where:** `src/server/services/{production,batch-queue,roll}.service.ts`, `src/lib/{repair,roll}-rules.ts`,
+the repair and roll controllers and validators, `src/app/(app)/batches/**`,
+`src/components/features/rolls/edit-roll-details.tsx`, `DESIGN.md` → "Corrections to past records",
+`docs/API.md`.

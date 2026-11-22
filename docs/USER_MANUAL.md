@@ -357,6 +357,25 @@ There you can:
 
 Once a batch is being inspected, Urgent, voided or finished, today's plan can't change it.
 
+**Correct a past record** (only you can; the Quality Inspector corrects only on the day they inspected a
+batch). Every correction asks **Why are you correcting it?** and keeps the old and the new value in the
+audit log.
+
+- **A batch from any past day:** on the **Queue** tab, under **Inspected and void**, choose the
+  **Batch date** and **Show this date** (**Last 7 days** goes back). Tap **Correct** on the batch. You
+  can also reach a day from **Reports → Operations**: **See batches** under the day, which is marked
+  **Corrected** once a batch of it was changed on a later day. The failed pairs and the lines under
+  **What was wrong** can't change once a repair from the batch is back for inspection.
+- **A repair's inspection:** in the same list, tap **Correct** on the inspected repair and change how
+  its pairs split between **Passed**, **Scrapped** and **Sent back again** (the total stays the same).
+  You can do this while the pairs it sent back are still at their stage; once one is back for inspection,
+  inspected or marked not fixable, the row says so and it can't change.
+- **A roll's details:** open the roll (**Reports → Rolls**) and tap **Edit details** to correct its
+  tag number, the day it was received and, for a roll that was returned or kept before the new rule,
+  its return note. Its **area** can change only until a Shoe Constructor taps **Finish roll**: the defect
+  share and the return mark were worked out from it. The supplier and the leather item don't change;
+  use **Move** for its place.
+
 **Recent days** explains each short day in one sentence, for example "Below quota by 18 pairs. 3 of
 12 Shoe Constructors were absent." It never names a person.
 
@@ -567,7 +586,7 @@ Filter by action or record type, or paste a record id to see its full history.
 | "Attendance not taken yet."                                            | The Floor Manager saves today's attendance.                                   |
 | "… is already inspecting B-…. Pick another batch."                     | Someone else is counting that batch. Take another one from the queue.         |
 | "B-… was voided: …. It can't be finished."                             | The Floor Manager voided it. Nothing to count.                                |
-| "A batch can only be corrected on the day it was inspected."           | Ask the Floor Manager; corrections to older batches come with Phase 35.       |
+| "A batch can only be corrected on the day it was inspected."           | Ask the Floor Manager: they can correct a batch from any past day.            |
 
 ---
 
@@ -586,7 +605,7 @@ Filter by action or record type, or paste a record id to see its full history.
 1. Keep **Batches** open: the **Queue** lists every batch waiting, by its code (B-261116-2).
 2. Take the top one: **Start inspection**, then **Inspect**.
 3. Enter pairs finished and how many failed. Save.
-4. Mistake? **Correct**, on the day you inspected it, with a reason.
+4. Mistake? **Correct**, on the day you inspected it, with a reason. An older batch is the Floor Manager's to correct.
 
 **Floor Manager**
 

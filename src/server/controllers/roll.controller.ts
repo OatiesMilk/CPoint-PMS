@@ -24,6 +24,7 @@ import {
   removeRoll,
   rollsCsv,
   startRoll,
+  updateRoll,
 } from "@/server/services/roll.service";
 import { capturePlan } from "@/server/services/production.service";
 import { isInventoryId } from "@/server/validators/inventory.validator";
@@ -32,6 +33,7 @@ import {
   isRollId,
   removeRollSchema,
   rollListQuerySchema,
+  updateRollSchema,
 } from "@/server/validators/roll.validator";
 import { canCaptureFor, can } from "@/server/policies/permissions";
 import { requireApiFinder } from "./location.controller";
@@ -127,6 +129,18 @@ export const rollController = {
     const detail = await getRollDetail(await rollIdFrom(ctx));
     if (!detail) throw Errors.notFound("This roll");
     return json({ data: detail });
+  }),
+
+  /**
+   * PATCH /api/v1/rolls/{id} { expectedUpdatedAt, reason, tagCode?, receivedOn?, areaSqFt?,
+   * returnNote? }: the Floor Manager corrects a roll's details (Phase 35B). The area only before
+   * Finish roll; the return note only once a decision exists.
+   */
+  update: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("roll:manage");
+    const id = await rollIdFrom(ctx);
+    const input = updateRollSchema.parse(await readJsonBody(request));
+    return json({ data: await updateRoll(id, input, user) });
   }),
 
   /** POST /api/v1/rolls/{id}/start: pick a roll at Capture; it is now being scanned. */

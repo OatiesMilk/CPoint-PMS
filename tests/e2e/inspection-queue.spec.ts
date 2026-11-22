@@ -128,9 +128,11 @@ test("the queue lists waiting batches across days by code, oldest first, with fi
   await expect(sat).toContainText("Late");
   await expect(sat).toContainText(/No rolls scanned|\d+ rolls? \(/);
 
-  // Oldest first while both are Normal.
+  // Oldest first while both are Normal. On a Sunday the last Sunday is a week older than the last
+  // Saturday, so the order follows the dates, not the weekdays.
   const codes = (await queue(page)).waiting.map((w) => w.code);
-  expect(codes.indexOf(SAT)).toBeLessThan(codes.indexOf(SUN));
+  const [older, newer] = saturday < sunday ? [SAT, SUN] : [SUN, SAT];
+  expect(codes.indexOf(older)).toBeLessThan(codes.indexOf(newer));
 
   // Search by code, and a filter by day.
   await page.getByLabel("Batch code").fill(SUN.slice(2));
@@ -180,7 +182,7 @@ test("the Floor Manager marks a batch Urgent, it jumps to the top, and the QI ca
   await expect(sun).toContainText("Urgent");
   await expect(sun).toContainText("Customer pick-up at 3 pm");
 
-  // Urgent goes first, though it is newer.
+  // Urgent goes first, whichever of the two is older.
   const codes = (await queue(fm)).waiting.map((w) => w.code);
   expect(codes.indexOf(SUN)).toBeLessThan(codes.indexOf(SAT));
   await expect(
@@ -241,6 +243,11 @@ test("two inspectors: one starts a batch, the other sees who has it; a day-old b
   await dialog.getByRole("button", { name: `Finish ${SUN}` }).click();
   await expect(dialog).toBeHidden();
   await expect(lea.getByText(`${SUN} finished.`, { exact: true })).toBeVisible();
+  // The toast sits over the list on a phone; let it go before the next tap (it intercepted the click in a loaded run).
+  // Sonner pauses a toast's timer while the pointer is over it, and the pointer is still where Finish was,
+  // under the toast: move it away first, as a finger lifting off the screen would.
+  await lea.mouse.move(0, 0);
+  await expect(lea.getByText(`${SUN} finished.`, { exact: true })).toBeHidden({ timeout: 15_000 });
   await expect(lea.getByTestId(`queue-${SUN}`)).toHaveCount(0);
   await expect(lea.getByTestId(`done-${SUN}`)).toContainText("20 pairs, 1 failed");
   await expect(lea.getByTestId(`done-${SUN}`)).toContainText("Inspected");

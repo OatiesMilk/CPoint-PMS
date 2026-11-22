@@ -977,10 +977,21 @@ recommendations, 2026-11-21). Decision: D-132. Two sessions.
 - [x] QA handoff `qa/handoffs/2026-11-21-phase-35a-reports-by-period.md`, Codex prompt
       `qa/CODEX_PROMPT_PHASE_35A.md`
 - [x] Codex QA: run 1 FAIL (print), run 2 FAIL (blank print charts), run 3 **PASS** (charts no longer print)
-- [ ] Committed and merged (`feature/reports-by-period`)
+- [x] Committed and merged (`feature/reports-by-period`, #59)
 
-**35B: corrections (later session)**
+**35B: corrections (D-133)**
 
-- [ ] A past batch corrected by the Floor Manager on any day (A-70, A-103)
-- [ ] A roll's details edited by the Floor Manager (A-104)
-- [ ] A repair's inspection corrected while its sent-back pairs are At stage (A-105)
+- [x] A past batch corrected by the Floor Manager on any day (A-70, A-103, A-109); Batch date picker under
+      Queue → Inspected and void; Corrected badge in Operations
+- [x] A roll's details edited by the Floor Manager (A-104, A-106, A-107, A-110)
+- [x] A repair's inspection corrected while its sent-back pairs are At stage (A-105, A-108)
+- [x] `npm run check` passes (1001 unit tests); `corrections.spec.ts` written (not run by Claude); DESIGN,
+      API, manual, spec and README updated
+- [x] QA handoff `qa/handoffs/2026-11-21-phase-35b-corrections.md`, Codex prompt
+      `qa/CODEX_PROMPT_PHASE_35B.md` (short: `qa/CODEX_PROMPT_PHASE_35B_MINI.md`)
+- [x] Codex QA run 1: FAIL (C10 wording, C11 focus, C12 e2e timestamp; fixed)
+- [x] Codex QA run 2: FAIL (Remove roll focus, two broad-run timeouts; fixed)
+- [x] Codex QA run 3: FAIL on a test fixture assumption (C11 passed 36 of 36; fixed)
+- [x] Codex QA run 4: FAIL on test-level causes (toast under the pointer, a concurrent repeat, sign-in stalls; fixed)
+- [x] Codex QA run 5: **PASS WITH ISSUES** (one full-suite sign-in stall passing alone; every scenario has passed)
+- [ ] Committed and merged

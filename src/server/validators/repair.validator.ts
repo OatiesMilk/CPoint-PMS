@@ -12,6 +12,9 @@ const reason = z
   .min(5, REASON_MESSAGE)
   .max(MAX_REASON, `Keep the reason under ${MAX_REASON} characters.`);
 
+/** A change's reason, checked the same in the form and on the server. */
+export const repairReasonSchema = reason;
+
 /** One line of "what was wrong" (checked for sums and messages by parseFindings). */
 export const findingLinesSchema = z.array(z.unknown()).optional();
 
@@ -35,6 +38,16 @@ export const repairInspectSchema = z.object({
   resend: z.array(z.unknown()).optional(),
 });
 export type RepairInspectInput = z.infer<typeof repairInspectSchema>;
+
+/**
+ * PATCH /api/v1/production/repairs/{id}/inspect (the Floor Manager, Phase 35B): the same result as an
+ * inspection, plus why and the `updatedAt` the person saw.
+ */
+export const repairCorrectionSchema = repairInspectSchema.extend({
+  expectedUpdatedAt: z.iso.datetime({ offset: true, error: OUT_OF_DATE }),
+  reason,
+});
+export type RepairCorrectionInput = z.infer<typeof repairCorrectionSchema>;
 
 /** PUT /api/v1/production/stages/{day}: who works at each stage. */
 export const stageAssignmentsSchema = z.object({

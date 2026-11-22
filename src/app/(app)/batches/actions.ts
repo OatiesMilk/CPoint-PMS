@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { toActionError, type ActionResult } from "@/server/lib/action-result";
 import {
+  correctRepairInspection,
   inspectRepair,
   setBatchPriority,
   startInspection,
@@ -12,6 +13,7 @@ import { changeRepair, markRepairBack } from "@/server/services/repair.service";
 import { saveStageAssignments, saveStageCount } from "@/server/services/stage.service";
 import {
   repairActionSchema,
+  repairCorrectionSchema,
   repairInspectSchema,
   stageAssignmentsSchema,
   stageCountSchema,
@@ -113,7 +115,7 @@ export async function voidBatchAction(
   }
 }
 
-/** A correction on the day the batch was inspected, with a reason. */
+/** A correction with a reason: the day the batch was inspected, or any past day for the Floor Manager. */
 export async function correctBatchAction(
   id: string,
   input: unknown,
@@ -206,6 +208,22 @@ export async function inspectRepairAction(
     return { ok: true, code: result.code, children: result.children };
   } catch (error) {
     return toActionError(error, "The repair inspection");
+  }
+}
+
+/** The Floor Manager corrects a repair's inspection, with a reason (Phase 35B, A-105). */
+export async function correctRepairInspectionAction(
+  id: string,
+  input: unknown,
+): Promise<ActionResult<{ code: string; children: { code: string }[] }>> {
+  const user = await requirePermission("repair:manage");
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: NO_REPAIR };
+  try {
+    const result = await correctRepairInspection(id, repairCorrectionSchema.parse(input), user);
+    refresh();
+    return { ok: true, code: result.code, children: result.children.map((code) => ({ code })) };
+  } catch (error) {
+    return toActionError(error, "The correction");
   }
 }
 

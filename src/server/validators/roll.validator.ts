@@ -65,6 +65,28 @@ export const addRollsSchema = z
 export type AddRollsInput = z.input<typeof addRollsSchema>;
 export type AddRollsValues = z.output<typeof addRollsSchema>;
 
+/**
+ * PATCH /api/v1/rolls/{id}: the Floor Manager corrects a roll's tag number, received day, return note
+ * or area (before Finish roll), with a reason (Phase 35B). A field left out is not changed; the values
+ * are checked against the roll by planRollEdit.
+ */
+export const updateRollSchema = z.object({
+  expectedUpdatedAt: z.iso.datetime({
+    offset: true,
+    error: "This page is out of date. Refresh and try again.",
+  }),
+  tagCode: z.unknown().optional(),
+  receivedOn: z.unknown().optional(),
+  areaSqFt: z.unknown().optional(),
+  returnNote: z.unknown().optional(),
+  reason: z
+    .string({ error: ROLL_MESSAGES.editReason })
+    .trim()
+    .min(5, ROLL_MESSAGES.editReason)
+    .max(CANCEL_REASON_MAX, ROLL_MESSAGES.removeReasonTooLong),
+});
+export type UpdateRollInput = z.infer<typeof updateRollSchema>;
+
 /** The Floor Manager removes a roll with a reason (Inventory or Reports → Rolls). */
 export const removeRollSchema = z.object({
   reason: z

@@ -5,6 +5,64 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-22 · Phase 35B: Codex run 5 PASS WITH ISSUES; QA done; git commands
+
+- Codex run 5 (`qa/reports/2026-11-22-phase-35b-run5.md`): C12 passed: `inspection-queue.spec.ts` three separate one-worker runs, `corrections.spec.ts` and the six related specs all passed. The one issue: the full suite (two workers) had a `reports.spec.ts` quality-report sign-in stall that passed alone (3 of 3, dev-server load, as in Phases 32, 33 and runs 2 to 4). With runs 1 to 4 every scenario has passed (C11 36 of 36).
+- Git commands for `feature/corrections` given to Dylan with the list `qa/phase-35b-files.txt` (nothing committed). Left out: `docs/DEMO_SCRIPT.md`, `qa/phase-34-files.txt`, `qa/overview-cleanup-files.txt`, `qa/phase-35a-files.txt`, the list file itself and the git-ignored report artifacts.
+
+## 2026-11-22 · Phase 35B: Codex run 4 FAIL on test-level causes, fixed; run 5 prompt
+
+- Codex run 4 (`qa/reports/2026-11-22-phase-35b-run4.md`): the corrected oldest-first check and the queue spec alone passed (4 of 4, three times); `corrections.spec.ts` 4 of 4. Failures: **F1** `--repeat-each=2` at two workers (my prompt) ran two copies of the queue spec on the same fixture days, so the app's stale guard correctly refused one copy's edit; **F2** the "finished" toast stayed up for the whole 15 s wait (also in the related run); **F3** two `reports.spec.ts` sign-in redirects in the full run (137 passed, 2 failed), passing alone (dev-server load, as in runs 2 and 3).
+- Cause of F2 found: Sonner pauses a toast's timer while the pointer is over it, and the pointer is still where Finish was, which on the phone layout is under the toast (the same reason it intercepted the click in run 2). The spec now moves the pointer away first (`lea.mouse.move(0, 0)`). Test only; ESLint and typecheck of the file passed.
+- Run 5 prompt `qa/CODEX_PROMPT_PHASE_35B_RUN5.md`: no concurrent repeat (three sequential runs at one worker) and the verdict rule of AGENTS.md made explicit (a sign-in stall, `ECONNRESET` or first-compile time-out that passes alone is PASS WITH ISSUES).
+
+## 2026-11-22 · Phase 35B: Codex run 3 FAIL on a test's Sunday assumption, fixed; run 4 prompt
+
+- Codex run 3 (`qa/reports/2026-11-22-phase-35b-run3.md`): C11 passed **36 of 36** (six dialogs, both themes, Escape, the cancel button and the X, exact opener: the shared focus fix works, Remove roll and New token included). `corrections.spec.ts` passed 4 of 4 alone and in the full suite. C12 failed: `inspection-queue.spec.ts` expected the last Saturday to be older than the last Sunday, which is false when the run is on a Sunday (Saturday 21 Nov, Sunday 15 Nov), and its three serial cases then did not run; the Admin `ECONNRESET` and the report sign-in stall passed alone (dev-server load, as before).
+- Fixed: the oldest-first check compares the two fixture dates (`saturday < sunday`). Test only; the app's order was right. ESLint and typecheck of the file passed (no app change, so no `npm run check` rerun). Run 4 prompt `qa/CODEX_PROMPT_PHASE_35B_RUN4.md`.
+
+## 2026-11-22 · Phase 35B: Codex run 2 FAIL, fixed; run 3 prompt
+
+- Codex run 2 (`qa/reports/2026-11-21-phase-35b-run2.md`): C10 and the corrected-day print check passed (the five-page A4 PDF fits, Corrected under the date, See batches not printed); the focus fix worked for four of five dialogs, both themes (30 checks, 24 passed). `corrections.spec.ts` passed 4 of 4 alone. F1 Remove roll still lost focus; F2 and F3 were timeouts in broad runs, each passing alone.
+- Fixed: **F1** Remove roll's Reason box has `autoFocus`, so the shared fix read the box (removed with the dialog) as the opener; `ui/dialog.tsx` now remembers the last element focused outside any dialog (`focusin`) and restores that (also covers the New token dialog). **F2** `inspection-queue.spec.ts` waits for the "finished." toast to go before tapping Correct on the phone (it intercepted the click; the new Batch date form moved the button under it). **F3** `corrections.spec.ts` clicks until the dialog is visible (`openDialog`, a click before hydration does nothing); assertions and timeouts unchanged.
+- `npm run check` passed (1001). Run 3 prompt `qa/CODEX_PROMPT_PHASE_35B_RUN3.md`.
+
+## 2026-11-21 · Phase 35B: Codex run 1 FAIL, fixed; run 2 prompt
+
+- Codex run 1 (`qa/reports/2026-11-21-phase-35b-run1.md`): C1 to C9 and A1 to A3 passed (a past batch, Corrected in Operations, the QI's limits, the lock, a roll's details, a repair's correction and its lock, the audit rows, finished and removed rolls). C10, C11 and C12 failed. Demo reset at the end.
+- Fixed: **F2** `corrections.spec.ts` read `timestamp` columns through `pg` as the laptop's local time (Asia/Shanghai, 8 hours off), so the stale guard answered STALE; now read as UTC text (`to_char`). **F1** focus fell to the page after Escape: Radix returns focus to its own Trigger and these dialogs open from plain buttons; `ui/dialog.tsx` now remembers what had focus on open and restores it (every dialog in the app). **F3** the handoff's C10 names both stale messages (no code change). **Observation** Operations' Production by day table printed with a clipped right header: my new Corrected badge sat beside the date and widened the first column; it is now under the date. F4 (a sign-in time-out in the full run, passing alone) is dev-server load; no change.
+- `npm run check` passed (1001). Run 2 prompt `qa/CODEX_PROMPT_PHASE_35B_RUN2.md`.
+
+## 2026-11-21 · CI fix: two Phase 35A e2e tests assumed demo data (main run 44897069011)
+
+- `e2e` failed on `main` after #59 (130 passed, 2 failed, 7 skipped; `check`, `station`, `docker` green). The failures were tests, not the app: CI has no demo week, so `reports-print.spec.ts` found 11 rolls where it expected more than 15, and `reports-period.spec.ts` filtered by the first leather item, which had no rolls (no "Download CSV" link).
+- **Codex re-check PASS** (`qa/reports/2026-11-21-ci-recheck-feature-reports-by-period.md`): full `test:e2e` 138 passed, 1 flaky (`admin.spec.ts:136`, passed on retry, unrelated), 0 failed; the two specs 14 of 14 on the dev database and on a throwaway empty one. Git commands for the two specs given to Dylan.
+- Fixed: both specs add their own In stock rolls with `addInventoryRoll()` (print: up to 16 rolls; period: one roll and its item selected by id). `npm run check` passed (1001). Re-check prompt `qa/CODEX_PROMPT_CI_RECHECK_feature-reports-by-period.md`; nothing committed.
+
+## 2026-11-21 · Phase 35B: corrections to past records (D-133)
+
+- Built 35B of `docs/prompts/plans/phase-35-reports-and-corrections-plan.md` (approved with all three
+  recommendations; the coordinator confirmed the repair inspection is correctable while the sent-back pairs
+  are At stage). Floor Manager only, always with a reason and an audit row; **no migration**.
+- **Past batch:** `correctCheckIn` drops the same-day limit for the Floor Manager (no cover check for a past
+  day, A-109) and keeps the stale check, the reason, both counts in the audit and the A-93 lock; the Quality
+  Inspector's message now says "Ask the Floor Manager to correct it." Queue → Inspected and void has a Batch
+  date picker (`doneDay`, any past day; a day not yet come is ignored); each queue item says whether this
+  viewer may correct it (`correctable`) and carries who, when and why (`correction`). `DayRow.correctedLater`
+  puts a Corrected badge and a See batches link on Operations' production by day (and Recent days).
+- **Roll details:** `planRollEdit` (pure) and `updateRoll`: tag, received day, return note (a decision must
+  exist; a kept roll keeps a reason), the area only before Finish roll and only for a roll from Inventory;
+  a removed roll can't change; `expectedUpdatedAt` stale check; only changed fields in the audit
+  (`roll.update`). `PATCH /api/v1/rolls/{id}`, an Edit details dialog on the roll page.
+- **Repair inspection:** `correctRepairInspection`, locked once a job it sent back is Back, inspected or Not
+  fixable (`inspectionLockedReason`); `planChildChanges` keeps a job per line so codes stay; one transaction;
+  audit `repair.inspect.correct` with both results. `PATCH /api/v1/production/repairs/{id}/inspect`; the
+  inspect dialog gains a correct mode with a reason.
+- `npm run check` passed (**1001 unit tests**, build OK). `corrections.spec.ts` written, not run. Not seen in
+  a browser by Claude. Handoff `qa/handoffs/2026-11-21-phase-35b-corrections.md`, prompt
+  `qa/CODEX_PROMPT_PHASE_35B.md` and a short one, `qa/CODEX_PROMPT_PHASE_35B_MINI.md`. DESIGN, API, the manual,
+  the master spec and README updated. Nothing committed.
+
 ## 2026-11-21 · Phase 35A: Codex run 3 PASS; QA done; git commands
 
 - Codex run 3 (`qa/reports/2026-11-21-phase-35a-run3.md`): P10 and P15 passed. All 39 PDF pages reviewed: the Production and Quality charts are absent with no blank plot, the tables fit with repeated headers, the Materials warning lists all 45 names with no control, header, remark and signatures print; the charts and "Show all" still work on screen. Print and period specs 7 and 7, full suite 135 passed, 0 failed, 4 skipped. With runs 1 and 2 every scenario has passed.

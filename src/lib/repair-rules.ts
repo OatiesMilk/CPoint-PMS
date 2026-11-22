@@ -357,6 +357,55 @@ export function parseRepairResult(
   return { ok: true, result: { passedPairs: passed, scrappedPairs: scrapped, resend } };
 }
 
+/**
+ * Why a repair's inspection can't be corrected now, or null (A-105): the Floor Manager may change it
+ * while every job it sent back again is still At stage; once one is Back, inspected or marked Not
+ * fixable, the pairs it sent on have moved.
+ */
+export function inspectionLockedReason(
+  job: { code: string },
+  children: readonly { code: string; status: RepairStatus }[],
+): string | null {
+  const moved = children.find((c) => c.status !== "AT_STAGE");
+  if (!moved) return null;
+  const now =
+    moved.status === "DONE"
+      ? "already inspected"
+      : moved.status === "CANCELLED"
+        ? "marked not fixable"
+        : "already back for inspection";
+  return `${moved.code}, sent back from ${job.code}, is ${now}, so this inspection can't change.`;
+}
+
+export type ResendLine = { stage: Stage; pairs: number };
+export type ChildChanges = {
+  /** Existing jobs whose stage or pairs change (kept, so their codes stay). */
+  update: { id: string; stage: Stage; pairs: number }[];
+  /** Jobs no longer needed. */
+  remove: string[];
+  /** Lines with no job yet. */
+  create: ResendLine[];
+};
+
+/**
+ * The corrected "sent back again" lines against the jobs that exist (oldest first): line i keeps job i
+ * (so its code stays), extra jobs are removed, extra lines are created (A-105).
+ */
+export function planChildChanges(
+  existing: readonly { id: string; stage: Stage; pairs: number }[],
+  lines: readonly ResendLine[],
+): ChildChanges {
+  const out: ChildChanges = { update: [], remove: [], create: [] };
+  lines.forEach((line, i) => {
+    const job = existing[i];
+    if (!job) out.create.push({ stage: line.stage, pairs: line.pairs });
+    else if (job.stage !== line.stage || job.pairs !== line.pairs)
+      out.update.push({ id: job.id, stage: line.stage, pairs: line.pairs });
+  });
+  for (const job of existing.slice(lines.length)) out.remove.push(job.id);
+  return out;
+}
+
 const manilaDay = (at: Date) => new Date(at.getTime() + 8 * 3_600_000).toISOString().slice(0, 10);
 
 /** Repaired pairs that passed, by the Manila day they were inspected (A-64). */

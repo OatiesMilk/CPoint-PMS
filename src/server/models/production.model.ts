@@ -217,6 +217,10 @@ const batchInclude = {
       pairs: true,
       failedPairs: true,
       enteredBy: { select: { name: true } },
+      // A correction stays visible on the batch, whichever day it was made (Phase 35B).
+      correctedAt: true,
+      correctionReason: true,
+      correctedBy: { select: { name: true } },
     },
   },
 } satisfies Prisma.ProductionBatchInclude;
@@ -247,10 +251,16 @@ export async function listOpenBatchRows(db: Db = defaultDb()) {
   return rows.map(batchRow);
 }
 
-/** Batches inspected or voided on a day from `from` on (the queue's Done list). */
-export async function listDoneBatchRows(from: string, db: Db = defaultDb()) {
+/**
+ * Batches inspected or voided with a batch day from `from` on (the queue's Done list), or only of
+ * `until` when it is given (a past day the Floor Manager looked up, Phase 35B).
+ */
+export async function listDoneBatchRows(from: string, until?: string, db: Db = defaultDb()) {
   const rows = await db.productionBatch.findMany({
-    where: { status: { in: ["INSPECTED", "VOID"] }, day: { gte: dayValue(from) } },
+    where: {
+      status: { in: ["INSPECTED", "VOID"] },
+      day: { gte: dayValue(from), ...(until ? { lte: dayValue(until) } : {}) },
+    },
     include: batchInclude,
     orderBy: [{ slotAt: "desc" }, { number: "desc" }],
     take: 200,
