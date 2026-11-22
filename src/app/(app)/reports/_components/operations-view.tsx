@@ -154,7 +154,12 @@ export function OperationsView({
               }))}
             />
           )}
-          <ProductionDaysTable days={production.days} testid="ops-production-table" sort={sort} />
+          <ProductionDaysTable
+            days={production.days}
+            testid="ops-production-table"
+            sort={sort}
+            seeBatches
+          />
         </CardContent>
       </Card>
 

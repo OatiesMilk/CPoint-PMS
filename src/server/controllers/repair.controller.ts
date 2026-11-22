@@ -2,9 +2,13 @@ import { z } from "zod";
 import { Errors } from "@/server/lib/errors";
 import { handle, json, readJsonBody } from "@/server/lib/http";
 import { requireApiPermission } from "@/server/policies/guard";
-import { inspectRepair } from "@/server/services/batch-queue.service";
+import { correctRepairInspection, inspectRepair } from "@/server/services/batch-queue.service";
 import { changeRepair, defectSuggestions, markRepairBack } from "@/server/services/repair.service";
-import { repairActionSchema, repairInspectSchema } from "@/server/validators/repair.validator";
+import {
+  repairActionSchema,
+  repairCorrectionSchema,
+  repairInspectSchema,
+} from "@/server/validators/repair.validator";
 
 type IdContext = { params: Promise<{ id: string }> };
 
@@ -42,5 +46,17 @@ export const repairController = {
     const id = await repairId(ctx);
     const input = repairInspectSchema.parse(await readJsonBody(request));
     return json({ data: await inspectRepair(id, input, user) });
+  }),
+
+  /**
+   * PATCH /api/v1/production/repairs/{id}/inspect  { passedPairs, scrappedPairs, resend, reason,
+   * expectedUpdatedAt }: the Floor Manager corrects an inspection while the pairs it sent back are
+   * still At stage (Phase 35B, A-105).
+   */
+  correctInspection: handle(async (request: Request, ctx: IdContext) => {
+    const user = await requireApiPermission("repair:manage");
+    const id = await repairId(ctx);
+    const input = repairCorrectionSchema.parse(await readJsonBody(request));
+    return json({ data: await correctRepairInspection(id, input, user) });
   }),
 };

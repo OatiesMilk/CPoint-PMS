@@ -383,7 +383,7 @@ export default async function BatchesPage({ searchParams }: PageProps<"/batches"
                 }))}
               />
             )}
-            <ProductionDaysTable days={recent.days} />
+            <ProductionDaysTable days={recent.days} seeBatches />
           </CardContent>
         </Card>
       )}

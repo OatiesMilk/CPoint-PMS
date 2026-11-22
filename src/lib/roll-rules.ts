@@ -26,6 +26,7 @@ export const ROLL_MESSAGES = {
     "This roll has shots, so it can’t be put back. Finish it once all of it is scanned, or ask the Floor Manager.",
   removeReason: "Write why this roll is removed.",
   removeReasonTooLong: `The reason can be up to ${CANCEL_REASON_MAX} characters.`,
+  editReason: "Say why you are correcting this roll, at least 5 characters.",
   stale: "Someone else changed this roll just now. Refresh to see where it is.",
   addAtLeastOne: "Add at least one roll.",
   tooMany: `Add at most ${ADD_ROLLS_MAX} rolls at a time.`,
@@ -330,4 +331,119 @@ export function rollReportStatus(roll: StatusRoll): RollReportStatus | null {
 export function rollStatusText(roll: StatusRoll): string {
   const report = rollReportStatus(roll);
   return report ? ROLL_REPORT_STATUS_LABELS[report] : ROLL_STATUS_LABELS[roll.status];
+}
+
+// ───────────── the Floor Manager's corrections to a roll (Phase 35B) ─────────────
+
+export const ROLL_EDIT_MESSAGES = {
+  noChange: "Nothing changed. Change a field, or close this window.",
+  areaLocked:
+    "The area can't change after Finish roll: the defect share and the return mark were worked out from it.",
+  areaNotFromInventory: "Only a roll from Inventory has an area to correct.",
+  noDecision: "This roll has no return decision, so it has no return note to change.",
+  keptNeedsReason:
+    "A kept roll needs the reason it was kept. Write it, or leave the note as it was.",
+  noteTooLong: `Keep the note under ${CANCEL_REASON_MAX} characters.`,
+  removed: (code: string) => `${code} was removed, so its details can't change.`,
+} as const;
+
+export type RollEditField = "tagCode" | "receivedOn" | "areaSqFt" | "returnNote";
+
+/** What the form sends: a field left out (undefined) is not changed. */
+export type RollEditInput = Partial<Record<RollEditField, unknown>>;
+
+export type RollEditCurrent = {
+  status: RollStatus;
+  fromInventory: boolean;
+  tagCode: string | null;
+  /** "2026-10-26" or null */
+  receivedOn: string | null;
+  areaSqFt: number | null;
+  returnDecision: "RETURNED" | "KEPT" | null;
+  returnNote: string | null;
+};
+
+export type RollChanges = {
+  tagCode?: string | null;
+  receivedOn?: string;
+  areaSqFt?: number;
+  returnNote?: string | null;
+};
+
+/** The area can be corrected until Finish roll worked out the defect share from it (A-104). */
+export const areaEditable = (roll: { status: RollStatus; fromInventory: boolean }) =>
+  roll.fromInventory && (roll.status === "IN_STOCK" || roll.status === "OPEN");
+
+/**
+ * The corrections the Floor Manager asked for, checked against the roll as it is (A-104): a tag, the
+ * day it was received (not after today), the area only before Finish roll, and the return note only
+ * once a decision exists. Returns just what changes, with the old values for the audit; each error
+ * names its field and the fix.
+ */
+export function planRollEdit(
+  roll: RollEditCurrent,
+  input: RollEditInput,
+  today: string,
+):
+  | { ok: true; changes: RollChanges; before: RollChanges }
+  | { ok: false; errors: Partial<Record<RollEditField | "form", string>> } {
+  const errors: Partial<Record<RollEditField | "form", string>> = {};
+  const changes: RollChanges = {};
+  const before: RollChanges = {};
+
+  if (input.tagCode !== undefined) {
+    const tag = typeof input.tagCode === "string" ? input.tagCode.trim() : null;
+    if (tag === null || tag.length > ROLL_TAG_MAX) errors.tagCode = ROLL_MESSAGES.tagTooLong;
+    else if ((tag || null) !== roll.tagCode) {
+      changes.tagCode = tag || null;
+      before.tagCode = roll.tagCode;
+    }
+  }
+
+  if (input.receivedOn !== undefined) {
+    const day = typeof input.receivedOn === "string" ? input.receivedOn.trim() : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00Z`)))
+      errors.receivedOn = ROLL_MESSAGES.receivedOn;
+    else if (day > today) errors.receivedOn = ROLL_MESSAGES.receivedInFuture;
+    else if (day !== roll.receivedOn) {
+      changes.receivedOn = day;
+      before.receivedOn = roll.receivedOn ?? undefined;
+    }
+  }
+
+  if (input.areaSqFt !== undefined) {
+    // parseArea speaks of "Roll 0:"; one roll is being edited, so its words are used without it.
+    const parsed = parseArea(input.areaSqFt, 0);
+    if (!parsed.ok) {
+      const bare = parsed.reason.replace(/^Roll 0:\s*/, "");
+      errors.areaSqFt = bare.charAt(0).toUpperCase() + bare.slice(1);
+    } else if (parsed.value !== roll.areaSqFt) {
+      if (!roll.fromInventory) errors.areaSqFt = ROLL_EDIT_MESSAGES.areaNotFromInventory;
+      else if (!areaEditable(roll)) errors.areaSqFt = ROLL_EDIT_MESSAGES.areaLocked;
+      else {
+        changes.areaSqFt = parsed.value;
+        before.areaSqFt = roll.areaSqFt ?? undefined;
+      }
+    }
+  }
+
+  if (input.returnNote !== undefined) {
+    const note = typeof input.returnNote === "string" ? input.returnNote.trim() : null;
+    if (note === null || note.length > CANCEL_REASON_MAX)
+      errors.returnNote = ROLL_EDIT_MESSAGES.noteTooLong;
+    else if ((note || null) !== roll.returnNote) {
+      if (roll.returnDecision === null) errors.returnNote = ROLL_EDIT_MESSAGES.noDecision;
+      else if (roll.returnDecision === "KEPT" && !note)
+        errors.returnNote = ROLL_EDIT_MESSAGES.keptNeedsReason;
+      else {
+        changes.returnNote = note || null;
+        before.returnNote = roll.returnNote;
+      }
+    }
+  }
+
+  if (Object.keys(errors).length) return { ok: false, errors };
+  if (Object.keys(changes).length === 0)
+    return { ok: false, errors: { form: ROLL_EDIT_MESSAGES.noChange } };
+  return { ok: true, changes, before };
 }

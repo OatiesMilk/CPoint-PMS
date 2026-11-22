@@ -518,15 +518,16 @@ describe("correctCheckIn", () => {
     ).rejects.toMatchObject({ status: 422 });
   });
 
-  it("only on the day it was inspected (Dylan 2026-11-19, until Phase 35)", async () => {
+  it("the Quality Inspector only on the day it was inspected (Dylan 2026-11-19)", async () => {
     model.findCheckIn.mockResolvedValueOnce(saved);
     await expect(
       svc.correctCheckIn("ci1", input(), QI, at("2026-10-20T16:30:00.000Z")),
     ).rejects.toMatchObject({
       status: 409,
       message:
-        "A batch can only be corrected on the day it was inspected. This one was inspected on Tue, 20 Oct.",
+        "A batch can only be corrected on the day it was inspected. This one was inspected on Tue, 20 Oct. Ask the Floor Manager to correct it.",
     });
+    expect(model.correctCheckIn).not.toHaveBeenCalled();
     // Inspected a day late: it can be corrected that later day.
     model.findCheckIn.mockResolvedValueOnce({
       ...saved,
@@ -535,6 +536,68 @@ describe("correctCheckIn", () => {
     await expect(
       svc.correctCheckIn("ci1", input(), QI, at("2026-10-21T02:00:00.000Z")),
     ).resolves.toMatchObject({ code: "B-261020-1" });
+  });
+
+  it("the Floor Manager corrects a batch from a past day, whoever is present today (Phase 35B, A-70)", async () => {
+    const fm = { id: "fm1", name: "Rodel Pascual", role: "FLOOR_MANAGER" as const };
+    // Last week's batch; a Quality Inspector is present today, so cover alone would refuse the Floor Manager.
+    workforce.qualityInspectorPresentOn.mockResolvedValue(true);
+    model.findCheckIn.mockResolvedValueOnce(saved);
+    const r = await svc.correctCheckIn("ci1", input(), fm, at("2026-10-27T03:00:00.000Z"));
+    expect(r).toMatchObject({ code: "B-261020-1" });
+    expect(model.correctCheckIn).toHaveBeenCalledWith(
+      "ci1",
+      saved.updatedAt,
+      expect.objectContaining({ correctedById: "fm1", correctionReason: "Counted a rack twice" }),
+      "tx",
+    );
+    expect(recordAudit).toHaveBeenCalledWith(
+      "tx",
+      expect.objectContaining({
+        action: "production.checkin.correct",
+        after: expect.objectContaining({
+          reason: "Counted a rack twice",
+          inspectedOn: "2026-10-20",
+          correctedOnLaterDay: true,
+        }),
+      }),
+    );
+    expect(recordAudit.mock.calls.at(-1)?.[1].after).not.toHaveProperty(
+      "coveringForQualityInspector",
+    );
+  });
+
+  it("still holds every other rule for a past day: stale check and the repair lock (A-93)", async () => {
+    const fm = { id: "fm1", name: "Rodel Pascual", role: "FLOOR_MANAGER" as const };
+    const later = at("2026-10-27T03:00:00.000Z");
+    model.findCheckIn.mockResolvedValueOnce({
+      ...saved,
+      updatedAt: at("2026-10-20T05:40:00.000Z"),
+    });
+    await expect(svc.correctCheckIn("ci1", input(), fm, later)).rejects.toMatchObject({
+      code: "STALE",
+    });
+    model.findCheckIn.mockResolvedValueOnce(saved);
+    repairSvc.findingsState.mockResolvedValueOnce({
+      findings: [],
+      jobs: [],
+      locked: true,
+      lines: [],
+    });
+    await expect(svc.correctCheckIn("ci1", input(), fm, later)).rejects.toMatchObject({
+      status: 409,
+      message: "A repair is already back.",
+    });
+    expect(model.correctCheckIn).not.toHaveBeenCalled();
+  });
+
+  it("the Floor Manager on the same day still follows who may inspect (D-088)", async () => {
+    const fm = { id: "fm1", name: "Rodel Pascual", role: "FLOOR_MANAGER" as const };
+    workforce.qualityInspectorPresentOn.mockResolvedValueOnce(true);
+    model.findCheckIn.mockResolvedValueOnce(saved);
+    await expect(
+      svc.correctCheckIn("ci1", input(), fm, at("2026-10-20T06:00:00.000Z")),
+    ).rejects.toMatchObject({ status: 403 });
   });
 
   it("is 409 STALE when someone corrected it first", async () => {
@@ -835,6 +898,34 @@ describe("productionDays (D-086, D-008, C-41)", () => {
     const keys = keysDeep(r);
     for (const k of ["userId", "name", "email", "enteredBy", "enteredById", "createdBy", "actor"])
       expect(keys.has(k)).toBe(false);
+    expect(r.days[0].correctedLater).toBe(false);
+  });
+
+  it("marks a day Corrected only when a batch was corrected on a later day (A-103)", async () => {
+    const monday = [plan("2026-10-19", { quota: 85, rollsPlanned: 3 })];
+    const checkIn = (correctedAt: Date | null) => [
+      {
+        id: "c0",
+        day: at("2026-10-19T00:00:00.000Z"),
+        slotAt: at("2026-10-19T05:00:00.000Z"),
+        enteredAt: at("2026-10-19T05:05:00.000Z"),
+        enteredBy: { name: "Lea Santos" },
+        pairs: 40,
+        failedPairs: 2,
+        correctedAt,
+      },
+    ];
+    const now = at("2026-10-22T04:00:00.000Z");
+    for (const [corrected, expected] of [
+      [null, false],
+      [at("2026-10-19T08:00:00.000Z"), false], // the same Manila day
+      [at("2026-10-20T01:00:00.000Z"), true], // 09:00 the next day
+    ] as const) {
+      model.listDayPlans.mockResolvedValueOnce(monday).mockResolvedValueOnce(monday);
+      model.listCheckIns.mockResolvedValueOnce(checkIn(corrected));
+      const r = await svc.productionDays("2026-10-19", "2026-10-19", now);
+      expect(r.days[0].correctedLater).toBe(expected);
+    }
   });
 });
 

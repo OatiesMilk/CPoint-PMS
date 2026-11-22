@@ -5,6 +5,7 @@ import {
   itemRollsQuerySchema,
   removeRollSchema,
   rollListQuerySchema,
+  updateRollSchema,
 } from "@/server/validators/roll.validator";
 
 const SUPPLIER = "0199a000-0000-7000-8000-000000000001";
@@ -118,5 +119,31 @@ describe("isRollId", () => {
   it("accepts a UUID only", () => {
     expect(isRollId(SUPPLIER)).toBe(true);
     expect(isRollId("R-2026-0001")).toBe(false);
+  });
+});
+
+describe("updateRollSchema (Phase 35B)", () => {
+  const stamp = "2026-10-25T08:00:00.000Z";
+
+  it("needs the version the person saw and a reason, and lets fields be left out", () => {
+    expect(
+      updateRollSchema.parse({
+        expectedUpdatedAt: stamp,
+        reason: " Tag read upside down ",
+        tagCode: "T-9",
+      }),
+    ).toEqual({ expectedUpdatedAt: stamp, reason: "Tag read upside down", tagCode: "T-9" });
+    expect(updateRollSchema.safeParse({ reason: "Tag read upside down" }).success).toBe(false);
+  });
+
+  it("asks why when the reason is missing or too short, or too long", () => {
+    const message = (reason: unknown) => {
+      const r = updateRollSchema.safeParse({ expectedUpdatedAt: stamp, reason });
+      return r.success ? null : r.error.issues[0].message;
+    };
+    expect(message(undefined)).toBe("Say why you are correcting this roll, at least 5 characters.");
+    expect(message("no")).toBe("Say why you are correcting this roll, at least 5 characters.");
+    expect(message("x".repeat(201))).toBe("The reason can be up to 200 characters.");
+    expect(message("A fine reason")).toBeNull();
   });
 });

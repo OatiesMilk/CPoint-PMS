@@ -13,10 +13,27 @@ export const DialogClose = Primitive.Close;
 // "md" for a confirm or a short form, "lg" for a form with a list or two fields side by side.
 const DIALOG_WIDTH = { md: "max-w-md", lg: "max-w-md sm:max-w-2xl" } as const;
 
+// Radix returns focus to its own Trigger, and most dialogs here are opened by a plain button, so focus
+// fell to the page on close (Phase 35B C11). Remember the last thing focused outside any dialog and
+// give it back on close. Read at open time it would be wrong for a dialog whose field takes
+// autoFocus (Remove roll, a new API token): that field already holds focus when the dialog opens.
+let lastOutside: HTMLElement | null = null;
+if (typeof document !== "undefined")
+  document.addEventListener("focusin", (event) => {
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      !target.closest('[role="dialog"]') &&
+      !target.hasAttribute("data-radix-focus-guard")
+    )
+      lastOutside = target;
+  });
+
 export function DialogContent({
   className,
   children,
   size = "md",
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof Primitive.Content> & { size?: keyof typeof DIALOG_WIDTH }) {
   return (
@@ -37,6 +54,12 @@ export function DialogContent({
           "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
           className,
         )}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event);
+          if (event.defaultPrevented) return;
+          event.preventDefault();
+          if (lastOutside?.isConnected) lastOutside.focus();
+        }}
         {...props}
       >
         {children}

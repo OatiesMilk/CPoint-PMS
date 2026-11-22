@@ -251,6 +251,27 @@ header, `min-h-11`, the current one with a 2 px `border-foreground` underline an
   block is `@media not print`). **Remarks** (a textarea that prints as text, or three ruled lines)
   and Prepared by / Checked by lines end the page. **Charts do not print** (`print:hidden`; they came out blank or cut off on A4); the table under each has the same numbers. Rolls prints every matching row (up to 500).
 
+## Corrections to past records (Phase 35B, D-133)
+
+The Floor Manager's, never a rewrite in silence: every one asks **Why are you correcting it?** (a
+textarea, at least 5 characters, the message under it) and says in its success toast that the old
+and new values are kept in the audit log.
+
+- **A past batch:** under Batches → Queue → **Inspected and void**, a small GET form (**Batch
+  date**, **Show this date**, **Last 7 days** to go back) above the list; the card's description
+  names the day and, for the Floor Manager, says a past batch can be corrected. Each row carries the
+  same **Correct** button and dialog as today's. A corrected batch shows one line, "Corrected by
+  <name>, Tue, 17 Nov 10:05: <reason>", under its findings. Operations' production-by-day row shows a
+  neutral **Corrected** badge beside the day when a batch of it was corrected on a later day, and a
+  muted **See batches** link (hidden in print) to that day's list.
+- **A roll's details:** **Edit details** (a secondary button) beside Move and Remove on the roll
+  page; a dialog with Tag number, Received on (a date, never after today), Area (sq ft) and, once a
+  decision exists, Return note. After Finish roll the area stays in the form but disabled, with the
+  reason in muted text under it ("Fixed after Finish roll: …"). Only changed fields are sent.
+- **A repair's inspection:** a **Correct** button on the inspected repair's row, opening the
+  inspect dialog with the saved numbers and a reason field. When a job it sent back has moved on, the
+  button is replaced by the sentence that says which job and why.
+
 ## Plan calendar (D-114)
 
 Batches → Plan days, desktop: a month grid, Monday to Sunday (`grid-cols-7`, the one place a fixed

@@ -152,6 +152,8 @@ export async function countVerdictsForRolls(rollIds: string[], db: Db = defaultD
 const detailSelect = {
   ...listSelect,
   tagCode: true,
+  /** For the Floor Manager's stale check when editing the details (Phase 35B). */
+  updatedAt: true,
   cancelledReason: true,
   returnNote: true,
   returnDecidedAt: true,
@@ -228,6 +230,10 @@ const openSelect = {
   status: true,
   itemId: true,
   areaSqFt: true,
+  // For the Floor Manager's corrections (Phase 35B).
+  receivedAt: true,
+  returnNote: true,
+  updatedAt: true,
   startedAt: true,
   startedById: true,
   usedCheckInId: true,
@@ -287,6 +293,28 @@ export function findRollState(id: string, db: Db = defaultDb()): Promise<OpenRol
 
 export function insertRoll(data: Prisma.RollUncheckedCreateInput, db: Db = defaultDb()) {
   return db.roll.create({ data, select: openSelect });
+}
+
+/**
+ * The Floor Manager's corrections (Phase 35B): only if nobody changed the roll since the caller
+ * loaded it. Returns false when someone else saved first.
+ */
+export async function updateRollDetails(
+  id: string,
+  expectedUpdatedAt: Date,
+  data: {
+    tagCode?: string | null;
+    receivedAt?: Date;
+    areaSqFt?: number;
+    returnNote?: string | null;
+  },
+  db: Db,
+): Promise<boolean> {
+  const { count } = await db.roll.updateMany({
+    where: { id, updatedAt: expectedUpdatedAt },
+    data,
+  });
+  return count === 1;
 }
 
 /** Picking or removing a roll also clears its location (Phase 32). */

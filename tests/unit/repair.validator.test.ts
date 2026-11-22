@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   repairActionSchema,
+  repairCorrectionSchema,
   repairInspectSchema,
   stageAssignmentsSchema,
   stageCountSchema,
@@ -117,5 +118,33 @@ describe("final defect types (Settings)", () => {
     expect(!noLabel.success && noLabel.error.issues[0].message).toBe(
       "Enter a label people will read, e.g. Lifted sole.",
     );
+  });
+});
+
+describe("repairCorrectionSchema (Phase 35B)", () => {
+  const stamp = "2026-11-20T06:00:00.000Z";
+
+  it("is an inspection plus the version the person saw and a reason", () => {
+    expect(
+      repairCorrectionSchema.parse({
+        expectedUpdatedAt: stamp,
+        reason: "One pair passed after all",
+        passedPairs: "4",
+        resend: [{ stage: "FINISHING", pairs: 1 }],
+      }),
+    ).toMatchObject({ passedPairs: "4", reason: "One pair passed after all" });
+  });
+
+  it("asks for the reason in words, and a fresh page when the version is missing", () => {
+    const issues = (body: object) => {
+      const r = repairCorrectionSchema.safeParse(body);
+      return r.success ? [] : r.error.issues.map((i) => i.message);
+    };
+    expect(issues({ expectedUpdatedAt: stamp, reason: "no" })).toEqual([
+      "Say why, at least 5 characters.",
+    ]);
+    expect(issues({ reason: "A good reason" })).toEqual([
+      "This page is out of date. Refresh and try again.",
+    ]);
   });
 });

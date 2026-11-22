@@ -31,6 +31,8 @@ import {
   rollStatusText,
   oldestOpenRoll,
   planFinish,
+  planRollEdit,
+  ROLL_EDIT_MESSAGES,
   planPutBack,
   planRemove,
   planStart,
@@ -72,11 +74,16 @@ import {
   nextRollCodeNumber,
   rollCodeTaken,
   saveRollMeasure,
+  updateRollDetails,
   type OpenRollRow,
   type RollDetailRow,
   type RollListRow,
 } from "@/server/models/roll.model";
-import type { AddRollsValues, RollListQuery } from "@/server/validators/roll.validator";
+import type {
+  AddRollsValues,
+  RollListQuery,
+  UpdateRollInput,
+} from "@/server/validators/roll.validator";
 import {
   awaitsPickup,
   locationText,
@@ -818,6 +825,63 @@ export async function removeRoll(id: string, reason: string, actor: Actor, now: 
       },
     });
     return { id, code: roll.code, status: "CANCELLED" as const };
+  });
+}
+
+/**
+ * The Floor Manager corrects a roll's details, with a reason (Phase 35B, A-104): its tag number, the
+ * day it was received, its return note (once a decision exists) and its area until Finish roll. The
+ * supplier and leather item don't change (stock is counted per item) and its place stays with Move.
+ * Only what changes goes in the audit, with the old and the new value.
+ */
+export async function updateRoll(
+  id: string,
+  input: UpdateRollInput,
+  actor: Actor,
+  now: Date = appNow(),
+) {
+  const roll = await loadRoll(id);
+  if (roll.status === "CANCELLED") throw Errors.conflict(ROLL_EDIT_MESSAGES.removed(roll.code));
+  if (roll.updatedAt.toISOString() !== new Date(input.expectedUpdatedAt).toISOString())
+    throw Errors.stale(ROLL_MESSAGES.stale);
+  const plan = planRollEdit(
+    {
+      status: roll.status,
+      fromInventory: roll.itemId !== null,
+      tagCode: roll.tagCode,
+      receivedOn: dayOf(roll.receivedAt),
+      areaSqFt: area(roll.areaSqFt),
+      returnDecision: roll.returnDecision,
+      returnNote: roll.returnNote,
+    },
+    input,
+    manilaToday(now),
+  );
+  if (!plan.ok)
+    throw Errors.validation(
+      Object.entries(plan.errors).map(([field, message]) => ({
+        path: [field],
+        message: message as string,
+      })),
+    );
+  const { receivedOn, ...rest } = plan.changes;
+  return runInTransaction(async (tx) => {
+    const done = await updateRollDetails(
+      id,
+      roll.updatedAt,
+      { ...rest, ...(receivedOn ? { receivedAt: new Date(`${receivedOn}T00:00:00Z`) } : {}) },
+      tx,
+    );
+    if (!done) throw Errors.stale(ROLL_MESSAGES.stale);
+    await recordAudit(tx, {
+      actor: { type: "USER", userId: actor.id },
+      action: "roll.update",
+      entity: "Roll",
+      entityId: id,
+      before: plan.before,
+      after: { code: roll.code, ...plan.changes, reason: input.reason },
+    });
+    return { id, code: roll.code, changed: Object.keys(plan.changes) };
   });
 }
 

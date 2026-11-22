@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { LoaderCircle, Plus, ScanSearch, Trash2 } from "lucide-react";
+import { LoaderCircle, Pencil, Plus, ScanSearch, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -18,9 +18,11 @@ import { FormErrorSummary } from "@/components/ui/form-error-summary";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { focusFirstInvalid } from "@/lib/focus-first-invalid";
 import { STAGES, STAGE_LABEL, parseRepairResult, type Stage } from "@/lib/repair-rules";
-import { inspectRepairAction } from "./actions";
+import { repairReasonSchema } from "@/server/validators/repair.validator";
+import { correctRepairInspectionAction, inspectRepairAction } from "./actions";
 
 type Props = {
   repair: {
@@ -31,6 +33,16 @@ type Props = {
     pairs: number;
     stageLabel: string;
   };
+  /**
+   * The Floor Manager's correction of an inspection already saved (Phase 35B, A-105): the saved
+   * result to start from. Without it the dialog inspects a repair that is back.
+   */
+  correction?: {
+    updatedAt: string;
+    passedPairs: number;
+    scrappedPairs: number;
+    resend: { stage: Stage; pairs: number }[];
+  };
 };
 
 type Line = { stage: "" | Stage; pairs: string };
@@ -40,12 +52,18 @@ type Line = { stage: "" | Stage; pairs: string };
  * or go back again (to which stage). The three must add up to the repair's pairs. A repair that
  * fails again can be scrapped or sent back with no limit.
  */
-export function RepairInspectDialog({ repair }: Props) {
+export function RepairInspectDialog({ repair, correction }: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [passed, setPassed] = useState("");
-  const [scrapped, setScrapped] = useState("");
-  const [again, setAgain] = useState<Line[]>([]);
+  const start = () => ({
+    passed: correction ? String(correction.passedPairs) : "",
+    scrapped: correction ? String(correction.scrappedPairs) : "",
+    again: (correction?.resend ?? []).map((l) => ({ stage: l.stage, pairs: String(l.pairs) })),
+  });
+  const [passed, setPassed] = useState(() => start().passed);
+  const [scrapped, setScrapped] = useState(() => start().scrapped);
+  const [again, setAgain] = useState<Line[]>(() => start().again);
+  const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -57,9 +75,11 @@ export function RepairInspectDialog({ repair }: Props) {
     again.reduce((s, l) => s + (Number.isInteger(Number(l.pairs)) ? Number(l.pairs) : 0), 0);
 
   function reset() {
-    setPassed("");
-    setScrapped("");
-    setAgain([]);
+    const s = start();
+    setPassed(s.passed);
+    setScrapped(s.scrapped);
+    setAgain(s.again);
+    setReason("");
     setErrors({});
     setFormError(null);
   }
@@ -79,22 +99,38 @@ export function RepairInspectDialog({ repair }: Props) {
     return out;
   }
 
+  /** The checks the server repeats; a correction also needs its reason. */
+  function checkAll(): Record<string, string> {
+    const out = check();
+    if (correction) {
+      const r = repairReasonSchema.safeParse(reason);
+      if (!r.success) out.reason = r.error.issues[0].message;
+    }
+    return out;
+  }
+
   function submit() {
     setFormError(null);
-    const found = check();
+    const found = checkAll();
     setErrors(found);
     if (Object.keys(found).length) return focusFirstInvalid(formRef.current);
     startTransition(async () => {
-      const result = await inspectRepairAction(repair.id, {
-        passedPairs: passed,
-        scrappedPairs: scrapped,
-        resend: again,
-      });
+      const body = { passedPairs: passed, scrappedPairs: scrapped, resend: again };
+      const result = correction
+        ? await correctRepairInspectionAction(repair.id, {
+            ...body,
+            reason,
+            expectedUpdatedAt: correction.updatedAt,
+          })
+        : await inspectRepairAction(repair.id, body);
       if (result.ok) {
+        const sentBack = result.children.map((c) => c.code);
         toast.success(
-          result.children.length
-            ? `${repair.code} inspected. Sent back again as ${result.children.map((c) => c.code).join(", ")}.`
-            : `${repair.code} inspected.`,
+          correction
+            ? `${repair.code} corrected. Both results are kept in the audit log.`
+            : sentBack.length
+              ? `${repair.code} inspected. Sent back again as ${sentBack.join(", ")}.`
+              : `${repair.code} inspected.`,
         );
         setOpen(false);
         reset();
@@ -117,7 +153,9 @@ export function RepairInspectDialog({ repair }: Props) {
           ? "repair-scrapped"
           : key.startsWith("resend.")
             ? `repair-again-${key.split(".")[1]}-pairs`
-            : "repair-result",
+            : key === "reason"
+              ? "repair-reason"
+              : "repair-result",
     message,
   }));
 
@@ -161,8 +199,8 @@ export function RepairInspectDialog({ repair }: Props) {
           setOpen(true);
         }}
       >
-        <ScanSearch aria-hidden />
-        Inspect repair
+        {correction ? <Pencil aria-hidden /> : <ScanSearch aria-hidden />}
+        {correction ? "Correct" : "Inspect repair"}
         <span className="sr-only"> {repair.code}</span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -170,10 +208,15 @@ export function RepairInspectDialog({ repair }: Props) {
           size="lg"
           className="max-h-[90dvh] overflow-x-hidden overflow-y-auto max-sm:top-auto max-sm:bottom-0 max-sm:max-w-none max-sm:translate-y-0 max-sm:rounded-b-none"
         >
-          <DialogTitle>Inspect {repair.code}</DialogTitle>
+          <DialogTitle>
+            {correction ? `Correct ${repair.code}` : `Inspect ${repair.code}`}
+          </DialogTitle>
           <DialogDescription>
             {repair.pairs} pair{repair.pairs === 1 ? "" : "s"} of {repair.defect} from{" "}
-            {repair.batchCode}, back from {repair.stageLabel}. Say what happened to each pair.
+            {repair.batchCode}, back from {repair.stageLabel}.{" "}
+            {correction
+              ? "Change what happened to each pair. The total stays the same, and the pairs sent back again follow."
+              : "Say what happened to each pair."}
           </DialogDescription>
           <form
             ref={formRef}
@@ -291,6 +334,25 @@ export function RepairInspectDialog({ repair }: Props) {
                 </span>
               )}
             </p>
+            {correction && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="repair-reason">Why are you correcting it?</Label>
+                <Textarea
+                  id="repair-reason"
+                  rows={2}
+                  value={reason}
+                  placeholder="e.g. Two pairs were scrapped by mistake"
+                  aria-invalid={!!errors.reason}
+                  aria-describedby={errors.reason ? "repair-reason-error" : undefined}
+                  onChange={(e) => {
+                    setReason(e.target.value);
+                    if (errors.reason && repairReasonSchema.safeParse(e.target.value).success)
+                      setErrors(({ reason: _gone, ...rest }) => rest);
+                  }}
+                />
+                <FieldError id="repair-reason-error" message={errors.reason} />
+              </div>
+            )}
             {formError && <Alert tone="danger">{formError}</Alert>}
             <DialogFooter className="max-sm:flex-col-reverse">
               <DialogClose asChild>
@@ -300,7 +362,7 @@ export function RepairInspectDialog({ repair }: Props) {
               </DialogClose>
               <Button type="submit" disabled={pending} className="max-sm:h-11">
                 {pending && <LoaderCircle aria-hidden className="animate-spin" />}
-                Save inspection
+                {correction ? "Save correction" : "Save inspection"}
               </Button>
             </DialogFooter>
           </form>

@@ -92,7 +92,7 @@ import {
 } from "@/server/models/production.model";
 import { repairedPassedByDay } from "@/lib/repair-rules";
 import { repairInspectionsBetween } from "@/server/models/repair.model";
-import { checkInCoverReason, mayEnterCheckIns } from "@/server/policies/permissions";
+import { can, checkInCoverReason, mayEnterCheckIns } from "@/server/policies/permissions";
 import {
   parseBatchCounts,
   type CheckInInput,
@@ -377,6 +377,8 @@ export type DayRow = {
   /** Line average for the day (D-008): pairs finished ÷ constructors present. */
   pairsPerConstructor: number | null;
   shortfall: string | null;
+  /** A batch of this day was corrected on a later day (Phase 35B, A-103); who and why stay on the batch. */
+  correctedLater: boolean;
 };
 
 type Loaded = Plans & {
@@ -442,6 +444,7 @@ export async function productionDays(
     const wf = workforce.get(day)!;
     rows.push({
       day,
+      correctedLater: dayCheckIns.some((c) => c.correctedAt && manilaDayOf(c.correctedAt) > day),
       batches: batches.length,
       finishedBatches,
       missed,
@@ -1200,8 +1203,9 @@ export async function saveCheckIn(input: CheckInInput, actor: CheckInActor, now:
 }
 
 /**
- * Correct a finished batch on the day it was inspected (Dylan 2026-11-19, until Phase 35), with a
- * reason; both counts go in the audit.
+ * Correct a finished batch, with a reason; both counts go in the audit. Whoever may inspect corrects
+ * it on the day it was inspected (Dylan 2026-11-19); the Floor Manager corrects a batch from any past
+ * day, whoever is present today (Phase 35B, A-70).
  */
 export async function correctCheckIn(
   id: string,
@@ -1212,11 +1216,15 @@ export async function correctCheckIn(
   const row = await findCheckIn(id);
   if (!row) throw Errors.notFound("This batch");
   const day = dayString(row.day);
-  const { covering } = await assertMayEnter(actor, manilaToday(now));
   const inspectedOn = manilaDayOf(row.enteredAt);
-  if (inspectedOn !== manilaToday(now))
+  const pastDay = inspectedOn !== manilaToday(now);
+  const floorManagerPast = pastDay && can(actor.role, "production:prioritise");
+  const { covering } = floorManagerPast
+    ? { covering: false }
+    : await assertMayEnter(actor, manilaToday(now));
+  if (pastDay && !floorManagerPast)
     throw Errors.conflict(
-      `A batch can only be corrected on the day it was inspected. This one was inspected on ${formatAttendanceDay(inspectedOn)}.`,
+      `A batch can only be corrected on the day it was inspected. This one was inspected on ${formatAttendanceDay(inspectedOn)}. Ask the Floor Manager to correct it.`,
     );
   if (row.updatedAt.toISOString() !== new Date(input.expectedUpdatedAt).toISOString())
     throw Errors.stale(
@@ -1274,6 +1282,7 @@ export async function correctCheckIn(
         ...next,
         ...(rebuilt ? { findings: rebuilt.summary, repairs: rebuilt.jobs.map((j) => j.code) } : {}),
         reason: input.reason,
+        ...(floorManagerPast ? { inspectedOn, correctedOnLaterDay: true } : {}),
         ...(covering ? { coveringForQualityInspector: true } : {}),
       },
     });

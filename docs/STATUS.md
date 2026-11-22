@@ -3,31 +3,47 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-21 (Phase 35A: Codex run 3 PASS; waiting for the commit)
-**Branch:** `main` at 9e3038a (#58 the Overview clean-up merged); Phase 35A is uncommitted.
-**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 35A (the file list is in the handoff,
-`qa/handoffs/2026-11-21-phase-35a-reports-by-period.md` §2) and the plan
-`docs/prompts/plans/phase-35-reports-and-corrections-plan.md`; `qa/phase-34-files.txt`,
-`qa/overview-cleanup-files.txt` and `docs/DEMO_SCRIPT.md` stay out (Dylan).
+**Last updated:** 2026-11-22 (Phase 35B: Codex run 5 PASS WITH ISSUES; QA done; waiting for the commit)
+**Branch:** `main` at 64af196 (#60, the 35A e2e CI fix); Phase 35B is uncommitted.
+**Uncommitted (laptop, `C:\dev\CPoint-PMS`):** Phase 35B (the file list is in the handoff,
+`qa/handoffs/2026-11-21-phase-35b-corrections.md` §2); `qa/phase-34-files.txt`,
+`qa/overview-cleanup-files.txt`, `qa/phase-35a-files.txt` and `docs/DEMO_SCRIPT.md` stay out (Dylan).
 
-- **Phase 35A, reports by period (built 2026-11-21, Dylan's go on the plan's three recommendations, D-132):**
-  Operations, Quality and Rolls take a **period**: Day, Week of the month (as Materials, A-67), Month or
-  Custom up to 366 days (A-68), all in the URL; old `preset` and `from`/`to` links work; a future or invalid
-  value ends at today or falls back to it. Tables **sort** by a column header (`?sort=<table>.<column>`, one
-  per page; eleven report tables and every Rolls column); **filters**: Operations' defect cards (defect,
-  fixable, stage; the key figures stay whole-line, A-101), Supplier quality (supplier, with its CSVs),
-  Quality's defect, Rolls' leather item and location; every report prints (**Print**: header with Prepared
-  by, repeated table header, Remarks, signatures; Rolls up to 500 rows, A-102). CSVs follow period and
-  filters, not the sort (A-100). Read-only, no migration. `npm run check` passed (**970 unit tests**,
-  build OK); `reports-period.spec.ts` and `reports-print.spec.ts` written, not run. Not looked at in a
-  browser by Claude: the print layout is unverified until Codex's PDFs. A sorted Rolls list sorts the newest
-  5,000 matches in memory. Handoff `qa/handoffs/2026-11-21-phase-35a-reports-by-period.md`, prompt
-  `qa/CODEX_PROMPT_PHASE_35A.md`. **35B (corrections: a past batch, a roll's details, a repair's
-  inspection) is the next session.**
+- **Phase 35B Codex run 5 PASS WITH ISSUES** (`qa/reports/2026-11-22-phase-35b-run5.md`): `inspection-queue.spec.ts` three runs at one worker, `corrections.spec.ts` and the six related specs passed; one `reports.spec.ts` sign-in stall in the full suite passed alone (dev-server load). With runs 1 to 4 (C11 36 of 36) every scenario has passed. **Phase 35B QA done**; git commands for `feature/corrections` given to Dylan (list `qa/phase-35b-files.txt`).
+- **Phase 35B Codex run 4 FAIL on test-level causes, fixed** (`qa/reports/2026-11-22-phase-35b-run4.md`): the toast stayed up because the pointer sat over it where Finish was (Sonner pauses on hover; the spec now moves the pointer away); `--repeat-each=2` at two workers was my prompt's fault (two copies on the same fixtures); two reports sign-in stalls in the full run pass alone (dev-server load). Next: `qa/CODEX_PROMPT_PHASE_35B_RUN5.md`.
+- **Phase 35B Codex run 3 FAIL on a test, fixed** (`qa/reports/2026-11-22-phase-35b-run3.md`): C11 passed 36 of 36 (the dialog focus fix works for all six dialogs); the e2e `inspection-queue.spec.ts` assumed the last Saturday is older than the last Sunday, wrong on a Sunday run (now compares the dates); the Admin `ECONNRESET` and the report sign-in stall pass alone. Next: `qa/CODEX_PROMPT_PHASE_35B_RUN4.md`.
+- **Phase 35B Codex run 2 FAIL, fixed** (`qa/reports/2026-11-21-phase-35b-run2.md`; C10 and the print check passed): Remove roll still lost focus (its Reason box is `autoFocus`; `ui/dialog.tsx` now restores the last element focused outside any dialog); two timeouts in broad runs, each passing alone, fixed in the tests (`inspection-queue.spec.ts` waits for the toast to go; `corrections.spec.ts` clicks until the dialog opens). `npm run check` passed (1001). Next: `qa/CODEX_PROMPT_PHASE_35B_RUN3.md`.
+- **Phase 35B Codex run 1 FAIL, fixed** (`qa/reports/2026-11-21-phase-35b-run1.md`; C1 to C9, A1 to A3 passed): the e2e read two `timestamp` columns as the laptop's local time (8 hours off), so the stale guard answered STALE (now UTC text); focus fell to the page when a dialog closed with Escape (`ui/dialog.tsx` now restores it, for every dialog); the Corrected badge widened Operations' first column in print (now under the date); C10's handoff wording. `npm run check` passed (1001). Next: `qa/CODEX_PROMPT_PHASE_35B_RUN2.md`.
+- **Phase 35B, corrections to past records (built 2026-11-21, plan approved with all three recommendations, D-133):**
+  the **Floor Manager** only, always with a reason and an audit row (old and new value), **no migration**.
+  **A batch from any past day:** Batches → Queue → Inspected and void has a **Batch date** picker (`doneDay`);
+  every rule of a same-day correction holds (stale check, both counts in the audit, the lock once a repair from
+  the batch is Back, A-93) and no QI-present cover is needed for a past day; the QI still corrects only on the
+  inspection day ("Ask the Floor Manager to correct it."); a corrected batch shows "Corrected by …, when, why";
+  Operations' production by day marks a day **Corrected** (a batch of it corrected on a later day) with a **See
+  batches** link. **A roll's details:** Edit details on the roll page (`PATCH /api/v1/rolls/{id}`): tag, received
+  day, return note (once a decision exists) and the **area only before Finish roll**; supplier and item never
+  change; a removed roll can't be edited. **A repair's inspection:** Correct on an inspected repair (`PATCH
+/api/v1/production/repairs/{id}/inspect`): the split between passed, scrapped and sent back again (same
+  total) **while every job it sent back is still At stage**; those jobs follow. `npm run check` passed
+  (**1001 unit tests**, build OK); `corrections.spec.ts` written, not run; not looked at in a browser by Claude.
+  Handoff `qa/handoffs/2026-11-21-phase-35b-corrections.md`, prompt `qa/CODEX_PROMPT_PHASE_35B.md` (short:
+  `qa/CODEX_PROMPT_PHASE_35B_MINI.md`). A repair's correction is marked only in the audit log (no column).
 
-- **Phase 35A Codex run 3 PASS** (`qa/reports/2026-11-21-phase-35a-run3.md`): P10 (all 39 PDF pages reviewed: no chart or blank plot, tables fit with repeated headers, Materials lists all 45 at-risk names with no control, header, remark and signatures present; both charts and "Show all" still work on screen) and P15 (print and period specs 7 and 7, full suite 135 passed, 0 failed, 4 skipped) passed. With runs 1 and 2 every scenario has passed. **Phase 35A QA done**; git commands for `feature/reports-by-period` given to Dylan (list `qa/phase-35a-files.txt`). Charts do not print (a decision to revisit with a static chart if wanted).
-- **Phase 35A Codex run 2 FAIL on P10 only, fixed** (`qa/reports/2026-11-21-phase-35a-run2.md`; P6, P9 and P15 passed, the full suite 135 passed, 0 failed, 4 skipped; Codex's run-1 fixes for actions and pager held): the Operations and Quality charts printed blank (my `.recharts-wrapper` rule collapsed them to 0 × 0 under print), and Materials printed the closed "Show all 26" control. Charts are now **not printed** (the production chart and Quality's "Rolls scanned per day" card are `print:hidden`; their tables hold the same numbers): a decision to revisit with a static chart if Dylan wants one on paper. Materials prints every at-risk material by name and no control. The chart CSS is removed. `npm run check` passed (970). Next: `qa/CODEX_PROMPT_PHASE_35A_RUN3.md` (P10 and the suites).
-- **Phase 35A Codex run 1 FAIL, fixed** (`qa/reports/2026-11-21-phase-35a-run1.md`; 13 of 17 passed; P1 to P5, P7, P8, P11 to P14, A1, A2 passed, the demo was reset): **F1** the Quality and Operations charts were clipped at the A4 right edge (a chart is measured at screen width; print CSS now scales it to the page); **F2** inline actions (card links, View, Claim sheet) and the Next/Previous buttons printed (now `print:hidden`; the Materials count line stays); **F4** the print spec's Remarks locator matched two elements (now a textbox by role); **F5** `rolls.spec.ts`'s no-person check matched the sort header's hidden "Sort by this column" (now "Select to sort"). Not faults: F3 (an impossible legacy `from=` shows the default 14 days: handoff reworded), F7 (the worst-rolls card shows 5, its CSV up to 100: handoff reworded), F6, F8 and F9 (sign-in and load stalls in the full run, each passing alone, as in Phases 32 and 33). `npm run check` passed (970). Next: `qa/CODEX_PROMPT_PHASE_35A_RUN2.md`.
+- **Main CI after #59 (run 44897069011): `e2e` red, two 35A tests, fixed in the tests (uncommitted).** `check`, `station`
+  and `docker` passed; `e2e` 130 passed, 2 failed, 7 skipped. CI has no demo week, so `reports-print.spec.ts` ("Rolls
+  prints every matching row": expected more than 15 rolls, saw 11) and `reports-period.spec.ts` ("Rolls sorts … and
+  filters by leather item": the first item had no rolls, so no Download CSV link) made wrong assumptions about the data.
+  Both now add their own rolls (`addInventoryRoll`); no app change. `npm run check` passed (1001). Re-check prompt
+  `qa/CODEX_PROMPT_CI_RECHECK_feature-reports-by-period.md`. **Codex re-check PASS** (`qa/reports/2026-11-21-ci-recheck-feature-reports-by-period.md`): the full `test:e2e` as CI runs it (6 workers, one retry) 138 passed, 1 flaky, 0 failed; the two specs 14 of 14 on the dev database and on a fresh empty one (a throwaway stack, removed afterwards). The one flaky test, `admin.spec.ts:136` (the camera settings Save button not enabled in time), passed on its retry and is not from this change. Dylan commits the two specs on their own small branch.
+- **Phase 35A, reports by period (built 2026-11-21, D-132, merged #59):** Operations, Quality and Rolls take a
+  period (Day, Week of the month, Month or Custom up to 366 days, A-67, A-68); tables sort by a header
+  (`?sort=<table>.<column>`); filters on the defect cards, Supplier quality, Quality's defect, Rolls' item and
+  location; every report prints (Prepared by, repeated table header, Remarks, signatures; Rolls up to 500 rows;
+  **charts do not print**, a decision to revisit with a static chart if wanted). CSVs follow period and filters,
+  not the sort. Read-only, no migration. QA passed in 3 Codex runs (`qa/reports/2026-11-21-phase-35a-run3.md`);
+  the run-by-run detail is in SESSION_LOG.
+
 - **Overview clean-up (built 2026-11-21, Dylan's yes to the plan's three recommendations, D-131):** the
   Floor Manager's Overview has three zones: **Needs attention** (only when due: Plan today, Stock update
   today, slim rows; Plan today is the filled button), **On the line now** (Today's batches beside Work in
@@ -341,8 +357,8 @@ check` passed (823). Next: `qa/CODEX_PROMPT_PHASE_33_RUN4.md` (R1, R2, Q14).
 - [x] 34. Final defects, repairs and work in progress (defense revision 1; built 2026-11-20, D-130;
       QA passed, run 4; merged #56, #57)
 - [x] Overview clean-up (the Floor Manager's home, D-131; QA passed, run 2; merged #58)
-- [x] 35A. Reports by period, sort, filter and print (D-132; built 2026-11-21; QA passed, run 3; uncommitted)
-- [ ] 35B. Corrections to past records (planned)
+- [x] 35A. Reports by period, sort, filter and print (D-132; built 2026-11-21; QA passed, run 3; merged #59)
+- [x] 35B. Corrections to past records (D-133; built 2026-11-21; QA passed, run 5; uncommitted)
 
 ## What works right now
 
@@ -378,9 +394,8 @@ D-entries.
 
 ## Next step (exact)
 
-0. Dylan: run the git commands for `feature/reports-by-period` (files from `qa/phase-35a-files.txt`), open the PR, merge when
-   CI is green; then the 35B session (corrections). Rebuild the Docker app after Phase 34, the Overview clean-up and
-   35A before using it.
+0. Dylan: run the git commands for `feature/corrections` (files from `qa/phase-35b-files.txt`), open the PR, merge when CI is green. Rebuild the Docker app after Phase 34, the
+   Overview clean-up, 35A and 35B before using it.
 1. Dylan: paste `qa/CODEX_PROMPT_PHASE_31_RUN4.md` into Codex (a weekday).
 2. Dylan, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too).
@@ -399,6 +414,20 @@ D-entries.
 - None for the demo.
 
 ## Open questions / assumptions awaiting client confirmation
+
+- ASSUMPTION (A-70, D-133): only the Floor Manager corrects past records; the Quality Inspector only on the
+  inspection day. **To ask CPoint:** should anyone else (the Quality Inspector) correct an older batch?
+- ASSUMPTION (A-103, D-133): a corrected batch shows "Corrected" on its day in Operations; who and why stay on
+  the batch and in the audit.
+- ASSUMPTION (A-104, A-107, D-133): a roll's area changes only before Finish roll (the defect share and the
+  return mark are worked out from it); a roll from before Phase 30A has no area to correct.
+- ASSUMPTION (A-105, A-108, D-133): a repair's inspection is correctable while the pairs it sent back are At
+  stage; it keeps the original inspection time and inspector, its passed pairs stay on the day first inspected,
+  and the correction is marked only in the audit log.
+- ASSUMPTION (A-106, A-110, D-133): a removed roll's details can't change; a kept roll's return note can't be
+  emptied (Keep needs a reason).
+- ASSUMPTION (A-109, D-133): the Floor Manager corrects a past batch even when a Quality Inspector is present
+  today.
 
 - ASSUMPTION (A-67, D-132): a week in Reports is a week of the month, as Materials (D-109); a month's weekly
   prints add up to its monthly print.

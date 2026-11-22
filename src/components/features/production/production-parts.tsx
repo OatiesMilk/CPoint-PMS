@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CircleCheck, CircleDashed, CircleSlash, Clock, Hourglass, Timer } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -113,6 +114,8 @@ export type DayRowView = {
   constructorsOnRoster: number;
   pairsPerConstructor: number | null;
   shortfall: string | null;
+  /** A batch of this day was corrected on a later day (Phase 35B, A-103). */
+  correctedLater?: boolean;
 };
 
 const DAY_KEYS: Record<string, SortKey<DayRowView>> = {
@@ -139,11 +142,14 @@ export function ProductionDaysTable({
   days,
   testid = "production-days",
   sort,
+  seeBatches = false,
 }: {
   days: DayRowView[];
   testid?: string;
   /** Reports → Operations (Phase 35): the page's sort. Without it the headers don't sort. */
   sort?: SortState | null;
+  /** A "See batches" link under each day, to the Floor Manager's list of that day (Phase 35B). */
+  seeBatches?: boolean;
 }) {
   const sortable = sort !== undefined;
   if (days.length === 0)
@@ -272,7 +278,27 @@ export function ProductionDaysTable({
             aria-label={formatAttendanceDay(d.day)}
             className="border-0 hover:bg-transparent"
           >
-            <TableCell className="whitespace-nowrap">{formatAttendanceDay(d.day)}</TableCell>
+            <TableCell className="whitespace-nowrap">
+              {formatAttendanceDay(d.day)}
+              {d.correctedLater && (
+                // Under the date, so the badge never widens the table past the page in print.
+                <span className="mt-1 block">
+                  <Badge tone="neutral" data-testid="day-corrected">
+                    Corrected
+                  </Badge>
+                </span>
+              )}
+              {seeBatches && (
+                <Link
+                  href={`/batches?tab=queue&doneDay=${d.day}#inspected-heading`}
+                  className="block text-sm text-muted-foreground underline-offset-4 hover:underline print:hidden"
+                  data-testid={`see-batches-${d.day}`}
+                >
+                  See batches
+                  <span className="sr-only"> of {formatAttendanceDay(d.day)}</span>
+                </Link>
+              )}
+            </TableCell>
             <TableCell numeric>{n(d.finished)}</TableCell>
             <TableCell numeric className="whitespace-nowrap">
               {n(d.failed)}
