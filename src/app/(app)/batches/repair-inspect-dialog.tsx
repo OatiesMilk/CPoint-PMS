@@ -20,7 +20,13 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { focusFirstInvalid } from "@/lib/focus-first-invalid";
-import { STAGES, STAGE_LABEL, parseRepairResult, type Stage } from "@/lib/repair-rules";
+import {
+  REPAIR_STAGES,
+  STAGE_LABEL,
+  parseRepairResult,
+  type RepairStage,
+  type Stage,
+} from "@/lib/repair-rules";
 import { repairReasonSchema } from "@/server/validators/repair.validator";
 import { correctRepairInspectionAction, inspectRepairAction } from "./actions";
 
@@ -265,13 +271,13 @@ export function RepairInspectDialog({ repair, correction }: Props) {
                         onChange={(e) =>
                           setAgain(
                             again.map((l, k) =>
-                              k === i ? { ...l, stage: e.target.value as Stage | "" } : l,
+                              k === i ? { ...l, stage: e.target.value as RepairStage | "" } : l,
                             ),
                           )
                         }
                       >
                         <option value="">Choose the stage</option>
-                        {STAGES.map((s) => (
+                        {REPAIR_STAGES.map((s) => (
                           <option key={s} value={s}>
                             {STAGE_LABEL[s]}
                           </option>

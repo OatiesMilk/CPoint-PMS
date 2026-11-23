@@ -18,7 +18,7 @@ import { FieldError } from "@/components/ui/field-error";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { STAGES, STAGE_LABEL, type Stage } from "@/lib/repair-rules";
+import { REPAIR_STAGES, STAGE_LABEL, type RepairStage, type Stage } from "@/lib/repair-rules";
 import { repairAction } from "./actions";
 
 type Repair = { id: string; code: string; stage: Stage };
@@ -33,7 +33,7 @@ export function RepairActions({ repair, canManage }: { repair: Repair; canManage
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [action, setAction] = useState<"move" | "notFixable">("move");
-  const [stage, setStage] = useState<"" | Stage>("");
+  const [stage, setStage] = useState<"" | RepairStage>("");
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export function RepairActions({ repair, canManage }: { repair: Repair; canManage
       if (result.ok) {
         toast.success(
           action === "move"
-            ? `${result.code} moved to ${STAGE_LABEL[stage as Stage]}.`
+            ? `${result.code} moved to ${STAGE_LABEL[stage as RepairStage]}.`
             : `${result.code} marked not fixable after all.`,
         );
         setOpen(false);
@@ -125,12 +125,12 @@ export function RepairActions({ repair, canManage }: { repair: Repair; canManage
                       aria-invalid={!!errors.stage}
                       aria-describedby={errors.stage ? "repair-stage-error" : undefined}
                       onChange={(e) => {
-                        setStage(e.target.value as Stage | "");
+                        setStage(e.target.value as RepairStage | "");
                         setErrors(({ stage: _s, ...rest }) => rest);
                       }}
                     >
                       <option value="">Choose the stage</option>
-                      {STAGES.filter((s) => s !== repair.stage).map((s) => (
+                      {REPAIR_STAGES.filter((s) => s !== repair.stage).map((s) => (
                         <option key={s} value={s}>
                           {STAGE_LABEL[s]}
                         </option>

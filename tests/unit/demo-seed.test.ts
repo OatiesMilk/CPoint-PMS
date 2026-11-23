@@ -202,22 +202,59 @@ const attendance = {
 const FINAL_TYPES = ["LIFTED_SOLE", "GLUE_MARKS", "LOOSE_STITCHING", "SCUFFS", "OTHER"].map(
   (key) => ({ id: `t-${key}`, key, label: key, isActive: true }),
 );
-const repairJobs = Array.from({ length: 7 }, (_, i) => ({
-  id: `j${i + 1}`,
-  pairs: 2,
-  sentAt: new Date(`2026-01-0${i + 1}T04:00:00Z`),
-  finding: { finalDefectType: { key: i === 4 ? "LOOSE_STITCHING" : "LIFTED_SOLE" } },
-}));
+// Repair jobs that move through their states like the real ones: older ones were sent days ago
+// (the demo's `now` is Saturday 3 Oct 2026, so the recent working days are Tue 29 Sep to Fri 2 Oct).
+type MockJob = {
+  id: string;
+  pairs: number;
+  stage: string;
+  sentAt: Date;
+  parentId: string | null;
+  status: "AT_STAGE" | "BACK_FOR_INSPECTION" | "DONE";
+  backAt?: Date;
+  finding: { finalDefectType: { key: string } };
+};
+const sent = (day: string, time: string) => new Date(`${day}T${time}:00+08:00`);
+const freshRepairJobs = (): MockJob[] =>
+  [
+    // Five older jobs, then six recent ones (Sole-ing, Finishing, Sole-ing, Construction, Finishing, Sole-ing).
+    ["r1", "2026-09-21", "13:08", "SOLE_ING", "LIFTED_SOLE"],
+    ["r2", "2026-09-22", "13:08", "FINISHING", "GLUE_MARKS"],
+    ["r3", "2026-09-23", "13:08", "SOLE_ING", "LIFTED_SOLE"],
+    ["r4", "2026-09-24", "13:08", "FINISHING", "GLUE_MARKS"],
+    ["r5", "2026-09-25", "13:08", "SOLE_ING", "LIFTED_SOLE"],
+    ["l1", "2026-09-29", "13:08", "SOLE_ING", "LIFTED_SOLE"],
+    ["l2", "2026-09-30", "13:08", "FINISHING", "GLUE_MARKS"],
+    ["l3", "2026-09-30", "17:08", "SOLE_ING", "LIFTED_SOLE"],
+    ["l4", "2026-10-01", "13:08", "CONSTRUCTION", "LOOSE_STITCHING"],
+    ["l5", "2026-10-01", "17:08", "FINISHING", "GLUE_MARKS"],
+    ["l6", "2026-10-02", "13:08", "SOLE_ING", "LIFTED_SOLE"],
+  ].map(([id, day, time, stage, key]) => ({
+    id,
+    pairs: 2,
+    stage,
+    sentAt: sent(day, time),
+    parentId: null,
+    status: "AT_STAGE" as const,
+    finding: { finalDefectType: { key } },
+  }));
+let repairJobs: MockJob[] = freshRepairJobs();
 const repairSvc = {
   finalDefectTypeOptions: vi.fn(async () => FINAL_TYPES),
-  markRepairBack: vi.fn(async (_id: string, _actor: unknown, _when: Date) => ({
-    id: "j",
-    code: "RP",
-  })),
+  markRepairBack: vi.fn(async (id: string, _actor: unknown, when: Date) => {
+    const job = repairJobs.find((j) => j.id === id)!;
+    job.status = "BACK_FOR_INSPECTION";
+    job.backAt = when;
+    return { id, code: "RP" };
+  }),
 };
 vi.mock("@/server/services/repair.service", () => repairSvc);
 vi.mock("@/server/models/repair.model", () => ({
-  listRepairsByStatus: vi.fn(async () => repairJobs),
+  listRepairsByStatus: vi.fn(async (statuses: string[]) =>
+    repairJobs
+      .filter((j) => statuses.includes(j.status))
+      .sort((x, y) => x.sentAt.getTime() - y.sentAt.getTime()),
+  ),
 }));
 vi.mock("@/server/models/stage.model", () => ({
   listActiveConstructors: vi.fn(async () =>
@@ -250,10 +287,28 @@ const batchQueue = {
     updatedAt: "2026-01-01T09:00:00.000Z",
   })),
   setBatchPriority: vi.fn(async () => ({ id: "b1", code: "B-260101-2", saved: true })),
-  inspectRepair: vi.fn(async (_id: string, _input: object, _actor: unknown, _when: Date) => ({
-    id: "j",
-    code: "RP",
-  })),
+  inspectRepair: vi.fn(
+    async (
+      id: string,
+      input: { resend: { stage: string; pairs: number }[] },
+      _actor: unknown,
+      when: Date,
+    ) => {
+      const job = repairJobs.find((j) => j.id === id)!;
+      job.status = "DONE";
+      for (const line of input.resend)
+        repairJobs.push({
+          id: `${id}-again`,
+          pairs: line.pairs,
+          stage: line.stage,
+          sentAt: when,
+          parentId: id,
+          status: "AT_STAGE",
+          finding: job.finding,
+        });
+      return { id, code: "RP" };
+    },
+  ),
 };
 vi.mock("@/server/services/batch-queue.service", () => batchQueue);
 vi.mock("@/server/services/attendance.service", () => attendance);
@@ -286,6 +341,7 @@ shareOf = (rollId) => demoRollShare(shotsOf(rollId), areaOf(rollId), CLASSES);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  repairJobs = freshRepairJobs();
   calls.length = 0;
   nextRoll = 0;
   savedPresent.clear();
@@ -454,6 +510,7 @@ describe("seedDemoWeek", () => {
   it("lists what was wrong on every failed batch, by a fixed rotation (Phase 34, D-130)", async () => {
     await seedDemoWeek({ now, seed: 1 });
     type Finish = {
+      slotAt: string;
       failedPairs: number;
       findings: {
         finalDefectTypeId: string;
@@ -480,6 +537,23 @@ describe("seedDemoWeek", () => {
     expect(count("LOOSE_STITCHING")).toBe(1);
     expect(lines.find((f) => f.finalDefectTypeId === "t-LOOSE_STITCHING")?.returnStage).toBe(
       "CONSTRUCTION",
+    );
+    // The last four working days (Tue 29 Sep to Fri 2 Oct) follow the live-board pattern in order
+    // (Phase 37): Loose stitching is there, Fixable, and so are the Fixable jobs for every stage.
+    const recent = inputs
+      .filter((c) => c.slotAt >= "2026-09-28T16:00:00.000Z")
+      .map((c) => c.findings[0]);
+    expect(recent.map((f) => f.finalDefectTypeId.replace("t-", ""))).toEqual([
+      "LIFTED_SOLE",
+      "GLUE_MARKS",
+      "SCUFFS",
+      "LIFTED_SOLE",
+      "LOOSE_STITCHING",
+      "GLUE_MARKS",
+      "LIFTED_SOLE",
+    ]);
+    expect(new Set(recent.filter((f) => f.remedy === "FIXABLE").map((f) => f.returnStage))).toEqual(
+      new Set(["SOLE_ING", "FINISHING", "CONSTRUCTION"]),
     );
     expect(
       lines
@@ -532,21 +606,74 @@ describe("seedDemoWeek", () => {
     expect(byConstructor.some(([input]) => input.stage === "PREPARATION")).toBe(true);
   });
 
-  it("puts repairs in every state: back, inspected, sent back again, and left at the stage (Phase 34)", async () => {
+  it("puts repairs in every state: old ones finished, three Back, recent ones At stage (Phase 37)", async () => {
     await seedDemoWeek({ now, seed: 1 });
     const back = repairSvc.markRepairBack.mock.calls.map(([id]) => id);
-    expect(back).toEqual(["j1", "j2", "j3", "j6"]);
+    // The five older jobs, the one sent back again, and the three oldest recent ones.
+    expect(back).toEqual(["r1", "r2", "r3", "r4", "r5", "r5-again", "l1", "l2", "l3"]);
     const inspected = batchQueue.inspectRepair.mock.calls as unknown as [
       string,
       { passedPairs: number; scrappedPairs: number; resend: { stage: string; pairs: number }[] },
+      unknown,
+      Date,
     ][];
-    expect(inspected.map(([id]) => id)).toEqual(["j1", "j2", "j3"]);
-    expect(inspected[0][1].passedPairs).toBe(2);
-    expect(inspected[1][1]).toMatchObject({ passedPairs: 1, scrappedPairs: 1 });
-    expect(inspected[2][1].resend).toEqual([{ stage: "FINISHING", pairs: 2 }]);
-    // The Loose stitching job and the newest one stay At stage.
-    expect(back).not.toContain("j5");
-    expect(back).not.toContain("j7");
+    expect(inspected.map(([id]) => id)).toEqual(["r1", "r2", "r3", "r4", "r5", "r5-again"]);
+    // Passed, passed, one scrapped, passed, sent back again to its own stage, then fixed.
+    expect(inspected[0][1]).toMatchObject({ passedPairs: 2, scrappedPairs: 0 });
+    expect(inspected[1][1]).toMatchObject({ passedPairs: 2, scrappedPairs: 0 });
+    expect(inspected[2][1]).toMatchObject({ passedPairs: 1, scrappedPairs: 1 });
+    expect(inspected[3][1]).toMatchObject({ passedPairs: 2, scrappedPairs: 0 });
+    expect(inspected[4][1].resend).toEqual([{ stage: "SOLE_ING", pairs: 2 }]);
+    expect(inspected[5][1]).toMatchObject({ passedPairs: 2, resend: [] });
+    // Each is inspected on a working day, after it was back, never in the future.
+    for (const [id, , , when] of inspected) {
+      const job = repairJobs.find((j) => j.id === id)!;
+      expect(when.getTime()).toBeGreaterThan(job.backAt!.getTime());
+      expect(when.getTime()).toBeLessThanOrEqual(now.getTime());
+      const weekday = new Date(when.getTime() + 8 * 3_600_000).getUTCDay();
+      expect([0, 6]).not.toContain(weekday);
+    }
+    // Three wait Back about 2 days, 1 day and 2 hours; one repair per stage after Preparation is At stage.
+    const waited = (id: string) =>
+      (now.getTime() - repairJobs.find((j) => j.id === id)!.backAt!.getTime()) / 3_600_000;
+    expect(waited("l1")).toBeCloseTo(48, 0);
+    expect(waited("l2")).toBeCloseTo(24, 0);
+    expect(repairJobs.find((j) => j.id === "l3")!.backAt!.getTime()).toBe(
+      repairJobs.find((j) => j.id === "l3")!.sentAt.getTime() + 2 * 3_600_000,
+    );
+    const left = repairJobs.filter((j) => j.status === "AT_STAGE");
+    expect(left.map((j) => j.id)).toEqual(["l4", "l5", "l6"]);
+    expect(left.map((j) => j.stage).sort()).toEqual(["CONSTRUCTION", "FINISHING", "SOLE_ING"]);
+    // Nothing is at Preparation.
+    expect(repairJobs.some((j) => j.stage === "PREPARATION")).toBe(false);
+  });
+
+  it("leaves Finishing's second count today out, so one stage has an older count (Phase 37)", async () => {
+    const friday = new Date("2026-10-02T09:05:00.000Z"); // Friday 17:05 in Manila
+    await seedDemoWeek({ now: friday, seed: 1 });
+    const counts = stages.saveStageCount.mock.calls as unknown as [
+      { stage: string },
+      unknown,
+      Date,
+    ][];
+    const today = (stage: string) =>
+      counts
+        .filter(
+          ([input, , when]) =>
+            input.stage === stage && when.toISOString() >= "2026-10-01T16:00:00.000Z",
+        )
+        .map(([, , when]) => when.toISOString());
+    expect(today("FINISHING")).toEqual(["2026-10-02T02:30:00.000Z"]);
+    for (const stage of ["PREPARATION", "CONSTRUCTION", "SOLE_ING"])
+      expect(today(stage)).toEqual(["2026-10-02T02:30:00.000Z", "2026-10-02T07:30:00.000Z"]);
+    // The days before are counted twice at every stage.
+    const yesterday = counts.filter(
+      ([input, , when]) =>
+        input.stage === "FINISHING" &&
+        when.toISOString() >= "2026-09-30T16:00:00.000Z" &&
+        when.toISOString() < "2026-10-01T16:00:00.000Z",
+    );
+    expect(yesterday).toHaveLength(2);
   });
 
   it("draws defects from the active defect types only", async () => {

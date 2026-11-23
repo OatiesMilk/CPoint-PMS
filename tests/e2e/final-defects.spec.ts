@@ -219,6 +219,9 @@ test("the QI lists what was wrong, and each fixable line starts a repair at its 
   await l4.fixable.check();
   // Only after Fixable is chosen does a stage appear, and none appears for Not fixable.
   await expect(l3.stage).toHaveCount(0);
+  // No repair goes back to Preparation (D-136): the camera already checked the leather.
+  await expect(l4.stage.getByRole("option", { name: "Preparation" })).toHaveCount(0);
+  await expect(l4.stage.getByRole("option", { name: "Construction" })).toHaveCount(1);
 
   // The messages name the line and the fix, and clear as it is fixed.
   const finish = dialog.getByRole("button", { name: `Finish ${MAIN_CODE}` });
@@ -540,9 +543,11 @@ test("the reports show the final defects, where they come from and the repairs",
   await expect(defects.getByRole("row", { name: "Reason not recorded" })).toHaveCount(0);
   const origins = fm.getByTestId("defect-origins-table");
   // Where a defect came from is the stage the QI chose; a later move by the Floor Manager doesn't change it.
-  // Cells: defect, Preparation, Construction, Sole-ing, Finishing, scrapped.
+  // Cells: defect, Construction, Sole-ing, Finishing, scrapped. No Preparation column: a repair never
+  // goes back to Preparation (D-136).
+  await expect(origins.getByRole("columnheader", { name: /Preparation/ })).toHaveCount(0);
   await expect(
-    origins.getByRole("row", { name: "Loose stitching" }).getByRole("cell").nth(2),
+    origins.getByRole("row", { name: "Loose stitching" }).getByRole("cell").nth(1),
   ).toContainText("1");
   await expect(fm.getByTestId("repairs-section")).toContainText("Sent");
   expect(await axe(fm)).toEqual([]);

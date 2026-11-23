@@ -3,10 +3,44 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-23 (Phase 36 merged as #62, CI green; only the hand rehearsal is left)
+**Last updated:** 2026-11-23 (Phases 37 and 38 built, uncommitted; Phase 38 QA PASS WITH ISSUES, run 3; Phase 36 merged as #62, CI green)
 **Branch:** `main` at c030f72 (#62, Phase 36 merged; its CI run on `main` passed all four jobs). `docs/DEMO_SCRIPT.md` is
 Dylan's file and stays out of git.
 
+- **Phase 38 (built 2026-11-23, D-136, uncommitted, on top of Phase 37):** the Preparation card on Batches → Work in
+  progress lists the camera's leather defects on today's finished rolls ("Scratch 9, Crease 7": rolls per type, as
+  Reports → Rolls; "Returned to supplier: N rolls."; a none line) instead of "No repairs here."; and no repair goes
+  back to Preparation (`REPAIR_STAGES`: Construction, Sole-ing, Finishing, in the finding form, Move to, Sent back
+  again, the validators, the Operations stage filter and columns). No migration; legacy Preparation rows are still
+  reported (A-115). `npm run check` passed on a copy of the working tree (lint, typecheck, 65 files and 1012 tests,
+  build; the laptop's `node_modules` is Windows-only, so it ran in the cloud container). Screenshot 21 retaken and
+  `USER_MANUAL.pdf` rebuilt (39 pages). Plan `docs/prompts/plans/phase-38-preparation-camera-defects-plan.md`,
+  handoff `qa/handoffs/2026-11-23-phase-38-preparation-camera-defects.md`, prompt `qa/CODEX_PROMPT_PHASE_38.md`,
+  files `qa/phase-38-files.txt`. **Codex:** run 1 FAIL (e2e with the demo clock a day ahead; manual L1 to L10 passed), run 2
+  (clock real) found one real test bug, `final-defects.spec.ts` read the origin cell as `.nth(2)` after the Preparation column
+  went (fixed), run 3 **PASS WITH ISSUES** (`qa/reports/2026-11-23-phase-38-run3.md`: final-defects 8 of 8; Corrections and
+  Reports time out at sign-in only in the six-worker full run and pass alone, three runs in a row). **To tell CPoint:** repairs never go back to Preparation. Left out on purpose:
+  `docs/DEMO_SCRIPT.md` (Dylan's file; Act 5 and 6 only use later stages) and the CI `docker` SQL block (protected;
+  a "no repair at PREPARATION" check can be offered as a patch).
+- **Phase 37 Codex run 1 PASS WITH ISSUES** (`qa/reports/2026-11-23-phase-37-run1.md`, clock real, 11:30 Manila): W1 to W3 and W5 to W8
+  passed (statuses and stage counts, DONE arithmetic, board, inspection of the oldest repair, Operations, Overview, second reset);
+  W4's 10:30-versus-15:30 contrast was blocked by the time of day (the count update itself worked). No code fix. **Run 2 PASS** (`qa/reports/2026-11-23-phase-37-run2.md`, W4 at a 16:00 demo clock): Finishing
+  as of 10:30 beside the others at 15:30, and a new count moved it. It found that `npm run demo:reset` seeded at real time
+  while the clock was moved; fixed: `scripts/demo-reset.ts` and `scripts/demo-seed.ts` now load the demo clock first
+  (checked: a CLI reset at a 16:00 clock seeded 15:30 counts; `npm run check` passed, 1012 tests).
+- **Phase 37 (built 2026-11-23, D-135, demo data only, uncommitted):** the demo seed shows a live Work in
+  progress board. Repairs from before the last four working days are finished (passed, one scrapped, sent back
+  again then passed); the recent ones are three Back for inspection (waiting about 2 days, 1 day, 2 hours) and one
+  At stage each at Construction, Sole-ing and Finishing; Finishing's count today is left at 10:30 beside the
+  others at 15:30 (A-111). Changed: `demo-seed.service.ts`, `tests/unit/demo-seed.test.ts`; docs: DEMO_SCRIPT
+  Act 6 (Dylan's file), USER_MANUAL 6.3a, README, master spec. `npm run check` passed (65 files, 1002 tests);
+  a real seed on PostgreSQL 16 at Fri 17:05 and Mon 08:50 Manila had every status, DONE pairs reconciled and
+  nothing at Preparation. Plan `docs/prompts/plans/phase-37-wip-demo-data-plan.md` (deviation: four working days
+  and seven pattern entries, not three and five), handoff `qa/handoffs/2026-11-23-phase-37-wip-demo-data.md`,
+  prompt `qa/CODEX_PROMPT_PHASE_37.md`. Manual screenshot 21 retaken (Fri 20 Nov 17:06 demo clock, headless
+  Chromium, Dylan asked) and `USER_MANUAL.pdf` rebuilt (37 pages). **Decided (Dylan, 2026-11-23):** no repair is ever seeded or sent
+  to Preparation; its defects are the camera's on raw leather. Phase 38 plans showing them on the board's
+  Preparation card.
 - **Phase 36 (built 2026-11-22, D-134, docs only; the one code change is demo data, see run 1):** the master spec, README (features,
   demo script, ER diagram), `docs/USER_MANUAL.md`, STATION_SETUP, CLAUDE.md and DESIGN swept for Phases 32
   to 35B; `docs/API.md` checked against every route (no gaps); `docs/DEMO_SCRIPT.md` rewritten for the four
@@ -145,6 +179,9 @@ D-entries.
 
 ## Next step (exact)
 
+-2. Dylan: the git commands for Phases 37 and 38 together (they share docs; the list is `qa/phase-37-38-commit-files.txt`).
+Phase 37's Codex runs 1 and 2 passed every scenario between them.
+
 0. Dylan: rehearse the demo once by hand (a weekday, phones, the marker card, a stopwatch, the print preview) from
    `docs/DEMO_SCRIPT.md` and tell Claude anything that needs fixing.
 1. Optional, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
@@ -164,6 +201,16 @@ D-entries.
 
 ## Open questions / assumptions awaiting client confirmation
 
+- Decided (Dylan, 2026-11-23, D-136): at Preparation the defects are the camera's, on the raw roll; no repair goes
+  back to Preparation (the camera already filtered the leather). The board's Preparation card counts rolls per
+  defect type (as Reports → Rolls) and the Capture page's My stage card doesn't show the list. Tell CPoint.
+- ASSUMPTION (A-113, D-136): the Preparation card counts rolls per leather defect type finished today, the same
+  count as Reports → Rolls; CPoint hasn't asked for another measure (the number of detections).
+- ASSUMPTION (A-114, D-136): constructors without Capture access may still be assigned to Preparation (A-96
+  unchanged); only repairs are barred from it. Amends A-75: a fixable pair goes back to Construction, Sole-ing or
+  Finishing.
+- ASSUMPTION (A-115, D-136): a finding or repair from before Phase 38 that names Preparation is never hidden (a
+  Preparation column in Where defects come from only while the period has such pairs); no data is migrated.
 - ASSUMPTION (A-70, D-133): only the Floor Manager corrects past records; the Quality Inspector only on the
   inspection day. **To ask CPoint:** should anyone else (the Quality Inspector) correct an older batch?
 - ASSUMPTION (A-103, D-133): a corrected batch shows "Corrected" on its day in Operations; who and why stay on

@@ -18,8 +18,8 @@ import { compareLabel, type ReportRange } from "@/lib/report-rules";
 import {
   hasRepairFilters,
   REMEDY_LABEL,
+  REPAIR_STAGES,
   STAGE_LABEL,
-  STAGES,
   type Remedy,
 } from "@/lib/repair-rules";
 import { sortFor, type SortKey, type SortState } from "@/lib/table-sort";
@@ -191,7 +191,7 @@ export function OperationsView({
             <Label htmlFor="filter-stage">Stage</Label>
             <Select id="filter-stage" name="stage" defaultValue={filters.stage ?? ""}>
               <option value="">All stages</option>
-              {STAGES.map((st) => (
+              {REPAIR_STAGES.map((st) => (
                 <option key={st} value={st}>
                   {STAGE_LABEL[st]}
                 </option>

@@ -26,14 +26,15 @@ shared view of the line:
   with a reason. On-screen notices call a batch by its code.
 - **Final defects and repairs (Phase 34, D-130):** when pairs fail inspection the Quality Inspector
   lists what was wrong (a defect type from Settings, the pairs, Fixable or Not fixable, and the stage
-  a fixable one goes back to). Each fixable line becomes a repair job with a code (RP-261120-2-1)
+  a fixable one goes back to: Construction, Sole-ing or Finishing, never Preparation). Each fixable line becomes a repair job with a code (RP-261120-2-1)
   that the stage marks Back for inspection and the inspector checks from the Queue: passed,
   scrapped or sent back again. After 5 findings of a type in 4 weeks the form suggests the usual
   answer. The line's stages are Preparation, Construction, Sole-ing and Finishing.
 - **Work in progress (Phase 34):** the Floor Manager says in the Plan dialog who works at which
   stage each day (a constructor with Capture access is always at Preparation, locked); the constructors there count the pairs at their stage on Capture ("My stage");
-  Batches → Work in progress shows each stage's count and its repairs. Counts are per stage, never
-  per person.
+  Batches → Work in progress shows each stage's count and its repairs. At Preparation the card
+  lists the camera's leather defects on today's rolls instead (Phase 38, D-136), and no repair goes
+  back to Preparation. Counts are per stage, never per person.
 - **Attendance and stock:** the Floor Manager marks who is present each day and updates stock on
   one sheet (Added, Used, Correction), with reminders on Wednesdays and Fridays.
 - **Reports (Phase 35A, D-132):** Operations, Quality, Rolls (with the claim sheet for a supplier)
@@ -583,7 +584,10 @@ adds the demo inventory items the first time. `npm run db:seed` runs the same st
   returned roll is picked up by the supplier (CPoint's real rack layout is unconfirmed, A-53);
 - the batch the shortest-handed day missed waits in the Inspection queue, Urgent with a reason;
   failed batches carry what was wrong, and the repairs they started are in every state (At stage,
-  Back for inspection, passed, scrapped, sent back again); stages have constructors and counts;
+  Back for inspection, passed, scrapped, sent back again): the older ones are finished and the recent
+  ones are a live Work in progress board (one At stage each at Construction, Sole-ing and Finishing,
+  three Back for inspection, Finishing's count left older than the others; Preparation has none, its
+  defects are the camera's, Phase 37); stages have constructors and counts;
 - stock updates on each past Wednesday and Friday (four in the two weeks);
 - attendance for the working days before today, a few constructors absent on some days (today is
   left for you to take); the days with two or more absent end below quota.

@@ -6,6 +6,10 @@ import {
   matchesFinding,
   matchesRepair,
   captureStageMessage,
+  leatherDefectsLine,
+  REPAIR_STAGES,
+  repairStageMessage,
+  returnedRollsLine,
   parseStageCount,
   summaryFieldId,
   compareWaiting,
@@ -51,6 +55,84 @@ describe("the stages (D-130)", () => {
       "Sole-ing",
       "Finishing",
     ]);
+  });
+});
+
+describe("repair stages (Phase 38, D-136)", () => {
+  it("are the three after Preparation, in line order", () => {
+    expect(REPAIR_STAGES.map((s) => STAGE_LABEL[s])).toEqual([
+      "Construction",
+      "Sole-ing",
+      "Finishing",
+    ]);
+    expect(STAGES).toHaveLength(4);
+  });
+
+  it("refuses a finding that goes back to Preparation, naming the line and the way out", () => {
+    const r = parseFindings(
+      2,
+      [{ finalDefectTypeId: "t1", pairs: 2, remedy: "FIXABLE", returnStage: "PREPARATION" }],
+      types,
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.lines[0].returnStage).toBe(
+      "Line 1 can't go back to Preparation, because the camera already checked the leather. Choose Construction, Sole-ing or Finishing.",
+    );
+    for (const stage of ["CONSTRUCTION", "SOLE_ING", "FINISHING"])
+      expect(
+        parseFindings(
+          2,
+          [{ finalDefectTypeId: "t1", pairs: 2, remedy: "FIXABLE", returnStage: stage }],
+          types,
+        ).ok,
+      ).toBe(true);
+  });
+
+  it("refuses Preparation on a repair's Sent back again line", () => {
+    const r = parseRepairResult(2, { resend: [{ stage: "PREPARATION", pairs: 2 }] });
+    expect(r.ok === false && r.resend?.[0]).toBe(repairStageMessage("PREPARATION", 1));
+    expect(parseRepairResult(2, { resend: [{ stage: "SOLE_ING", pairs: 2 }] }).ok).toBe(true);
+  });
+
+  it("leaves a legacy Preparation finding out of the usual answer", () => {
+    const now = new Date("2026-11-20T04:00:00Z");
+    const row = (days: number, returnStage: PastFinding["returnStage"]): PastFinding => ({
+      finalDefectTypeId: "t1",
+      remedy: "FIXABLE",
+      returnStage,
+      at: new Date(now.getTime() - days * 86_400_000),
+    });
+    const [s] = suggestFor(
+      [
+        row(1, "PREPARATION"),
+        row(2, "PREPARATION"),
+        row(3, "FINISHING"),
+        row(4, "FINISHING"),
+        row(5, "FINISHING"),
+      ],
+      (id) => id,
+      now,
+    );
+    expect(s.returnStage).toBe("FINISHING");
+  });
+});
+
+describe("the Preparation card's camera lines (D-136)", () => {
+  it("lists the defect types found, rolls each, and nothing for a type with none", () => {
+    expect(
+      leatherDefectsLine([
+        { label: "Scratch", rolls: 9 },
+        { label: "Crease", rolls: 7 },
+        { label: "Hole", rolls: 0 },
+      ]),
+    ).toBe("Scratch 9, Crease 7");
+    expect(leatherDefectsLine([])).toBe("");
+  });
+  it("says how many rolls were returned, or nothing", () => {
+    expect(returnedRollsLine(0)).toBeNull();
+    expect(returnedRollsLine(1)).toBe("Returned to supplier: 1 roll.");
+    expect(returnedRollsLine(2)).toBe("Returned to supplier: 2 rolls.");
   });
 });
 

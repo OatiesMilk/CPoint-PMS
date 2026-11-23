@@ -1,11 +1,14 @@
 import { z } from "zod";
-import { MAX_REASON, STAGES } from "@/lib/repair-rules";
+import { MAX_REASON, REPAIR_STAGES, REPAIR_STAGE_NAMES, STAGES } from "@/lib/repair-rules";
 
 const OUT_OF_DATE = "This page is out of date. Refresh and try again.";
 const STAGE_MESSAGE = "Choose a stage: Preparation, Construction, Sole-ing or Finishing.";
 const REASON_MESSAGE = "Say why, at least 5 characters.";
 
 const stage = z.enum(STAGES, { error: STAGE_MESSAGE });
+/** Where a repair may be moved to (Phase 38, D-136): never Preparation. */
+const REPAIR_STAGE_MESSAGE = `Choose a stage a repair can go to: ${REPAIR_STAGE_NAMES}. Preparation handles leather the camera already checked.`;
+const repairStage = z.enum(REPAIR_STAGES, { error: REPAIR_STAGE_MESSAGE });
 const reason = z
   .string({ error: REASON_MESSAGE })
   .trim()
@@ -23,7 +26,7 @@ export const repairActionSchema = z.discriminatedUnion(
   "action",
   [
     z.object({ action: z.literal("back") }),
-    z.object({ action: z.literal("move"), stage, reason }),
+    z.object({ action: z.literal("move"), stage: repairStage, reason }),
     z.object({ action: z.literal("notFixable"), reason }),
   ],
   { error: OUT_OF_DATE },

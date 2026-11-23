@@ -19,6 +19,29 @@ export const STAGE_LABEL: Record<Stage, string> = {
 export const isStage = (v: unknown): v is Stage =>
   typeof v === "string" && (STAGES as readonly string[]).includes(v);
 
+/**
+ * Where a repair can go (Phase 38, D-136): the three stages after Preparation. Preparation handles
+ * raw leather the camera has already checked, so there is no shoe there to repair. `STAGES` stays
+ * for who works where, the counts and the board.
+ */
+export const REPAIR_STAGES = ["CONSTRUCTION", "SOLE_ING", "FINISHING"] as const;
+export type RepairStage = (typeof REPAIR_STAGES)[number];
+
+export const isRepairStage = (v: unknown): v is RepairStage =>
+  typeof v === "string" && (REPAIR_STAGES as readonly string[]).includes(v);
+
+/** "Construction, Sole-ing or Finishing", for messages (from the labels, never retyped). */
+export const REPAIR_STAGE_NAMES = `${REPAIR_STAGES.slice(0, -1)
+  .map((s) => STAGE_LABEL[s])
+  .join(", ")} or ${STAGE_LABEL[REPAIR_STAGES[REPAIR_STAGES.length - 1]]}`;
+
+/** The message for a repair line whose stage is missing or isn't one a repair may go to. */
+export function repairStageMessage(value: unknown, n: number): string {
+  return value === "PREPARATION"
+    ? `Line ${n} can't go back to Preparation, because the camera already checked the leather. Choose ${REPAIR_STAGE_NAMES}.`
+    : `Choose the stage line ${n} goes back to.`;
+}
+
 export type Remedy = "FIXABLE" | "NOT_FIXABLE";
 export type RepairStatus = "AT_STAGE" | "BACK_FOR_INSPECTION" | "DONE" | "CANCELLED";
 
@@ -62,7 +85,7 @@ export type FindingLine = {
   finalDefectTypeId: string;
   pairs: number;
   remedy: Remedy;
-  returnStage: Stage | null;
+  returnStage: RepairStage | null;
   note: string | null;
 };
 
@@ -140,10 +163,10 @@ export function parseFindings(
     const remedy: Remedy | null =
       r.remedy === "FIXABLE" || r.remedy === "NOT_FIXABLE" ? r.remedy : null;
     if (!remedy) put(i, "remedy", `Say whether line ${n} can be fixed.`);
-    let stage: Stage | null = null;
+    let stage: RepairStage | null = null;
     if (remedy === "FIXABLE") {
-      if (isStage(r.returnStage)) stage = r.returnStage;
-      else put(i, "returnStage", `Choose the stage line ${n} goes back to.`);
+      if (isRepairStage(r.returnStage)) stage = r.returnStage;
+      else put(i, "returnStage", repairStageMessage(r.returnStage, n));
     }
     const note = typeof r.note === "string" && r.note.trim() ? r.note.trim() : null;
     if (note && note.length > MAX_FINDING_NOTE)
@@ -182,7 +205,7 @@ export type PastFinding = {
 export type Suggestion = {
   finalDefectTypeId: string;
   remedy: Remedy;
-  returnStage: Stage | null;
+  returnStage: RepairStage | null;
   /** The findings behind the answer (of the same remedy, and of the stage when fixable). */
   count: number;
   total: number;
@@ -214,11 +237,13 @@ export function suggestFor(
     const fixable = list.filter((f) => f.remedy === "FIXABLE");
     const notFixable = list.length - fixable.length;
     const remedy: Remedy = fixable.length >= notFixable ? "FIXABLE" : "NOT_FIXABLE";
-    let stage: Stage | null = null;
+    let stage: RepairStage | null = null;
     let count = notFixable;
     if (remedy === "FIXABLE") {
       let best = -1;
-      for (const s of STAGES) {
+      // Only the stages a repair can go to; a finding from before Phase 38 that names Preparation
+      // doesn't count towards the usual answer.
+      for (const s of REPAIR_STAGES) {
         const c = fixable.filter((f) => f.returnStage === s).length;
         if (c > best) {
           best = c;
@@ -308,7 +333,7 @@ export type RawRepairResult = {
 export type RepairResult = {
   passedPairs: number;
   scrappedPairs: number;
-  resend: { stage: Stage; pairs: number }[];
+  resend: { stage: RepairStage; pairs: number }[];
 };
 
 export type RepairResultErrors = {
@@ -334,14 +359,13 @@ export function parseRepairResult(
   };
   const passed = count(raw.passedPairs, "passedPairs", "that passed");
   const scrapped = count(raw.scrappedPairs, "scrappedPairs", "scrapped");
-  const resend: { stage: Stage; pairs: number }[] = [];
+  const resend: { stage: RepairStage; pairs: number }[] = [];
   const list = Array.isArray(raw.resend)
     ? (raw.resend as { stage?: unknown; pairs?: unknown }[])
     : [];
   list.forEach((r, i) => {
     const pairs = wholePairs(r?.pairs);
-    if (!isStage(r?.stage))
-      (errors.resend ??= {})[i] = `Choose the stage line ${i + 1} goes back to.`;
+    if (!isRepairStage(r?.stage)) (errors.resend ??= {})[i] = repairStageMessage(r?.stage, i + 1);
     else if (pairs === null || pairs < 1)
       (errors.resend ??= {})[i] = `Enter how many pairs on line ${i + 1} (1 or more).`;
     else resend.push({ stage: r.stage, pairs });
@@ -559,6 +583,25 @@ export function wipTotals(rows: readonly CountRow[]): StageTotals[] {
       latest: values[values.length - 1],
     };
   });
+}
+
+/**
+ * The Preparation card's camera line (Phase 38, D-136): the leather defects found on the rolls
+ * finished today, one count of rolls per defect type, "Scratch 9, Crease 7". Labels come from
+ * Settings → Defect types; a type nobody found isn't listed.
+ */
+export function leatherDefectsLine(rows: readonly { label: string; rolls: number }[]): string {
+  return rows
+    .filter((r) => r.rolls > 0)
+    .map((r) => `${r.label} ${r.rolls.toLocaleString("en-PH")}`)
+    .join(", ");
+}
+
+/** "Returned to supplier: 2 rolls." (null when none was returned). */
+export function returnedRollsLine(returned: number): string | null {
+  return returned > 0
+    ? `Returned to supplier: ${returned.toLocaleString("en-PH")} roll${returned === 1 ? "" : "s"}.`
+    : null;
 }
 
 /** "2 batches and 1 repair waiting for inspection" */

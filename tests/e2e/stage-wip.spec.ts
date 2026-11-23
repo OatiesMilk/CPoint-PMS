@@ -240,6 +240,11 @@ test("the Floor Manager covers a stage nobody is assigned to, and the board and 
   await fm.goto("/batches?tab=wip");
   const preparation = fm.getByTestId("wip-PREPARATION");
   await expect(preparation).toContainText("Rolls:");
+  // At Preparation the defects are the camera's, on the raw roll; no repairs go there (D-136).
+  await expect(preparation.getByTestId("wip-leather-defects")).toContainText(
+    "Leather defects found by the camera",
+  );
+  await expect(preparation).not.toContainText("No repairs here.");
   await preparation.getByRole("button", { name: /^Update count/ }).click();
   await preparation.getByLabel("Pairs at Preparation now").fill("33");
   await preparation.getByRole("button", { name: "Save count" }).click();

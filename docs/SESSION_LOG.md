@@ -5,6 +5,98 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-23 · Phase 37 Codex run 2 triaged; the CLI reset follows the demo clock (coding thread)
+
+- `qa/reports/2026-11-23-phase-37-run2.md`: W4 PASS at a 16:00 demo clock (Finishing as of 10:30, the others 15:30; a new
+  count moved Finishing to 16:10). Codex noticed `npm run demo:reset` seeded at real time with the clock moved: the CLI
+  process never loaded the offset (only the app's guard and start-up call `syncDemoClock`).
+- Fix: `scripts/demo-reset.ts` and `scripts/demo-seed.ts` call `syncDemoClock()` first (it keeps real time when the demo
+  tools are off, as the app does); the reset prints the time it seeds at. Checked in the cloud container: a CLI reset with
+  the clock at 16:00 Manila seeded Finishing at 10:30 and the others at 10:30 and 15:30; `npm run check` passed (lint,
+  typecheck, 65 files and 1012 tests, build). No browser or e2e tests run.
+
+## 2026-11-23 · Phase 37 Codex run 1 triaged (coding thread)
+
+- `qa/reports/2026-11-23-phase-37-run1.md`: PASS WITH ISSUES, 7 of 8 passed, 1 blocked. W4 (Finishing at 10:30 beside the others
+  at 15:30) couldn't be seen because the reset ran at about 11:30 Manila; saving a new Finishing count worked (15 pairs as of 10:30
+  to 21 as of 11:35). W5's one timeout was the test's locator following the next queue row; the saved result was verified.
+- No app or test change. Next: rerun W4 after 15:30 Manila with the clock at real time (optional), then Dylan's git commands for
+  Phases 37 and 38 together (the report is in `qa/phase-37-38-commit-files.txt`).
+
+## 2026-11-23 · Phase 38: Preparation shows the camera's defects; no repair goes back to Preparation (coding thread)
+
+- Built from `docs/prompts/plans/phase-38-preparation-camera-defects-plan.md` (Dylan: "add it", defaults stand: rolls
+  per type, no list on My stage), on top of the uncommitted Phase 37 in the same folder. D-136, A-113 to A-115.
+- Card: `wipBoard()` gains `preparation.leatherDefects` from `defectBreakdown()` for today's Manila range at the found-at
+  setting, and `rollOutcomesByDay()` (replacing `rollsScannedByDay`) for the rolls scanned and returned today;
+  `wip-board.tsx` shows it with a heading that says these are the camera's defects, on raw leather. "No repairs here."
+  no longer shows at Preparation (the repair block stays only while a legacy Preparation repair is open).
+- Rule: `REPAIR_STAGES`, `isRepairStage` and `repairStageMessage` in `repair-rules.ts`; used by the finding form, Move to,
+  Sent back again, the validators (`repair.validator.ts`, `report.validator.ts`), `parseFindings`/`parseRepairResult`,
+  the usual-answer suggestion and `repairReport()` (Preparation column only when the period has legacy pairs).
+  Correction forms keep the wider `Stage` type so a saved legacy line shows and asks for a valid stage.
+- Tests: unit (repair-rules, stage.service, repair.service, repair.validator; 1002 to 1012 tests) and two e2e assertions
+  (`final-defects.spec.ts`, `stage-wip.spec.ts`). Docs: README, USER_MANUAL (5.4a, 5.4b, 6.3a and the caption of 21), API,
+  master spec, DECISIONS, ROADMAP, STATUS; the Phase 37 handoff's W3 reworded.
+- Checks: the laptop's `node_modules` is Windows-only and the laptop shell has no npm access, so `npm run check` ran in
+  the cloud container on a copy of the working tree: lint clean, typecheck clean (after one fix: correction forms
+  needed the wider stage type), 65 files and 1012 tests passed, build passed. No browser or e2e tests were run.
+- Screenshot 21 retaken from a seed at Fri 20 Nov 17:10 (demo clock set before the reset, `next dev`, headless Chromium,
+  1366 px at 2x; the Preparation card reads "Crease 11, Scratch 9, Cut 8, Hole 7") and `USER_MANUAL.pdf` rebuilt (39 pages;
+  it was 37, the new text and a slightly different print stylesheet account for the difference). The card also ran
+  against a real database in that seed (a returned roll showed "Returned to supplier: 1 roll.").
+- Not done: the legacy-rows SQL on Dylan's dev database (the laptop's database isn't reachable from here; L1 in the
+  handoff). `test-results/phase38-src.tgz` and `phase38-fix.tgz` (now 0 bytes, git-ignored) are left in the repo folder
+  because deleting needs a permission prompt; delete them any time.
+- Next: Codex `qa/CODEX_PROMPT_PHASE_38.md`, then the git commands.
+- Codex run 1 (`qa/reports/2026-11-23-phase-38-run1.md`): **FAIL, from the e2e only.** All ten manual scenarios passed
+  (L1 SQL 0 and 0 before and after the reset; the card matches SQL and Reports → Quality; Goes back to, Move to and
+  Sent back again offer no Preparation; the API refuses Preparation with 422 and the messages in the handoff;
+  `?stage=PREPARATION` shows all stages; axe clean). The five e2e specs gave 7 passed, 6 failed, 15 not run, with the
+  demo clock on Tue 24 Nov and the laptop on Mon 23 Nov. Claude's triage (no code change): F3 and F6 assign the stage
+  for `TODAY` from `Date.now()` while the app's today was a day ahead, F1 fits the same cause, F4 is the first scan's
+  30 s timeout, F2 and F5 are link expectations in code Phase 38 doesn't touch. Run 2 with the clock back to real
+  time: `qa/CODEX_PROMPT_PHASE_38_RUN2.md`. Rolls report note: the camera's defects by type are under Reports →
+  Quality → Defects by type (the Rolls list filters by roll added), the handoff's wording said Rolls; docs say
+  "as Reports → Rolls" for the roll counts, the defect table is Quality's.
+
+- Codex run 2 (`qa/reports/2026-11-23-phase-38-run2.md`, demo clock back to real time, restart of `npm run dev` needed
+  because it caches the offset): 19 passed, 3 failed, 6 not run (serial). The clock was the cause of run 1's F1 to
+  F6: stage-wip 6 of 6, batches 7 of 7, and the Corrections and Reports link assertions passed. Two sign-in timeouts
+  in a six-worker run (Corrections F1, Reports F2) passed alone, twice each: load, not Phase 38. **One real failure,
+  mine:** `final-defects.spec.ts:549` read the "Loose stitching" origin cell as `.nth(2)`, which was Construction when
+  the table had a Preparation column; with the column gone it is cell 1. Fixed in the test (cell 1, plus no
+  Preparation heading); the three later serial tests of that spec were blocked and are unverified. Run 3:
+  `qa/CODEX_PROMPT_PHASE_38_RUN3.md`.
+
+- Codex run 3 (`qa/reports/2026-11-23-phase-38-run3.md`, clock real): **PASS WITH ISSUES.** `final-defects.spec.ts` 8 of 8 alone
+  and in the full run; stage-wip 6 of 6, batches 7 of 7. In the six-worker run Corrections (1 failed, 3 not run) and Reports
+  (3 failed: a 30 s timeout, the 7 days link URL, the sign-in home URL) failed and then passed alone (4 of 4, 3 of 3), as in run 2:
+  load on `next dev`, not Phase 38. Phase 38 is done pending the commit. The commit list for Phases 37 and 38 together
+  (they share docs) is `qa/phase-37-38-commit-files.txt`.
+
+## 2026-11-23 · Phase 37: work in progress demo data (coding thread)
+
+- Built from `docs/prompts/plans/phase-37-wip-demo-data-plan.md` (Dylan's go; amended: no repair at Preparation,
+  its defects are the camera's on raw leather, confirmed by Dylan). Demo seed only: `seedRepairs` (older repairs
+  finished by rotation, three Back for inspection with waits of about 2 days, 1 day and 2 hours, the newest At
+  stage), the recent failed-batch pattern (`DEMO_RECENT_FINDINGS`, seven entries over the last four working
+  days, Loose stitching one of them), `seedStages` (Finishing's second count today left out).
+- Deviation from the plan: four working days and seven entries, because three Back plus an At stage card per
+  stage can't come from the five batches of three days.
+- Tests: the repair mock moves through states; three tests updated or added (pattern, repair states, older
+  count). `npm run check` passed (65 files, 1002 tests, build; run in a cloud copy with the changed files, then
+  copied to the laptop).
+- Real seed (PostgreSQL 16, throwaway DB): Fri 20 Nov 17:05 gave At stage 3 (Construction, Finishing, Sole-ing),
+  Back 3, Done 10 (9 passed, 2 scrapped, 1 sent back again = 12 pairs); Mon 23 Nov 08:50 gave At stage 3, Back 2,
+  Done 10. Nothing at Preparation; DONE pairs reconcile.
+- Docs: DEMO_SCRIPT (data list, Act 6, troubleshooting), USER_MANUAL 6.3a, README demo-week bullet, master spec,
+  DECISIONS D-135 (A-111, A-112), ROADMAP, STATUS; vault Daily and phase summary. Dylan then asked Claude to take
+  the screenshot: 21 retaken from a seed at Fri 20 Nov 17:05 (demo clock, `next dev`, headless Chromium, 1366 px at
+  2x; the board reads "2 batches and 3 repairs waiting", Finishing "as of 10:30"), and `USER_MANUAL.pdf` rebuilt
+  (Python-Markdown, Chromium print, A4, 37 pages, page footer).
+- Next: Codex `qa/CODEX_PROMPT_PHASE_37.md`, then the git commands.
+
 ## 2026-11-22 · Phase 36: Codex run 2 PASS WITH ISSUES
 
 - Codex run 2 (`qa/reports/2026-11-22-phase-36-run2.md`): **D8 PASS** (all 15 storage SQL checks, `MOVED` 2, LR-BSB-050's history shows "Moved" with "The first bin was full."); D9 PASS WITH ISSUES (the three figures are legible with the five module titles and the NEW chips); D10 skipped as instructed.

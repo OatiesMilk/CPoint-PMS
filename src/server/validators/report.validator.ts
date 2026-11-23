@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { STAGES } from "@/lib/repair-rules";
+import { REPAIR_STAGES } from "@/lib/repair-rules";
 
 const day = z
   .string()
@@ -40,7 +40,8 @@ export const reportQuerySchema = periodQuerySchema.extend({
   /** Operations → the defect cards: a final defect type's key (Quality: a leather defect's key). */
   defect: short,
   remedy: z.enum(["FIXABLE", "NOT_FIXABLE"]).optional().catch(undefined),
-  stage: z.enum(STAGES).optional().catch(undefined),
+  /** The stage a fixable pair went back to: a repair never goes to Preparation (D-136). */
+  stage: z.enum(REPAIR_STAGES).optional().catch(undefined),
   /** Operations → Supplier quality. */
   supplierId: z.uuid().optional().catch(undefined),
   ...sortQuerySchema.shape,

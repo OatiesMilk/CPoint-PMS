@@ -6,12 +6,15 @@
  *   npm run demo:reset -- --yes --no-demo-week
  *
  * Works on the database in .env and the files under UPLOADS_DIR. Back the database up
- * first. Refuses to run with NODE_ENV=production. Keeps the device token in CV_DEVICE_TOKEN (.env,
+ * first. Seeds at the demo clock's time when it is moved (D-125), as the login page's Reset does.
+ * Refuses to run with NODE_ENV=production. Keeps the device token in CV_DEVICE_TOKEN (.env,
  * or an old cv/.env from before the station was retired, D-069), so the simulator keeps working.
  */
 import "dotenv/config";
 import { readFileSync } from "node:fs";
+import { appNow } from "../src/lib/clock";
 import { getPrisma } from "../src/server/lib/prisma";
+import { syncDemoClock } from "../src/server/services/demo-clock.service";
 import { previewReset, resetDemoData, resetKeep } from "../src/server/services/demo-reset.service";
 
 function stationToken(): string | undefined {
@@ -72,6 +75,9 @@ async function main() {
     console.log("\nNothing changed. Back up the database, then run: npm run demo:reset -- --yes");
     return;
   }
+  // The seed follows the app's clock: load the demo clock's saved offset, as the app's own process does.
+  await syncDemoClock();
+  console.log(`Seeding at ${appNow().toISOString()} (the app's clock).`);
   const started = Date.now();
   const result = await resetDemoData(keep, { demoWeek });
   console.log(

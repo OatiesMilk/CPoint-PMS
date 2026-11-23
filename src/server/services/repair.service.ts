@@ -7,6 +7,7 @@
 import { appNow } from "@/lib/clock";
 import { manilaToday } from "@/lib/format";
 import {
+  REPAIR_STAGES,
   STAGES,
   STAGE_LABEL,
   mayCountStage,
@@ -406,12 +407,15 @@ export async function repairReport(
     notRecorded: filtered ? 0 : unexplained,
     totalFailed: total,
   };
+  // A repair goes only to the stages after Preparation (D-136). A finding from before Phase 38 may
+  // still name Preparation; its column shows only when the period has such pairs, so none are hidden.
+  const originStages = rows.some((r) => r.byStage.PREPARATION > 0) ? STAGES : REPAIR_STAGES;
   const origins = {
-    stages: STAGES.map((s) => ({ stage: s, label: STAGE_LABEL[s] })),
+    stages: originStages.map((s) => ({ stage: s, label: STAGE_LABEL[s] })),
     rows: rows.map((r) => ({
       id: r.id,
       label: r.label,
-      byStage: STAGES.map((s) => ({
+      byStage: originStages.map((s) => ({
         stage: s,
         pairs: r.byStage[s],
         share: share(r.byStage[s], r.pairs),
