@@ -1044,7 +1044,7 @@ its defects are the camera's, so no repair there). Decision: D-135. No behaviour
       Chromium, at Dylan's request) and `USER_MANUAL.pdf` rebuilt (37 pages)
 - [x] Codex QA run 1 (2026-11-23, PASS WITH ISSUES: W1 to W3, W5 to W8 passed; W4's after-15:30 contrast blocked by the time of day)
 - [x] W4 rerun (run 2, demo clock at 16:00: PASS); the CLI reset and seed now follow the demo clock
-- [ ] Committed and merged
+- [x] Committed and merged (#64, 2026-11-23; CI run 151 on `main` passed)
 
 ## Phase 38 — Preparation shows the camera's defects; no repair goes back to Preparation
 
@@ -1065,4 +1065,19 @@ Plan: `docs/prompts/plans/phase-38-preparation-camera-defects-plan.md` (Dylan's 
 - [x] Codex QA: run 1 FAIL (e2e with the demo clock a day ahead; L1 to L10 passed), run 2 FAIL (one real test bug, the
       origin-cell index, fixed), run 3 PASS WITH ISSUES (final-defects 8 of 8; Corrections and Reports time out only in the
       six-worker run and pass alone)
-- [ ] Committed and merged
+- [x] Committed and merged (#64, 2026-11-23; CI run 151 on `main` passed)
+
+## Phase 39 — Close-out after Phases 37 and 38 (docs only)
+
+Plan: `docs/prompts/plans/phase-39-closeout-plan.md` (Dylan's go, 2026-11-23). No application code, no migration, no new
+decision.
+
+- [x] STATUS and ROADMAP say Phases 37 and 38 are merged (#64), the progress list has both, the next step lists Dylan's
+      rehearsal, the CPoint questions and the CI patch
+- [x] "To ask or tell CPoint" block in STATUS, pointing to the existing assumptions
+- [x] SESSION_LOG entry; vault Daily note and phase summaries
+- [x] `qa/phase-39-ci-no-preparation-repairs.patch`: two `docker` SQL checks (no finding or repair job at PREPARATION);
+      both counts are 0 on a real seed (PostgreSQL 16, demo week: 15 Fixable findings, 16 repair jobs); `git apply --check` clean
+- [x] Stale `qa/phase-36-ci-storage-checks.patch` deleted (already in `ci.yml`)
+- [ ] Dylan applies the patch (`git apply qa/phase-39-ci-no-preparation-repairs.patch`), commits and merges; the `docker` job passes
+      (Codex re-check prompt only if it fails)

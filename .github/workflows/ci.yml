@@ -175,6 +175,11 @@ jobs:
           q "select count(*) from (select day, \"userId\" from stage_assignments group by day, \"userId\" having count(*) > 1) t" | grep -qx 0
           test "$(q "select count(*) from stage_counts")" -ge 1
           test "$(q "select count(*) from pg_enum e join pg_type t on t.oid = e.enumtypid where t.typname='ProductionStage' and e.enumlabel='CONSTRUCTION'")" -eq 1
+          # No repair goes back to Preparation (Phase 38, D-136): the camera already filtered the raw
+          # leather, so no finding and no repair job names it (the enum value stays for assignments
+          # and counts).
+          q "select count(*) from inspection_findings where \"returnStage\" = 'PREPARATION'" | grep -qx 0
+          q "select count(*) from repair_jobs where stage = 'PREPARATION'" | grep -qx 0
           # Storage locations and roll moves (Phase 32, D-128): the six demo bins and the RETURN
           # area exist and stay active, every roll in storage is in an active place and is a roll
           # in stock or a returned roll still waiting for the supplier, every roll in stock has a
