@@ -957,7 +957,7 @@ Dylan found the Overview messy (2026-11-20). Plan: `docs/prompts/plans/floor-man
       the demo clock, which the in-app browser could not set); full suite 121 passed, 0 failed
 - [x] Codex QA run 2 from `qa/CODEX_PROMPT_OVERVIEW_CLEANUP_RUN2.md`: **PASS WITH ISSUES** (O1 to O4, O6 to O8
       passed; O5's empty footer is covered by a unit test, the handoff had expected it on a day it can't occur)
-- [ ] Committed and merged (`feature/overview-cleanup`)
+- [x] Committed and merged (`feature/overview-cleanup`, #58)
 
 ## Phase 35 — Reports by period you can sort, filter, print and correct (defense revision 3)
 
@@ -1019,5 +1019,5 @@ D-134. No behaviour change.
 - [x] `npm run check` passes
 - [x] QA handoff `qa/handoffs/2026-11-22-phase-36-docs.md`, Codex prompts `qa/CODEX_PROMPT_PHASE_36.md`
       and `qa/CODEX_PROMPT_PHASE_36_SCREENSHOTS.md`
-- [ ] Codex QA: manual steps, demo rehearsal, API spot-check, docker SQL checks (run 1 done; run 2 and the hand rehearsal pending)
-- [ ] Committed and merged (`docs/phase-36`, list in `qa/phase-36-files.txt`)
+- [x] Codex QA: run 1 and run 2 PASS WITH ISSUES (D8 15 of 15, `MOVED` 2); the hand rehearsal with phones is Dylan's
+- [x] Committed and merged (`docs/phase-36`, #62, `c030f72`; CI green)
