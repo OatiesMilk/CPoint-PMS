@@ -5,6 +5,21 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-23 · Phase 39: close-out after Phases 37 and 38 (planning thread, docs only)
+
+- Phases 37 and 38 merged together as #64 (8de71d4); CI run 151 on `main` passed. `docs/STATUS.md` and `docs/ROADMAP.md`
+  still said "uncommitted": now they say merged, the progress list has 37 and 38, the Phase 37 and 38 bullets are one short
+  paragraph each, and the next step is Dylan's rehearsal, the CPoint questions and the CI patch. STATUS has a "To ask or
+  tell CPoint" block that only points to existing assumptions (A-53, A-57, A-62, A-70, A-88, A-96; D-136). No D-entry.
+- `qa/phase-39-ci-no-preparation-repairs.patch`: two `docker` SQL checks (no finding with `returnStage` PREPARATION, no
+  repair job at PREPARATION). Run on a real demo seed in the cloud container (PostgreSQL 16, after `demo:reset` and
+  `demo:seed`): both counts 0, with 15 Fixable findings and 16 repair jobs present; `git apply --check` clean. `.github/`
+  is protected, so Dylan applies it. The stale `qa/phase-36-ci-storage-checks.patch` (already in `ci.yml`) was deleted.
+- Left out on purpose: the six-worker sign-in timeouts in Corrections and Reports (pass alone, CI green), `DEMO_SCRIPT.md`
+  (Dylan's file), screenshots. No application code and no tests changed, so `npm run check` was not run.
+- Next: Dylan's git commands (STATUS, ROADMAP, SESSION_LOG, the patch and the plan), then his hand rehearsal with phones
+  and the CPoint questions.
+
 ## 2026-11-23 · Phase 37 Codex run 2 triaged; the CLI reset follows the demo clock (coding thread)
 
 - `qa/reports/2026-11-23-phase-37-run2.md`: W4 PASS at a 16:00 demo clock (Finishing as of 10:30, the others 15:30; a new
