@@ -3,9 +3,9 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-22 (Phase 36: docs, figures and demo script built; waiting for Codex QA)
-**Branch:** `main` at dec06e7 (#61, Phase 35B merged). Phase 36 is uncommitted on the laptop
-(`C:\dev\CPoint-PMS`, list in `qa/phase-36-files.txt`); `docs/DEMO_SCRIPT.md` is Dylan's file and stays out of git.
+**Last updated:** 2026-11-23 (Phase 36 merged as #62, CI green; only the hand rehearsal is left)
+**Branch:** `main` at c030f72 (#62, Phase 36 merged; its CI run on `main` passed all four jobs). `docs/DEMO_SCRIPT.md` is
+Dylan's file and stays out of git.
 
 - **Phase 36 (built 2026-11-22, D-134, docs only; the one code change is demo data, see run 1):** the master spec, README (features,
   demo script, ER diagram), `docs/USER_MANUAL.md`, STATION_SETUP, CLAUDE.md and DESIGN swept for Phases 32
@@ -23,7 +23,7 @@
   is no longer needed. Two captions were corrected to match the shots (19 and 25).
 - **Phase 36 Codex run 2 PASS WITH ISSUES** (`qa/reports/2026-11-22-phase-36-run2.md`): D8 passed (15 of 15, `MOVED` 2), D9 figures fine; F1 (the "92 handlers" source) answered in `docs/prompts/paper-figures.md` (92 route handlers in 77 files).
 - **Still to do for Phase 36:** Dylan rehearses the demo once by hand with phones, the marker card and a stopwatch; then the git commands.
-- **Last merged features:** 35B corrections to past records (#61, D-133), 35A reports by period (#59, D-132),
+- **Last merged features:** Phase 36 docs, figures and demo (#62, D-134), 35B corrections to past records (#61, D-133), 35A reports by period (#59, D-132),
   the Overview clean-up (#58, D-131), Phase 34 final defects, repairs and work in progress (#56, #57, D-130),
   Phase 33 the Inspection queue (#55, D-129), Phase 32 roll locations (#54, D-128). The run-by-run QA detail
   is in `SESSION_LOG.md`.
@@ -33,7 +33,7 @@
   30F-3 Batches checks (run 4); Phase 31's docs were merged (#46) and Phase 36 supersedes part of them.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks included; Codex
   only tests and reports; every agent reads the Obsidian vault first.
-- **Overall:** every planned phase is built (0 to 36); Phase 36 waits for QA.
+- **Overall:** every planned phase is built and merged (0 to 36); only Dylan's hand rehearsal of the demo is left.
 
 ## Phase progress
 
@@ -108,8 +108,8 @@
 - [x] Overview clean-up (the Floor Manager's home, D-131; QA passed, run 2; merged #58)
 - [x] 35A. Reports by period, sort, filter and print (D-132; built 2026-11-21; QA passed, run 3; merged #59)
 - [x] 35B. Corrections to past records (D-133; built 2026-11-21; QA passed, run 5; merged #61)
-- [ ] 36. The documentation, the figures and the demo match the system (D-134; built 2026-11-22,
-      uncommitted; the manual's screenshots and PDF are done; Codex run 2 and the hand rehearsal next)
+- [x] 36. The documentation, the figures and the demo match the system (D-134; built 2026-11-22; QA passed
+      with Codex run 2; merged #62; the hand rehearsal with phones is Dylan's, not a code check)
 
 ## What works right now
 
@@ -145,9 +145,8 @@ D-entries.
 
 ## Next step (exact)
 
-0. Dylan: paste `qa/CODEX_PROMPT_PHASE_36_RUN2_MINI.md` into Codex (D8 and D9 again), rehearse the demo by hand
-   (a weekday, phones, the marker card, a stopwatch, the print preview), then Claude gives the git commands
-   for `docs/phase-36` (list `qa/phase-36-files.txt`; `docs/DEMO_SCRIPT.md` stays out).
+0. Dylan: rehearse the demo once by hand (a weekday, phones, the marker card, a stopwatch, the print preview) from
+   `docs/DEMO_SCRIPT.md` and tell Claude anything that needs fixing.
 1. Optional, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too). Phase 31 merged (#46).
 2. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.
