@@ -358,7 +358,8 @@ export const DEMO_BINS: readonly [string, string][] = [
 /**
  * What the QI found on each failed batch, by a fixed rotation, not chance, so every run is the same
  * (Phase 34, D-130): enough Lifted sole and Glue marks inside 4 weeks for the form's suggestion to
- * show, mostly Fixable; some Scuffs that can't be fixed; one Loose stitching for Construction.
+ * show, mostly Fixable; some Scuffs that can't be fixed. This is the rotation for the older days;
+ * the last few working days use DEMO_RECENT_FINDINGS.
  */
 const DEMO_FINDINGS: readonly { key: string; remedy: Remedy; stage: Stage | null }[] = [
   { key: "LIFTED_SOLE", remedy: "FIXABLE", stage: "SOLE_ING" },
@@ -369,8 +370,32 @@ const DEMO_FINDINGS: readonly { key: string; remedy: Remedy; stage: Stage | null
   { key: "LIFTED_SOLE", remedy: "FIXABLE", stage: "SOLE_ING" },
   { key: "LIFTED_SOLE", remedy: "NOT_FIXABLE", stage: null },
 ];
-/** The ninth failed batch is the one Loose stitching that goes back to Construction. */
-const DEMO_STITCHING_AT = 8;
+/**
+ * The work-in-progress board's live jobs (Phase 37, D-135): the failed batches of the last
+ * DEMO_RECENT_DAYS working days, in order. The first three Fixable jobs go Back for inspection
+ * (seedRepairs); the Loose stitching (Construction), a Glue marks (Finishing) and a Lifted sole
+ * (Sole-ing) stay At stage, so every stage after Preparation has a card to point at. Preparation
+ * never gets a repair: its defects are the camera's, on raw leather (A-62).
+ */
+const DEMO_RECENT_FINDINGS: readonly { key: string; remedy: Remedy; stage: Stage | null }[] = [
+  { key: "LIFTED_SOLE", remedy: "FIXABLE", stage: "SOLE_ING" },
+  { key: "GLUE_MARKS", remedy: "FIXABLE", stage: "FINISHING" },
+  { key: "SCUFFS", remedy: "NOT_FIXABLE", stage: null },
+  { key: "LIFTED_SOLE", remedy: "FIXABLE", stage: "SOLE_ING" },
+  { key: "LOOSE_STITCHING", remedy: "FIXABLE", stage: "CONSTRUCTION" },
+  { key: "GLUE_MARKS", remedy: "FIXABLE", stage: "FINISHING" },
+  { key: "LIFTED_SOLE", remedy: "FIXABLE", stage: "SOLE_ING" },
+];
+/** The recent working days (today included, when it is one): older repairs are all dealt with. */
+const DEMO_RECENT_DAYS = 4;
+/** Placeholder outcomes of the older repairs, by rotation (A-112): hour of the inspection, result. */
+const DEMO_OLD_REPAIRS = [
+  { hour: 10, outcome: "pass" },
+  { hour: 11, outcome: "pass" },
+  { hour: 12, outcome: "partial" },
+  { hour: 13, outcome: "pass" },
+  { hour: 14, outcome: "again" },
+] as const;
 /** Pairs at each stage at the demo's counts, by stage (a believable spread, not a ranking). */
 const DEMO_STAGE_COUNT: Record<Stage, [number, number]> = {
   PREPARATION: [20, 40],
@@ -547,6 +572,9 @@ export async function seedDemoWeek(
   for (let d = firstDay; d <= today; d = addDays(d, 1)) {
     if (isoWeekday(d) <= 5) workingDays.push(d);
   }
+  // The first of the recent working days, where the work-in-progress board's live jobs begin
+  // (Phase 37, D-135).
+  const recentFrom = workingDays.at(-DEMO_RECENT_DAYS) ?? workingDays[0];
   // The days attendance is taken for, and the one the Quality Inspector is away (D-088).
   const attendanceDays = workingDays.filter((d) => d < today).slice(-ABSENT.length);
   const qiAwayDay: string | undefined =
@@ -736,6 +764,9 @@ export async function seedDemoWeek(
           if (!past(t)) continue;
           const [lo, hi] = DEMO_STAGE_COUNT[stage];
           const pairs = Math.round(lo + stream() * (hi - lo));
+          // Today's second count of Finishing is left out on purpose (Phase 37, A-111): its card
+          // reads the older time, so there is one stage to Update count on.
+          if (day === today && n === 1 && stage === "FINISHING") continue;
           const assigned = groups.find((g) => g.stage === stage)?.userIds ?? [];
           const person =
             stage === "PREPARATION" && capture.length > 0
@@ -752,62 +783,86 @@ export async function seedDemoWeek(
   }
 
   /**
-   * Repairs at every state (Phase 34): the failed batches' Fixable lines already started jobs At
-   * stage. The oldest three go Back for inspection and are inspected the next day (one passes, one
-   * passes one and scraps one, one is sent back again), one recent job waits Back in the queue,
-   * and the rest stay At stage (the latest Sole-ing and the Construction one included).
+   * Repairs at every state, as a live board (Phase 34, Phase 37): the failed batches' Fixable lines
+   * already started jobs At stage.
+   *  - Jobs sent before the recent working days were dealt with: Back 3 to 4 hours later and
+   *    inspected the next working day, by a fixed rotation (passed, passed, one scrapped, passed,
+   *    sent back again); a job sent back again is passed the working day after.
+   *  - Of the recent jobs, the oldest three are Back for inspection, waiting about 2 days, 1 day
+   *    and 2 hours after they were sent, so the Queue lists three repairs; the newest stay At
+   *    stage (Construction, Sole-ing, Finishing).
    */
   async function seedRepairs(): Promise<void> {
-    const jobs = (await listRepairsByStatus(["AT_STAGE"])).filter(
-      (j) => j.finding.finalDefectType.key !== "LOOSE_STITCHING",
-    );
-    if (jobs.length < 5) return;
-    const day = (t: Date) => new Date(t.getTime() + 8 * HOUR).toISOString().slice(0, 10);
-    const later = (j: (typeof jobs)[number], hour: number) => at(addDays(day(j.sentAt), 1), hour);
-    const back = async (j: (typeof jobs)[number], hours: number) => {
-      const t = plus(j.sentAt, hours * HOUR);
+    type Job = Awaited<ReturnType<typeof listRepairsByStatus>>[number];
+    const cutoff = at(recentFrom, 0);
+    const inspector = (d: string) => (d === qiAwayDay && qiMarkedAbsent ? fm! : qi!);
+    const back = async (j: Job, t: Date) => {
       const when = past(t) ? t : plus(j.sentAt, MINUTE);
       if (!past(when)) return null;
       await markRepairBack(j.id, fm!, when);
       return when;
     };
-    const [done, partial, again] = jobs;
-    if (await back(done, 3)) {
-      const t = later(done, 10);
-      if (past(t))
-        await inspectRepair(
-          done.id,
-          { passedPairs: done.pairs, scrappedPairs: 0, resend: [] },
-          qi!,
-          t,
-        );
+    // Inspected the next working day after it came back, at the given hour.
+    const inspect = async (
+      j: Job,
+      backAt: Date,
+      hour: number,
+      result: {
+        passedPairs: number;
+        scrappedPairs: number;
+        resend: { stage: Stage; pairs: number }[];
+      },
+    ) => {
+      const next = workingDays.find((d) => d > manilaToday(backAt));
+      if (!next) return;
+      const t = at(next, hour);
+      if (past(t)) await inspectRepair(j.id, result, inspector(next), t);
+    };
+    const atStage = async () => listRepairsByStatus(["AT_STAGE"]);
+
+    const old = (await atStage()).filter((j) => j.sentAt < cutoff);
+    for (const [i, j] of old.entries()) {
+      const { hour, outcome } = DEMO_OLD_REPAIRS[i % DEMO_OLD_REPAIRS.length];
+      const backAt = await back(j, plus(j.sentAt, (outcome === "again" ? 4 : 3) * HOUR));
+      if (!backAt) continue;
+      await inspect(
+        j,
+        backAt,
+        hour,
+        outcome === "pass"
+          ? { passedPairs: j.pairs, scrappedPairs: 0, resend: [] }
+          : outcome === "partial"
+            ? {
+                passedPairs: Math.max(0, j.pairs - 1),
+                scrappedPairs: Math.min(1, j.pairs),
+                resend: [],
+              }
+            : { passedPairs: 0, scrappedPairs: 0, resend: [{ stage: j.stage, pairs: j.pairs }] },
+      );
     }
-    if (await back(partial, 3)) {
-      const t = later(partial, 11);
-      if (past(t))
-        await inspectRepair(
-          partial.id,
-          { passedPairs: Math.max(0, partial.pairs - 1), scrappedPairs: 1, resend: [] },
-          qi!,
-          t,
-        );
+    // The jobs sent back again are fixed the second time.
+    for (const child of (await atStage()).filter((j) => j.parentId)) {
+      const backAt = await back(child, plus(child.sentAt, 3 * HOUR));
+      if (backAt)
+        await inspect(child, backAt, 10, {
+          passedPairs: child.pairs,
+          scrappedPairs: 0,
+          resend: [],
+        });
     }
-    if (await back(again, 4)) {
-      const t = later(again, 14);
-      if (past(t))
-        await inspectRepair(
-          again.id,
-          {
-            passedPairs: 0,
-            scrappedPairs: 0,
-            resend: [{ stage: "FINISHING", pairs: again.pairs }],
-          },
-          qi!,
-          t,
-        );
+    // The recent jobs: the oldest three wait Back for inspection, the newest stay At stage.
+    const live = (await atStage()).filter((j) => !j.parentId && j.sentAt >= cutoff);
+    const waiting = live.slice(0, Math.min(3, Math.max(0, live.length - 3)));
+    for (const [k, j] of waiting.entries()) {
+      const age = [2 * 24 * HOUR, 24 * HOUR, 0][k];
+      const earliest = plus(j.sentAt, 2 * HOUR);
+      await back(
+        j,
+        age > 0 && now.getTime() - age > earliest.getTime()
+          ? new Date(now.getTime() - age)
+          : earliest,
+      );
     }
-    // A recent one waits back for inspection, so the Queue shows a repair.
-    await back(jobs[jobs.length - 2], 2);
   }
 
   /**
@@ -959,6 +1014,7 @@ export async function seedDemoWeek(
     const rate = hours > 0 ? demoRate(most, hours) : 0;
     let entered = 0;
     let failedBatches = 0;
+    let recentBatches = 0;
     for (const day of workingDays) {
       const batches = batchesFor(DEFAULT_SCHEDULE, [DEFAULT_LUNCH], day);
       const present = views.get(day) ?? 0;
@@ -974,14 +1030,9 @@ export async function seedDemoWeek(
         let findings: object[] = [];
         if (failedPairs > 0) {
           const pattern =
-            failedBatches === DEMO_STITCHING_AT
-              ? {
-                  key: "LOOSE_STITCHING",
-                  remedy: "FIXABLE" as Remedy,
-                  stage: "CONSTRUCTION" as Stage,
-                }
-              : DEMO_FINDINGS[failedBatches % DEMO_FINDINGS.length];
-          failedBatches += 1;
+            day >= recentFrom && recentBatches < DEMO_RECENT_FINDINGS.length
+              ? DEMO_RECENT_FINDINGS[recentBatches++]
+              : DEMO_FINDINGS[failedBatches++ % DEMO_FINDINGS.length];
           const typeId = finalTypes.get(pattern.key);
           if (typeId)
             findings = [

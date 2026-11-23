@@ -1021,3 +1021,48 @@ D-134. No behaviour change.
       and `qa/CODEX_PROMPT_PHASE_36_SCREENSHOTS.md`
 - [x] Codex QA: run 1 and run 2 PASS WITH ISSUES (D8 15 of 15, `MOVED` 2); the hand rehearsal with phones is Dylan's
 - [x] Committed and merged (`docs/phase-36`, #62, `c030f72`; CI green)
+
+## Phase 37 — Work in progress demo data (demo data only)
+
+Plan: `docs/prompts/plans/phase-37-wip-demo-data-plan.md` (Dylan's request 2026-11-23, amended for Preparation:
+its defects are the camera's, so no repair there). Decision: D-135. No behaviour change.
+
+- [x] `seedRepairs`: repairs from before the last four working days finished (rotation), three Back for
+      inspection with different waits, the newest At stage (Construction, Sole-ing, Finishing)
+- [x] The last four working days' failed batches follow a fixed pattern (seven entries); Loose stitching is one
+      of them
+- [x] `seedStages`: Finishing's second count today left out (A-111)
+- [x] Unit tests: the repair mock moves through its states; findings pattern, repair states and the older
+      count are checked (26 demo-seed tests)
+- [x] A real seed on PostgreSQL 16 checked at Fri 17:05 and Mon 08:50 Manila (every status present, DONE pairs
+      reconcile, nothing at Preparation)
+- [x] Docs: `docs/DEMO_SCRIPT.md` (Act 6 and the data list), `docs/USER_MANUAL.md` §6.3a, README demo-week
+      bullet, master spec, STATUS, SESSION_LOG, DECISIONS (D-135)
+- [x] `npm run check` passes (2026-11-23: lint, typecheck, 65 test files and 1002 tests, build)
+- [x] QA handoff `qa/handoffs/2026-11-23-phase-37-wip-demo-data.md`, Codex prompt `qa/CODEX_PROMPT_PHASE_37.md`
+- [x] Manual screenshot 21 retaken from a fresh seed (demo clock Fri 20 Nov 17:06, 1366 px at 2x, headless
+      Chromium, at Dylan's request) and `USER_MANUAL.pdf` rebuilt (37 pages)
+- [x] Codex QA run 1 (2026-11-23, PASS WITH ISSUES: W1 to W3, W5 to W8 passed; W4's after-15:30 contrast blocked by the time of day)
+- [x] W4 rerun (run 2, demo clock at 16:00: PASS); the CLI reset and seed now follow the demo clock
+- [ ] Committed and merged
+
+## Phase 38 — Preparation shows the camera's defects; no repair goes back to Preparation
+
+Plan: `docs/prompts/plans/phase-38-preparation-camera-defects-plan.md` (Dylan's request 2026-11-23). Decision: D-136
+(A-113 to A-115). Built on top of Phase 37 in the same working tree (file lists kept apart: `qa/phase-37-files.txt`,
+`qa/phase-38-files.txt`).
+
+- [x] The Preparation card lists the camera's leather defects on today's finished rolls (rolls per type, as Reports →
+      Rolls), the rolls returned, and a none line; "No repairs here." gone from Preparation
+- [x] `REPAIR_STAGES` (Construction, Sole-ing, Finishing) in the finding form, Change → Move to, Sent back again, the
+      validators, the Operations stage filter and Where defects come from; legacy Preparation rows still reported (A-115)
+- [x] Unit tests (repair-rules, stage.service, repair.service, repair.validator) and two e2e assertions
+- [x] Docs: README, USER_MANUAL (5.4a, 5.4b, 6.3a, caption 21), API, master spec, DECISIONS (D-136), STATUS, SESSION_LOG
+- [x] `npm run check` passes (2026-11-23, on a copy of the working tree: lint, typecheck, 65 files and 1012 tests, build)
+- [x] Manual screenshot 21 retaken from a seed at Fri 20 Nov 17:10 (headless Chromium, 1366 px at 2x) and
+      `USER_MANUAL.pdf` rebuilt (39 pages)
+- [x] QA handoff `qa/handoffs/2026-11-23-phase-38-preparation-camera-defects.md`, Codex prompt `qa/CODEX_PROMPT_PHASE_38.md`
+- [x] Codex QA: run 1 FAIL (e2e with the demo clock a day ahead; L1 to L10 passed), run 2 FAIL (one real test bug, the
+      origin-cell index, fixed), run 3 PASS WITH ISSUES (final-defects 8 of 8; Corrections and Reports time out only in the
+      six-worker run and pass alone)
+- [ ] Committed and merged

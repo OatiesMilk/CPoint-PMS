@@ -12,7 +12,7 @@ import type { Role } from "@/lib/domain";
 import { formatAttendanceDay } from "@/lib/attendance-rules";
 import { manilaToday } from "@/lib/format";
 import { clockTime, queueState, isQueued } from "@/lib/production-rules";
-import { addDays } from "@/lib/report-rules";
+import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
   STAGES,
   parseStageCount,
@@ -20,9 +20,11 @@ import {
   captureStageMessage,
   countReminderDue,
   latestCounts,
+  leatherDefectsLine,
   mayCountStage,
   oneStagePerPerson,
   prefillAssignments,
+  returnedRollsLine,
   waitingLine,
   wipTotals,
   type Assignment,
@@ -32,6 +34,7 @@ import { Errors } from "@/server/lib/errors";
 import { runInTransaction } from "@/server/models/db";
 import { listBatchRows, listDayPlans, listOpenBatchRows } from "@/server/models/production.model";
 import { countOpenRolls } from "@/server/models/roll.model";
+import { defectBreakdown } from "@/server/models/report.model";
 import { listRepairsByStatus } from "@/server/models/repair.model";
 import {
   insertCount,
@@ -45,7 +48,8 @@ import {
 import type { StageAssignmentsInput } from "@/server/validators/repair.validator";
 import { getAttendanceDay } from "./attendance.service";
 import { recordAudit } from "./audit.service";
-import { rollsScannedByDay } from "./roll.service";
+import { foundAt } from "./report.service";
+import { rollOutcomesByDay } from "./roll.service";
 
 type Actor = { id: string; name?: string; role: Role };
 
@@ -283,8 +287,25 @@ export type StageCard = {
   assigned: string | null;
 };
 
-/** Rolls open and being scanned, for the Preparation card (the existing counts). */
-export type PreparationRolls = { beingScanned: number; scannedToday: number };
+/**
+ * What the camera found on the raw leather rolls finished today (Phase 38, D-136, A-113), the same
+ * count as Reports → Rolls: rolls per leather defect type, never sections. These are the leather
+ * defects, a different list from the final shoe defects checked after Preparation (A-62, A-66).
+ */
+export type LeatherDefects = {
+  rows: { key: string; label: string; rolls: number }[];
+  /** "Scratch 9, Crease 7", or empty when the camera found nothing. */
+  line: string;
+  /** "Returned to supplier: 2 rolls.", or null when none came back today. */
+  returnedLine: string | null;
+};
+
+/** The Preparation card's roll figures: rolls being scanned and scanned today, and the camera's defects. */
+export type PreparationRolls = {
+  beingScanned: number;
+  scannedToday: number;
+  leatherDefects: LeatherDefects;
+};
 
 /**
  * The work in progress board (Phase 34, A-72): each stage in line order with its count, its
@@ -293,15 +314,24 @@ export type PreparationRolls = { beingScanned: number; scannedToday: number };
  */
 export async function wipBoard(viewer: { role: Role }, now: Date = appNow()) {
   const today = manilaToday(now);
-  const [assigned, counts, atStage, back, open, scanned, beingScanned] = await Promise.all([
-    listAssignments(today),
-    listCounts(today, today),
-    listRepairsByStatus(["AT_STAGE"]),
-    listRepairsByStatus(["BACK_FOR_INSPECTION"]),
-    listOpenBatchRows(),
-    rollsScannedByDay(today, today),
-    countOpenRolls(),
-  ]);
+  const todayRange = { start: manilaDayStart(today), end: manilaDayStart(addDays(today, 1)) };
+  const [assigned, counts, atStage, back, open, outcomes, beingScanned, defects] =
+    await Promise.all([
+      listAssignments(today),
+      listCounts(today, today),
+      listRepairsByStatus(["AT_STAGE"]),
+      listRepairsByStatus(["BACK_FOR_INSPECTION"]),
+      listOpenBatchRows(),
+      rollOutcomesByDay(today, today),
+      countOpenRolls(),
+      foundAt().then((found) => defectBreakdown(todayRange, found)),
+    ]);
+  const todayRolls = outcomes.get(today) ?? { scanned: 0, returned: 0 };
+  const leatherDefects: LeatherDefects = {
+    rows: defects.map((d) => ({ key: d.key, label: d.label, rolls: d.rolls })),
+    line: leatherDefectsLine(defects),
+    returnedLine: returnedRollsLine(todayRolls.returned),
+  };
   const latest = latestCounts(counts, today);
   const cards: StageCard[] = STAGES.map((stage) => {
     const c = latest.get(stage) ?? null;
@@ -333,7 +363,11 @@ export async function wipBoard(viewer: { role: Role }, now: Date = appNow()) {
   return {
     day: today,
     cards,
-    preparation: { beingScanned, scannedToday: scanned.get(today) ?? 0 } satisfies PreparationRolls,
+    preparation: {
+      beingScanned,
+      scannedToday: todayRolls.scanned,
+      leatherDefects,
+    } satisfies PreparationRolls,
     waiting: {
       batches: waitingBatches,
       repairs: back.length,

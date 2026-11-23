@@ -69,6 +69,12 @@ findings that still shape the system:
   **corrections to past records** (Phase 35B, D-133). The Floor Manager's Overview is in three zones
   (D-131).
 - Phase 36 (D-134) brought the docs, the figures and the CI checks up to this list.
+- Phase 38 (D-136): the Preparation card on Work in progress lists the camera's leather defects on the
+  rolls finished today (rolls per type, as Reports → Rolls), and a repair is never sent back to
+  Preparation (`REPAIR_STAGES`: Construction, Sole-ing, Finishing; amends A-75).
+- Phase 37 (D-135, demo data only): the demo's work in progress is a live board (older repairs finished,
+recent ones At stage and Back for inspection, Finishing's count left older). At **Preparation** a
+shoe repair never exists: its defects are the camera's, on raw leather (A-62, A-66).
 </context>
 
 <read_first>
@@ -274,7 +280,7 @@ the finished pairs."), nothing reaches a closed app.
 **Final defects and repairs (Phase 34, D-130):** when pairs fail inspection the QI lists _what was
 wrong_: one line per defect (a `FinalDefectType`, a list the System Admin edits, separate from the
 camera's leather defect types), the pairs, **Fixable** or **Not fixable**, and for a fixable one the
-stage it goes back to. The lines add up to the failed pairs; `OTHER` needs a note. Each fixable line
+stage it goes back to (Construction, Sole-ing or Finishing; never Preparation, D-136). The lines add up to the failed pairs; `OTHER` needs a note. Each fixable line
 makes a repair job (`RP-261120-2-1`) **At stage**; the constructor assigned to that stage today (or
 the Floor Manager) marks it **Back for inspection**; the QI inspects it from the Queue: passed,
 scrapped or sent back again (no limit, a child job). The Floor Manager may move an At-stage job or

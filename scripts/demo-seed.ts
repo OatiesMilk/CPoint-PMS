@@ -4,12 +4,16 @@
  * SEED_DEMO_USERS=true, or run `npm run db:seed`).
  *
  *   npm run demo:seed
+ *
+ * Seeds at the demo clock's time when it is moved (D-125), as the app does.
  */
 import "dotenv/config";
 import { seedDemoWeek } from "../src/server/services/demo-seed.service";
 import { getPrisma } from "../src/server/lib/prisma";
+import { syncDemoClock } from "../src/server/services/demo-clock.service";
 
-seedDemoWeek()
+syncDemoClock()
+  .then(() => seedDemoWeek())
   .then(async (result) => {
     console.log(
       result.seeded

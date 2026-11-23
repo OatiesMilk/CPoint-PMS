@@ -41,8 +41,16 @@ describe("repairActionSchema", () => {
       reason: "Needs a press",
     });
     expect(!s.success && s.error.issues[0].message).toBe(
-      "Choose a stage: Preparation, Construction, Sole-ing or Finishing.",
+      "Choose a stage a repair can go to: Construction, Sole-ing or Finishing. Preparation handles leather the camera already checked.",
     );
+    // No repair goes back to Preparation (D-136), though a stage count or assignment may name it.
+    const p = repairActionSchema.safeParse({
+      action: "move",
+      stage: "PREPARATION",
+      reason: "Needs a press",
+    });
+    expect(p.success).toBe(false);
+    expect(stageCountSchema.safeParse({ stage: "PREPARATION", pairs: 1 }).success).toBe(true);
     expect(repairActionSchema.safeParse({ action: "scrap" }).success).toBe(false);
   });
 });

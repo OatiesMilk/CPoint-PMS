@@ -13,6 +13,23 @@ import type { WipBoard as Board } from "@/server/services/stage.service";
 
 const n = (v: number) => v.toLocaleString("en-PH");
 
+/**
+ * Preparation works on the raw leather roll, which the camera has already inspected, so its
+ * defects are the camera's, not the shoe defects found after it (D-136). Rolls per defect type, as
+ * Reports → Rolls; the labels are Settings → Defect types.
+ */
+function LeatherDefectsBlock({ defects }: { defects: Board["preparation"]["leatherDefects"] }) {
+  return (
+    <div className="flex flex-col gap-1.5 text-sm" data-testid="wip-leather-defects">
+      <p className="font-medium">Leather defects found by the camera, rolls finished today</p>
+      <p className={defects.line ? undefined : "text-muted-foreground"}>
+        {defects.line || "The camera found no defects on today's rolls."}
+      </p>
+      {defects.returnedLine && <p className="text-muted-foreground">{defects.returnedLine}</p>}
+    </div>
+  );
+}
+
 export function WipBoard({ board }: { board: Board }) {
   return (
     <section aria-labelledby="wip-heading" className="flex flex-col gap-4">
@@ -22,7 +39,8 @@ export function WipBoard({ board }: { board: Board }) {
         </h2>
         <p className="text-muted-foreground">
           Pairs at each stage now, as counted by the people there, and the repairs waiting at each
-          stage. A count is for the whole stage.
+          stage after Preparation. A count is for the whole stage. At Preparation the defects are
+          the camera&apos;s, on the raw leather roll; at the other stages they are on the shoe.
         </p>
       </div>
       <Link
@@ -49,17 +67,24 @@ export function WipBoard({ board }: { board: Board }) {
                   </span>
                 </p>
                 {c.stage === "PREPARATION" && (
-                  <p className="text-sm text-muted-foreground">
-                    Rolls: {board.preparation.beingScanned} being scanned,{" "}
-                    {board.preparation.scannedToday} scanned today.
-                  </p>
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Rolls: {board.preparation.beingScanned} being scanned,{" "}
+                      {board.preparation.scannedToday} scanned today.
+                    </p>
+                    <LeatherDefectsBlock defects={board.preparation.leatherDefects} />
+                  </>
                 )}
+                {/* No repair goes back to Preparation (D-136): the block shows here only for a
+                    repair saved before that rule, so no pairs are hidden. */}
                 <div className="flex flex-col gap-1.5 text-sm">
-                  <p>
-                    {c.repairPairs === 0
-                      ? "No repairs here."
-                      : `In repair here: ${n(c.repairPairs)} pair${c.repairPairs === 1 ? "" : "s"}`}
-                  </p>
+                  {(c.stage !== "PREPARATION" || c.repairPairs > 0) && (
+                    <p>
+                      {c.repairPairs === 0
+                        ? "No repairs here."
+                        : `In repair here: ${n(c.repairPairs)} pair${c.repairPairs === 1 ? "" : "s"}`}
+                    </p>
+                  )}
                   {c.repairDefects.length > 0 && (
                     <p className="text-muted-foreground">{c.repairDefects.join(", ")}</p>
                   )}

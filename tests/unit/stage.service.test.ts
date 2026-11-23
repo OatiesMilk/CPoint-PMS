@@ -50,9 +50,21 @@ vi.mock("@/server/models/stage.model", () => stage);
 vi.mock("@/server/models/production.model", () => production);
 vi.mock("@/server/models/repair.model", () => repairs);
 vi.mock("@/server/models/roll.model", () => ({ countOpenRolls: vi.fn(async () => 2) }));
-vi.mock("@/server/services/roll.service", () => ({
-  rollsScannedByDay: vi.fn(async () => new Map([["2026-11-20", 7]])),
-}));
+const rollOutcomesByDay = vi.fn(
+  async (_from: string, _to: string) =>
+    new Map([["2026-11-20", { scanned: 7, returned: 1 }]]) as Map<
+      string,
+      { scanned: number; returned: number }
+    >,
+);
+vi.mock("@/server/services/roll.service", () => ({ rollOutcomesByDay }));
+// The camera's defects on today's rolls (Phase 38): the same breakdown Reports → Rolls uses.
+const defectBreakdown = vi.fn(
+  async (_range: { start: Date; end: Date }, _foundAt: number) =>
+    [] as { key: string; label: string; rolls: number; returned: number }[],
+);
+vi.mock("@/server/models/report.model", () => ({ defectBreakdown }));
+vi.mock("@/server/services/report.service", () => ({ foundAt: vi.fn(async () => 0.5) }));
 vi.mock("@/server/services/attendance.service", () => attendance);
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
 vi.mock("@/server/models/db", () => ({
@@ -476,7 +488,7 @@ describe("wipBoard (D-008)", () => {
       assigned: "Assigned today: Ana Reyes, Ben Cruz",
     });
     expect(b.cards[0]).toMatchObject({ pairs: null, asOf: "Not counted today", assigned: null });
-    expect(b.preparation).toEqual({ beingScanned: 2, scannedToday: 7 });
+    expect(b.preparation).toMatchObject({ beingScanned: 2, scannedToday: 7 });
     expect(b.canCount).toBe(true);
     expect((await svc.wipBoard(QI, NOW)).canCount).toBe(false);
   });
@@ -491,6 +503,48 @@ describe("wipBoard (D-008)", () => {
     const all = keys(b);
     for (const bad of ["userId", "enteredBy", "by", "name", "user", "person"])
       expect(all).not.toContain(bad);
+  });
+});
+
+describe("wipBoard, the Preparation card (Phase 38, D-136)", () => {
+  it("lists the camera's defects on today's rolls, rolls per type, for today's Manila day", async () => {
+    defectBreakdown.mockResolvedValueOnce([
+      { key: "scratch", label: "Scratch", rolls: 9, returned: 1 },
+      { key: "crease", label: "Crease", rolls: 7, returned: 0 },
+    ]);
+    const b = await svc.wipBoard(FM, NOW);
+    expect(b.preparation.leatherDefects).toEqual({
+      rows: [
+        { key: "scratch", label: "Scratch", rolls: 9 },
+        { key: "crease", label: "Crease", rolls: 7 },
+      ],
+      line: "Scratch 9, Crease 7",
+      returnedLine: "Returned to supplier: 1 roll.",
+    });
+    // Fri 20 Nov 2026 in Manila: 19 Nov 16:00 UTC to 20 Nov 16:00 UTC, at the found-at setting.
+    expect(defectBreakdown).toHaveBeenCalledWith(
+      {
+        start: new Date("2026-11-19T16:00:00.000Z"),
+        end: new Date("2026-11-20T16:00:00.000Z"),
+      },
+      0.5,
+    );
+    // The camera's defects are the leather's, never the final shoe defects, and Preparation has no repairs.
+    expect(b.cards[0].repairs).toEqual([]);
+    expect(b.cards[0].repairPairs).toBe(0);
+  });
+
+  it("says the camera found nothing, and leaves the returned line out when none came back", async () => {
+    rollOutcomesByDay.mockResolvedValueOnce(new Map([["2026-11-20", { scanned: 3, returned: 0 }]]));
+    const b = await svc.wipBoard(FM, NOW);
+    expect(b.preparation.scannedToday).toBe(3);
+    expect(b.preparation.leatherDefects).toEqual({ rows: [], line: "", returnedLine: null });
+  });
+
+  it("counts no rolls on a day with none finished", async () => {
+    rollOutcomesByDay.mockResolvedValueOnce(new Map());
+    const b = await svc.wipBoard(FM, NOW);
+    expect(b.preparation).toMatchObject({ scannedToday: 0 });
   });
 });
 

@@ -9,12 +9,13 @@ import { Select } from "@/components/ui/select";
 import {
   OTHER_KEY,
   REMEDY_LABEL,
-  STAGES,
+  REPAIR_STAGES,
   STAGE_LABEL,
   findingsGap,
   parseFindings,
   type FindingField,
   type Remedy,
+  type RepairStage,
   type Stage,
   type Suggestion,
 } from "@/lib/repair-rules";
@@ -25,6 +26,7 @@ export type FindingDraft = {
   finalDefectTypeId: string;
   pairs: string;
   remedy: "" | Remedy;
+  /** A saved line from before Phase 38 may still name Preparation; the form then asks for a valid stage (D-136). */
   returnStage: "" | Stage;
   note: string;
 };
@@ -226,11 +228,11 @@ export function FindingsEditor({
                       err("returnStage") ? `${findingFieldId(i, "returnStage")}-error` : undefined
                     }
                     onChange={(e) =>
-                      update(i, { returnStage: e.target.value as Stage | "" }, "returnStage")
+                      update(i, { returnStage: e.target.value as RepairStage | "" }, "returnStage")
                     }
                   >
                     <option value="">Choose the stage</option>
-                    {STAGES.map((s) => (
+                    {REPAIR_STAGES.map((s) => (
                       <option key={s} value={s}>
                         {STAGE_LABEL[s]}
                       </option>

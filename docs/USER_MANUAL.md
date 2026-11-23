@@ -300,7 +300,9 @@ When **Of these, failed inspection** is more than 0, **What was wrong** appears.
 each defect:
 
 1. Choose the **Defect** and type the **Pairs**.
-2. Choose **Fixable** or **Not fixable**. For a fixable one choose the stage it **Goes back to**.
+2. Choose **Fixable** or **Not fixable**. For a fixable one choose the stage it **Goes back to**:
+   Construction, Sole-ing or Finishing. Preparation is not offered, because the camera already
+   checked the leather and no shoe is there to repair.
 3. **Add another defect** for the next line. If the form suggests an answer ("Usually fixable at
    Sole-ing, 14 of 17") tap **Use this**, or ignore it. It is never filled in for you.
 4. The lines must add up to the failed pairs. The form tells you what is missing ("3 of 5 failed
@@ -317,7 +319,7 @@ fixable line is scrapped.
 When the stage marks a repair **Back for inspection**, it joins the **Queue** under
 **Repairs back for inspection**, with the batch it came from, the defect and how long it has waited.
 Repairs have no due time. Tap **Inspect repair** and enter how many pairs **Passed**, were
-**Scrapped**, or are **Sent back again** (**Send some back again**, then the stage). The three must
+**Scrapped**, or are **Sent back again** (**Send some back again**, then Construction, Sole-ing or Finishing). The three must
 add up to the repair's pairs. A repair can fail again as often as needed. Passed repaired pairs count
 toward the quota on the day they pass.
 
@@ -437,7 +439,19 @@ audit log.
   inspection** (or **Change**: move it to another stage, or **Not fixable after all**, each with a
   reason, until it is back). The Overview has a small card for it.
 
-![Work in progress: each stage's pairs and its repairs.](screenshots/manual/21-work-in-progress.png)
+![Work in progress: each stage's pairs and its repairs; at Preparation, the camera's leather defects.](screenshots/manual/21-work-in-progress.png)
+
+- **Preparation has no repairs, and shows the camera's defects.** There the camera inspects the raw
+  leather roll. The **Preparation** card lists **Leather defects found by the camera, rolls finished
+  today** ("Scratch 9, Crease 7": rolls per defect type, the same count as **Reports → Rolls**, the
+  types from Settings) and, when a roll went back, "Returned to supplier: 1 roll."; with none it says
+  "The camera found no defects on today's rolls." Those defects decide a roll's Pass or Return to
+  supplier, never a repair. No repair goes back to Preparation: a repair goes only to Construction,
+  Sole-ing or Finishing, where a finished shoe is inspected and its final defects (Lifted sole, Glue
+  marks, Loose stitching, Scuffs, Other) are recorded.
+- On the demo data the board is already live (Phase 37): one repair At stage at Construction, Sole-ing and
+  Finishing, three repairs Back for inspection in the Queue, and Finishing's count older than the others
+  ("as of 10:30" beside "as of 15:30") so there is a card to update, as in the screenshot above.
 
 - **Reports → Operations** has four new sections: **Final defects**, **Where defects come from**,
   **Repairs** and **Work in progress**. Failed pairs from before reasons were recorded show as

@@ -385,15 +385,27 @@ describe("repairReport (A-89)", () => {
     });
     expect(r.finalDefects.rows[0].fixableShare).toBeCloseTo(4 / 6);
     const lifted = r.origins.rows[0];
-    expect(lifted.byStage.map((s) => s.pairs)).toEqual([0, 0, 3, 1]);
+    // No Preparation column: a repair never goes back to Preparation (D-136).
+    expect(lifted.byStage.map((s) => s.pairs)).toEqual([0, 3, 1]);
     expect(lifted.scrapped).toBe(2);
     expect(lifted.scrappedShare).toBeCloseTo(2 / 6);
+    expect(r.origins.stages.map((s) => s.label)).toEqual(["Construction", "Sole-ing", "Finishing"]);
+  });
+
+  it("keeps a Preparation column only when a finding from before Phase 38 names it (D-136)", async () => {
+    model.findingsBetween.mockResolvedValueOnce([
+      finding("t1", "Lifted sole", 2, "FIXABLE", "PREPARATION"),
+      finding("t1", "Lifted sole", 1, "FIXABLE", "FINISHING"),
+    ]);
+    model.unexplainedFailedPairs.mockResolvedValueOnce(0);
+    const r = await svc.repairReport({ from: "2026-11-01", to: "2026-11-30" });
     expect(r.origins.stages.map((s) => s.label)).toEqual([
       "Preparation",
       "Construction",
       "Sole-ing",
       "Finishing",
     ]);
+    expect(r.origins.rows[0].byStage.map((s) => s.pairs)).toEqual([2, 0, 0, 1]);
   });
 
   it("filters narrow the rows and keep every share a share of all failed pairs (A-101)", async () => {

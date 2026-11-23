@@ -1,0 +1,38 @@
+# Phase 38 files only (Codex artifacts are git-ignored). Shared docs, also changed by Phase 37: README.md, docs/USER_MANUAL.md,
+# docs/prompts/system-rebuild.md, docs/STATUS.md, docs/SESSION_LOG.md, docs/DECISIONS.md, docs/ROADMAP.md.
+# Left out on purpose: docs/DEMO_SCRIPT.md (Dylan's file), .claude/settings.local.json.
+src/lib/repair-rules.ts
+src/server/services/stage.service.ts
+src/server/services/repair.service.ts
+src/server/validators/repair.validator.ts
+src/server/validators/report.validator.ts
+src/app/(app)/batches/wip-board.tsx
+src/app/(app)/batches/findings-editor.tsx
+src/app/(app)/batches/repair-actions.tsx
+src/app/(app)/batches/repair-inspect-dialog.tsx
+src/app/(app)/reports/_components/operations-view.tsx
+tests/unit/repair-rules.test.ts
+tests/unit/stage.service.test.ts
+tests/unit/repair.service.test.ts
+tests/unit/repair.validator.test.ts
+tests/e2e/final-defects.spec.ts
+tests/e2e/stage-wip.spec.ts
+docs/API.md
+docs/USER_MANUAL.md
+docs/USER_MANUAL.pdf
+docs/screenshots/manual/21-work-in-progress.png
+README.md
+docs/prompts/system-rebuild.md
+docs/STATUS.md
+docs/SESSION_LOG.md
+docs/DECISIONS.md
+docs/ROADMAP.md
+docs/prompts/plans/phase-38-preparation-camera-defects-plan.md
+qa/handoffs/2026-11-23-phase-38-preparation-camera-defects.md
+qa/CODEX_PROMPT_PHASE_38.md
+qa/phase-38-files.txt
+qa/CODEX_PROMPT_PHASE_38_RUN2.md
+qa/CODEX_PROMPT_PHASE_38_RUN3.md
+qa/reports/2026-11-23-phase-38-run1.md
+qa/reports/2026-11-23-phase-38-run2.md
+qa/reports/2026-11-23-phase-38-run3.md

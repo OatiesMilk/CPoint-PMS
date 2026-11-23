@@ -2776,3 +2776,59 @@ rolls from, LR-001, is used up by the last working day), so the seed now moves t
 the most rolls left: demo data only. The PDF stays pending until Codex's screenshots are in `docs/screenshots/manual/`.
 Assumptions the docs had to state (none new in rules): the demo seeds six bins and `RETURN`; labels are A4
 3 x 7 (A-54).
+
+### D-135 · 2026-11-23 · Accepted — The demo's work in progress is a live board (demo data only)
+
+**Context:** Dylan (2026-11-23) asked for more emphasis on work in progress in the demo data so it presents
+more easily. The Phase 36 screenshot showed 12 or more repairs At stage dated back ten days, one repair Back
+for inspection, and every stage counted at the same time, so nothing stood out.
+**Decision:** The demo seed (`seedRepairs`, `seedStages`, the finding pattern of the last working days)
+shows a live board: repairs from before the last four working days are finished (passed, passed, one pair
+scrapped, passed, sent back again and then passed, by rotation); of the recent ones the oldest three are Back
+for inspection, waiting about 2 days, 1 day and 2 hours, and the newest stay At stage, one each at
+Construction, Sole-ing and Finishing; on today only, Finishing's second count is left out so its card reads
+the older time and there is a stage to **Update count** on. The failed batches of the last four working days
+follow a fixed pattern (the plan said three days and five entries, which can't give three Back and three At
+stage; four days and seven entries do). Nothing else in the week changes. **No repair is ever seeded at
+Preparation (Dylan, 2026-11-23, confirmed, not an assumption):** its defects are the ones the camera detects
+on the raw leather roll (the Settings defect types read by Capture), a different list from the final
+defects of finished shoes at the later stages (A-62, A-66); they lead to a roll's Pass or Return to
+supplier, never to a repair.
+**Consequences:** Demo data only: no schema, rule, page or service change. **A-111** (demo only) Finishing's
+count today is the older one on purpose. **A-112** (demo only) the repair outcomes by rotation (passed, one
+scrapped, sent back again) are placeholders; CPoint hasn't given a real pass rate for repairs and nothing
+reads them as a figure. Not seeded: a second open roll (it moves roll counts and the Phase 26 to 30 docs), and
+"Not fixable after all" or "moved to another stage" repairs (they stay a live step). Showing the camera's
+leather defects on the Preparation card of the board is not part of this phase; it is Phase 38
+(`docs/prompts/plans/phase-38-preparation-camera-defects-plan.md`).
+**Where:** `src/server/services/demo-seed.service.ts`, `tests/unit/demo-seed.test.ts`.
+
+### D-136 · 2026-11-23 · Accepted — Preparation shows the camera's defects; no repair goes back to Preparation
+
+**Context:** Dylan (2026-11-23), after Phase 37: at Preparation "the defects to be seen are the ones detected
+by the camera capture module", on the raw leather roll the camera inspects, while the defects after Preparation
+are on a shoe. And: "there should be no repairs to be sent back, since it is already pre-filtered by the CV
+and it is raw leather being inspected, not a shoe that needs repair."
+**Decision:** (1) The Preparation card on Batches → Work in progress lists **Leather defects found by the camera,
+rolls finished today**: one count of rolls per leather defect type, the same count as Reports → Rolls
+(`defectBreakdown`, today's Manila day, the "A defect counts as found at" setting, labels from Settings → Defect
+types), "Returned to supplier: N rolls." when a roll finished today was returned, and "The camera found no
+defects on today's rolls." when none. The final shoe defects and the camera's leather defects stay two lists
+(A-62, A-66). The Overview card and the Capture page's My stage card are unchanged (Dylan: the defaults stand).
+(2) A repair goes only to Construction, Sole-ing or Finishing: `REPAIR_STAGES` in `src/lib/repair-rules.ts`
+feeds the finding form's Goes back to, a repair's Change → Move to, Inspect repair → Sent back again, the
+validators (a Preparation stage is refused with a message naming the field), the Operations Stage filter and the
+Where defects come from columns. `STAGES` (four) stays for who works where, counts and the board. Amends A-75
+("the stage is where a fixable pair goes back to"): the three stages after Preparation. No migration, the enum
+keeps `PREPARATION` for assignments and counts.
+**Consequences:** **A-113** the Preparation card counts rolls per defect type finished today, as Reports → Rolls;
+CPoint hasn't asked for another measure. **A-114** constructors without Capture access may still be assigned to
+Preparation (A-96 unchanged); only repairs are barred from it. **A-115** a finding or repair from before this
+rule that names Preparation is never hidden: Where defects come from keeps a Preparation column only while the
+period has pairs sent there, the Preparation card keeps a repair block only while such a repair is open, a
+correction form with such a line asks for a valid stage, and the usual-answer suggestion ignores it; `?stage=
+PREPARATION` on Reports → Operations is ignored. Tell CPoint: repairs never go back to Preparation.
+**Where:** `src/lib/repair-rules.ts`, `src/server/services/stage.service.ts`, `repair.service.ts`,
+`src/server/validators/repair.validator.ts`, `report.validator.ts`, `src/app/(app)/batches/wip-board.tsx`,
+`findings-editor.tsx`, `repair-actions.tsx`, `repair-inspect-dialog.tsx`,
+`src/app/(app)/reports/_components/operations-view.tsx`.
