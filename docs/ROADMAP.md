@@ -1079,5 +1079,4 @@ decision.
 - [x] `qa/phase-39-ci-no-preparation-repairs.patch`: two `docker` SQL checks (no finding or repair job at PREPARATION);
       both counts are 0 on a real seed (PostgreSQL 16, demo week: 15 Fixable findings, 16 repair jobs); `git apply --check` clean
 - [x] Stale `qa/phase-36-ci-storage-checks.patch` deleted (already in `ci.yml`)
-- [ ] Dylan applies the patch (`git apply qa/phase-39-ci-no-preparation-repairs.patch`), commits and merges; the `docker` job passes
-      (Codex re-check prompt only if it fails)
+- [x] Patch applied and merged (#65, #66); the `docker` job passes

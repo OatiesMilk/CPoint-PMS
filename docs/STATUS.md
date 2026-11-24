@@ -3,8 +3,8 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-23 (Phases 37 and 38 merged as #64, CI green; Phase 39 close-out: docs say merged)
-**Branch:** `main` at 8de71d4 (#64, Phases 37 and 38 merged together; its CI run on `main`, run 151, passed). `docs/DEMO_SCRIPT.md` is
+**Last updated:** 2026-11-24 (Phase 39 merged as #65 and #66; the `docker` check for no repair at Preparation passes)
+**Branch:** `main` at 539762d (#66, Phase 39; #65 before it). On `main`, the CI run for #66 failed only `e2e` `batches.spec.ts:346`, because it ran at 00:23 Manila (the known 00:00 to 01:00 window); the rerun on 2026-11-24 passed, so CI is green on `main`. `docs/DEMO_SCRIPT.md` is
 Dylan's file and stays out of git.
 
 - **Phase 38 (D-136, merged #64):** the Preparation card on Batches → Work in progress lists the camera's leather
@@ -20,8 +20,8 @@ Dylan's file and stays out of git.
   `npm run demo:reset` and `demo:seed` now follow the demo clock. Codex: run 1 PASS WITH ISSUES, run 2 PASS
   (`qa/reports/2026-11-23-phase-37-run1.md`, `-run2.md`). Plan `docs/prompts/plans/phase-37-wip-demo-data-plan.md`, handoff
   `qa/handoffs/2026-11-23-phase-37-wip-demo-data.md`. Manual screenshot 21 retaken and `USER_MANUAL.pdf` rebuilt (39 pages).
-- **Phase 39 (docs only, built 2026-11-23, not yet committed):** this close-out (STATUS and ROADMAP say merged; the patch
-  `qa/phase-39-ci-no-preparation-repairs.patch` adds two `docker` SQL checks, both counts 0 on a real seed); plan
+- **Phase 39 (docs only, merged #65, #66):** the close-out (STATUS and ROADMAP say Phases 37 and 38 merged; the two `docker` SQL
+  checks from `qa/phase-39-ci-no-preparation-repairs.patch` are in `ci.yml` and pass, no finding or repair job at PREPARATION); plan
   `docs/prompts/plans/phase-39-closeout-plan.md`.
 - **Phase 36 (built 2026-11-22, D-134, docs only; the one code change is demo data, see run 1):** the master spec, README (features,
   demo script, ER diagram), `docs/USER_MANUAL.md`, STATION_SETUP, CLAUDE.md and DESIGN swept for Phases 32
@@ -39,17 +39,17 @@ Dylan's file and stays out of git.
   is no longer needed. Two captions were corrected to match the shots (19 and 25).
 - **Phase 36 Codex run 2 PASS WITH ISSUES** (`qa/reports/2026-11-22-phase-36-run2.md`): D8 passed (15 of 15, `MOVED` 2), D9 figures fine; F1 (the "92 handlers" source) answered in `docs/prompts/paper-figures.md` (92 route handlers in 77 files).
 - **Still to do for Phase 36:** Dylan rehearses the demo once by hand with phones, the marker card and a stopwatch; then the git commands.
-- **Last merged features:** Phases 37 and 38 Work in progress demo data and Preparation's camera defects (#64, D-135, D-136), Phase 36 docs, figures and demo (#62, D-134), 35B corrections to past records (#61, D-133), 35A reports by period (#59, D-132),
+- **Last merged features:** Phase 39 close-out and the CI check for no repair at Preparation (#65, #66), Phases 37 and 38 Work in progress demo data and Preparation's camera defects (#64, D-135, D-136), Phase 36 docs, figures and demo (#62, D-134), 35B corrections to past records (#61, D-133), 35A reports by period (#59, D-132),
   the Overview clean-up (#58, D-131), Phase 34 final defects, repairs and work in progress (#56, #57, D-130),
   Phase 33 the Inspection queue (#55, D-129), Phase 32 roll locations (#54, D-128). The run-by-run QA detail
   is in `SESSION_LOG.md`.
-- **Main CI:** green on `main` after #64 (run 151, 2026-11-23); earlier runs green after #54, #62 and #63; the `e2e` flake `admin.spec.ts:136` and the
+- **Main CI:** #66's `docker` job passed; its `e2e` job failed only in the 00:00 to 01:00 Manila window and passed on the rerun (2026-11-24); green after #64 (run 151) and #65; earlier runs green after #54, #62 and #63; the `e2e` flake `admin.spec.ts:136` and the
   `batches.spec.ts` 00:00 to 01:00 Manila window are known (see Known test observations).
 - **Older items still open:** Phase 31's Codex run for D4 (README "3. Quality Inspector") on a weekday and the
   30F-3 Batches checks (run 4); Phase 31's docs were merged (#46) and Phase 36 supersedes part of them.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks included; Codex
   only tests and reports; every agent reads the Obsidian vault first.
-- **Overall:** every planned phase is built and merged (0 to 38); only Dylan's hand rehearsal of the demo and the questions for CPoint are left.
+- **Overall:** every planned phase is built and merged (0 to 39); only Dylan's hand rehearsal of the demo and the questions for CPoint are left.
 
 ## Phase progress
 
@@ -126,6 +126,7 @@ Dylan's file and stays out of git.
 - [x] 35B. Corrections to past records (D-133; built 2026-11-21; QA passed, run 5; merged #61)
 - [x] 38. Preparation shows the camera's defects; no repair goes back to Preparation (D-136; built 2026-11-23; QA PASS WITH ISSUES, run 3; merged #64, CI green)
 - [x] 37. Work in progress demo data (D-135; built 2026-11-23; QA passed, run 2; merged #64)
+- [x] 39. Close-out after Phases 37 and 38; CI checks no repair is at Preparation (docs only; merged #65, #66)
 - [x] 36. The documentation, the figures and the demo match the system (D-134; built 2026-11-22; QA passed
       with Codex run 2; merged #62; the hand rehearsal with phones is Dylan's, not a code check)
 
@@ -166,8 +167,7 @@ D-entries.
 0. Dylan: rehearse the demo once by hand (a weekday, phones, the marker card, a stopwatch, the print preview) from
    `docs/DEMO_SCRIPT.md` and tell Claude anything that needs fixing.
    - Also: take the "To ask or tell CPoint" block under Open questions to CPoint.
-   - Also: apply the Phase 39 CI edit (`qa/phase-39-ci-no-preparation-repairs.patch`, `git apply`) so the `docker` job checks
-     that no repair is at Preparation, then commit and merge it; if the `docker` job fails, Claude fixes it and writes `qa/CODEX_PROMPT_CI_RECHECK_<branch>.md`.
+   - Also: delete `qa/phase-39-ci-no-preparation-repairs.patch` (already in `ci.yml`, merged #66).
 1. Optional, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too). Phase 31 merged (#46).
 2. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.

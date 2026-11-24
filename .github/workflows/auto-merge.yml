@@ -1,0 +1,23 @@
+name: auto-merge
+
+# Turns on squash auto-merge for every PR into main; GitHub merges it once the
+# required checks (check, station, docker, e2e) pass under main's branch protection.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable:
+    # Same-repo, non-draft PRs only: a fork's PR never merges itself on this public repo.
+    if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}

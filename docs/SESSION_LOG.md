@@ -5,6 +5,19 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-24 · Fix: `batches.spec.ts` passes between 00:00 and 01:00 Manila (coding thread, test only)
+
+- Cause: the spec's hourly fixture plan (00:00 to 23:59) has no batch ended before 01:00, so the "is due" banner never
+  showed (CI on #66 failed at 00:23 Manila; the rerun passed). The app was right.
+- Fix in `tests/e2e/batches.spec.ts` only: from 01:00 Manila the plan is unchanged (60 minutes); in the first hour it is
+  5 minutes, 00:00 to 02:00, and before 00:05 `beforeAll` waits until 00:05:05 first. Header comment rewritten. The `later`
+  UPCOMING check is behind `if (later)` and the Floor Manager test doesn't depend on the plan (read, not changed).
+- `npm run check` passed (lint, typecheck, 1012 unit tests, build). The spec itself was not run here, and not inside the
+  00:00 to 01:00 window: Codex runs `qa/CODEX_PROMPT_FIX_BATCHES_MIDNIGHT.md`.
+- Left out on purpose: `docs/STATUS.md` (it holds Dylan's uncommitted edits; its "Known test observations" bullet and the
+  Main CI line still mention the 00:00 to 01:00 window and need removing), README, manual, API, spec (no user-facing change).
+  Plan `docs/prompts/plans/fix-batches-spec-midnight-plan.md`, handoff `qa/handoffs/2026-11-24-batches-spec-midnight.md`.
+
 ## 2026-11-23 · Phase 39: close-out after Phases 37 and 38 (planning thread, docs only)
 
 - Phases 37 and 38 merged together as #64 (8de71d4); CI run 151 on `main` passed. `docs/STATUS.md` and `docs/ROADMAP.md`
