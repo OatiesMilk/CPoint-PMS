@@ -12,8 +12,10 @@ import { captureApi, createDeviceToken, createRoll, finishRoll, postScan } from 
  *
  * Finish batch opens 10 minutes before a batch's end, so the test can't rely on the default
  * 08:00–13:00 and 13:00–17:00. It puts its own plan for today and "no lunch" straight in the
- * database (hourly from 00:00 to 23:59), so a batch is always due after 01:00 Manila, and puts
- * today's own plan back afterwards. Run it after 01:00 Manila time. The
+ * database and puts today's own plan back afterwards. The plan is hourly from 00:00 to 23:59,
+ * so a batch is due at any hour from 01:00 Manila; in the first hour (00:00 to 01:00) it is
+ * 5-minute batches from 00:00 to 02:00 instead, and before 00:05 the hook waits until the first
+ * one has ended. The
  * Floor Manager test changes today's attendance (QI present, then absent) and puts it back; don't
  * run it beside attendance.spec.ts.
  */
@@ -85,6 +87,23 @@ async function today(page: Page): Promise<{ rows: Row[]; canEnter: boolean }> {
 }
 
 test.beforeAll(async () => {
+  // A batch is due only after its end, and the first hourly batch ends at 01:00: in the first
+  // Manila hour use 5-minute batches, and wait until the first has ended (the hook may wait ~5 min).
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Manila",
+    hourCycle: "h23",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: string) => Number(parts.find((p) => p.type === type)!.value);
+  const secondsIntoDay = part("hour") * 3600 + part("minute") * 60 + part("second");
+  const firstHour = secondsIntoDay < 3600;
+  const [interval, shiftEnd] = firstHour ? [5, "02:00"] : [60, "23:59"];
+  if (firstHour && secondsIntoDay < 305) {
+    test.setTimeout(6 * 60_000);
+    await new Promise((r) => setTimeout(r, (305 - secondsIntoDay) * 1000));
+  }
   lunchId = await withDb(async (db) => {
     const today = manilaDay();
     const before = await db.query(`SELECT * FROM day_plans WHERE day = $1::date`, [today]);
@@ -95,8 +114,8 @@ test.beforeAll(async () => {
     // An hourly plan for today (an old interval the form no longer offers, D-115).
     await db.query(
       `INSERT INTO day_plans (id, day, kind, "rollsPlanned", quota, "intervalMinutes", "shiftStart", "shiftEnd", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid(), $1::date, 'PLANNED', 3, 100, 60, '00:00', '23:59', now(), now())`,
-      [today],
+       VALUES (gen_random_uuid(), $1::date, 'PLANNED', 3, 100, $2, '00:00', $3, now(), now())`,
+      [today, interval, shiftEnd],
     );
     for (let i = 1; i < 40; i++) {
       const day = manilaDay(i);
