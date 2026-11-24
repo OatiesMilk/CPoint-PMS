@@ -3,8 +3,8 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-24 (Phase 39 merged as #65 and #66; the `docker` check for no repair at Preparation passes)
-**Branch:** `main` at 539762d (#66, Phase 39; #65 before it). On `main`, the CI run for #66 failed only `e2e` `batches.spec.ts:346`, because it ran at 00:23 Manila (the known 00:00 to 01:00 window); the rerun on 2026-11-24 passed, so CI is green on `main`. `docs/DEMO_SCRIPT.md` is
+**Last updated:** 2026-11-24 (the `batches.spec.ts` midnight fix and auto-merge merged as #67; Phase 39 merged as #65 and #66)
+**Branch:** `main` at 85c3b4b (#67, the `batches.spec.ts` midnight fix; #66, Phase 39, before it). PRs into `main` now merge themselves once `check`, `station`, `docker` and `e2e` pass (branch protection plus `.github/workflows/auto-merge.yml`, squash; #67 was the first). `docs/DEMO_SCRIPT.md` is
 Dylan's file and stays out of git.
 
 - **Phase 38 (D-136, merged #64):** the Preparation card on Batches → Work in progress lists the camera's leather
@@ -43,8 +43,7 @@ Dylan's file and stays out of git.
   the Overview clean-up (#58, D-131), Phase 34 final defects, repairs and work in progress (#56, #57, D-130),
   Phase 33 the Inspection queue (#55, D-129), Phase 32 roll locations (#54, D-128). The run-by-run QA detail
   is in `SESSION_LOG.md`.
-- **Main CI:** #66's `docker` job passed; its `e2e` job failed only in the 00:00 to 01:00 Manila window and passed on the rerun (2026-11-24); green after #64 (run 151) and #65; earlier runs green after #54, #62 and #63; the `e2e` flake `admin.spec.ts:136` and the
-  `batches.spec.ts` 00:00 to 01:00 Manila window are known (see Known test observations).
+- **Main CI:** #66's `docker` job passed; its `e2e` job failed only in the 00:00 to 01:00 Manila window and passed on the rerun (2026-11-24); green after #64 (run 151) and #65; #67's four checks passed; earlier runs green after #54, #62 and #63; the `e2e` flake `admin.spec.ts:136` is known (see Known test observations).
 - **Older items still open:** Phase 31's Codex run for D4 (README "3. Quality Inspector") on a weekday and the
   30F-3 Batches checks (run 4); Phase 31's docs were merged (#46) and Phase 36 supersedes part of them.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks included; Codex
@@ -540,8 +539,9 @@ D-entries.
 
 - Fixed: full e2e runs crashed Chromium late in the run, because helper pages were never closed.
   They're closed now; three local and two Docker full runs since passed 64/64.
-- `batches.spec.ts` needs a batch due today, so it fails between 00:00 and 01:00 Manila (16:00 to
-  17:00 UTC), in CI too. Rerun the job after that hour; no code fault (Phase 30A run 5).
+- Fixed (2026-11-24, #67, `docs/prompts/plans/fix-batches-spec-midnight-plan.md`): `batches.spec.ts` failed between
+  00:00 and 01:00 Manila (16:00 to 17:00 UTC); in that hour it now plans 5-minute batches. The midnight path
+  hasn't run live yet (only a run in that hour exercises it).
 - The single admin sign-in timeout seen once earlier was probably the same resource exhaustion. It
   hasn't recurred since the fix. Watch CI.
 
