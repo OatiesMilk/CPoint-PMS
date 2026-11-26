@@ -18,7 +18,12 @@ Template:
   the time of the Phase 36 shots, so codes and rolls match (LR-BSB-050, B-261116-2; the demo data now has 2 failed pairs on that
   batch where the old shot had 1). 23 cropped to its old height. PDF rebuilt again (42 pages).
 - Vault: Daily 2026-11-26, `Notes/Phases/Phase 40 - Preparation counted in pieces`, `Phase 41 - Find roll in Inventory`, Phases rows.
-- No code changed, so no `npm run check`.
+- CI on PR #69 (run 45834482030): `check`, `station`, `docker` passed; `e2e` failed 2 tests, both from Phases 40 and 41, not the
+  docs: `final-defects.spec.ts:615` lists a board card's keys exactly and lacked Phase 40's `unit`; `inventory.spec.ts:423` signed
+  in as the demo constructor, who has no camera access on CI's fresh database (it passed on Dylan's PC, where the demo week gave
+  it access), so `/find` went to `/forbidden`. Fixed in the tests: `unit` added; the test now uses `makeConstructor({ canCapture:
+  true })` as the other specs do. Both spec files 19 of 19 on a fresh database with demo users only; `npm run check` passed
+  (1021 tests, build).
 
 ## 2026-11-26 · Phase 41: Find roll is a button on Inventory (coding thread)
 

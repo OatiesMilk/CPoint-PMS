@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { addInventoryRoll, managerApi, supplierId } from "./cv-helpers";
+import { addInventoryRoll, makeConstructor, managerApi, supplierId } from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -423,7 +423,11 @@ test.describe("Find roll from Inventory (Phase 41, D-138)", () => {
   test("a constructor with camera access keeps Find roll in the menu and cannot open Inventory", async ({
     page,
   }) => {
-    await signInAs(page, ACCOUNTS.constructor);
+    // A fresh account: the shared demo constructor has no camera access on a fresh database (CI).
+    const sc = await makeConstructor({ canCapture: true });
+    await page.goto("/login");
+    await signIn(page, sc.email);
+    await expect(page).toHaveURL(ACCOUNTS.constructor.home);
     await page.goto("/find");
     await expect(page.getByRole("heading", { name: "Find roll", level: 1 })).toBeVisible();
     // No back link to a page they cannot open.
