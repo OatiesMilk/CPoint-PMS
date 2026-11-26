@@ -5,6 +5,21 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-26 · Phases 40 and 41: screenshot 21, the manual PDF and the vault notes (laptop)
+
+- Screenshot 21 retaken on a throwaway database (`cpoint_shots` in the dev Postgres container, dropped after): migrations,
+  `db:seed`, demo clock Fri 20 Nov 17:10, `demo:reset`, `next dev` on port 3005, headless Chromium 1366 px at 2x, Next.js badge
+  hidden. It reads "34 pieces as of 15:30" at Preparation and "Crease 11, Scratch 9, Cut 8, Hole 7" as before; the Floor Manager's
+  sidebar has no Find roll. Caption updated in `USER_MANUAL.md`. Dylan's dev database wasn't touched.
+- `docs/USER_MANUAL.pdf` rebuilt (Python-Markdown, Chromium print, A4, page footer; 42 pages, was 39: the builder's stylesheet
+  wasn't in the repo, so the margins differ a little). Also copied to the untracked `docs/2516-USERSMANUAL.pdf` (Dylan's choice).
+- Then, at Dylan's request, retook the shots that showed Find roll in the Floor Manager's sidebar: 15, 18, 23, 25 and 26 (14
+  predates Phase 32, 19 and 22 are the QI's view, 24 is a print). Same throwaway setup with the demo clock at Sun 22 Nov 20:45,
+  the time of the Phase 36 shots, so codes and rolls match (LR-BSB-050, B-261116-2; the demo data now has 2 failed pairs on that
+  batch where the old shot had 1). 23 cropped to its old height. PDF rebuilt again (42 pages).
+- Vault: Daily 2026-11-26, `Notes/Phases/Phase 40 - Preparation counted in pieces`, `Phase 41 - Find roll in Inventory`, Phases rows.
+- No code changed, so no `npm run check`.
+
 ## 2026-11-26 · Phase 41: Find roll is a button on Inventory (coding thread)
 
 - Dylan's request (2026-11-26): take Find roll out of the navigation bar and make it a button on Inventory. Constructors with

@@ -440,7 +440,7 @@ audit log.
   inspection** (or **Change**: move it to another stage, or **Not fixable after all**, each with a
   reason, until it is back). The Overview has a small card for it.
 
-![Work in progress: each stage's pairs and its repairs; at Preparation, the camera's leather defects.](screenshots/manual/21-work-in-progress.png)
+![Work in progress: pieces of leather at Preparation, pairs and repairs at the other stages; at Preparation, the camera's leather defects.](screenshots/manual/21-work-in-progress.png)
 
 - **Preparation has no repairs, and shows the camera's defects.** There the camera inspects the raw
   leather roll. The **Preparation** card lists **Leather defects found by the camera, rolls finished

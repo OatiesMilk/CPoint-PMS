@@ -14,7 +14,7 @@ Dylan's file and stays out of git.
   passes (37 tests, 2 environment skips); the one issue is a `demo:reset` foreign-key failure (`scans_batchId_fkey`) at setup,
   not Phase 41's, and a reset after stopping the dev server worked (to look at separately). Prompt `qa/CODEX_PROMPT_PHASE_41.md`, handoff
   `qa/handoffs/2026-11-26-find-roll-in-inventory.md`, plan `docs/prompts/plans/phase-41-find-roll-in-inventory-plan.md`. Still
-  to do: rebuild `USER_MANUAL.pdf` (text changed), the vault notes on the laptop. **To tell CPoint:** the Floor Manager now
+  to do: nothing (`USER_MANUAL.pdf` rebuilt and the vault notes added on the laptop, 2026-11-26). **To tell CPoint:** the Floor Manager now
   opens Find roll from Inventory; constructors keep it in their menu.
 - **Phase 40 (D-137, built 2026-11-26, not merged):** work in progress at Preparation is counted in **pieces**, not pairs (the
   board, Overview card, My stage, count form and Plan hint; pairs from Construction on); Reports → Work in progress leaves
@@ -22,8 +22,8 @@ Dylan's file and stays out of git.
 check` passed (1020 tests). Codex run 1 **PASS WITH ISSUES** (`qa/reports/2026-11-26-phase-40-run1.md`: P1 to P12, A1, A2 and the
   stage-wip, reports and batches specs pass; the one "failure" was the handoff saying the stage-count POST returns 200, it returns 201
   as before: handoff corrected, no code change). Handoff `qa/handoffs/2026-11-26-preparation-wip-unit.md`, plan
-  `docs/prompts/plans/phase-40-preparation-wip-unit-plan.md`. Still to do:
-  retake manual screenshot 21 and rebuild `USER_MANUAL.pdf`. **To tell CPoint** and **to ask** (A-116): see Open questions.
+  `docs/prompts/plans/phase-40-preparation-wip-unit-plan.md`. Screenshot 21 retaken
+  and `USER_MANUAL.pdf` rebuilt (42 pages) on the laptop, 2026-11-26. **To tell CPoint** and **to ask** (A-116): see Open questions.
 - **Phase 38 (D-136, merged #64):** the Preparation card on Batches → Work in progress lists the camera's leather
   defects on today's finished rolls (rolls per type, as Reports → Rolls; "Returned to supplier: N rolls."; a none line),
   and no repair goes back to Preparation (`REPAIR_STAGES`: Construction, Sole-ing, Finishing; API refuses it with 422).
@@ -186,8 +186,8 @@ D-entries.
    `docs/DEMO_SCRIPT.md` and tell Claude anything that needs fixing.
    - Also: take the "To ask or tell CPoint" block under Open questions to CPoint.
    - Also: delete `qa/phase-39-ci-no-preparation-repairs.patch` (already in `ci.yml`, merged #66).
-   - Phase 40: Codex passed (run 1); Claude retakes screenshot 21 and rebuilds the manual PDF (once, with Phase 41), then the git commands.
-   - Phase 41: Codex passed (run 1); Claude rebuilds the manual PDF and Dylan adds the vault notes on the laptop; the git commands come from the Phase 41 thread.
+   - Phases 40 and 41: Codex passed (run 1 each); screenshot 21, the manual PDF and the vault notes done (2026-11-26); Dylan pushes them to PR #69, which merges itself once CI passes.
+   - Manual screenshots 15, 18, 23, 25 and 26 retaken without Find roll in the Floor Manager's sidebar (2026-11-26).
 1. Optional, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too). Phase 31 merged (#46).
 2. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.
