@@ -32,6 +32,11 @@ export default async function FindRollPage({ searchParams }: PageProps<"/find">)
       <PageHeader
         title="Find roll"
         description="Type a roll’s code or tag number, or scan the QR code on a roll or a rack."
+        // The Floor Manager comes from Inventory's Find roll button (Phase 41); a constructor
+        // comes from their menu and needs no back link.
+        back={
+          can(user.role, "inventory:read") ? { href: "/inventory", label: "Inventory" } : undefined
+        }
       />
       <FindRollClient
         initialQuery={q}

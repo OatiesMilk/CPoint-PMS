@@ -73,8 +73,10 @@ findings that still shape the system:
   rolls finished today (rolls per type, as Reports → Rolls), and a repair is never sent back to
   Preparation (`REPAIR_STAGES`: Construction, Sole-ing, Finishing; amends A-75).
 - Phase 37 (D-135, demo data only): the demo's work in progress is a live board (older repairs finished,
-recent ones At stage and Back for inspection, Finishing's count left older). At **Preparation** a
-shoe repair never exists: its defects are the camera's, on raw leather (A-62, A-66).
+  recent ones At stage and Back for inspection, Finishing's count left older). At **Preparation** a
+  shoe repair never exists: its defects are the camera's, on raw leather (A-62, A-66).
+- Phase 40 (D-137): work in progress at Preparation is counted in pieces, not pairs (A-116); the report leaves
+Preparation out.
 </context>
 
 <read_first>
@@ -161,7 +163,7 @@ src/
     (app)/admin/...                 # Admin home, users, settings, tokens, audit
     (app)/batches/...               # Queue, Today, Work in progress, Plan days (FM, QI)
     (app)/camera/capture/           # Capture, My stage and Floor view (constructors)
-    (app)/find/                     # Find roll (FM, constructors with camera access)
+    (app)/find/                     # Find roll (FM from Inventory, constructors with camera access from their menu)
     (app)/attendance/  inventory/  reports/  scans/[id]/
                                     # inventory/ also holds storage locations and roll labels
     api/
@@ -197,7 +199,8 @@ Layer rules (enforce them in code review, and with ESLint `no-restricted-imports
 
 <domain_rules>
 **Production line:** Preparation → Construction → Sole-ing → Finishing. The system does not track
-stages (removed in Phase 23, D-082); it tracks rolls at Preparation and pairs at each batch's end.
+stages (removed in Phase 23, D-082); it tracks rolls at Preparation and pairs at each batch's end. The stage hand count (Phase 34) is
+in pieces of leather at Preparation and pairs after it (Phase 40, D-137, A-116 assumption).
 
 **Roll = one leather roll from a supplier** (`Roll` in the code, table `batches`, D-095). The Floor
 Manager adds rolls to a Leather roll item in Inventory with the day they arrived, each roll's
@@ -221,7 +224,9 @@ rolls were kept there (A-79); a location with rolls can't be deactivated. **Labe
 3 × 7 stickers (A-54) with a QR that holds the plain code (`LR-MLT-004`, or `LOC:R1-B3`, A-80), read by
 the app's own scanner. **Find roll** (`/find`) takes a roll code, part of one, a tag number or a scanned
 label and shows where the roll is in large text and where it has been; the Floor Manager can move it
-or mark it picked up from there.
+or mark it picked up from there. The Floor Manager reaches it from the **Find roll** button on
+Inventory (Phase 41, D-138; no menu item, `/find` marks Inventory in the sidebar and has a back link);
+a constructor with camera access keeps it in their menu, since they can't open Inventory.
 
 **Computer vision (Preparation only, before cutting):**
 
@@ -304,9 +309,14 @@ Quality Inspector still corrects only on the inspection day. No migration: the a
 (formerly "Upper making"), Sole-ing and Finishing. The Floor Manager assigns the active Shoe
 Constructors to stages for a day in the Plan dialog (one stage each, suggested from the last working
 day, editable for today and later planned days). An assigned constructor, or the Floor Manager,
-saves the pairs at a stage; the latest count of the day is the stage's count. Batches → Work in
-progress shows each stage's count, its repairs and what waits for inspection. All figures are per
-stage, never per person.
+saves the count at a stage, in **pieces** at Preparation (a roll that passed the camera is cut into
+pieces; Dylan, A-116, an assumption until CPoint names the unit) and **pairs** at the other three
+(Phase 40, D-137); the latest count of the day is the stage's count. The field stays `pairs` in
+the table and API; `STAGE_COUNT_UNIT` in `src/lib/repair-rules.ts` is the one place that names the
+unit. Batches → Work in
+progress shows each stage's count in its unit, its repairs and what waits for inspection; nothing
+adds or compares counts across units (A-117), so Reports → Operations → Work in progress covers only
+Construction, Sole-ing and Finishing. All figures are per stage, never per person.
 
 **Inventory:** items with category (`LEATHER_ROLL | NAILS | ADHESIVE | THREAD | EQUIPMENT | OTHER`),
 unit, quantity on hand and reorder level; a leather item has a supplier and counts its rolls.
@@ -341,7 +351,7 @@ Seed one demo account per role (password from `.env`, documented in README).
 
 Each role sees only its modules (Phase 28, D-100, C-18). Sidebars, in order: Shoe Constructor
 **Capture** and, with camera access, **Find roll**; Quality Inspector **Batches**; Floor Manager
-**Overview, Batches, Attendance, Reports, Inventory, Find roll**; System Admin **Overview, Users,
+**Overview, Batches, Attendance, Reports, Inventory** (Find roll is a button on Inventory, D-138); System Admin **Overview, Users,
 Settings, API tokens, Audit log** (D-119). Everything else answers 403; removed pages answer 404. The
 matrix is `src/server/policies/permissions.ts`; the sidebars are `navigation.ts`.
 
@@ -349,7 +359,7 @@ matrix is `src/server/policies/permissions.ts`; the sidebars are `navigation.ts`
 | ------------------------------------------------------------------------------------------------------------- | -------------------------- | ----------------- | ------------ | ------------------------------------ |
 | Overview (role home)                                                                                          | ✅                         | — (Batches)       | ✅           | — (Capture)                          |
 | Capture, My stage and Floor view: pick leather and roll, capture, finish, put back, set a returned roll aside | —                          | —                 | —            | if allowed (D-075)                   |
-| Find roll (`location:read`)                                                                                   | ✅                         | —                 | —            | if allowed (D-128)                   |
+| Find roll (`location:read`)                                                                                   | ✅ (button on Inventory)   | —                 | —            | if allowed (D-128), in their menu    |
 | Inventory: Storage locations, roll labels, Move rolls, Picked up by supplier (`location:manage`, `roll:move`) | ✅                         | —                 | —            | —                                    |
 | Reports → Rolls, a roll's page and its shots, the claim sheet, Remove, Edit details                           | ✅ (`roll:*`, `scan:read`) | —                 | —            | —                                    |
 | Batches: Queue and Today (read, `production:read`)                                                            | ✅                         | ✅ (home)         | —            | —                                    |

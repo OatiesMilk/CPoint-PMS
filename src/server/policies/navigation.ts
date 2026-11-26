@@ -20,13 +20,21 @@ export type NavItem = {
   icon: NavIcon;
   /** Roadmap phase that builds it. Items not built yet render as non-clickable "Phase N" entries. */
   phase?: number;
+  /**
+   * Other pages that mark this item as the current one (Phase 41): the Floor Manager reaches Find
+   * roll from Inventory, so `/find` marks Inventory and titles the phone bar "Inventory".
+   */
+  alsoActive?: string[];
 };
 
 export type NavSection = { title: string | null; items: NavItem[] };
 
 type Definition = NavItem & {
   permission: Permission;
-  /** Shown only to a constructor the System Admin allows to capture (Find roll, Phase 32). */
+  /**
+   * Shown only to a constructor the System Admin allows to capture (Find roll, Phase 32). The Floor
+   * Manager has no Find roll item: it is a button on Inventory (Phase 41, D-138).
+   */
   needsCapture?: boolean;
 };
 
@@ -68,8 +76,14 @@ const MENUS: Record<Role, Definition[]> = {
     BATCHES,
     { label: "Attendance", href: "/attendance", icon: "attendance", permission: "attendance:read" },
     { label: "Reports", href: "/reports", icon: "reports", permission: "report:production" },
-    { label: "Inventory", href: "/inventory", icon: "inventory", permission: "inventory:read" },
-    FIND_ROLL,
+    // Find roll is a button on this page for the Floor Manager (Phase 41, D-138).
+    {
+      label: "Inventory",
+      href: "/inventory",
+      icon: "inventory",
+      permission: "inventory:read",
+      alsoActive: ["/find"],
+    },
   ],
   SYSTEM_ADMIN: [
     {
@@ -94,6 +108,12 @@ export function navigationFor(user: { role: Role; canCapture?: boolean }): NavSe
         !item.needsCapture ||
         canFindRolls({ role: user.role, canCapture: user.canCapture ?? false }),
     )
-    .map(({ label, href, icon, phase }) => ({ label, href, icon, phase }));
+    .map(({ label, href, icon, phase, alsoActive }) => ({
+      label,
+      href,
+      icon,
+      phase,
+      ...(alsoActive && { alsoActive }),
+    }));
   return [{ title: null, items }];
 }

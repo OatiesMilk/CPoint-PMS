@@ -5,6 +5,61 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-26 · Phase 41: Find roll is a button on Inventory (coding thread)
+
+- Dylan's request (2026-11-26): take Find roll out of the navigation bar and make it a button on Inventory. Constructors with
+  camera access use Find roll but can't open Inventory (`inventory:read` is the Floor Manager's, D-100), so Dylan chose option 1:
+  only the Floor Manager's menu changes. Plan `docs/prompts/plans/phase-41-find-roll-in-inventory-plan.md`, decision D-138
+  (amends D-128's entry point only), assumption A-118 (constructors keep it in their menu; tell CPoint, not ask).
+- Built: `navigation.ts` drops `FIND_ROLL` from the Floor Manager (kept for constructors with camera access) and adds an optional
+  `alsoActive` on nav items (the Floor Manager's Inventory carries `/find`); `sidebar.tsx` matches `alsoActive` (longest match
+  kept), so `/find` marks Inventory and the phone bar reads "Inventory"; `inventory/page.tsx` has a **Find roll** secondary
+  button (ScanSearch icon) after Storage locations, shown with `location:read`, first and `h-11` below `sm`; `find/page.tsx`
+  has a back link to Inventory for people who can read inventory. No change to `guard.ts`, `permissions.ts`, the API,
+  services or the database; no migration; Find roll stays at `/find`.
+- Tests: `tests/unit/permissions.test.ts` (no Find roll in the Floor Manager's menu, `alsoActive` only on their Inventory,
+  constructors keep it); `tests/e2e/auth.spec.ts` (manager nav loses "Find roll", `/inventory` added to `REFUSED.constructor`);
+  `tests/e2e/inventory.spec.ts` new block "Find roll from Inventory (Phase 41, D-138)" (not run here: Codex runs the e2e).
+- `npm run check` passed on 2026-11-26 on Dylan's PC (lint, typecheck, 65 files and 1021 tests, build), after `npm install`
+  (jsqr) and `npm run db:generate` (the PC's Prisma client was stale).
+- Docs updated: master spec (tree comment, Phase 32 paragraph, sidebars, module table), README (features, demo step 4
+  "Inventory → Find roll", roles), USER_MANUAL (6.5, 6.5a, section 8), DESIGN.md (Phone layout), DECISIONS (D-138), ROADMAP
+  (Phase 41), STATUS. Left out on purpose: API.md, STATION_SETUP.md, CLAUDE.md (route and rule unchanged); `docs/DEMO_SCRIPT.md`
+  (Dylan's file, no Find roll step); manual screenshots (none shows the Floor Manager's Find roll menu item or the Inventory
+  header buttons); `docs/USER_MANUAL.pdf` not rebuilt (its text changed; it needs the cloud container's headless Chromium print).
+- Phase 40 was built in the same folder in parallel; Phase 41's files are listed in the handoff. Vault not updated: the vault
+  (`C:\dev\capstone-obsidian`) is on the laptop and isn't on this PC.
+- Codex run 1 (2026-11-26, `qa/reports/2026-11-26-phase-41-run1.md`): **PASS WITH ISSUES**. 13 of 13 scenarios pass (Floor Manager at
+  1366 px and 390 px, both constructor kinds, the QI and the Admin, the Storage locations link); e2e: `auth.spec.ts` 21 passed
+  and 1 skipped, the new inventory block 3 passed, `capture.spec.ts` 13 passed and 1 skipped (both skips are environment).
+  The one issue: the first `npm run demo:reset '--' --yes` failed on `scans_batchId_fkey` while the dev server was up; after
+  stopping it, the reset worked (93 s). Not caused by Phase 41; to investigate on its own.
+- Next: rebuild `USER_MANUAL.pdf`, add the vault notes on the laptop, then the git commands.
+
+## 2026-11-26 · Phase 40: work in progress at Preparation is counted in pieces, not pairs (coding thread)
+
+- Dylan's request and answers (2026-11-26): Preparation is leather, not shoes, so its count says "pieces" ("pieces" because a roll
+  that passed the camera is cut into pieces); Reports → Work in progress compares only the pair stages; demo numbers stay. Plan
+  `docs/prompts/plans/phase-40-preparation-wip-unit-plan.md`, decision D-137, assumptions A-116 (the unit) and A-117 (no sums across units).
+- Built: `STAGE_COUNT_UNIT`, `countUnit`, `countUnitName`, `PAIR_COUNT_STAGES` and `parseStageCount(raw, stage)` in
+  `src/lib/repair-rules.ts`; `stage.service.ts` passes the stage to the parser, adds `unit` to the board cards and `myStage`, and
+  `wipReport` keeps only Construction, Sole-ing and Finishing; the count form, My stage, board, Overview card, Plan hint and Reports
+  text follow. No migration, no API field rename.
+- Tests: new unit tests in `repair-rules.test.ts` and `stage.service.test.ts` (unit helper, messages in pieces, report leaves
+  Preparation out, a Preparation-only day isn't counted); `tests/e2e/stage-wip.spec.ts` assertions updated (not run: Codex runs them).
+- `npm run check` passed on 2026-11-26 (lint, typecheck, 65 files and 1020 tests, build). The laptop's `node_modules` are Windows
+  builds that the cloud VM can't run, so the check ran on a clean copy of `main` (same commit fe5ca83) with the 12 changed files
+  copied in; a Prettier-only line wrap in `wip-card.tsx` was made after that run.
+- Docs updated: README, USER_MANUAL (4.4a, 6.3a, Reports), API.md, master spec, DECISIONS (D-137), ROADMAP (Phase 40), STATUS.
+  Left out on purpose: `docs/DEMO_SCRIPT.md` (Dylan's file; its "pairs" lines are about batches, so none needs changing); manual
+  screenshot 21 and `USER_MANUAL.pdf` (the board still shows "pairs" at Preparation until retaken; they need a fresh seed and
+  headless Chromium, so they wait for the Codex pass); demo seed numbers (20 to 40 pieces looks small for cut leather, Dylan kept them).
+- Codex run 1 (same day, PC): **PASS WITH ISSUES**, `qa/reports/2026-11-26-phase-40-run1.md`. P1 to P12, A1, A2 and the `stage-wip` (6),
+  `reports` (3) and `batches` (7) specs pass. The only failure, P11, was the handoff expecting 200 where the stage-count POST has
+  always returned 201; the handoff was corrected, no code changed. Vault steps skipped (vault is on the laptop).
+- Handoff `qa/handoffs/2026-11-26-preparation-wip-unit.md`, prompt `qa/CODEX_PROMPT_PHASE_40.md`. Phase 41 (Find roll in Inventory)
+  was built in the same folder in parallel, so the working tree also holds its files; Phase 40's files are listed in the handoff.
+
 ## 2026-11-24 · Fix: `batches.spec.ts` passes between 00:00 and 01:00 Manila (coding thread, test only)
 
 - Cause: the spec's hourly fixture plan (00:00 to 23:59) has no batch ended before 01:00, so the "is due" banner never

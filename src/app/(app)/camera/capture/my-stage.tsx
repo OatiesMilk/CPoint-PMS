@@ -7,7 +7,7 @@ import { RepairActions } from "@/app/(app)/batches/repair-actions";
 import type { MyStage as MyStageData } from "@/server/services/stage.service";
 
 /**
- * My stage (Phase 34, D-130, A-73): the constructor's stage today, "Sole-ing · pairs here now"
+ * My stage (Phase 34, D-130, A-73): the constructor's stage today, "Sole-ing · pairs here now" ("Preparation · pieces here now" at Preparation, D-137)
  * with one big number field for the whole stage, the repairs waiting there and a reminder when a
  * batch has ended since the last count. A phone card, shown on Capture. The number is the stage's,
  * not the person's: "Last counted 14:05 for all of Sole-ing".
@@ -27,7 +27,9 @@ export function MyStage({ stage }: { stage: MyStageData | null }) {
     <Card aria-label="My stage" data-testid="my-stage">
       <CardContent className="flex flex-col gap-4 p-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-semibold tracking-tight">{stage.label} · pairs here now</h2>
+          <h2 className="text-xl font-semibold tracking-tight">
+            {stage.label} · {stage.unit} here now
+          </h2>
           <p className="text-sm text-muted-foreground" data-testid="my-stage-last">
             {stage.lastCounted}
           </p>

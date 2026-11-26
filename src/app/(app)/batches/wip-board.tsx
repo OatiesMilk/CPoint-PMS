@@ -38,9 +38,10 @@ export function WipBoard({ board }: { board: Board }) {
           Work in progress
         </h2>
         <p className="text-muted-foreground">
-          Pairs at each stage now, as counted by the people there, and the repairs waiting at each
-          stage after Preparation. A count is for the whole stage. At Preparation the defects are
-          the camera&apos;s, on the raw leather roll; at the other stages they are on the shoe.
+          At each stage now, as counted by the people there: pieces of leather at Preparation, pairs
+          after it. Repairs wait at each stage after Preparation. A count is for the whole stage. At
+          Preparation the defects are the camera&apos;s, on the raw leather roll; at the other
+          stages they are on the shoe.
         </p>
       </div>
       <Link
@@ -63,7 +64,7 @@ export function WipBoard({ board }: { board: Board }) {
                 <p className="text-kpi font-semibold tracking-tight tabular-nums">
                   {c.pairs === null ? "–" : n(c.pairs)}
                   <span className="ml-2 text-base font-normal text-muted-foreground">
-                    {c.pairs === null ? c.asOf : `pairs ${c.asOf}`}
+                    {c.pairs === null ? c.asOf : `${c.unit} ${c.asOf}`}
                   </span>
                 </p>
                 {c.stage === "PREPARATION" && (

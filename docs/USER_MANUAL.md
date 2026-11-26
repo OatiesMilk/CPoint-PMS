@@ -172,13 +172,14 @@ If a photo didn't reach the server (for example the Wi-Fi dropped), tap **Send a
      it when the supplier comes. (**Skip** leaves it for the Floor Manager to place.)
 3. Tap **Start another roll** for the next one.
 
-### 4.4a My stage: count the pairs at your stage
+### 4.4a My stage: count the pieces or pairs at your stage
 
 If the Floor Manager assigned you to a stage today (Preparation, Construction, Sole-ing or
 Finishing), **My stage** is at the top of **Capture**, with or without camera access.
 
-1. Type the pairs at your stage right now in **Pairs at … now** and tap **Save count**. The number is
-   for the whole stage ("Last counted 14:05 for all of Sole-ing"), not for you. The last count
+1. Type the count at your stage right now in **Pairs at … now** (**Pieces at Preparation now** at
+   Preparation: the leather pieces cut from the rolls that passed the camera, not shoes yet) and tap
+   **Save count**. The number is for the whole stage ("Last counted 14:05 for all of Sole-ing"), not for you. The last count
    stands until someone counts again.
 2. When a batch has just ended the page says so ("B-261120-2 just ended. Update the count.").
 3. **Repairs at your stage** lists pairs sent back to you, with the defect and a code such as
@@ -349,7 +350,7 @@ A summary of today on the line, in three groups:
   is the filled one. The "Today has no plan yet" banner doesn’t show on this page (the row says it);
   it still shows on your other pages.
 - **On the line now**: **Today’s batches** (passed pairs against the quota, and the next batch due) beside
-  **Work in progress** (pairs at each stage, the repairs open and what waits for inspection).
+  **Work in progress** (pieces at Preparation and pairs at each stage after it, the repairs open and what waits for inspection).
 - **Today so far**: **Attendance** (says "Not taken yet today." until you save it; tap **Take
   attendance**), **Rolls today** (rolls scanned, returned to supplier and still open), **Low-stock
   alerts** (items at or below their reorder level) and **Daily summary** (yesterday and today so far,
@@ -433,8 +434,8 @@ audit log.
   last working day ("Same as Thu 19 Nov. Save to confirm."); nothing is saved until you do. You can
   change today and later planned days even after the plan locks; past days are read-only. A person
   marked absent that day is flagged **Absent**.
-- **Work in progress:** the third tab on **Batches**. Each stage shows the pairs there now ("as of
-  14:05", or "Not counted today"), its repairs and a quiet line "Assigned today: …" below. Use
+- **Work in progress:** the third tab on **Batches**. Each stage shows its count now ("14 pairs as of
+  14:05", "33 pieces as of 14:05" at Preparation, or "Not counted today"; Preparation counts leather pieces because nothing is a shoe until Construction), its repairs and a quiet line "Assigned today: …" below. Use
   **Update count** for a stage nobody is assigned to. On a repair at a stage use **Back for
   inspection** (or **Change**: move it to another stage, or **Not fixable after all**, each with a
   reason, until it is back). The Overview has a small card for it.
@@ -455,7 +456,10 @@ audit log.
 
 - **Reports → Operations** has four new sections: **Final defects**, **Where defects come from**,
   **Repairs** and **Work in progress**. Failed pairs from before reasons were recorded show as
-  "Reason not recorded". Nothing is by person.
+  "Reason not recorded". Nothing is by person. **Work in progress** there compares only the stages
+  counted in pairs (Construction, Sole-ing and Finishing: days counted, average, highest, latest and
+  a bar for the stage where pairs wait most). **Preparation** is counted in pieces, so it is left
+  out of the report and stays on the board, the Overview card and **My stage** (Phase 40, D-137).
 
 ### 6.4 Attendance
 
@@ -531,7 +535,7 @@ codes; the demo uses placeholders such as `R1-B3` and `RETURN`.
 
 1. On the leather item, tap **Move rolls**. Tick the rolls, choose **Move to** (a location), add a **Note**
    if useful ("Rack 1 was full"), then tap **Move 3 rolls** (the number you ticked).
-2. For one roll, open it (**Reports → Rolls**) or use **Find roll**: **Move**, or **Place it** for a roll
+2. For one roll, open it (**Reports → Rolls**) or use **Inventory → Find roll**: **Move**, or **Place it** for a roll
    with no place yet. Every move is added to the roll's **Location history**; nothing is erased.
 3. When a Shoe Constructor picks a roll at **Capture**, it leaves its place automatically. A roll put
    back is placed again.
@@ -541,7 +545,7 @@ codes; the demo uses placeholders such as `R1-B3` and `RETURN`.
 **A roll Returned to supplier**
 
 The constructor sets it aside in a place after **Finish roll** (the demo uses `RETURN`). It stays there
-until the supplier collects it. Then open the roll (or find it in **Find roll**) and tap **Picked up by
+until the supplier collects it. Then open the roll (or find it with **Inventory → Find roll**) and tap **Picked up by
 supplier**. The place is free again. If nobody set it aside, tap **Set aside** and choose a place.
 
 **Update stock for other materials**
@@ -561,7 +565,9 @@ Mistakes are never edited away. Fix them with a Correction; every change stays i
 
 ### 6.5a Find roll
 
-**Find roll** is in your menu. It works like the constructors' version (see
+Open **Inventory** and tap **Find roll** at the top of the page (on a phone-sized window it is the first
+button). Find roll is not in your menu; **Inventory** stays marked while you are on it, and **Inventory**
+at the top left of the page takes you back. It works like the constructors' version (see
 [section 4.7](#47-find-roll-where-is-that-roll)), and you can also **Move** a roll, **Place it**, or mark it
 **Picked up by supplier** from the result. **Open the roll's page** goes to its report.
 
@@ -744,7 +750,7 @@ Filter by action or record type, or paste a record id to see its full history.
 3. Green Pass: cut it. Red Reject: set it aside.
 4. Move the roll, capture again, until all of it is in.
 5. **Finish roll**. Over the limit? Say **Where did you put it?** and **Set aside**.
-6. Lost a roll? **Find roll**: type or scan its code.
+6. Lost a roll? **Inventory → Find roll**: type or scan its code.
 
 **Quality Inspector**
 

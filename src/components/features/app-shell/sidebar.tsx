@@ -48,7 +48,14 @@ type NavIcon =
   | "settings"
   | "tokens"
   | "audit";
-export type SidebarItem = { label: string; href: string; icon: NavIcon; phase?: number };
+export type SidebarItem = {
+  label: string;
+  href: string;
+  icon: NavIcon;
+  phase?: number;
+  /** Other pages that mark this item (Phase 41): /find marks the Floor Manager's Inventory. */
+  alsoActive?: string[];
+};
 export type SidebarSection = { title: string | null; items: SidebarItem[] };
 
 const ICONS: Record<NavIcon, LucideIcon> = {
@@ -82,12 +89,22 @@ function isActive(pathname: string, href: string, exact = false) {
   return pathname === href || (!exact && pathname.startsWith(`${href}/`));
 }
 
-/** The one item to mark: the longest match, so /admin/users marks Users, not Overview too. */
+/**
+ * The one item to mark: the longest match, so /admin/users marks Users, not Overview too. An item
+ * also matches its `alsoActive` pages (/find marks the Floor Manager's Inventory, Phase 41).
+ */
 function activeHref(pathname: string, sections: SidebarSection[]): string | null {
   let best: string | null = null;
+  let bestLength = 0;
   for (const item of sections.flatMap((s) => s.items)) {
-    if (item.phase || !isActive(pathname, item.href, item.icon === "overview")) continue;
-    if (!best || item.href.length > best.length) best = item.href;
+    if (item.phase) continue;
+    for (const path of [item.href, ...(item.alsoActive ?? [])]) {
+      if (!isActive(pathname, path, item.icon === "overview")) continue;
+      if (!best || path.length > bestLength) {
+        best = item.href;
+        bestLength = path.length;
+      }
+    }
   }
   return best;
 }
@@ -125,7 +142,8 @@ type BarProps = Props & { current: string | null };
 /**
  * Below 640 px (a phone, Phase 26, D-096): a top bar with the logo, the page's name, a page menu
  * when the role has more than one page, and the account menu. A Shoe Constructor with camera
- * access has Capture and Find roll (Phase 32).
+ * access has Capture and Find roll (Phase 32); the Floor Manager reaches Find roll from Inventory
+ * (Phase 41).
  */
 function PhoneBar({ sections, current, user, signOutAction, bell, stockDue, planDue }: BarProps) {
   const items = sections.flatMap((s) => s.items).filter((i) => !i.phase);

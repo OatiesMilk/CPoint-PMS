@@ -35,7 +35,7 @@ export const stageController = {
     return json({ data: await saveStageAssignments(day, input, user) });
   }),
 
-  /** POST /api/v1/production/stage-counts  { stage, pairs }: the pairs at a stage now, for today */
+  /** POST /api/v1/production/stage-counts  { stage, pairs }: the count at a stage now, for today (pieces at Preparation, pairs elsewhere) */
   count: handle(async (request: Request) => {
     const user = await requireApiPermission("stage:count");
     const input = stageCountSchema.parse(await readJsonBody(request));

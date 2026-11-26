@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { managerApi, supplierId } from "./cv-helpers";
+import { addInventoryRoll, managerApi, supplierId } from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -359,4 +359,76 @@ test("Inventory is the Floor Manager's alone (D-100): the Admin and the QI are r
   await expect(qi).toHaveURL("/forbidden");
   expect((await qi.request.get("/api/v1/inventory")).status()).toBe(403);
   await qi.close();
+});
+
+test.describe("Find roll from Inventory (Phase 41, D-138)", () => {
+  test("the Floor Manager opens Find roll from Inventory, finds a roll and goes back", async ({
+    page,
+  }) => {
+    const roll = await addInventoryRoll();
+    await signInAs(page, ACCOUNTS.manager);
+
+    // Find roll is not in the menu; it is a button on Inventory.
+    await expect(
+      page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Find roll" }),
+    ).toHaveCount(0);
+    await page.getByRole("link", { name: "Inventory" }).first().click();
+    await expect(page).toHaveURL("/inventory");
+    await page.getByRole("link", { name: "Find roll" }).click();
+    await expect(page).toHaveURL("/find");
+    await expect(page.getByRole("heading", { name: "Find roll", level: 1 })).toBeVisible();
+
+    // Inventory stays marked in the sidebar, and a back link returns to it.
+    const nav = page.getByRole("navigation", { name: "Main" });
+    await expect(nav.getByRole("link", { name: "Inventory" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await page.getByLabel("Roll code or tag number").fill(roll.code);
+    await page.getByRole("button", { name: "Find", exact: true }).click();
+    await expect(page.getByTestId("found-roll")).toContainText(roll.code);
+
+    await page.getByRole("main").getByRole("link", { name: "Inventory" }).click();
+    await expect(page).toHaveURL("/inventory");
+  });
+
+  test("on a phone-sized window the button is first and the page does not scroll sideways", async ({
+    browser,
+  }) => {
+    const phone = await (
+      await browser.newContext({ viewport: { width: 390, height: 844 } })
+    ).newPage();
+    await signInAs(phone, ACCOUNTS.manager);
+    await phone.goto("/inventory");
+    const button = phone.getByRole("link", { name: "Find roll" });
+    await expect(button).toBeVisible();
+    const box = await button.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    // It is the first action, above the fold.
+    expect(box?.y ?? 9999).toBeLessThan(844);
+    expect(await phone.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
+
+    await button.click();
+    await expect(phone).toHaveURL("/find");
+    // The phone bar names the page the person came from.
+    await expect(phone.getByRole("banner").getByText("Inventory", { exact: true })).toBeVisible();
+    expect(await phone.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
+    await phone.close();
+  });
+
+  test("a constructor with camera access keeps Find roll in the menu and cannot open Inventory", async ({
+    page,
+  }) => {
+    await signInAs(page, ACCOUNTS.constructor);
+    await page.goto("/find");
+    await expect(page.getByRole("heading", { name: "Find roll", level: 1 })).toBeVisible();
+    // No back link to a page they cannot open.
+    await expect(page.getByRole("link", { name: "Inventory" })).toHaveCount(0);
+    await page.goto("/inventory");
+    await expect(page).toHaveURL("/forbidden");
+  });
 });

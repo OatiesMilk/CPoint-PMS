@@ -3,10 +3,27 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-24 (the `batches.spec.ts` midnight fix and auto-merge merged as #67; Phase 39 merged as #65 and #66)
+**Last updated:** 2026-11-26 (Phases 40 and 41 built, waiting for Codex; before that the `batches.spec.ts` midnight fix and auto-merge merged as #67; Phase 39 merged as #65 and #66)
 **Branch:** `main` at 85c3b4b (#67, the `batches.spec.ts` midnight fix; #66, Phase 39, before it). PRs into `main` now merge themselves once `check`, `station`, `docker` and `e2e` pass (branch protection plus `.github/workflows/auto-merge.yml`, squash; #67 was the first). `docs/DEMO_SCRIPT.md` is
 Dylan's file and stays out of git.
 
+- **Phase 41 (D-138, built 2026-11-26, Codex run 1 PASS WITH ISSUES, not merged):** Find roll left the Floor Manager's menu and is a **Find roll** button on
+  Inventory (first on a phone-sized window); on `/find` the sidebar marks Inventory and a back link returns to it. Constructors
+  with camera access keep Find roll in their menu (they can't open Inventory, A-118). No migration; `/find`, its rule and the
+  API are unchanged. `npm run check` passed (1021 tests). Codex run 1 (`qa/reports/2026-11-26-phase-41-run1.md`): all 13 scenarios pass and e2e
+  passes (37 tests, 2 environment skips); the one issue is a `demo:reset` foreign-key failure (`scans_batchId_fkey`) at setup,
+  not Phase 41's, and a reset after stopping the dev server worked (to look at separately). Prompt `qa/CODEX_PROMPT_PHASE_41.md`, handoff
+  `qa/handoffs/2026-11-26-find-roll-in-inventory.md`, plan `docs/prompts/plans/phase-41-find-roll-in-inventory-plan.md`. Still
+  to do: rebuild `USER_MANUAL.pdf` (text changed), the vault notes on the laptop. **To tell CPoint:** the Floor Manager now
+  opens Find roll from Inventory; constructors keep it in their menu.
+- **Phase 40 (D-137, built 2026-11-26, not merged):** work in progress at Preparation is counted in **pieces**, not pairs (the
+  board, Overview card, My stage, count form and Plan hint; pairs from Construction on); Reports → Work in progress leaves
+  Preparation out and compares only Construction, Sole-ing and Finishing. No migration, the API field stays `pairs`. `npm run
+check` passed (1020 tests). Codex run 1 **PASS WITH ISSUES** (`qa/reports/2026-11-26-phase-40-run1.md`: P1 to P12, A1, A2 and the
+  stage-wip, reports and batches specs pass; the one "failure" was the handoff saying the stage-count POST returns 200, it returns 201
+  as before: handoff corrected, no code change). Handoff `qa/handoffs/2026-11-26-preparation-wip-unit.md`, plan
+  `docs/prompts/plans/phase-40-preparation-wip-unit-plan.md`. Still to do:
+  retake manual screenshot 21 and rebuild `USER_MANUAL.pdf`. **To tell CPoint** and **to ask** (A-116): see Open questions.
 - **Phase 38 (D-136, merged #64):** the Preparation card on Batches → Work in progress lists the camera's leather
   defects on today's finished rolls (rolls per type, as Reports → Rolls; "Returned to supplier: N rolls."; a none line),
   and no repair goes back to Preparation (`REPAIR_STAGES`: Construction, Sole-ing, Finishing; API refuses it with 422).
@@ -126,6 +143,8 @@ Dylan's file and stays out of git.
 - [x] 38. Preparation shows the camera's defects; no repair goes back to Preparation (D-136; built 2026-11-23; QA PASS WITH ISSUES, run 3; merged #64, CI green)
 - [x] 37. Work in progress demo data (D-135; built 2026-11-23; QA passed, run 2; merged #64)
 - [x] 39. Close-out after Phases 37 and 38; CI checks no repair is at Preparation (docs only; merged #65, #66)
+- [x] 40. Work in progress at Preparation is counted in pieces; Reports → Work in progress leaves it out (D-137; built 2026-11-26; QA PASS WITH ISSUES, run 1; screenshot 21 and the PDF still to retake)
+- [x] 41. Find roll is a button on Inventory (D-138; built 2026-11-26; QA PASS WITH ISSUES, run 1; not merged yet)
 - [x] 36. The documentation, the figures and the demo match the system (D-134; built 2026-11-22; QA passed
       with Codex run 2; merged #62; the hand rehearsal with phones is Dylan's, not a code check)
 
@@ -167,6 +186,8 @@ D-entries.
    `docs/DEMO_SCRIPT.md` and tell Claude anything that needs fixing.
    - Also: take the "To ask or tell CPoint" block under Open questions to CPoint.
    - Also: delete `qa/phase-39-ci-no-preparation-repairs.patch` (already in `ci.yml`, merged #66).
+   - Phase 40: Codex passed (run 1); Claude retakes screenshot 21 and rebuilds the manual PDF (once, with Phase 41), then the git commands.
+   - Phase 41: Codex passed (run 1); Claude rebuilds the manual PDF and Dylan adds the vault notes on the laptop; the git commands come from the Phase 41 thread.
 1. Optional, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too). Phase 31 merged (#46).
 2. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.
@@ -189,7 +210,22 @@ D-entries.
 - **Ask:** their real list of final defects (A-62, the five are placeholders); their rack layout (A-53) and a batch code format
   they recognise (A-57); whether the Quality Inspector may also correct older batches (A-70); their rule for repairs that keep
   failing (A-88); whether a capture constructor really stays at Preparation all day (A-96).
+- **Ask (A-116):** what do they count at Preparation, by hand, after the roll is cut: leather pieces, rolls, cut sets, something else?
 - **Tell:** repairs never go back to Preparation, and the board's Preparation card shows the camera's leather defects (D-136).
+  Work in progress counts pieces at Preparation and pairs from Construction on, and the report compares only the pair stages (D-137).
+  The Floor Manager opens Find roll from a button on Inventory; constructors keep it in their menu (D-138, A-118).
+
+- Decided (Dylan, 2026-11-26, D-138): Find roll leaves the Floor Manager's menu and is a button on Inventory; constructors with
+  camera access keep it in their menu (option 1 of the Phase 41 plan). Tell CPoint.
+- ASSUMPTION (A-118, D-138): constructors keep Find roll in their menu rather than gaining Inventory access (Inventory stays the
+  Floor Manager's, D-100). To tell CPoint, not to ask.
+- Decided (Dylan, 2026-11-26, D-137): the work in progress at Preparation is not counted in pairs, because it is still leather;
+  Dylan: "pieces", since a roll that passed the camera is cut into pieces. Reports → Work in progress leaves Preparation out.
+  The demo's Preparation numbers (20 to 40) stay. Tell CPoint.
+- ASSUMPTION (A-116, D-137): the Preparation count is "pieces" (leather pieces); CPoint hasn't named the unit. Only
+  `STAGE_COUNT_UNIT` and the docs' word change if they use another.
+- ASSUMPTION (A-117, D-137): each stage's count shows in its own unit; nothing adds or compares counts across units, and
+  the field stays `pairs` in the database and API.
 
 - Decided (Dylan, 2026-11-23, D-136): at Preparation the defects are the camera's, on the raw roll; no repair goes
   back to Preparation (the camera already filtered the leather). The board's Preparation card counts rolls per

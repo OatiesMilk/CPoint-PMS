@@ -115,7 +115,8 @@ D-128, A-71). Every other page stays desktop first.
   name, a page menu (`Menu`, "Pages") only when the role has more than one page, then the account
   menu (Change password, Sign out) and the theme switch. A Shoe Constructor with camera access has
   two pages, Capture and Find roll (Phase 32), so the page menu shows; without it, Capture only and
-  no page menu.
+  no page menu. The Floor Manager has no Find roll item: Inventory has a **Find roll** button (Phase 41,
+  D-138), and `/find` marks Inventory and titles the bar "Inventory".
 - **Touch:** every control a thumb uses is at least 44px tall (`h-11`, `size="lg"`); the one
   primary action of a phone page is fixed at the bottom of the screen above the safe area
   (`pb-[max(0.75rem,env(safe-area-inset-bottom))]`) and the page leaves room for it (`pb-28`).
@@ -140,7 +141,9 @@ D-128, A-71). Every other page stays desktop first.
   the last three are the right column). Below `sm` the page description is `sr-only`, so the
   picture is on the first screen at 390 × 844. A hint shows once: "Choose the roll this shot
   belongs to." lives under the Capture button only.
-- **Find roll (Phase 32):** one column, at most `max-w-xl`: the search field (`h-11`, monospace,
+- **Find roll (Phase 32):** the Floor Manager reaches it from the Inventory page's **Find roll** button
+  (`variant="secondary"`, first and `h-11` below `sm`, Phase 41), constructors from their menu; the page
+  has a back link to Inventory for the Floor Manager only. One column, at most `max-w-xl`: the search field (`h-11`, monospace,
   "Roll code or tag number") and two `size="lg"` buttons, **Find** and **Scan label**, side by side
   from `sm`, stacked below it. The answer repeats the roll's code in `text-xl` and **Where it is**
   in `text-xl` semibold; the location history is a list (when, what, from → to), never a table.

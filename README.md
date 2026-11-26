@@ -14,8 +14,8 @@ shared view of the line:
   supplier**, otherwise **Scanning passed** (D-116). Each roll's scanning time is recorded (D-121).
 - **Storage locations, labels and Find roll (Phase 32, D-128):** the Floor Manager sets up the racks,
   bins and areas where rolls are kept (Inventory → Storage locations), prints A4 sticker sheets with
-  a QR code for each roll and each location, and places or moves rolls. **Find roll** (on a phone,
-  for the Floor Manager and constructors with camera access) takes a roll's code, tag number or
+  a QR code for each roll and each location, and places or moves rolls. **Find roll** (on a phone;
+  a button on Inventory for the Floor Manager, in the menu for constructors with camera access, D-138) takes a roll's code, tag number or
   scanned label and shows where it is and where it has been; Capture can pick a roll by its label.
   A roll Returned to supplier is set aside in a place until the supplier picks it up.
 - **Batches and the Inspection queue (Phases 27 and 33, D-129):** the Floor Manager plans each
@@ -31,8 +31,9 @@ shared view of the line:
   scrapped or sent back again. After 5 findings of a type in 4 weeks the form suggests the usual
   answer. The line's stages are Preparation, Construction, Sole-ing and Finishing.
 - **Work in progress (Phase 34):** the Floor Manager says in the Plan dialog who works at which
-  stage each day (a constructor with Capture access is always at Preparation, locked); the constructors there count the pairs at their stage on Capture ("My stage");
-  Batches → Work in progress shows each stage's count and its repairs. At Preparation the card
+  stage each day (a constructor with Capture access is always at Preparation, locked); the constructors there count the work at their stage on Capture ("My stage"), pieces of leather at Preparation and pairs after it (Phase 40, D-137);
+  Batches → Work in progress shows each stage's count and its repairs. Reports → Operations → Work in
+  progress compares only the pair stages (Construction, Sole-ing, Finishing). At Preparation the card
   lists the camera's leather defects on today's rolls instead (Phase 38, D-136), and no repair goes
   back to Preparation. Counts are per stage, never per person.
 - **Attendance and stock:** the Floor Manager marks who is present each day and updates stock on
@@ -145,7 +146,7 @@ since the defense: locations and Find roll, the Inspection queue, defects and re
 periods and corrections. Use two browser windows (or one normal and one private) to show two roles
 side by side, and a phone-sized window for Capture, Batches and Find roll. Each role sees only its own pages (D-100, D-119): the Floor Manager Overview, Batches,
 Attendance, Reports and Inventory; the Quality Inspector Batches; the System Admin Overview, Users,
-Settings, API tokens and Audit log; a constructor Capture and Find roll.
+Settings, API tokens and Audit log; a constructor Capture and Find roll (the Floor Manager opens Find roll from a button on Inventory).
 
 **Demo tools (optional, D-101):** with `DEMO_LOGIN_TOOLS=true` (and `SEED_DEMO_USERS=true`) the
 login page has **Demo sign-in**, one button per role, and **Reset demo data** (type RESET; 2 to 3
@@ -181,7 +182,7 @@ first on **Batches → Plan days** if it isn't.
 4. **Inventory → Storage locations** (Phase 32): the demo's placeholder racks and bins (`R1-B1` to
    `R2-B3`) and `RETURN`, with how many rolls each holds; tick two and **Print 2 labels** (an A4
    sheet of 3 × 7 stickers; print at 100%). Back on the item, **Move rolls** takes a few rolls to
-   another place with a note. Then **Find roll** in the menu, on a phone-sized window: type a roll's
+   another place with a note. Then **Inventory → Find roll**, on a phone-sized window: type a roll's
    code (or **Scan label**) and read where it is and its **Location history**, which names nobody.
 5. **Reports → Rolls:** every roll with its supplier, area, shots, Defect %, scanning time and
    status: **Scanning passed** or **Returned to supplier**. Three demo rolls have a long cut on
@@ -201,8 +202,8 @@ first on **Batches → Plan days** if it isn't.
    then **Print** (the header says who prepared it; the layout leaves room for Remarks and two
    signatures) or download a CSV and open it in Excel.
 8. **Batches → Queue** (Phase 33): every batch waiting for inspection, by its code, **Urgent** first;
-   **Mark Urgent** or **Void** one with a reason. **Work in progress** (third tab) shows the pairs at
-   each stage and the repairs at them (Phase 34).
+   **Mark Urgent** or **Void** one with a reason. **Work in progress** (third tab) shows each stage's
+   count (pieces at Preparation, pairs after it) and the repairs at them (Phase 34).
 9. **A correction** (Phase 35B): **Queue → Inspected and void**, pick a **Batch date**, **Correct**
    a batch with a reason; **Reports → Operations** now marks that day **Corrected**. On a roll's
    page, **Edit details**. Every correction is in the audit log with the old and the new value.
@@ -223,7 +224,7 @@ first on **Batches → Plan days** if it isn't.
 3. **Finish roll**: the roll leaves stock, and the constructor reads its Defect % against the limit.
    A roll over the limit asks **Where did you put it?** (**Set aside for the supplier**). **Floor
    view** shows the same with a coloured band for a monitor at a fixed station.
-4. **My stage** (Phase 34): a constructor the Floor Manager assigned to a stage counts the pairs
+4. **My stage** (Phase 34): a constructor the Floor Manager assigned to a stage counts the pieces (Preparation) or pairs
    there and marks a repair **Back for inspection**; **Find roll** looks a roll up by code.
 
 ### 3. Quality Inspector (3 min)

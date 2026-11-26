@@ -123,14 +123,7 @@ describe("navigationFor", () => {
       "Find roll",
     ]);
     expect(labels(QI)).toEqual(["Batches"]);
-    expect(labels(FM)).toEqual([
-      "Overview",
-      "Batches",
-      "Attendance",
-      "Reports",
-      "Inventory",
-      "Find roll",
-    ]);
+    expect(labels(FM)).toEqual(["Overview", "Batches", "Attendance", "Reports", "Inventory"]);
     expect(labels(AD)).toEqual(["Overview", "Users", "Settings", "API tokens", "Audit log"]);
   });
 
@@ -151,7 +144,6 @@ describe("navigationFor", () => {
       "/attendance",
       "/reports",
       "/inventory",
-      "/find",
     ]);
     expect(hrefs(AD)).toEqual([
       "/admin",
@@ -174,6 +166,24 @@ describe("navigationFor", () => {
     ]);
     // Nobody else captures, whatever the switch says.
     for (const role of [FM, QI, AD]) expect(labels(role)).not.toContain("Capture");
+  });
+
+  it("gives the Floor Manager Find roll as a button on Inventory, not a menu item (Phase 41, D-138)", () => {
+    // Only the Floor Manager's Inventory carries /find, so /find marks it (and titles the phone
+    // bar); a constructor's Find roll item marks itself.
+    const alsoActive = (user: { role: Role; canCapture?: boolean }) =>
+      navigationFor(user)[0].items.map((i) => [i.label, i.alsoActive ?? []]);
+    expect(labels(FM)).not.toContain("Find roll");
+    expect(alsoActive({ role: FM })).toContainEqual(["Inventory", ["/find"]]);
+    for (const user of [{ role: SC, canCapture: true }, { role: QI }, { role: AD }] as const) {
+      expect(navigationFor(user)[0].items.flatMap((i) => i.alsoActive ?? [])).toEqual([]);
+    }
+    // The page is still open to the Floor Manager, and constructors keep it in their menu.
+    expect(canFindRolls({ role: FM, canCapture: false })).toBe(true);
+    expect(labels(SC)).not.toContain("Find roll");
+    expect(navigationFor({ role: SC, canCapture: true })[0].items.map((i) => i.label)).toContain(
+      "Find roll",
+    );
   });
 
   it("links each role's first item to its own home; Batches is the QI's home", () => {
