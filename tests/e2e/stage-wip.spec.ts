@@ -246,14 +246,15 @@ test("the Floor Manager covers a stage nobody is assigned to, and the board and 
   );
   await expect(preparation).not.toContainText("No repairs here.");
   await preparation.getByRole("button", { name: /^Update count/ }).click();
-  await preparation.getByLabel("Pairs at Preparation now").fill("33");
+  await preparation.getByLabel("Pieces at Preparation now").fill("33");
   await preparation.getByRole("button", { name: "Save count" }).click();
-  await expect(fm.getByText("Preparation counted: 33 pairs.")).toBeVisible();
+  await expect(fm.getByText("Preparation counted: 33 pieces.")).toBeVisible();
   await expect(preparation).toContainText("33");
-  await expect(preparation).toContainText(/as of \d\d:\d\d/);
+  await expect(preparation).toContainText(/pieces as of \d\d:\d\d/);
   // Sole-ing shows the constructor's count with who is assigned in a quiet line below.
   const soleIng = fm.getByTestId("wip-SOLE_ING");
   await expect(soleIng).toContainText("14");
+  await expect(soleIng).toContainText(/pairs as of \d\d:\d\d/);
   await expect(soleIng).toContainText("Assigned today:");
   expect(await axe(fm)).toEqual([]);
 
@@ -262,17 +263,24 @@ test("the Floor Manager covers a stage nobody is assigned to, and the board and 
   const report = (
     await (await fm.request.get(`/api/v1/reports/operations?from=${TODAY}&to=${TODAY}`)).json()
   ).data;
+  // Preparation is counted in pieces, so the report leaves it out (D-137): only the pair stages match.
   for (const card of board.cards as { stage: string; pairs: number | null }[]) {
     const row = report.wip.stages.find((s: { stage: string }) => s.stage === card.stage);
-    expect(row.latest).toBe(card.pairs);
+    if (card.stage === "PREPARATION") expect(row).toBeUndefined();
+    else expect(row.latest).toBe(card.pairs);
   }
   // The home card links to it.
   await fm.goto("/floor-manager");
   await expect(fm.getByTestId("wip-card")).toContainText("Preparation");
   await fm.goto(`/reports?view=operations&from=${TODAY}&to=${TODAY}`);
+  // The report compares only the stages counted in pairs: no Preparation row, and Sole-ing's 14 shows.
+  await expect(
+    fm.getByTestId("wip-stage-table").getByRole("row", { name: "Sole-ing" }),
+  ).toContainText("14");
   await expect(
     fm.getByTestId("wip-stage-table").getByRole("row", { name: "Preparation" }),
-  ).toContainText("33");
+  ).toHaveCount(0);
+  await expect(fm.getByTestId("wip-section")).toContainText("Preparation is counted in pieces");
   await fm.context().close();
 });
 
@@ -361,13 +369,13 @@ test("a constructor with Capture access is at Preparation: locked in the Plan di
   const page = await signedIn(browser, capturer.email, { width: 390, height: 800 });
   await page.goto("/camera/capture");
   const card = page.getByTestId("my-stage");
-  await expect(card.getByRole("heading", { name: "Preparation · pairs here now" })).toBeVisible();
+  await expect(card.getByRole("heading", { name: "Preparation · pieces here now" })).toBeVisible();
   await expect(card.getByTestId("my-stage-capture")).toContainText(
     "You have Capture access, so you work at Preparation.",
   );
-  await card.getByLabel("Pairs at Preparation now").fill("21");
+  await card.getByLabel("Pieces at Preparation now").fill("21");
   await card.getByRole("button", { name: "Save count" }).click();
-  await expect(page.getByText("Preparation counted: 21 pairs.")).toBeVisible();
+  await expect(page.getByText("Preparation counted: 21 pieces.")).toBeVisible();
   const other = await page.request.post("/api/v1/production/stage-counts", {
     data: { stage: "SOLE_ING", pairs: 3 },
   });

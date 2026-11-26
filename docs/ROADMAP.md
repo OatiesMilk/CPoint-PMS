@@ -1080,3 +1080,38 @@ decision.
       both counts are 0 on a real seed (PostgreSQL 16, demo week: 15 Fixable findings, 16 repair jobs); `git apply --check` clean
 - [x] Stale `qa/phase-36-ci-storage-checks.patch` deleted (already in `ci.yml`)
 - [x] Patch applied and merged (#65, #66); the `docker` job passes
+
+## Phase 40 — Work in progress at Preparation is counted in pieces, not pairs
+
+Plan: `docs/prompts/plans/phase-40-preparation-wip-unit-plan.md` (Dylan's request and answers, 2026-11-26). Decision: D-137
+(A-116, A-117). No migration; the field stays `pairs` in the database and API.
+
+- [x] One unit table (`STAGE_COUNT_UNIT`, `countUnit`, `PAIR_COUNT_STAGES`) in `src/lib/repair-rules.ts`; `parseStageCount(raw, stage)`
+      names pieces at Preparation and pairs elsewhere
+- [x] The board, the Overview card, My stage, the count form (label, toast, errors) and the Plan hint say pieces at Preparation
+- [x] Reports → Operations → Work in progress leaves Preparation out (Construction, Sole-ing, Finishing only)
+- [x] Unit tests (repair-rules, stage.service) and the e2e assertions in `tests/e2e/stage-wip.spec.ts` (not run here; Codex runs them)
+- [x] Docs: README, USER_MANUAL (4.4a, 6.3a, Reports), API, master spec, DECISIONS (D-137), STATUS, SESSION_LOG
+- [x] `npm run check` passes (2026-11-26, on a clean copy of `main` with the changes: lint, typecheck, 65 files and 1020 tests, build)
+- [x] QA handoff `qa/handoffs/2026-11-26-preparation-wip-unit.md`, Codex prompt `qa/CODEX_PROMPT_PHASE_40.md`
+- [x] Codex QA run 1: PASS WITH ISSUES (`qa/reports/2026-11-26-phase-40-run1.md`; the one failure was a wrong expected status in the handoff, fixed there)
+- [ ] Screenshot 21 (the board) and `USER_MANUAL.pdf` retaken after QA passes, and committed and merged
+
+## Phase 41 — Find roll is a button on Inventory
+
+Plan: `docs/prompts/plans/phase-41-find-roll-in-inventory-plan.md` (Dylan's request 2026-11-26, option 1). Decision: D-138
+(A-118). No migration; the route `/find`, its rule and the API are unchanged. Built in the same working tree as Phase 40.
+
+- [x] The Floor Manager's menu has no Find roll; Inventory has a **Find roll** button (after Storage locations; first and
+      44 px tall below `sm`), shown with `location:read`
+- [x] Constructors with camera access keep Find roll in their menu; `/inventory` stays refused to them
+- [x] On `/find` the Floor Manager's sidebar marks Inventory (`alsoActive`), the phone bar reads "Inventory", and a back link
+      returns to Inventory; constructors get no back link
+- [x] Unit tests (`permissions.test.ts`) and e2e (`auth.spec.ts`, the "Find roll from Inventory" block in `inventory.spec.ts`;
+      not run here, Codex runs them)
+- [x] Docs: README, USER_MANUAL (6.5, 6.5a, section 8), master spec, DESIGN.md, DECISIONS (D-138), STATUS, SESSION_LOG
+- [x] `npm run check` passes (2026-11-26, on Dylan's PC: lint, typecheck, 65 files and 1021 tests, build)
+- [x] QA handoff `qa/handoffs/2026-11-26-find-roll-in-inventory.md`, Codex prompt `qa/CODEX_PROMPT_PHASE_41.md`
+- [x] Codex QA run 1: PASS WITH ISSUES (`qa/reports/2026-11-26-phase-41-run1.md`; 13 of 13 scenarios, e2e 37 passed with 2 environment skips;
+      the one issue is a `demo:reset` foreign-key failure at setup, not Phase 41's)
+- [ ] `USER_MANUAL.pdf` rebuilt (the manual's text changed; no screenshot shows the change), and committed and merged

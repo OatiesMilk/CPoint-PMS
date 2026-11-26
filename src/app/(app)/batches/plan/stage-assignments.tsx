@@ -126,7 +126,7 @@ export function StageAssignments({ day }: { day: string }) {
         </h3>
         <p className="text-sm text-muted-foreground">
           {view.editable
-            ? "Tick the constructors at each stage. Each is at one stage a day. They count the pairs at their stage. A constructor with Capture access always works at Preparation."
+            ? "Tick the constructors at each stage. Each is at one stage a day. They count the work at their stage. A constructor with Capture access always works at Preparation."
             : (view.lockedReason ?? "")}
         </p>
       </div>

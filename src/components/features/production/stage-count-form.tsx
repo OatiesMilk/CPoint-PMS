@@ -8,12 +8,12 @@ import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field-error";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { parseStageCount, type Stage } from "@/lib/repair-rules";
+import { countUnit, countUnitName, parseStageCount, type Stage } from "@/lib/repair-rules";
 import { cn } from "@/lib/utils";
 
 /**
- * "Pairs here now" for a stage (Phase 34, A-72, A-73): one shared number for the whole stage, not
- * a person's count. A big keypad field on a phone (Capture), a plain one on the board.
+ * "Pairs here now" for a stage, "pieces" at Preparation (Phase 34, A-72, A-73, D-137): one shared
+ * number for the whole stage, not a person's count. A big keypad field on a phone (Capture), a plain one on the board.
  */
 export function StageCountForm({
   stage,
@@ -35,7 +35,7 @@ export function StageCountForm({
 
   // Checked here first, so the message shows at once and without a round trip.
   function check(): boolean {
-    const parsed = parseStageCount(value);
+    const parsed = parseStageCount(value, stage);
     if (parsed.ok) return true;
     setError(parsed.message);
     return false;
@@ -50,7 +50,7 @@ export function StageCountForm({
     startTransition(async () => {
       const result = await saveStageCountAction({ stage, pairs: value });
       if (result.ok) {
-        toast.success(`${label} counted: ${result.pairs} pair${result.pairs === 1 ? "" : "s"}.`);
+        toast.success(`${label} counted: ${countUnit(stage, result.pairs)}.`);
         onSaved?.();
         return;
       }
@@ -68,7 +68,7 @@ export function StageCountForm({
       }}
     >
       <Label htmlFor={id} className={cn(large && "text-base")}>
-        Pairs at {label} now
+        {countUnitName(stage).replace(/^./, (c) => c.toUpperCase())} at {label} now
       </Label>
       <div className="flex flex-wrap items-start gap-2">
         <div className="flex min-w-0 flex-col gap-1.5">

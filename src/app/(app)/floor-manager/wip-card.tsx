@@ -20,7 +20,9 @@ export function WipCard({ board }: { board: WipBoard }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle>Work in progress</CardTitle>
-            <CardDescription>Pairs at each stage, as last counted today.</CardDescription>
+            <CardDescription>
+              Pieces at Preparation, pairs after it, as last counted today.
+            </CardDescription>
           </div>
           <CardLink href="/batches?tab=wip">Open</CardLink>
         </div>

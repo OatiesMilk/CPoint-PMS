@@ -106,6 +106,16 @@ describe("parseCount", () => {
       });
     expect(svc.parseCount("50001")).toMatchObject({ ok: false });
   });
+
+  it("names the stage's unit: pieces at Preparation, pairs elsewhere (D-137)", () => {
+    expect(svc.parseCount("x", "PREPARATION")).toMatchObject({
+      ok: false,
+      message: "Enter the pieces here now as a whole number, like 12. Enter 0 if none.",
+    });
+    expect(svc.parseCount("x", "SOLE_ING")).toMatchObject({
+      message: "Enter the pairs here now as a whole number, like 12. Enter 0 if none.",
+    });
+  });
 });
 
 describe("saveStageCount (A-72, A-73)", () => {
@@ -162,6 +172,20 @@ describe("saveStageCount (A-72, A-73)", () => {
     await expect(
       svc.saveStageCount({ stage: "FINISHING", pairs: "3" }, FM, NOW),
     ).resolves.toMatchObject({ pairs: 3 });
+  });
+
+  it("tells a Preparation count in pieces when the number is wrong (D-137)", async () => {
+    await expect(
+      svc.saveStageCount({ stage: "PREPARATION", pairs: "x" }, FM, NOW),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [
+        {
+          path: ["pairs"],
+          message: "Enter the pieces here now as a whole number, like 12. Enter 0 if none.",
+        },
+      ],
+    });
   });
 
   it("names the field when the number is wrong", async () => {
@@ -451,6 +475,7 @@ describe("myStage (A-73)", () => {
       stage: "SOLE_ING",
       label: "Sole-ing",
       pairs: 14,
+      unit: "pairs",
       lastCounted: "Last counted 11:05 for all of Sole-ing",
       reminder: "B-261120-1 just ended. Update the count.",
     });
@@ -488,6 +513,8 @@ describe("wipBoard (D-008)", () => {
       assigned: "Assigned today: Ana Reyes, Ben Cruz",
     });
     expect(b.cards[0]).toMatchObject({ pairs: null, asOf: "Not counted today", assigned: null });
+    // Each card names its unit: pieces of leather at Preparation, pairs after it (D-137).
+    expect(b.cards.map((c) => c.unit)).toEqual(["pieces", "pairs", "pairs", "pairs"]);
     expect(b.preparation).toMatchObject({ beingScanned: 2, scannedToday: 7 });
     expect(b.canCount).toBe(true);
     expect((await svc.wipBoard(QI, NOW)).canCount).toBe(false);
@@ -579,6 +606,51 @@ describe("wipReport", () => {
       latest: 20,
       barShare: 1,
     });
-    expect(r.perDay[1].counts).toMatchObject({ SOLE_ING: 20, FINISHING: 5, PREPARATION: null });
+    expect(r.perDay[1].counts).toMatchObject({ SOLE_ING: 20, FINISHING: 5 });
+  });
+
+  it("leaves Preparation out: it is counted in pieces, not compared with the pair stages (D-137)", async () => {
+    stage.listCounts.mockResolvedValue([
+      {
+        day: "2026-11-19",
+        stage: "PREPARATION",
+        pairs: 40,
+        enteredAt: new Date("2026-11-19T06:00:00Z"),
+      },
+      {
+        day: "2026-11-20",
+        stage: "PREPARATION",
+        pairs: 33,
+        enteredAt: new Date("2026-11-20T06:00:00Z"),
+      },
+      {
+        day: "2026-11-20",
+        stage: "SOLE_ING",
+        pairs: 20,
+        enteredAt: new Date("2026-11-20T06:00:00Z"),
+      },
+    ]);
+    const r = await svc.wipReport({ from: "2026-11-19", to: "2026-11-20" });
+    expect(r.stages.map((s) => s.stage)).toEqual(["CONSTRUCTION", "SOLE_ING", "FINISHING"]);
+    // 2026-11-19 has only a Preparation count, so it is not a counted day.
+    expect(r.counted).toBe(1);
+    expect(r.perDay).toHaveLength(1);
+    expect(Object.keys(r.perDay[0].counts)).toEqual(["CONSTRUCTION", "SOLE_ING", "FINISHING"]);
+    // The busiest of the three is the bar's 100%, not Preparation's 33.
+    expect(r.stages.find((s) => s.stage === "SOLE_ING")?.barShare).toBe(1);
+  });
+
+  it("counts no day when only Preparation was counted", async () => {
+    stage.listCounts.mockResolvedValue([
+      {
+        day: "2026-11-20",
+        stage: "PREPARATION",
+        pairs: 33,
+        enteredAt: new Date("2026-11-20T06:00:00Z"),
+      },
+    ]);
+    const r = await svc.wipReport({ from: "2026-11-20", to: "2026-11-20" });
+    expect(r.counted).toBe(0);
+    expect(r.perDay).toEqual([]);
   });
 });

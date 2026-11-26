@@ -16,6 +16,35 @@ export const STAGE_LABEL: Record<Stage, string> = {
   FINISHING: "Finishing",
 };
 
+/**
+ * What a stage's hand count is counted in (Phase 40, D-137, A-116): leather pieces at Preparation,
+ * where a roll that passed the camera is cut and nothing is a shoe yet, and pairs from Construction
+ * on. The one place the unit lives; the field stays `pairs` in the database and API.
+ */
+export const STAGE_COUNT_UNIT: Record<Stage, { one: string; many: string }> = {
+  PREPARATION: { one: "piece", many: "pieces" },
+  CONSTRUCTION: { one: "pair", many: "pairs" },
+  SOLE_ING: { one: "pair", many: "pairs" },
+  FINISHING: { one: "pair", many: "pairs" },
+};
+
+/**
+ * The stages whose count is in pairs (D-137): Reports → Work in progress compares only these, and
+ * Preparation, counted in pieces, stays on the board, the Overview card and My stage.
+ */
+export const PAIR_COUNT_STAGES = STAGES.filter(
+  (s) => STAGE_COUNT_UNIT[s].many === "pairs",
+) as readonly Stage[];
+
+/** The unit's plural for a stage ("pieces" or "pairs"), as the services hand it to the pages. */
+export const countUnitName = (stage: Stage): string => STAGE_COUNT_UNIT[stage].many;
+
+/** A count with its unit: "1 piece", "33 pieces", "14 pairs". */
+export function countUnit(stage: Stage, n: number): string {
+  const u = STAGE_COUNT_UNIT[stage];
+  return `${n.toLocaleString("en-PH")} ${n === 1 ? u.one : u.many}`;
+}
+
 export const isStage = (v: unknown): v is Stage =>
   typeof v === "string" && (STAGES as readonly string[]).includes(v);
 
@@ -628,16 +657,19 @@ export function wipFooterLine(repairPairs: number, waiting: string): string {
 export const STAGE_COUNT_MAX = 50_000;
 
 /**
- * The pairs at a stage (A-72): digits only, from 0 to 50,000. Typed text such as "1e3", "0x10",
+ * The count at a stage (A-72): digits only, from 0 to 50,000. Typed text such as "1e3", "0x10",
  * "1.5", "-1" or nothing is refused. The form checks it as it is typed and the server checks it again
- * with the same text.
+ * with the same text. The messages name the stage's unit, pieces at Preparation and pairs elsewhere
+ * (D-137); without a stage they say pairs.
  */
 export function parseStageCount(
   raw: unknown,
+  stage?: Stage,
 ): { ok: true; pairs: number } | { ok: false; message: string } {
+  const unit = stage ? STAGE_COUNT_UNIT[stage].many : "pairs";
   const bad = {
     ok: false as const,
-    message: "Enter the pairs here now as a whole number, like 12. Enter 0 if none.",
+    message: `Enter the ${unit} here now as a whole number, like 12. Enter 0 if none.`,
   };
   let n: number;
   if (typeof raw === "number") {
@@ -654,7 +686,7 @@ export function parseStageCount(
       message:
         "That is more than " +
         STAGE_COUNT_MAX.toLocaleString("en-PH") +
-        " pairs. Check the number.",
+        ` ${unit}. Check the number.`,
     };
   return { ok: true, pairs: n };
 }

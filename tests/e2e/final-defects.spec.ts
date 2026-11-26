@@ -626,6 +626,7 @@ test("no name sits beside a figure on the board or in the reports", async ({ bro
         "repairPairs",
         "repairs",
         "stage",
+        "unit",
       ].sort(),
     );
   const report = JSON.stringify(

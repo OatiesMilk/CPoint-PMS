@@ -16,7 +16,8 @@ test("health endpoint reports app and database up", async ({ request }) => {
 
 // Each role sees only its modules (Phase 28, D-100, C-18): one list, in this order.
 const EXPECTED_NAV = {
-  manager: ["Overview", "Batches", "Attendance", "Reports", "Inventory", "Find roll"],
+  // Find roll is a button on Inventory, not a menu item (Phase 41, D-138).
+  manager: ["Overview", "Batches", "Attendance", "Reports", "Inventory"],
   inspector: ["Batches"],
   // No Camera: its page is gone (D-119).
   admin: ["Overview", "Users", "Settings", "API tokens", "Audit log"],
@@ -29,7 +30,8 @@ const REFUSED = {
   manager: ["/admin", "/admin/users", "/camera/capture"],
   inspector: ["/reports", "/attendance", "/inventory", "/floor-manager", "/admin"],
   admin: ["/batches", "/attendance", "/inventory", "/reports", "/reports/rolls", "/camera/capture"],
-  constructor: ["/batches", "/reports", "/admin"],
+  // Inventory stays the Floor Manager's: a constructor's Find roll is in their own menu (D-138).
+  constructor: ["/batches", "/reports", "/admin", "/inventory"],
 } as const;
 
 for (const role of Object.keys(ACCOUNTS) as (keyof typeof ACCOUNTS)[]) {

@@ -10,7 +10,7 @@ import type { Metadata } from "next";
 import { TablePager } from "@/components/features/table-pager";
 import Link from "next/link";
 import { connection } from "next/server";
-import { ClipboardPen, Plus, Warehouse } from "lucide-react";
+import { ClipboardPen, Plus, ScanSearch, Warehouse } from "lucide-react";
 import { StockBadge } from "@/components/features/inventory/stock-badge";
 import { PageHeader } from "@/components/features/page-header";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,8 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
   const filtered = Boolean(query.category || query.stock || query.q || query.inactive);
   const { rows, total, page, pageCount } = await listItems(query);
   const canManage = can(user.role, "inventory:manage");
+  // Find roll is reached from here, not the menu, for the Floor Manager (Phase 41, D-138).
+  const canFind = can(user.role, "location:read");
 
   const pageHref = (p: number) => {
     const next = new URLSearchParams();
@@ -56,28 +58,42 @@ export default async function InventoryPage({ searchParams }: PageProps<"/invent
         title="Inventory"
         description="Leather rolls and supplies. Stock changes only on Update stock: what was added, used or corrected."
         actions={
-          canManage && (
+          (canManage || canFind) && (
             <div className="flex flex-wrap gap-2">
-              {total > 0 && (
-                <Button asChild>
-                  <Link href="/inventory/update">
-                    <ClipboardPen aria-hidden />
-                    Update stock
+              {canManage && (
+                <>
+                  {total > 0 && (
+                    <Button asChild>
+                      <Link href="/inventory/update">
+                        <ClipboardPen aria-hidden />
+                        Update stock
+                      </Link>
+                    </Button>
+                  )}
+                  <Button asChild variant={total > 0 ? "secondary" : "primary"}>
+                    <Link href="/inventory/new">
+                      <Plus aria-hidden />
+                      Add item
+                    </Link>
+                  </Button>
+                  <Button asChild variant="secondary">
+                    <Link href="/inventory/locations">
+                      <Warehouse aria-hidden />
+                      Storage locations
+                    </Link>
+                  </Button>
+                </>
+              )}
+              {canFind && (
+                // First and taller on a phone-sized window: the Floor Manager looks a roll up
+                // standing in the store (D-128), and this page is not a phone page (D-034).
+                <Button asChild variant="secondary" className="max-sm:order-first max-sm:h-11">
+                  <Link href="/find">
+                    <ScanSearch aria-hidden />
+                    Find roll
                   </Link>
                 </Button>
               )}
-              <Button asChild variant={total > 0 ? "secondary" : "primary"}>
-                <Link href="/inventory/new">
-                  <Plus aria-hidden />
-                  Add item
-                </Link>
-              </Button>
-              <Button asChild variant="secondary">
-                <Link href="/inventory/locations">
-                  <Warehouse aria-hidden />
-                  Storage locations
-                </Link>
-              </Button>
             </div>
           )
         }

@@ -12,6 +12,10 @@ import {
   returnedRollsLine,
   parseStageCount,
   summaryFieldId,
+  countUnit,
+  countUnitName,
+  PAIR_COUNT_STAGES,
+  STAGE_COUNT_UNIT,
   compareWaiting,
   countReminderDue,
   findingsGap,
@@ -548,6 +552,42 @@ describe("parseStageCount (A-72)", () => {
       ok: false,
       message: "That is more than 50,000 pairs. Check the number.",
     });
+  });
+});
+
+describe("the unit of a stage's count (Phase 40, D-137, A-116)", () => {
+  it("is pieces at Preparation and pairs from Construction on", () => {
+    expect(STAGE_COUNT_UNIT.PREPARATION).toEqual({ one: "piece", many: "pieces" });
+    for (const s of ["CONSTRUCTION", "SOLE_ING", "FINISHING"] as const)
+      expect(STAGE_COUNT_UNIT[s]).toEqual({ one: "pair", many: "pairs" });
+    expect(countUnitName("PREPARATION")).toBe("pieces");
+    expect(countUnitName("SOLE_ING")).toBe("pairs");
+  });
+  it("writes a count with its unit, singular for 1", () => {
+    expect(countUnit("PREPARATION", 1)).toBe("1 piece");
+    expect(countUnit("PREPARATION", 0)).toBe("0 pieces");
+    expect(countUnit("PREPARATION", 33)).toBe("33 pieces");
+    expect(countUnit("SOLE_ING", 1)).toBe("1 pair");
+    expect(countUnit("SOLE_ING", 14)).toBe("14 pairs");
+    expect(countUnit("FINISHING", 1200)).toBe("1,200 pairs");
+  });
+  it("says which stages are compared in pairs", () => {
+    expect(PAIR_COUNT_STAGES).toEqual(["CONSTRUCTION", "SOLE_ING", "FINISHING"]);
+  });
+  it("makes parseStageCount name the stage's unit in both messages", () => {
+    expect(parseStageCount("x", "PREPARATION")).toEqual({
+      ok: false,
+      message: "Enter the pieces here now as a whole number, like 12. Enter 0 if none.",
+    });
+    expect(parseStageCount("50001", "PREPARATION")).toEqual({
+      ok: false,
+      message: "That is more than 50,000 pieces. Check the number.",
+    });
+    expect(parseStageCount("x", "FINISHING")).toEqual({
+      ok: false,
+      message: "Enter the pairs here now as a whole number, like 12. Enter 0 if none.",
+    });
+    expect(parseStageCount("33", "PREPARATION")).toEqual({ ok: true, pairs: 33 });
   });
 });
 

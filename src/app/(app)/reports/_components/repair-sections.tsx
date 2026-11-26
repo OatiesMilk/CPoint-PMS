@@ -5,7 +5,7 @@ import { CardLink } from "@/components/ui/card-link";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { SortableHeader } from "@/components/features/reports/sortable-header";
 import { formatPercent } from "@/lib/format";
-import { STAGES } from "@/lib/repair-rules";
+import { PAIR_COUNT_STAGES, STAGES } from "@/lib/repair-rules";
 import { sortFor, type SortKey, type SortState } from "@/lib/table-sort";
 import type { OperationsReport } from "@/server/services/ops-report.service";
 import type { ReactNode } from "react";
@@ -46,7 +46,7 @@ const WIP_STAGE_KEYS: Record<string, SortKey<WipStageRow>> = {
 type WipDayRow = OperationsReport["wip"]["perDay"][number];
 const WIP_DAY_KEYS: Record<string, SortKey<WipDayRow>> = {
   day: (r) => r.day,
-  ...Object.fromEntries(STAGES.map((s) => [stageKey(s), (r: WipDayRow) => r.counts[s]])),
+  ...Object.fromEntries(PAIR_COUNT_STAGES.map((s) => [stageKey(s), (r: WipDayRow) => r.counts[s]])),
 };
 
 /**
@@ -253,8 +253,9 @@ export function WipReportCard({
           <div>
             <CardTitle>Work in progress</CardTitle>
             <CardDescription>
-              Pairs at each stage, from the counts the people there enter. Each day’s last count
-              stands for that day. The stage with the highest average is where pairs wait most.
+              Pairs at each stage after Preparation, from the counts the people there enter. Each
+              day’s last count stands for that day. The stage with the highest average is where
+              pairs wait most. Preparation is counted in pieces, so it is on the board and not here.
             </CardDescription>
           </div>
           <CardLink href="/batches?tab=wip">Today’s board</CardLink>
@@ -331,7 +332,7 @@ export function WipReportCard({
                 {sortFor(sort, "wip-days", [...w.perDay].reverse(), WIP_DAY_KEYS).map((d) => (
                   <TableRow key={d.day} aria-label={d.day}>
                     <TableCell>{d.label}</TableCell>
-                    {STAGES.map((s) => (
+                    {w.stages.map(({ stage: s }) => (
                       <TableCell key={s} numeric>
                         {d.counts[s] ?? "–"}
                       </TableCell>

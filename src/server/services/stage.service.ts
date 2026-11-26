@@ -14,7 +14,9 @@ import { manilaToday } from "@/lib/format";
 import { clockTime, queueState, isQueued } from "@/lib/production-rules";
 import { addDays, manilaDayStart } from "@/lib/report-rules";
 import {
+  PAIR_COUNT_STAGES,
   STAGES,
+  countUnitName,
   parseStageCount,
   STAGE_LABEL,
   captureStageMessage,
@@ -170,7 +172,7 @@ export async function saveStageAssignments(
 
 // ───────────── counts ─────────────
 
-/** The count's number: a whole number from 0 (A-72). */
+/** The count's number, checked with the stage's unit: pieces at Preparation, pairs elsewhere (D-137). */
 export const parseCount = parseStageCount;
 
 /**
@@ -190,7 +192,7 @@ export async function saveStageCount(
         ? `You are not assigned to ${STAGE_LABEL[input.stage]} today. Ask the Floor Manager.`
         : "Only the Floor Manager and the constructors assigned to a stage can count it.",
     );
-  const parsed = parseCount(input.pairs);
+  const parsed = parseCount(input.pairs, input.stage);
   if (!parsed.ok) throw Errors.validation([{ path: ["pairs"], message: parsed.message }]);
   // The batch whose interval holds the moment of the count, null outside the shift.
   const rows = await listBatchRows(today, today);
@@ -254,6 +256,8 @@ export async function myStage(viewer: { id: string }, now: Date = appNow()) {
     /** Has Capture access, so the stage is always Preparation (Addendum 1, A-95). */
     captureAccess: capture.some((c) => c.id === viewer.id),
     pairs: current?.pairs ?? null,
+    /** What the count is in: "pieces" at Preparation, "pairs" elsewhere (D-137, A-116). */
+    unit: countUnitName(mine.stage),
     lastCounted: lastCountedLine(mine.stage, current?.enteredAt ?? null),
     reminder: reminder ? `${reminder.code} just ended. Update the count.` : null,
     repairs: repairs
@@ -277,6 +281,8 @@ export type StageCard = {
   label: string;
   /** The count now, or null when not counted today. */
   pairs: number | null;
+  /** What the count is in: "pieces" at Preparation, "pairs" elsewhere (D-137, A-116). */
+  unit: string;
   /** "as of 14:05", or "Not counted today". */
   asOf: string;
   /** Pairs in repair at this stage and what they are for ("Lifted sole ×2"). */
@@ -347,6 +353,7 @@ export async function wipBoard(viewer: { role: Role }, now: Date = appNow()) {
       stage,
       label: STAGE_LABEL[stage],
       pairs: c?.pairs ?? null,
+      unit: countUnitName(stage),
       asOf: c ? `as of ${clockTime(c.enteredAt)}` : "Not counted today",
       repairPairs: jobs.reduce((s, j) => s + j.pairs, 0),
       repairDefects: [...byDefect].map(([label, n]) => `${label} ×${n}`),
@@ -385,21 +392,24 @@ export type WipBoard = Awaited<ReturnType<typeof wipBoard>>;
 
 /**
  * Per stage the days counted and the average, highest and latest of each day's last count, and per
- * day the last count at each stage. Stage totals only (D-008).
+ * day the last count at each stage. Stage totals only (D-008). Only the stages counted in pairs
+ * (Construction, Sole-ing, Finishing): Preparation is counted in pieces, so it isn't compared with
+ * them and a day with only a Preparation count isn't a counted day (D-137).
  */
 export async function wipReport(range: { from: string; to: string }) {
-  const rows = await listCounts(range.from, range.to);
-  const totals = wipTotals(rows);
+  const rows = (await listCounts(range.from, range.to)).filter((r) =>
+    PAIR_COUNT_STAGES.includes(r.stage),
+  );
+  const totals = wipTotals(rows).filter((t) => PAIR_COUNT_STAGES.includes(t.stage));
   const days = [...new Set(rows.map((r) => r.day))].sort();
   const perDay = days.map((day) => {
     const latest = latestCounts(rows, day);
     return {
       day,
       label: formatAttendanceDay(day),
-      counts: Object.fromEntries(STAGES.map((s) => [s, latest.get(s)?.pairs ?? null])) as Record<
-        Stage,
-        number | null
-      >,
+      counts: Object.fromEntries(
+        PAIR_COUNT_STAGES.map((s) => [s, latest.get(s)?.pairs ?? null]),
+      ) as Record<Stage, number | null>,
     };
   });
   const top = Math.max(0, ...totals.map((t) => t.average ?? 0));

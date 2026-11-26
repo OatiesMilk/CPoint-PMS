@@ -2832,3 +2832,50 @@ PREPARATION` on Reports → Operations is ignored. Tell CPoint: repairs never go
 `src/server/validators/repair.validator.ts`, `report.validator.ts`, `src/app/(app)/batches/wip-board.tsx`,
 `findings-editor.tsx`, `repair-actions.tsx`, `repair-inspect-dialog.tsx`,
 `src/app/(app)/reports/_components/operations-view.tsx`.
+
+### D-137 · 2026-11-26 · Accepted — Work in progress at Preparation is counted in pieces, not pairs
+
+**Context:** Dylan (2026-11-26): "Shouldn't WIP for Preparation not say 'pairs', since at this stage it's not yet formed
+into a shoe, it's still leather? It's only at Construction that it comes out as pairs." Phase 34 (D-130, A-72) wrote one rule
+for every stage's hand count, so Preparation inherited the word "pairs" in the board, the Overview card, My stage, the count
+form and Reports. CPoint hasn't named a unit for Preparation.
+**Decision:** (1) The unit is shown per stage: **pieces** at Preparation, **pairs** at Construction, Sole-ing and Finishing.
+Dylan: a roll that passes the camera is cut into pieces. `STAGE_COUNT_UNIT`, `countUnit` and `countUnitName` in
+`src/lib/repair-rules.ts` are the one place; the board's cards and My stage carry a `unit` string; the count form's label
+("Pieces at Preparation now"), toast, errors, the board caption, the Overview description, the Plan hint and the My stage
+heading follow it. (2) **Reports → Operations → Work in progress leaves Preparation out** (Dylan: compare only the stages that
+operate with pairs): `wipReport` keeps Construction, Sole-ing and Finishing, so `counted`, `perDay` and the bar's 100% come
+from those three, and a day with only a Preparation count isn't a counted day. Preparation's count is still stored, audited
+and on the board, the Overview card and My stage. (3) No migration and no API rename: the column and the
+`POST /api/v1/production/stage-counts` field stay `pairs`; API.md says that at `PREPARATION` the number is pieces. (4) Demo
+numbers at Preparation (20 to 40) are unchanged (Dylan).
+**Consequences:** **A-116** (ASSUMPTION) the Preparation count is "pieces" (leather pieces), CPoint hasn't named the unit;
+**to ask CPoint:** what do you count at Preparation (cut pieces, rolls, cut sets, something else)? If it is something else,
+only the one `STAGE_COUNT_UNIT` entry and the docs' word change. **A-117** the board and Overview show each stage's count in
+its own unit and nothing adds or compares counts across units. Repairs, failed pairs, the quota and "Pairs finished" stay in
+pairs (a repair never goes to Preparation, D-136).
+**Where:** `src/lib/repair-rules.ts`, `src/server/services/stage.service.ts`, `src/server/controllers/stage.controller.ts`,
+`src/components/features/production/stage-count-form.tsx`, `src/app/(app)/camera/capture/my-stage.tsx`,
+`src/app/(app)/batches/wip-board.tsx`, `src/app/(app)/batches/plan/stage-assignments.tsx`,
+`src/app/(app)/floor-manager/wip-card.tsx`, `src/app/(app)/reports/_components/repair-sections.tsx`.
+
+### D-138 · 2026-11-26 · Accepted — Find roll is a button on Inventory for the Floor Manager and stays in the constructors' menu
+
+**Context:** Dylan (2026-11-26) asked to take Find roll out of the navigation bar and make it a button on the Inventory
+page. Find roll is used by the Floor Manager and by constructors with camera access, mostly on a phone (D-128, A-71). A
+constructor can't reach Inventory: `inventory:read` is the Floor Manager's (D-100), so a button on Inventory alone would take
+Find roll away from them. Plan `docs/prompts/plans/phase-41-find-roll-in-inventory-plan.md`; Dylan chose option 1.
+**Decision:** (1) The Floor Manager's menu has no Find roll item; Inventory has a **Find roll** button (secondary, after
+Storage locations; first and 44 px tall on a phone-sized window) shown with `location:read`. (2) Constructors with camera
+access keep Find roll in their own menu, as before. (3) On `/find` the Floor Manager's sidebar marks Inventory (a new optional
+`alsoActive` on nav items, longest match kept), the phone bar reads "Inventory", and the page has a back link to Inventory;
+constructors get no back link. (4) Find roll stays at `/find`: the route, `requireFindRoll`, `canFindRolls`, the API and the
+Storage locations link (`/find?q=LOC:<code>`) are unchanged. Amends D-128 for Find roll's entry point only. Rejected: option 2
+(Find roll leaves every menu and constructors get a button on Capture), because Capture's phone screen must keep the live
+picture on the first screen (30F-3) and it needs more test changes.
+**Consequences:** **A-118** (ASSUMPTION) constructors keep Find roll in their menu rather than gaining Inventory access;
+**tell CPoint**, not ask: the Floor Manager now opens Find roll from Inventory. The Floor Manager on a phone takes one more tap
+(Pages → Inventory → Find roll); a bookmark of `/find` still works. No migration.
+**Where:** `src/server/policies/navigation.ts`, `src/components/features/app-shell/sidebar.tsx`,
+`src/app/(app)/inventory/page.tsx`, `src/app/(app)/find/page.tsx`, `tests/unit/permissions.test.ts`,
+`tests/e2e/auth.spec.ts`, `tests/e2e/inventory.spec.ts`.
