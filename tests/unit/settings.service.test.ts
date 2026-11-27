@@ -26,6 +26,8 @@ vi.mock("@/server/models/db", () => ({
   runInTransaction: (fn: (tx: unknown) => unknown) => fn("tx"),
 }));
 vi.mock("@/server/services/audit.service", () => ({ recordAudit }));
+const seedSupplierTag = vi.fn(async (..._args: unknown[]) => ({ id: "t1" }));
+vi.mock("@/server/services/roll-tag.service", () => ({ seedSupplierTag }));
 const suggestSupplierCode = vi.fn(async () => "MLT");
 vi.mock("@/server/services/supplier-code.service", () => ({ suggestSupplierCode }));
 
@@ -139,6 +141,24 @@ describe("reference data", () => {
     await svc.createReferenceRow("supplier", { name: "Marikina Leather Trading" }, admin);
     expect(suggestSupplierCode).toHaveBeenCalledWith("Marikina Leather Trading");
     expect(refs.insertReference.mock.calls[0][1]).toMatchObject({ code: "MLT" });
+  });
+
+  it("gives a new supplier its short code as its default roll tag, in the same transaction (Phase 42)", async () => {
+    await svc.createReferenceRow("supplier", { name: "Marikina Leather Trading" }, admin);
+    expect(seedSupplierTag).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "r1", code: "MLT" }),
+      "tx",
+      admin,
+    );
+  });
+
+  it("makes no roll tag for a defect type", async () => {
+    await svc.createReferenceRow(
+      "defectType",
+      { key: "slit", label: "Slit", outcome: "NOT_ACCEPTED" },
+      admin,
+    );
+    expect(seedSupplierTag).not.toHaveBeenCalled();
   });
 
   it("takes a typed code in capitals, and refuses one another supplier has", async () => {

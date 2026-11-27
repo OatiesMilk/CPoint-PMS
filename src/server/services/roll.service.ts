@@ -27,6 +27,7 @@ import { parseSort, sortRows, type SortKey } from "@/lib/table-sort";
 import { PAGE_SIZE } from "@/lib/pagination";
 import {
   formatRollCode,
+  highestRollNumber,
   isReturnedToSupplier,
   rollStatusText,
   oldestOpenRoll,
@@ -38,16 +39,19 @@ import {
   planStart,
   rollClosedMessage,
   rollCodePrefix,
+  rollCodeTakenMessage,
   ROLL_MESSAGES,
   type Plan,
 } from "@/lib/roll-rules";
+import { ROLL_TAG_MESSAGES } from "@/lib/roll-tag-rules";
 import { rollShare } from "@/lib/measure";
 import { AppError, Errors } from "@/server/lib/errors";
 import { getCvSettings } from "@/server/models/cv-settings.model";
-import { runInTransaction } from "@/server/models/db";
+import { type Db, runInTransaction } from "@/server/models/db";
 import { findInventoryItem, listInventoryItems } from "@/server/models/inventory.model";
 import { listLunchBreaks } from "@/server/models/production.model";
 import { findSupplier, listActiveSuppliers } from "@/server/models/reference-data.model";
+import { findDefaultRollTag, findRollTag } from "@/server/models/roll-tag.model";
 import {
   countDefectsForRolls,
   countOpenRolls,
@@ -71,19 +75,14 @@ import {
   moveRoll,
   setRollLocation,
   type RollMoveRow,
-  nextRollCodeNumber,
-  rollCodeTaken,
+  listRollCodesWithPrefix,
   saveRollMeasure,
   updateRollDetails,
   type OpenRollRow,
   type RollDetailRow,
   type RollListRow,
 } from "@/server/models/roll.model";
-import type {
-  AddRollsValues,
-  RollListQuery,
-  UpdateRollInput,
-} from "@/server/validators/roll.validator";
+import type { RollListQuery, UpdateRollInput } from "@/server/validators/roll.validator";
 import {
   awaitsPickup,
   locationText,
@@ -484,13 +483,20 @@ const stateOf = (r: OpenRollRow) => ({
 });
 
 /**
- * Add rolls to a leather item (Inventory, the Floor Manager): one record each, with its own area
- * and an optional supplier's tag, coded LR-<supplier code>-001 on. Each is +1 in stock, so the
- * item's count follows its rolls. One transaction; nothing is saved unless every roll is fine.
+ * Add rolls to a leather item (Inventory, the Floor Manager): one record each, with its own area,
+ * a roll tag and its digits, coded LR-<tag>-<digits> (Phase 42, D-139). No tag means the item's
+ * supplier's default tag; no digits mean the next free number for that tag (A-120). Each roll is
+ * +1 in stock, so the item's count follows its rolls. One transaction; nothing is saved unless
+ * every roll is fine, and a code that already is a roll is refused with its next free number.
  */
 export async function addRolls(
   itemId: string,
-  values: Omit<AddRollsValues, "locationId"> & { locationId?: string | null },
+  values: {
+    receivedOn: string;
+    /** No `tagId`: the supplier's default tag. No `number`: the next free number. */
+    rolls: { areaSqFt: number; tagId?: string; number?: number | null }[];
+    locationId?: string | null;
+  },
   actor: Actor,
   now: Date = appNow(),
 ) {
@@ -504,83 +510,191 @@ export async function addRolls(
     throw Errors.conflict(`${item.name} is deactivated. Reactivate it to add rolls.`);
   const supplier = item.supplierId ? await findSupplier(item.supplierId) : null;
   if (!supplier)
-    throw Errors.conflict(`Choose ${item.name}’s supplier first (Edit), so its rolls get a code.`);
+    throw Errors.conflict(
+      `Choose ${item.name}’s supplier first (Edit), so its rolls are traced to it.`,
+    );
   if (!supplier.isActive)
     throw Errors.conflict(
       `${supplier.name} is no longer an active supplier. Choose another supplier for ${item.name} first.`,
     );
   const location = values.locationId ? await activeLocation(values.locationId) : null;
+  const tags = await tagsForRolls(values.rolls, supplier);
 
   // About seven statements a roll in one transaction: a delivery of 25 can pass Prisma's default
   // 5 s on a busy laptop (Phase 33 run 1, demo:reset after the e2e suite), so it gets 30 s.
-  return runInTransaction(
-    async (tx) => {
-      const added = [];
-      let onHand = Number(item.quantityOnHand);
-      for (const roll of values.rolls) {
-        let code: string;
-        do {
-          code = formatRollCode(
-            supplier.code,
-            await nextRollCodeNumber(rollCodePrefix(supplier.code), tx),
-          );
-        } while (await rollCodeTaken(code, tx));
-        const row = await insertRoll(
-          {
-            code,
-            tagCode: roll.tagCode ?? null,
-            itemId: item.id,
-            supplierId: supplier.id,
-            areaSqFt: roll.areaSqFt,
-            receivedAt: new Date(`${values.receivedOn}T00:00:00Z`),
-            status: "IN_STOCK",
-            createdById: actor.id,
-            createdAt: now,
-            locationId: location?.id ?? null,
-            locatedAt: location ? now : null,
-          },
-          tx,
-        );
-        if (location)
-          await insertRollMove(
+  try {
+    return await runInTransaction(
+      async (tx) => {
+        const codes = await planRollCodes(values.rolls, tags, tx);
+        const added = [];
+        let onHand = Number(item.quantityOnHand);
+        for (const [i, roll] of values.rolls.entries()) {
+          const { code, tag } = codes[i];
+          const row = await insertRoll(
             {
-              rollId: row.id,
-              fromLocationId: null,
-              toLocationId: location.id,
-              reason: "PLACED",
-              byId: actor.id,
-              at: now,
+              code,
+              tagId: tag.id,
+              itemId: item.id,
+              supplierId: supplier.id,
+              areaSqFt: roll.areaSqFt,
+              receivedAt: new Date(`${values.receivedOn}T00:00:00Z`),
+              status: "IN_STOCK",
+              createdById: actor.id,
+              createdAt: now,
+              locationId: location?.id ?? null,
+              locatedAt: location ? now : null,
             },
             tx,
           );
-        const moved = await postMovement(
-          tx,
-          { id: item.id, sku: item.sku, name: item.name, unit: item.unit, quantityOnHand: onHand },
-          { type: "IN", delta: 1, reason: `Roll ${code} added`, rollId: row.id },
-          actor,
-          now,
-        );
-        onHand = moved.onHandAfter;
-        added.push({ id: row.id, code, areaSqFt: roll.areaSqFt, tagCode: roll.tagCode ?? null });
-      }
-      await recordAudit(tx, {
-        actor: { type: "USER", userId: actor.id },
-        action: "roll.add",
-        entity: "InventoryItem",
-        entityId: item.id,
-        after: {
-          item: `${item.sku} · ${item.name}`,
-          supplier: supplier.name,
-          receivedOn: values.receivedOn,
-          location: location?.code ?? null,
-          rolls: added.map(({ code, areaSqFt, tagCode }) => ({ code, areaSqFt, tagCode })),
+          if (location)
+            await insertRollMove(
+              {
+                rollId: row.id,
+                fromLocationId: null,
+                toLocationId: location.id,
+                reason: "PLACED",
+                byId: actor.id,
+                at: now,
+              },
+              tx,
+            );
+          const moved = await postMovement(
+            tx,
+            {
+              id: item.id,
+              sku: item.sku,
+              name: item.name,
+              unit: item.unit,
+              quantityOnHand: onHand,
+            },
+            { type: "IN", delta: 1, reason: `Roll ${code} added`, rollId: row.id },
+            actor,
+            now,
+          );
+          onHand = moved.onHandAfter;
+          added.push({ id: row.id, code, areaSqFt: roll.areaSqFt, tag: tag.code });
+        }
+        await recordAudit(tx, {
+          actor: { type: "USER", userId: actor.id },
+          action: "roll.add",
+          entity: "InventoryItem",
+          entityId: item.id,
+          after: {
+            item: `${item.sku} · ${item.name}`,
+            supplier: supplier.name,
+            receivedOn: values.receivedOn,
+            location: location?.code ?? null,
+            rolls: added.map(({ code, areaSqFt, tag }) => ({ code, areaSqFt, tag })),
+            quantityOnHand: onHand,
+          },
+        });
+        return {
+          added: added.map(({ id, code, areaSqFt }) => ({ id, code, areaSqFt })),
           quantityOnHand: onHand,
-        },
+        };
+      },
+      { timeoutMs: 30_000 },
+    );
+  } catch (error) {
+    // Two people adding to the same tag at once: the unique index on the code decides.
+    if ((error as { code?: string } | null)?.code === "P2002")
+      throw Errors.conflict(
+        "Another roll took one of these codes at the same moment. Nothing was saved. Try again.",
+      );
+    throw error;
+  }
+}
+
+/**
+ * The highest number each of these tags has in its roll codes (0 when none), for Add rolls' live
+ * code line: the next free number is one more (Phase 42).
+ */
+export async function highestNumbersForTags(tagCodes: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const code of tagCodes) {
+    const prefix = rollCodePrefix(code);
+    out[code] = highestRollNumber(await listRollCodesWithPrefix(prefix), prefix);
+  }
+  return out;
+}
+
+type AddRollRow = { tagId?: string; number?: number | null };
+type ChosenTag = { id: string; code: string };
+
+/**
+ * The tag of each row (Phase 42): the one chosen, else the supplier's default, and only an active
+ * one. Every row's problem is named by its roll before anything is read or saved.
+ */
+async function tagsForRolls(
+  rows: readonly AddRollRow[],
+  supplier: { id: string; name: string },
+): Promise<ChosenTag[]> {
+  const issues: { path: (string | number)[]; message: string }[] = [];
+  const byId = new Map<string, Awaited<ReturnType<typeof findRollTag>>>();
+  const tagFor = async (id: string) => {
+    if (!byId.has(id)) byId.set(id, await findRollTag(id));
+    return byId.get(id) ?? null;
+  };
+  const fallback = rows.some((r) => !r.tagId) ? await findDefaultRollTag(supplier.id) : null;
+  const out: ChosenTag[] = [];
+  for (const [i, row] of rows.entries()) {
+    const n = i + 1;
+    const path = ["rolls", i, "tagId"];
+    const tag = row.tagId ? await tagFor(row.tagId) : fallback;
+    if (!tag) {
+      issues.push({
+        path,
+        message: row.tagId
+          ? `Roll ${n}: ${ROLL_TAG_MESSAGES.chooseTag}`
+          : `Roll ${n}: ${supplier.name} has no default tag. Choose a tag from the list.`,
       });
-      return { added, quantityOnHand: onHand };
-    },
-    { timeoutMs: 30_000 },
-  );
+    } else if (!tag.isActive) {
+      issues.push({
+        path,
+        message: `Roll ${n}: the tag ${tag.code} is deactivated. Choose another tag.`,
+      });
+    } else out.push({ id: tag.id, code: tag.code });
+  }
+  if (issues.length > 0) throw Errors.validation(issues);
+  return out;
+}
+
+/**
+ * The code of each row, read inside the save's transaction (Phase 42): the digits typed, or the
+ * next free number after the highest the tag has (A-120). A code that already is a roll, or repeats
+ * in the same save, is refused on its row with the next free number (A-121); nothing is written here.
+ */
+async function planRollCodes(
+  rows: readonly AddRollRow[],
+  tags: readonly ChosenTag[],
+  db: Db,
+): Promise<{ code: string; tag: ChosenTag }[]> {
+  const state = new Map<string, { used: Set<string>; highest: number }>();
+  const issues: { path: (string | number)[]; message: string }[] = [];
+  const out: { code: string; tag: ChosenTag }[] = [];
+  for (const [i, row] of rows.entries()) {
+    const tag = tags[i];
+    const prefix = rollCodePrefix(tag.code);
+    let seen = state.get(prefix);
+    if (!seen) {
+      const existing = await listRollCodesWithPrefix(prefix, db);
+      seen = { used: new Set(existing), highest: highestRollNumber(existing, prefix) };
+      state.set(prefix, seen);
+    }
+    const number = row.number ?? seen.highest + 1;
+    const code = formatRollCode(tag.code, number);
+    if (seen.used.has(code)) {
+      issues.push({
+        path: ["rolls", i, "number"],
+        message: rollCodeTakenMessage(i + 1, code, formatRollCode(tag.code, seen.highest + 1)),
+      });
+    }
+    seen.used.add(code);
+    seen.highest = Math.max(seen.highest, number);
+    out.push({ code, tag });
+  }
+  if (issues.length > 0) throw Errors.validation(issues);
+  return out;
 }
 
 /** Pick a roll at Capture (Phase 30A): a roll in stock, not scanned yet, becomes Being scanned. */

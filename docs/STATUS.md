@@ -3,11 +3,33 @@
 > Living snapshot. **Overwrite** it to stay current; history goes in `SESSION_LOG.md`.
 > Updated at the end of every Claude Code session via `/wrap-up`.
 
-**Last updated:** 2026-11-26 (Phases 40 and 41 built, waiting for Codex; before that the `batches.spec.ts` midnight fix and auto-merge merged as #67; Phase 39 merged as #65 and #66)
-**Branch:** `main` at 85c3b4b (#67, the `batches.spec.ts` midnight fix; #66, Phase 39, before it). PRs into `main` now merge themselves once `check`, `station`, `docker` and `e2e` pass (branch protection plus `.github/workflows/auto-merge.yml`, squash; #67 was the first). `docs/DEMO_SCRIPT.md` is
+**Last updated:** 2026-11-26 (Phase 42 roll tags: Codex run 2 PASS WITH ISSUES, ready for the git commands; before that Phases 40 and 41, merged as #69; before that the `batches.spec.ts` midnight fix and auto-merge merged as #67; Phase 39 merged as #65 and #66)
+**Branch:** `main` at bd8dc71 (#69, Phases 40 and 41; #67, the `batches.spec.ts` midnight fix, and #66, Phase 39, before it). Phase 42's work is uncommitted on top of it. PRs into `main` now merge themselves once `check`, `station`, `docker` and `e2e` pass (branch protection plus `.github/workflows/auto-merge.yml`, squash; #67 was the first). `docs/DEMO_SCRIPT.md` is
 Dylan's file and stays out of git.
 
-- **Phase 41 (D-138, built 2026-11-26, Codex run 1 PASS WITH ISSUES, not merged):** Find roll left the Floor Manager's menu and is a **Find roll** button on
+- **Phase 42 (D-139, built 2026-11-26, not merged; Codex run 1 FAIL, run 2 PASS WITH ISSUES, 2026-11-27):** every roll code starts with a **roll tag**,
+  `LR-<tag>-<digits>` (`LR-BLC-001`). Inventory → **Roll tags** (a button on Inventory, Floor Manager only): add, edit, deactivate,
+  remove; a tag's code is locked once a roll was made from it; one default per supplier. **Add rolls** has Tag (the supplier's
+  default first) and optional Digits per row with a live code line; blank digits take the next free number; a taken or repeated
+  code is refused on its row, nothing saved. A supplier's short code now only seeds its first tag. **One migration**
+  (`20261126090000_roll_tags`, applied by Codex's run 1 on a database with 275 rolls, all linked). `npm run check`
+  passed in a clean container copy of `main` (68 files, 1068 tests, build), **not on the PC**; e2e run by Codex (13 of 13). Deviation: no
+  partial unique index for one default per supplier (the service keeps it). Plan `docs/prompts/plans/phase-42-roll-tags-plan.md`,
+  handoff `qa/handoffs/2026-11-26-roll-tags.md`, prompt `qa/CODEX_PROMPT_PHASE_42.md`. Still to do: screenshot 14, a
+  Roll tags screenshot and the manual PDF on the laptop; the vault notes (laptop); Dylan adds "choose the tag, type the digits" to
+  his `docs/DEMO_SCRIPT.md`. **To ask** and **to tell CPoint:** see Open questions.
+  **Codex run 1** (`qa/reports/2026-11-27-phase-42-run1.md`): the migration applied on the populated database (275 of 275 rolls
+  linked, codes unchanged); T1 to T19 and A1 to A5: 22 pass, 2 fail (T8, T9), e2e 62 pass, 4 fail. Fixed (Claude, 2026-11-27): the
+  Digits and Code boxes no longer strip or cut what is typed, so a bad value gets its row error (T8, T9: `ABCDEFG` was saved as
+  `ABCDEF`); the Add rolls preview shows no code for invalid digits; `demo:reset` now removes every roll tag and gives each kept
+  supplier its default back (the run left nine QA tags, seven still marked Default); the e2e Supplier selector picks the
+  "Supplier (optional)" box. The other three e2e failures (remove roll, Inspector sign-in, first Add rolls save) passed manual
+  checks and look like dev-server timing at six workers: run 2 reruns `inventory.spec.ts` with one worker. `npm run check` passed
+  again in the container copy; run 2 prompt `qa/CODEX_PROMPT_PHASE_42_RUN2.md`.
+  **Codex run 2** (`qa/reports/2026-11-27-phase-42-run2.md`) **PASS WITH ISSUES**: T20 (reset leaves one default tag per supplier plus
+  `BLC`), T5 to T9 and all 13 Inventory e2e tests (one worker) pass. The one issue, the preview line reading "Choose a tag to see the
+  code." under bad digits, now reads "Fix the digits to see the code." (Claude, 2026-11-27; lint, typecheck and 1068 unit tests pass).
+- **Phase 41 (D-138, built 2026-11-26, Codex run 1 PASS WITH ISSUES, merged #69):** Find roll left the Floor Manager's menu and is a **Find roll** button on
   Inventory (first on a phone-sized window); on `/find` the sidebar marks Inventory and a back link returns to it. Constructors
   with camera access keep Find roll in their menu (they can't open Inventory, A-118). No migration; `/find`, its rule and the
   API are unchanged. `npm run check` passed (1021 tests). Codex run 1 (`qa/reports/2026-11-26-phase-41-run1.md`): all 13 scenarios pass and e2e
@@ -65,7 +87,7 @@ check` passed (1020 tests). Codex run 1 **PASS WITH ISSUES** (`qa/reports/2026-1
   30F-3 Batches checks (run 4); Phase 31's docs were merged (#46) and Phase 36 supersedes part of them.
 - **Agent workflow (D-089, D-092):** Claude builds and fixes every failure, failing CI checks included; Codex
   only tests and reports; every agent reads the Obsidian vault first.
-- **Overall:** every planned phase is built and merged (0 to 39); only Dylan's hand rehearsal of the demo and the questions for CPoint are left.
+- **Overall:** every planned phase is built and merged (0 to 41); Phase 42 (roll tags) passed Codex run 2 and waits for its PR; then Dylan's hand rehearsal of the demo and the questions for CPoint are left.
 
 ## Phase progress
 
@@ -144,7 +166,8 @@ check` passed (1020 tests). Codex run 1 **PASS WITH ISSUES** (`qa/reports/2026-1
 - [x] 37. Work in progress demo data (D-135; built 2026-11-23; QA passed, run 2; merged #64)
 - [x] 39. Close-out after Phases 37 and 38; CI checks no repair is at Preparation (docs only; merged #65, #66)
 - [x] 40. Work in progress at Preparation is counted in pieces; Reports → Work in progress leaves it out (D-137; built 2026-11-26; QA PASS WITH ISSUES, run 1; screenshot 21 and the PDF still to retake)
-- [x] 41. Find roll is a button on Inventory (D-138; built 2026-11-26; QA PASS WITH ISSUES, run 1; not merged yet)
+- [x] 41. Find roll is a button on Inventory (D-138; built 2026-11-26; QA PASS WITH ISSUES, run 1; merged #69)
+- [x] 42. Roll tags: a managed list starts every roll code, `LR-<tag>-<digits>` (D-139; built 2026-11-26; Codex run 2 PASS WITH ISSUES; not merged)
 - [x] 36. The documentation, the figures and the demo match the system (D-134; built 2026-11-22; QA passed
       with Codex run 2; merged #62; the hand rehearsal with phones is Dylan's, not a code check)
 
@@ -168,7 +191,7 @@ D-entries.
   batch has a code (B-261116-2) and waits in the Inspection queue until the QI inspects it (pairs
   finished and failed) or the FM voids it; Urgent first; on-screen notices; Recent days with the
   reason for each short day.
-- **Inventory (Phases 29, 30A):** leather rolls added with their area; the Update stock sheet
+- **Inventory (Phases 29, 30A, 42):** leather rolls added with their area, a tag and digits (`LR-BLC-001`); Roll tags page; the Update stock sheet
   (Added, Used, Correction); reminders on Wednesday and Friday; low stock.
 - **Attendance (Phase 22):** one day at a time, today and 7 days back; no per-person history.
 - **Reports (D-116, D-117, D-118):** Operations, Quality, Rolls (claim sheet, supplier quality,
@@ -177,23 +200,25 @@ D-entries.
   suppliers with codes, the lunch break; API tokens for the simulator; the audit log.
 - **Look (Phase 30F, D-122):** tokens, shared page header, KPI tiles, states, phone layouts for
   Capture and Batches.
-- **Database:** the latest migration is `final_defects_and_repairs` (D-130, Phase 34); `prisma/migrations/` lists them all.
+- **Database:** the latest migration is `roll_tags` (D-139, Phase 42; applied on the dev database in Codex run 1, see Phase 42 above); `prisma/migrations/` lists them all.
   UUIDv7 ids (D-018).
 
 ## Next step (exact)
 
-0. Dylan: rehearse the demo once by hand (a weekday, phones, the marker card, a stopwatch, the print preview) from
+0. Phase 42: Dylan commits and pushes it (git commands from Claude). Then Claude (laptop) retakes screenshot 14
+   and takes a Roll tags one, rebuilds `USER_MANUAL.pdf` and writes the vault notes; Dylan updates his `docs/DEMO_SCRIPT.md` Add rolls step.
+1. Dylan: rehearse the demo once by hand (a weekday, phones, the marker card, a stopwatch, the print preview) from
    `docs/DEMO_SCRIPT.md` and tell Claude anything that needs fixing.
    - Also: take the "To ask or tell CPoint" block under Open questions to CPoint.
    - Also: delete `qa/phase-39-ci-no-preparation-repairs.patch` (already in `ci.yml`, merged #66).
    - Phases 40 and 41: Codex passed (run 1 each); screenshot 21, the manual PDF and the vault notes done (2026-11-26); Dylan pushes them to PR #69, which merges itself once CI passes.
    - Manual screenshots 15, 18, 23, 25 and 26 retaken without Find roll in the Floor Manager's sidebar (2026-11-26).
-1. Optional, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
+2. Optional, on a weekday with today planned: `qa/CODEX_PROMPT_PHASE_30F_3_RUN3.md` again as run 4
    (Batches, the plan line, the full suite; the Plan days cells from #44 too). Phase 31 merged (#46).
-2. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.
-3. Dylan, at the station: capture a few real knife cuts on scrap leather (2.5, 3 and 4 in) with
+3. Dylan: time a roll by hand at the factory and compare with Reports → Rolls' Scanning time.
+4. Dylan, at the station: capture a few real knife cuts on scrap leather (2.5, 3 and 4 in) with
    the card to check the 3-inch line on real cuts.
-4. Optional: fresh screenshots for README (the ones in `docs/screenshots/` predate Phase 25 and
+5. Optional: fresh screenshots for README (the ones in `docs/screenshots/` predate Phase 25 and
    30F, so README no longer embeds them); delete `%TEMP%\cpoint-qa-uploads-phase26` and the two
    Phase 25 folders. Done 2026-11-08: the 15 older backups (only
    `before-reset-2026-11-04.dump` is kept), `certs/`, `mkcert -uninstall`, the Phase 26 temp
@@ -211,10 +236,27 @@ D-entries.
   they recognise (A-57); whether the Quality Inspector may also correct older batches (A-70); their rule for repairs that keep
   failing (A-88); whether a capture constructor really stays at Preparation all day (A-96).
 - **Ask (A-116):** what do they count at Preparation, by hand, after the roll is cut: leather pieces, rolls, cut sets, something else?
+- **Ask (Phase 42, A-119):** their real roll tag codes per supplier (`BLC` is Dylan's example), and whether the digits after the tag are
+  the number on their own stamp or a running number.
+- **Tell:** every roll code now starts with a tag the Floor Manager keeps under Inventory → Roll tags (D-139).
 - **Tell:** repairs never go back to Preparation, and the board's Preparation card shows the camera's leather defects (D-136).
   Work in progress counts pieces at Preparation and pairs from Construction on, and the report compares only the pair stages (D-137).
   The Floor Manager opens Find roll from a button on Inventory; constructors keep it in their menu (D-138, A-118).
 
+- Decided (Dylan, 2026-11-26, D-139): the roll tag replaces the supplier's short code in the roll code (`LR-BLC-001`); the tag is a
+  dropdown in Add rolls with the supplier's own chosen first, then the digits; the Floor Manager manages the tags on Inventory;
+  blank digits take the next free number; old tag numbers stay on old rolls. Tell CPoint.
+- ASSUMPTION (A-119, D-139): the tag list is the only source of a roll code's middle part; a supplier's short code only seeds its
+  first tag as its default.
+- ASSUMPTION (A-120, D-139): digits are optional; blank = the next free number for that tag (one more than the highest); padded to 3,
+  at most 6 digits.
+- ASSUMPTION (A-121, D-139): a code is globally unique; a typed number that exists is refused, never overwritten.
+- ASSUMPTION (A-122, D-139): a tag's code can't change once a roll was made from it (labels); remove only a never-used tag, else
+  deactivate it.
+- ASSUMPTION (A-123, D-139): a tag belongs to one supplier or to none; the supplier's default is preselected, every active tag can be
+  picked; a deactivated tag can't be a default.
+- ASSUMPTION (A-124, D-139): old rolls keep their codes and their free-text Tag number; no relabelling; the Phase 35B correction of
+  Tag number stays.
 - Decided (Dylan, 2026-11-26, D-138): Find roll leaves the Floor Manager's menu and is a button on Inventory; constructors with
   camera access keep it in their menu (option 1 of the Phase 41 plan). Tell CPoint.
 - ASSUMPTION (A-118, D-138): constructors keep Find roll in their menu rather than gaining Inventory access (Inventory stays the

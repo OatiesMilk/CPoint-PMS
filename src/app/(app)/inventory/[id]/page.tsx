@@ -42,7 +42,8 @@ import {
 import { requirePermission } from "@/server/policies/guard";
 import { can } from "@/server/policies/permissions";
 import { getItemDetail } from "@/server/services/inventory.service";
-import { listItemRolls } from "@/server/services/roll.service";
+import { highestNumbersForTags, listItemRolls } from "@/server/services/roll.service";
+import { listRollTagOptions } from "@/server/services/roll-tag.service";
 import { isInventoryId } from "@/server/validators/inventory.validator";
 import { itemRollsQuerySchema } from "@/server/validators/roll.validator";
 import { removeRollAction } from "../../reports/rolls/actions";
@@ -90,6 +91,9 @@ export default async function InventoryItemPage({
           name,
         }))
       : [];
+  // The roll tags Add rolls offers (Phase 42), and each one's highest roll number for its live code line.
+  const tags = isLeather && canManage ? await listRollTagOptions() : [];
+  const highest = await highestNumbersForTags(tags.map((t) => t.code));
   const movable = (rolls?.rows ?? [])
     .filter((r) => r.canMove)
     .map((r) => ({ id: r.id, code: r.code, where: r.where, locationId: r.locationId }));
@@ -164,7 +168,11 @@ export default async function InventoryItemPage({
                   )}
                   <AddRollsDialog
                     item={{ id: item.id, name: item.name }}
-                    supplierCode={item.supplier?.code ?? null}
+                    supplier={
+                      item.supplier ? { id: item.supplier.id, name: item.supplier.name } : null
+                    }
+                    tags={tags}
+                    highest={highest}
                     locations={locations}
                   />
                 </div>

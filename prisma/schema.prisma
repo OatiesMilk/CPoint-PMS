@@ -246,13 +246,15 @@ model Supplier {
   contactPerson String?
   phone         String?
   notes         String?
-  /// Short code in roll codes, LR-<code>-001 (Phase 30A, D-104): 2 to 6 capital letters or digits.
+  /// Short code, 2 to 6 capital letters or digits. Since Phase 42 (D-139) it only seeds the supplier's
+  /// first roll tag; roll codes come from the roll tags (LR-<tag>-001).
   code          String   @unique
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
   rolls          Roll[]
   inventoryItems InventoryItem[]
+  rollTags       RollTag[]
 
   @@map("suppliers")
 }
@@ -317,7 +319,8 @@ model RollSequence {
   @@map("batch_sequences")
 }
 
-/// The next number per roll-code prefix, e.g. "LR-MLT" (Phase 30A, D-104).
+/// The next number per roll-code prefix, e.g. "LR-MLT" (Phase 30A, D-104). Unused since Phase 42
+/// (the next free number is read from the rolls); dropped in a later clean-up.
 model RollCodeSequence {
   prefix    String @id
   lastValue Int    @default(0)
@@ -325,18 +328,44 @@ model RollCodeSequence {
   @@map("roll_code_sequences")
 }
 
+/// A roll tag (Phase 42, D-139): the middle of a roll code, LR-<code>-001. The Floor Manager keeps the
+/// list under Inventory → Roll tags; Add rolls picks one per roll. CPoint hasn't confirmed its real
+/// tag codes (A-119).
+model RollTag {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  /// 2 to 6 capital letters or digits, starting with a letter (like a supplier's short code).
+  code       String   @unique
+  /// The supplier this tag belongs to; null = a tag for any supplier.
+  supplierId String?  @db.Uuid
+  /// The supplier's default in the Add rolls dropdown; at most one per supplier (kept by the service).
+  isDefault  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  /// The rolls whose code was made from it (rolls from before Phase 42 have none).
+  rolls    Roll[]
+
+  @@index([supplierId])
+  @@map("roll_tags")
+}
+
 /// One leather roll from a supplier (the table keeps its old name, D-095). Since Phase 30A
 /// (D-104) the Floor Manager adds it to Inventory with its area; a Shoe Constructor picks it at
 /// Capture, captures it shot by shot and finishes it; the QI ticks it Fully used at Finish batch.
 model Roll {
   id                String          @id @default(uuid(7)) @db.Uuid
-  /// LR-MLT-001. Older R-YYYY-NNNN and B-YYYY-NNNN rolls were renamed to LR-… in Phase 33 (D-129),
+  /// LR-BLC-001: LR-, the roll tag's code, the digits (Phase 42, D-139). Older R-YYYY-NNNN and B-YYYY-NNNN rolls were renamed to LR-… in Phase 33 (D-129),
   /// so B- means a batch only.
   code              String          @unique
   /// The roll's code before Phase 33's rename (an old label or claim sheet); still found by Find roll.
   formerCode        String?         @unique
-  /// The number on the supplier's tag, optional.
+  /// The number on the supplier's own paper tag, optional (typed in Add rolls until Phase 42; now only
+  /// corrected in Edit roll details).
   tagCode           String?         @map("rollCode")
+  /// The roll tag its code was made from (Phase 42); null for rolls from before.
+  tagId             String?         @db.Uuid
   supplierId        String?         @db.Uuid // the leather item's supplier; older rolls may have none
   /// The leather item it belongs to (Phase 30A); null for rolls from before.
   itemId            String?         @db.Uuid
@@ -383,6 +412,7 @@ model Roll {
   updatedAt         DateTime        @updatedAt
 
   supplier        Supplier?           @relation(fields: [supplierId], references: [id])
+  tag             RollTag?            @relation(fields: [tagId], references: [id])
   item            InventoryItem?      @relation(fields: [itemId], references: [id])
   createdBy       User                @relation("RollCreatedBy", fields: [createdById], references: [id])
   startedBy       User?               @relation("RollStartedBy", fields: [startedById], references: [id])
@@ -402,6 +432,7 @@ model Roll {
   @@index([status, startedById])
   @@index([itemId, status])
   @@index([supplierId])
+  @@index([tagId])
   @@index([createdById])
   @@index([startedById])
   @@index([usedById])

@@ -88,7 +88,7 @@ a person (D-008).
 
 | Method & path                       | Who                                   | Body / query                                                                                         | Returns                                                                                                                                                                   |
 | ----------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/inventory/{id}/rolls` | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagCode? }] }`                                                    | `201 { data: { added: [{ id, code, areaSqFt, tagCode }], quantityOnHand } }`, codes `LR-<supplier>-001`                                                                   |
+| `POST /api/v1/inventory/{id}/rolls` | `inventory:manage` (Floor Manager)    | `{ receivedOn, rolls: [{ areaSqFt, tagId?, number? }] }`                                             | `201 { data: { added: [{ id, code, areaSqFt }], quantityOnHand } }`, codes `LR-<supplier>-001`                                                                            |
 | `GET /api/v1/rolls`                 | `roll:read` (Floor Manager)           | `status` (`NOT_SCANNED`, `PASSED`, `RETURNED`, D-116), `supplierId`, `days` (7, 30, 90), `q`, `page` | `{ data: Roll[], meta: { total, page, pageCount } }`, 15 a page, newest first, with `passed` and `rejected`                                                               |
 | `GET /api/v1/rolls/{id}`            | `roll:read`                           | —                                                                                                    | the roll with its item, area, shots and their detections                                                                                                                  |
 | `PATCH /api/v1/rolls/{id}`          | `roll:manage` (Floor Manager)         | `{ expectedUpdatedAt, reason, tagCode?, receivedOn?, areaSqFt?, returnNote? }`                       | `{ data: { id, code, changed[] } }` (Phase 35B, A-104)                                                                                                                    |
@@ -115,11 +115,18 @@ asking picked it, to start the dropdown on their own roll; `takenFromId` is the 
 taken from when picked (to prefill Put back), and an open roll's `location` is null. `/current`
 leaves `mine` out.
 
-- **Add rolls:** the item must be an active Leather roll item with an active supplier (its code
-  makes the roll codes), else `409` named. `receivedOn` is a date, not after today (Manila).
-  `areaSqFt` is 0.1 to 200 with at most two decimals; each message names the roll ("Roll 2: enter
-  its area in square feet, like 24.5."), at `rolls.<i>.areaSqFt`. `tagCode` is the number on the
-  supplier's tag, up to 40. Up to 50 rolls a save. Each roll is an `IN` +1 with its `rollId`.
+- **Add rolls:** the item must be an active Leather roll item with an active supplier, else `409`
+  named. `receivedOn` is a date, not after today (Manila). `areaSqFt` is 0.1 to 200 with at most two
+  decimals; each message names the roll ("Roll 2: enter its area in square feet, like 24.5."), at
+  `rolls.<i>.areaSqFt`. Since Phase 42 (D-139) the code is `LR-<tag>-<digits>`: `tagId` is a roll tag
+  (`GET /roll-tags`); left out, the item's supplier's default tag (`422` at `rolls.<i>.tagId`, "Roll 1:
+  … has no default tag. Choose a tag from the list.", when it has none; a deactivated or unknown tag
+  is refused the same way). `number` is the digits, 1 to 6 numbers, 1 or more (a number or a string);
+  left out, the next free number for that tag (one more than the highest number under `LR-<tag>-`).
+  A code that is already a roll, or repeats in the same save, is a `422` at `rolls.<i>.number` ("Roll
+  2: LR-BLC-001 is already a roll. Next free: LR-BLC-004.") and nothing is saved. `tagCode` (the
+  number on the supplier's own paper tag) is no longer taken here; it is still returned on a roll and
+  corrected with `PATCH /rolls/{id}`. Up to 50 rolls a save. Each roll is an `IN` +1 with its `rollId`.
 - **Start** (Phase 30E, D-113): Capture lists the rolls waiting by leather, then the chosen
   leather's rolls by code and area; `POST /rolls/{id}/start` picks one (`409` named when it isn't
   in stock any more).
@@ -321,6 +328,36 @@ on …", "Picked up by the supplier on …").
 - Audited: `location.add`, `location.edit`, `location.deactivate`, `location.reactivate`,
   `roll.move` (one row per move, on the target location), `roll.set_aside`, `roll.picked_up`.
 - The Quality Inspector and the System Admin get `403` on every route here.
+
+## Roll tags (session, Phase 42, D-139)
+
+The list whose codes start every roll code, `LR-<tag>-<digits>`. CPoint hasn't confirmed its real tag
+codes (A-119); `BLC` is a placeholder. A supplier's first tag is made from its short code when the
+supplier is added (Settings, bootstrap, the demo seed) and by the Phase 42 migration for existing
+suppliers, as its default. A tag may belong to one supplier or to none (A-123).
+
+| Method & path                   | Permission                       | Body / query                                       | Response                       |
+| ------------------------------- | -------------------------------- | -------------------------------------------------- | ------------------------------ |
+| `GET /api/v1/roll-tags`         | `inventory:read` (Floor Manager) | `active=false` to include deactivated ones         | `{ data: RollTag[] }`, by code |
+| `POST /api/v1/roll-tags`        | `inventory:manage`               | `{ code, supplierId?, isDefault? }`                | `201 { data: RollTag }`        |
+| `GET /api/v1/roll-tags/{id}`    | `inventory:read`                 | —                                                  | `{ data: RollTag }`            |
+| `PATCH /api/v1/roll-tags/{id}`  | `inventory:manage`               | any of `{ code, supplierId, isDefault, isActive }` | `{ data: RollTag }`            |
+| `DELETE /api/v1/roll-tags/{id}` | `inventory:manage`               | —                                                  | `{ data: { removed: true } }`  |
+
+**`RollTag`**: `{ id, code, supplierId, supplierName, isDefault, isActive, rolls }`, `rolls` being the
+rolls whose code was made from it.
+
+- `code` is 2 to 6 capital letters or digits starting with a letter (typed in lower case it is
+  upper-cased); one already used by another tag is a `422` at `code` ("BLC is already a roll tag.
+  Choose another code."). `supplierId` empty or `null` means any supplier. `isDefault` needs a
+  supplier (`422` at `isDefault`); a supplier has one default, so setting it clears the supplier's
+  other one. Deactivating (`isActive: false`) also clears `isDefault`, and a deactivated tag can't be
+  made a default.
+- `code` changes only while no roll was made from the tag (it is on printed labels, A-122); after that
+  `409` "N rolls were made from BLC, so its code is on printed labels and stays. Add a new tag
+  instead…". `DELETE` is only for a tag no roll was made from, else `409` "…Deactivate it instead…".
+- Every change is audited (`roll_tag.create`, `.update`, `.deactivate`, `.reactivate`, `.delete`) with
+  the code and the supplier's name, no people.
 
 ## Inventory (session)
 

@@ -155,6 +155,8 @@ const ensureLocation = vi.fn(async (v: { code: string }) => ({
   code: v.code,
 }));
 vi.mock("@/server/services/location.service", () => ({ ensureLocation }));
+const ensureRollTag = vi.fn(async (v: { code: string }) => ({ id: `tag-${v.code}`, code: v.code }));
+vi.mock("@/server/services/roll-tag.service", () => ({ ensureRollTag }));
 const inventory = { createItem: vi.fn(async () => ({ id: "item" })) };
 vi.mock("@/server/services/inventory.service", () => inventory);
 const stockUpdates = { saveStockUpdate: vi.fn(async () => ({ id: "u", items: 1 })) };
@@ -718,6 +720,22 @@ describe("seedDemoWeek", () => {
       expect(actor).toMatchObject({ role: "FLOOR_MANAGER" });
       expect((when as Date).getTime()).toBeLessThanOrEqual(now.getTime());
     }
+  });
+
+  it("adds one extra roll tag for Bulacan Supplier A, and the rolls take each supplier's default tag (Phase 42)", async () => {
+    mocks.listActiveSuppliers.mockResolvedValueOnce([
+      { id: "sp-a", name: "Bulacan Supplier A" },
+      { id: "sp-b", name: "Marikina Supplier A" },
+    ]);
+    await seedDemoWeek({ now, seed: 1 });
+    expect(ensureRollTag).toHaveBeenCalledTimes(1);
+    expect(ensureRollTag).toHaveBeenCalledWith(
+      { code: "BLC", supplierId: "sp-a", isDefault: false },
+      expect.objectContaining({ id: "manager@cpoint.local" }),
+    );
+    // No tag and no digits on a row: the default tag and the next free number; no tag number.
+    for (const [, values] of svc.addRolls.mock.calls as unknown as [string, { rolls: object[] }][])
+      for (const r of values.rolls) expect(Object.keys(r)).toEqual(["areaSqFt"]);
   });
 
   it("adds each leather roll in Inventory with its area, then picks, scans and finishes it (Phase 30A)", async () => {

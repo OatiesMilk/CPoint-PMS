@@ -10,34 +10,58 @@ import {
 
 const SUPPLIER = "0199a000-0000-7000-8000-000000000001";
 
-describe("addRollsSchema (Phase 30A, D-103)", () => {
-  it("takes the day they arrived and one area per roll, with an optional tag", () => {
+describe("addRollsSchema (Phase 30A, D-103; roll tags, Phase 42, D-139)", () => {
+  const TAG = "0199a000-0000-7000-8000-0000000000aa";
+
+  it("takes the day they arrived and one area per roll, with a tag and digits each (both optional)", () => {
     expect(
       addRollsSchema.parse({
         receivedOn: " 2026-10-26 ",
         rolls: [
-          { areaSqFt: "24.5", tagCode: " T-1 " },
-          { areaSqFt: 30, tagCode: "  " },
+          { areaSqFt: "24.5", tagId: ` ${TAG} `, number: " 012 " },
+          { areaSqFt: 30, tagId: "  ", number: "" },
+          { areaSqFt: 31, number: 7 },
         ],
       }),
     ).toEqual({
       receivedOn: "2026-10-26",
       rolls: [
-        { areaSqFt: 24.5, tagCode: "T-1" },
-        { areaSqFt: 30, tagCode: undefined },
+        { areaSqFt: 24.5, tagId: TAG, number: 12 },
+        { areaSqFt: 30, tagId: undefined, number: null },
+        { areaSqFt: 31, tagId: undefined, number: 7 },
       ],
       locationId: null,
     });
   });
 
+  it("no longer takes the supplier's free-text tag number: it is ignored", () => {
+    expect(
+      addRollsSchema.parse({
+        receivedOn: "2026-10-26",
+        rolls: [{ areaSqFt: 24, tagCode: "T-1" }],
+      }).rolls,
+    ).toEqual([{ areaSqFt: 24, tagId: undefined, number: null }]);
+  });
+
   it("puts each message under its roll's field", () => {
     const r = addRollsSchema.safeParse({
       receivedOn: "2026-10-26",
-      rolls: [{ areaSqFt: "24" }, { areaSqFt: "" }, { areaSqFt: "5", tagCode: "x".repeat(41) }],
+      rolls: [
+        { areaSqFt: "24" },
+        { areaSqFt: "" },
+        { areaSqFt: "5", tagId: "not-an-id", number: "12a" },
+        { areaSqFt: "5", number: "0" },
+        { areaSqFt: "5", number: "1234567" },
+      ],
     });
+    const digits = (n: number) =>
+      `Roll ${n}: type the digits after the tag, like 001 (up to 6 digits). Leave them empty for the next free number.`;
     expect(r.error?.issues.map((i) => [i.path.join("."), i.message])).toEqual([
       ["rolls.1.areaSqFt", "Roll 2: enter its area in square feet, like 24.5."],
-      ["rolls.2.tagCode", "Roll 3: The supplier’s tag can be up to 40 characters."],
+      ["rolls.2.tagId", "Roll 3: Choose a tag from the list."],
+      ["rolls.2.number", digits(3)],
+      ["rolls.3.number", digits(4)],
+      ["rolls.4.number", digits(5)],
     ]);
   });
 
