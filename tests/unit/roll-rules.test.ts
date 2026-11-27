@@ -15,16 +15,74 @@ import {
   planRemove,
   planStart,
   rollClosedMessage,
+  highestRollNumber,
+  parseRollNumber,
+  previewRollCodes,
   rollCodePrefix,
+  rollCodeTakenMessage,
   SUPPLIER_CODE_PATTERN,
   supplierCodeFromName,
 } from "@/lib/roll-rules";
 
-describe("roll codes (Phase 30A)", () => {
-  it("is LR-, the supplier's code and a three-digit number that can grow", () => {
+describe("roll codes (Phase 30A; the roll tag starts them since Phase 42)", () => {
+  it("is LR-, the roll tag's code and a three-digit number that can grow", () => {
     expect(rollCodePrefix("MLT")).toBe("LR-MLT");
     expect(formatRollCode("MLT", 7)).toBe("LR-MLT-007");
+    expect(formatRollCode("BLC", 1)).toBe("LR-BLC-001");
     expect(formatRollCode("JLS", 1000)).toBe("LR-JLS-1000");
+  });
+
+  it("reads the digits typed after a tag: 1 to 6 digits, 1 or more; empty means next free", () => {
+    expect(parseRollNumber("001", 1)).toEqual({ ok: true, value: 1 });
+    expect(parseRollNumber(" 12 ", 1)).toEqual({ ok: true, value: 12 });
+    expect(parseRollNumber(7, 1)).toEqual({ ok: true, value: 7 });
+    expect(parseRollNumber("999999", 1)).toEqual({ ok: true, value: 999999 });
+    for (const empty of ["", "  ", undefined, null])
+      expect(parseRollNumber(empty, 1)).toEqual({ ok: true, value: null });
+    for (const bad of ["0", "000", "1234567", "12a", "-1", "1.5", "abc"]) {
+      expect(parseRollNumber(bad, 3)).toEqual({
+        ok: false,
+        reason:
+          "Roll 3: type the digits after the tag, like 001 (up to 6 digits). Leave them empty for the next free number.",
+      });
+    }
+  });
+
+  it("finds the highest number under a prefix and ignores codes that aren't LR-<tag>-digits", () => {
+    const codes = [
+      "LR-BLC-001",
+      "LR-BLC-1234",
+      "LR-BLC-X-009",
+      "LR-BLCD-050",
+      "B-261116-2",
+      "LR-BLC-",
+    ];
+    expect(highestRollNumber(codes, "LR-BLC")).toBe(1234);
+    expect(highestRollNumber(codes, "LR-BLCD")).toBe(50);
+    expect(highestRollNumber(codes, "LR-NEW")).toBe(0);
+    expect(highestRollNumber([], "LR-BLC")).toBe(0);
+  });
+
+  it("previews each row's code the way the server will give it", () => {
+    expect(
+      previewRollCodes(
+        [
+          { tagCode: "BLC", number: null },
+          { tagCode: "BLC", number: null },
+          { tagCode: "BLC", number: 20 },
+          { tagCode: "BLC", number: null },
+          { tagCode: "MLT", number: null },
+          { tagCode: null, number: 5 },
+        ],
+        { BLC: 3, MLT: 0 },
+      ),
+    ).toEqual(["LR-BLC-004", "LR-BLC-005", "LR-BLC-020", "LR-BLC-021", "LR-MLT-001", null]);
+  });
+
+  it("says which number is next free when a typed one is taken", () => {
+    expect(rollCodeTakenMessage(2, "LR-BLC-001", "LR-BLC-004")).toBe(
+      "Roll 2: LR-BLC-001 is already a roll. Next free: LR-BLC-004.",
+    );
   });
 
   it("makes a supplier code from the name's initials", () => {

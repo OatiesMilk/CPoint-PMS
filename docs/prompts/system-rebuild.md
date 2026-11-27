@@ -76,7 +76,11 @@ findings that still shape the system:
   recent ones At stage and Back for inspection, Finishing's count left older). At **Preparation** a
   shoe repair never exists: its defects are the camera's, on raw leather (A-62, A-66).
 - Phase 40 (D-137): work in progress at Preparation is counted in pieces, not pairs (A-116); the report leaves
-Preparation out.
+  Preparation out.
+- Phase 42 (D-139): **roll tags**. Every roll code starts with a tag from a list the Floor Manager keeps under
+Inventory → Roll tags (`LR-<tag>-<digits>`); Add rolls picks the tag per roll (the supplier's default first) and
+takes optional digits (blank = next free number); a supplier's short code only seeds its first tag (A-119 to
+A-124). The free-text "Supplier's tag" left Add rolls; an old roll keeps its Tag number.
 </context>
 
 <read_first>
@@ -204,7 +208,8 @@ in pieces of leather at Preparation and pairs after it (Phase 40, D-137, A-116 a
 
 **Roll = one leather roll from a supplier** (`Roll` in the code, table `batches`, D-095). The Floor
 Manager adds rolls to a Leather roll item in Inventory with the day they arrived, each roll's
-**area** in sq ft (0.1 to 200) and the supplier's tag (D-103). Codes `LR-<supplier code>-001`; the
+**area** in sq ft (0.1 to 200) and a **roll tag** with optional digits (D-103, D-139). Codes
+`LR-<tag>-<digits>` (`LR-BLC-001`); the
 old `B-`/`R-` roll codes were renamed in Phase 33 and are kept as `formerCode` so Find roll and old
 labels still find them (`B-` now means a batch only, D-129). Statuses: **Not scanned** (`IN_STOCK`,
 +1 on its item) → **Being scanned** (`OPEN`, picked at Capture) → **Scanned** (`FINISHED`, Finish
@@ -227,6 +232,17 @@ label and shows where the roll is in large text and where it has been; the Floor
 or mark it picked up from there. The Floor Manager reaches it from the **Find roll** button on
 Inventory (Phase 41, D-138; no menu item, `/find` marks Inventory in the sidebar and has a back link);
 a constructor with camera access keeps it in their menu, since they can't open Inventory.
+
+**Roll tags (Phase 42, D-139):** a **roll tag** is data (a code of 2 to 6 capital letters or digits starting
+with a letter, an optional supplier, a default flag per supplier, an active flag); the Floor Manager manages
+them under Inventory → Roll tags (`inventory:manage`). A roll's code is `LR-<tag>-<digits>`: **Add rolls**
+takes a tag per roll (the item's supplier's default first, then its other tags and the rest) and optional
+digits (1 to 6 numbers; blank takes one more than the highest number under that prefix, A-120); a code that
+is already a roll, or repeats in the save, is refused on its row with the next free number and nothing is
+saved (A-121). A tag's code is fixed once a roll was made from it (A-122); only a never-used tag can be
+removed, otherwise it is deactivated and leaves Add rolls (its rolls keep their codes). A tag belongs to one
+supplier or to none (A-123). A supplier's short code only seeds its first tag as its default (A-119). Rolls
+from before keep their codes and their free-text Tag number (A-124). Every change is audited without names.
 
 **Computer vision (Preparation only, before cutting):**
 
@@ -361,6 +377,7 @@ matrix is `src/server/policies/permissions.ts`; the sidebars are `navigation.ts`
 | Capture, My stage and Floor view: pick leather and roll, capture, finish, put back, set a returned roll aside | —                          | —                 | —            | if allowed (D-075)                   |
 | Find roll (`location:read`)                                                                                   | ✅ (button on Inventory)   | —                 | —            | if allowed (D-128), in their menu    |
 | Inventory: Storage locations, roll labels, Move rolls, Picked up by supplier (`location:manage`, `roll:move`) | ✅                         | —                 | —            | —                                    |
+| Inventory: Roll tags (`inventory:manage`, Phase 42)                                                           | ✅                         | —                 | —            | —                                    |
 | Reports → Rolls, a roll's page and its shots, the claim sheet, Remove, Edit details                           | ✅ (`roll:*`, `scan:read`) | —                 | —            | —                                    |
 | Batches: Queue and Today (read, `production:read`)                                                            | ✅                         | ✅ (home)         | —            | —                                    |
 | Batches: inspect a batch, inspect a repair, correct on the inspection day                                     | no QI present (D-088)      | ✅                | —            | —                                    |
@@ -436,9 +453,9 @@ and the decision engine. Full shapes in `docs/API.md`.
 Prisma models (`prisma/schema.prisma` has every field and index; ids are UUIDv7, D-018):
 `User(role, isActive, canCapture)`, `SessionRevocation`, `ApiToken(name, tokenHash, scopes, lastUsedAt, revokedAt)`,
 `AuditLog(actorId?, actorType USER|DEVICE|SYSTEM, action, entity, entityId, before?, after?)`,
-`Supplier(name, code)`, `DefectType(key, label, isActive, sortOrder, outcome, notAcceptedFromIn?, flatSharePct?)`,
+`Supplier(name, code)`, `RollTag(code, supplierId?, isDefault, isActive)` (Phase 42), `DefectType(key, label, isActive, sortOrder, outcome, notAcceptedFromIn?, flatSharePct?)`,
 `CvSettings(foundAtOrAbove, earlyModelNotice, returnSharePct)` (singleton),
-`Roll(code, tagCode, itemId, supplierId, areaSqFt, receivedAt, status, startedAt, finishedAt, defectSharePct, returnLimitPct, markedForReturn, …)` (table `batches`),
+`Roll(code, tagCode, tagId?, itemId, supplierId, areaSqFt, receivedAt, status, startedAt, finishedAt, defectSharePct, returnLimitPct, markedForReturn, …)` (table `batches`),
 `Scan(rollId, sequence, imagePath, source, modelVersion, captureId, aiVerdict, finalVerdict, widthIn, defectAreaSqIn, flatSharePct, thresholdsSnapshot)`,
 `Detection(scanId, defectTypeId?, rawClassKey, confidence, x, y, width, height, lengthIn?, areaSqIn?)`,
 `InventoryItem(sku, name, category, unit, quantityOnHand, reorderLevel, supplierId?)`,

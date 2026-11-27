@@ -2879,3 +2879,49 @@ picture on the first screen (30F-3) and it needs more test changes.
 **Where:** `src/server/policies/navigation.ts`, `src/components/features/app-shell/sidebar.tsx`,
 `src/app/(app)/inventory/page.tsx`, `src/app/(app)/find/page.tsx`, `tests/unit/permissions.test.ts`,
 `tests/e2e/auth.spec.ts`, `tests/e2e/inventory.spec.ts`.
+
+### D-139 · 2026-11-26 · Accepted — Roll tags: a managed list starts every roll code (`LR-<tag>-<digits>`)
+
+**Context:** Dylan (2026-11-26) asked that in Inventory → a leather item → Add rolls the **Supplier's tag** box become a
+dropdown of tag codes, the supplier's own tag chosen by default (Bulacan supplier A → `BLC`), followed by the digits the user
+types, so the code reads `LR-BLC-001`; and that the Floor Manager can create, edit or remove tags on the Inventory page. Until
+then the code's middle part was the supplier's short code (`LR-BSA-001`, made from its initials, editable only by the Admin)
+and the "Supplier's tag" was a free-text note (up to 40 characters) that never reached the code. Plan
+`docs/prompts/plans/phase-42-roll-tags-plan.md`; Dylan answered Q1 yes (option 1: the tag replaces the supplier's code in the
+roll code) and left Q2 and Q3 at the recommended answers.
+**Decision:** (1) A **roll tag** is data (`RollTag`: `code` unique, 2 to 6 capital letters or digits starting with a letter,
+optional `supplierId`, `isDefault`, `isActive`); a roll's code is `LR-<tag code>-<digits>` and the roll keeps the tag it came
+from (`Roll.tagId`, null for rolls from before). (2) **Add rolls**: each roll row has **Tag** (required in the form; the item's
+supplier's default is chosen first, its tags listed before "Other tags"; a new row starts on the tag above) and **Digits**
+(optional, 1 to 6 numbers, 1 or more, shown padded to three). Digits left empty take one more than the highest number under
+`LR-<tag>-` (read inside the save's transaction); a typed code that already is a roll, or repeats in the same save, is refused on
+its row with the next free one and nothing is saved. The API's `rolls[].tagId` defaults to the item's supplier's default tag and
+`rolls[].number` to the next free number, so API callers, e2e helpers and the demo seed that send neither keep working;
+the old `tagCode` field is no longer taken there (it is ignored). (3) **Inventory → Roll tags** (`/inventory/tags`, a **Roll tags**
+button on Inventory, `inventory:manage`, the Floor Manager only): add, edit, deactivate/reactivate and remove, every change in
+`runInTransaction` with `recordAudit` (`roll_tag.create | update | deactivate | reactivate | delete`, the code and supplier name,
+no people); routes `GET/POST /api/v1/roll-tags`, `GET/PATCH/DELETE /api/v1/roll-tags/{id}`. (4) **Supplier short codes** stay
+(Admin's field, labels, bootstrap) but now only **seed the supplier's first tag** as its default: the migration creates one
+default tag per existing supplier and links the rolls whose code starts `LR-<that code>-`, so today's codes and defaults don't
+change; Settings → Suppliers, bootstrap and the demo seed create it for new suppliers (skipped when a tag with that code exists).
+Editing a supplier's code later doesn't rename its tag. (5) The demo adds one extra tag, `BLC` for Bulacan Supplier A, so the
+dropdown shows a choice; demo rolls stop sending a Tag number. Amends D-103/D-104 (the code's middle part) only.
+**Deviations from the plan:** the migration has **no partial unique index** for "one default per supplier" (Prisma can't express
+it and a raw index would show as drift on the next `migrate dev`); the service keeps the rule in one transaction (setting a
+default clears the supplier's other one). The next free number is worked out from the rolls' codes (`roll_code_sequences` stays,
+unused, to be dropped in a later clean-up).
+**Consequences:** **A-119** (ASSUMPTION) the tag list is the only source of a roll code's middle part; the supplier's short code only
+seeds its first tag. **A-120** digits are optional; empty = next free number for that tag; padded to 3, at most 6 digits.
+**A-121** a code is globally unique (it already was); a typed number that exists is refused, never overwritten. **A-122** a tag's
+code can't change once a roll was made from it (it is on printed labels, as a location's code, A-79); a tag can be removed only
+if no roll was ever made from it, otherwise it is deactivated (its rolls keep their codes, it leaves Add rolls). **A-123** a tag
+belongs to one supplier or to none; the supplier's default tag is preselected and every active tag can be picked; a deactivated tag
+can't be a default; the last default of a supplier may be removed or deactivated, and then Add rolls asks for a tag per roll.
+**A-124** old rolls keep their codes and their free-text Tag number (shown, searched, printed, correctable in Edit roll details,
+Phase 35B); no relabelling. **To ask CPoint:** their real tag codes per supplier (`BLC` is Dylan's example) and whether the
+digits are the number on their own stamp or a running number. **Tell CPoint** that roll codes now start with a tag the Floor
+Manager keeps. Risk noted: the migration was written without a database to run it on; Codex's T1 is its first real run.
+**Where:** `prisma/schema.prisma`, `prisma/migrations/20261126090000_roll_tags/`, `src/lib/roll-rules.ts`, `src/lib/roll-tag-rules.ts`,
+`src/server/models/roll-tag.model.ts`, `src/server/services/roll-tag.service.ts`, `src/server/services/roll.service.ts`,
+`src/server/controllers/roll-tag.controller.ts`, `src/app/api/v1/roll-tags/**`, `src/app/(app)/inventory/tags/**`,
+`src/app/(app)/inventory/[id]/add-rolls-dialog.tsx`, `tests/unit/roll-tag*.test.ts`, `tests/e2e/inventory.spec.ts`.

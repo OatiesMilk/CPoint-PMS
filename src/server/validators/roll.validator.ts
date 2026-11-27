@@ -2,21 +2,24 @@ import { z } from "zod";
 import { periodQuerySchema, sortQuerySchema } from "./report.validator";
 import { RollStatus } from "@/lib/domain";
 import { LOCATION_MESSAGES } from "@/lib/location-rules";
+import { ROLL_TAG_MESSAGES } from "@/lib/roll-tag-rules";
 import {
   ADD_ROLLS_MAX,
   CANCEL_REASON_MAX,
   parseArea,
   ROLL_MESSAGES,
   ROLL_REPORT_STATUSES,
-  ROLL_TAG_MAX,
+  parseRollNumber,
 } from "@/lib/roll-rules";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const uuidSchema = z.uuid();
 
 /**
  * Inventory → a leather item → Add rolls (Phase 30A, D-103): the day they arrived (not after
  * today, checked by the service's caller with Manila's date) and one row per roll with its area
- * in square feet and the supplier's tag (optional). Each message names the roll and the fix.
+ * in square feet, its roll tag and its digits (Phase 42, D-139). A row without a tag takes the
+ * supplier's default; without digits, the next free number. Each message names the roll and the fix.
  */
 export const addRollsSchema = z
   .object({
@@ -29,7 +32,8 @@ export const addRollsSchema = z
       .array(
         z.object({
           areaSqFt: z.unknown().optional(),
-          tagCode: z.unknown().optional(),
+          tagId: z.unknown().optional(),
+          number: z.unknown().optional(),
         }),
         { error: ROLL_MESSAGES.addAtLeastOne },
       )
@@ -44,20 +48,24 @@ export const addRollsSchema = z
       const parsed = parseArea(roll.areaSqFt, n);
       if (!parsed.ok)
         ctx.addIssue({ code: "custom", path: ["rolls", i, "areaSqFt"], message: parsed.reason });
-      const tag = typeof roll.tagCode === "string" ? roll.tagCode.trim() : "";
-      if (roll.tagCode !== undefined && roll.tagCode !== null && typeof roll.tagCode !== "string")
+      const rawTag = typeof roll.tagId === "string" ? roll.tagId.trim() : "";
+      const tagOk =
+        roll.tagId == null ||
+        (typeof roll.tagId === "string" && (rawTag === "" || uuidSchema.safeParse(rawTag).success));
+      if (!tagOk)
         ctx.addIssue({
           code: "custom",
-          path: ["rolls", i, "tagCode"],
-          message: `Roll ${n}: ${ROLL_MESSAGES.tagTooLong}`,
+          path: ["rolls", i, "tagId"],
+          message: `Roll ${n}: ${ROLL_TAG_MESSAGES.chooseTag}`,
         });
-      else if (tag.length > ROLL_TAG_MAX)
-        ctx.addIssue({
-          code: "custom",
-          path: ["rolls", i, "tagCode"],
-          message: `Roll ${n}: ${ROLL_MESSAGES.tagTooLong}`,
-        });
-      return { areaSqFt: parsed.ok ? parsed.value : 0, tagCode: tag || undefined };
+      const digits = parseRollNumber(roll.number, n);
+      if (!digits.ok)
+        ctx.addIssue({ code: "custom", path: ["rolls", i, "number"], message: digits.reason });
+      return {
+        areaSqFt: parsed.ok ? parsed.value : 0,
+        tagId: rawTag && tagOk ? rawTag : undefined,
+        number: digits.ok ? digits.value : null,
+      };
     });
     return { receivedOn: value.receivedOn, rolls, locationId: value.locationId ?? null };
   });

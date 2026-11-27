@@ -94,7 +94,7 @@ const CASES: [string, ZodType, unknown[]][] = [
       {},
       { receivedOn: "", rolls: [] },
       { receivedOn: "26/10/2026", rolls: [{ areaSqFt: "" }] },
-      { receivedOn: "2026-10-26", rolls: [{ areaSqFt: "big", tagCode: long(41) }] },
+      { receivedOn: "2026-10-26", rolls: [{ areaSqFt: "big", tagId: "nope", number: "12a" }] },
       { receivedOn: "2026-10-26", rolls: [{ areaSqFt: "0" }, { areaSqFt: "24.555" }] },
     ],
   ],

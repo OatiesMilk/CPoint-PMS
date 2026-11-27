@@ -5,6 +5,52 @@ Append-only, **newest on top**. One entry per Claude Code session.
 Template:
 
 ```
+## 2026-11-27 · Phase 42 closed after Codex run 2 (coding thread, cloud copy)
+
+- Codex run 2 (`qa/reports/2026-11-27-phase-42-run2.md`) PASS WITH ISSUES: T20, T5 to T9 and the 13 Inventory e2e tests (one
+  worker) pass. The one issue (preview line under bad digits said "Choose a tag") now says "Fix the digits to see the code."
+  `ROADMAP` and `STATUS` ticked. Left: git commands (Dylan), screenshots, manual PDF and vault notes on the laptop.
+
+## 2026-11-27 · Phase 42 fixes after Codex run 1 (coding thread, cloud copy)
+
+- Codex run 1 (`qa/reports/2026-11-27-phase-42-run1.md`) FAIL: migration fine; F1/F2 real (Digits and Code inputs stripped or
+  cut the typed value instead of refusing it); F3 to F5 and F7 timing (passed when run one worker at a time); F6 a test selector.
+- Fixes: removed `maxLength` and the digit stripping so the row errors show (preview shows no code for bad digits); `demo:reset`
+  deletes all roll tags and `reseedSupplierTags` restores each kept supplier's default (`demo-reset.model.ts`, `.service.ts`,
+  unit test updated); e2e Supplier selector is the "Supplier (optional)" combobox. `npm run check` passed in the container copy.
+- Not run: browser and e2e tests. Next: `qa/CODEX_PROMPT_PHASE_42_RUN2.md`. Vault lines still to add on the laptop.
+
+## 2026-11-26 · Phase 42: roll tags (coding thread, PC)
+
+- Dylan's request (2026-11-26): in Add rolls the Supplier's tag becomes a dropdown of tag codes (the supplier's own chosen by
+  default), then the digits, so the code reads `LR-BLC-001`; the Floor Manager manages the tags on Inventory. Plan
+  `docs/prompts/plans/phase-42-roll-tags-plan.md`; Dylan answered Q1 yes (the tag replaces the supplier's code in the roll code),
+  Q2 and Q3 at the defaults (blank digits take the next free number; old Tag numbers stay on old rolls). Decision D-139,
+  assumptions A-119 to A-124.
+- Built: `RollTag` model + `Roll.tagId` + migration `20261126090000_roll_tags` (one default tag per supplier from its short
+  code; rolls linked by code prefix); `roll-tag` model, service, validator, controller and `/api/v1/roll-tags` routes;
+  `/inventory/tags` page (table, Add/Edit dialog, deactivate with undo, remove with confirm) and a **Roll tags** button on Inventory;
+  `addRolls` takes `tagId?` and `number?` per roll (default tag, next free number, taken or repeated code refused on its row,
+  one transaction, a unique-index race answered as a 409); Add rolls' dialog has Tag and Digits per row with a live code line
+  (`previewRollCodes`); suppliers get their first tag in Settings, bootstrap and the demo seed; the demo adds `BLC`; demo rolls
+  no longer send a Tag number. `nextRollCodeNumber` and `rollCodeTaken` are gone (the next free number is read from the rolls'
+  codes); `roll_code_sequences` stays, unused.
+- Deviation from the plan: no partial unique index for "one default per supplier" in the migration (Prisma can't express it; a raw
+  index would read as drift on `migrate dev`); the service keeps the rule. Noted in D-139 and the handoff.
+- Tests: new `roll-tag-rules`, `roll-tag.service`, `roll-tag.validator`; changed `roll-rules`, `roll.service`, `roll.validator`,
+  `settings.service`, `demo-seed`, `validator-messages`; e2e in `tests/e2e/inventory.spec.ts` (a new "Roll tags (Phase 42, D-139)"
+  block, the Add rolls test now uses Tag and Digits, the Forbidden test covers `/inventory/tags` and the API) written, **not run**.
+- Checks: the repository on the PC has Windows-only `node_modules`, which the cloud container that Claude works in can't run, so the
+  code was built in the container's copy of `main` (bd8dc71) and `npm run check` ran there: lint, typecheck, 68 test files and 1068
+  tests, build, all passed (2026-11-26). The changed files were then copied to the PC folder. **Not run:** the migration SQL (no
+  database in the container; Codex's T1 is the first run), any browser or e2e test, and `npm run check` on the PC itself.
+- Docs: README (features, demo script, ER diagram, 32 tables), `docs/USER_MANUAL.md` (6.5 Add rolls steps and a Roll tags
+  subsection, 7.3 Suppliers, section 8 messages), `docs/API.md` (Roll tags section, the rolls payload), master spec (`<context>`,
+  rules, data model, permissions table), `DESIGN.md`, D-139, ROADMAP Phase 42, STATUS. Left out: `docs/DEMO_SCRIPT.md` (Dylan's
+  file; its Add rolls step should say "choose the tag, type the digits"), the manual's screenshots and PDF (retaken on the laptop
+  after the QA pass), the vault notes (Dylan was on the PC; the vault is laptop-only).
+- Handoff `qa/handoffs/2026-11-26-roll-tags.md`; Codex prompt `qa/CODEX_PROMPT_PHASE_42.md` (points at the PC folder, no vault steps).
+
 ## 2026-11-26 · Phases 40 and 41: screenshot 21, the manual PDF and the vault notes (laptop)
 
 - Screenshot 21 retaken on a throwaway database (`cpoint_shots` in the dev Postgres container, dropped after): migrations,

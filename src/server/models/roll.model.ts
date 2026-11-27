@@ -348,20 +348,18 @@ export async function moveRoll(
 }
 
 /**
- * Atomically reserves the next number for a roll-code prefix ("LR-MLT": 1, 2, 3, …), safe under
- * concurrent adds. Keyed by the prefix, so a code that changes and comes back never repeats.
+ * Every roll code that starts with a prefix ("LR-BLC-"), for the next free number and the taken
+ * check in Add rolls (Phase 42): read inside the save's transaction.
  */
-export async function nextRollCodeNumber(prefix: string, db: Db = defaultDb()): Promise<number> {
-  const rows = await db.$queryRaw<{ lastValue: number }[]>`
-    INSERT INTO roll_code_sequences ("prefix", "lastValue") VALUES (${prefix}, 1)
-    ON CONFLICT ("prefix") DO UPDATE SET "lastValue" = roll_code_sequences."lastValue" + 1
-    RETURNING "lastValue"`;
-  return rows[0].lastValue;
-}
-
-/** Whether a code is taken already (a roll from before could hold an LR- code as its tag only). */
-export async function rollCodeTaken(code: string, db: Db = defaultDb()): Promise<boolean> {
-  return (await db.roll.count({ where: { code } })) > 0;
+export async function listRollCodesWithPrefix(
+  prefix: string,
+  db: Db = defaultDb(),
+): Promise<string[]> {
+  const rows = await db.roll.findMany({
+    where: { code: { startsWith: `${prefix}-` } },
+    select: { code: true },
+  });
+  return rows.map((r) => r.code);
 }
 
 /** A roll's shots' measures, for its share at Finish roll (Phase 30C). */

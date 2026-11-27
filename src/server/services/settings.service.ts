@@ -19,6 +19,7 @@ import {
   type ThresholdsInput,
 } from "@/server/validators/settings.validator";
 import { recordAudit } from "./audit.service";
+import { seedSupplierTag } from "./roll-tag.service";
 import { suggestSupplierCode } from "./supplier-code.service";
 
 type Actor = { id: string };
@@ -188,6 +189,13 @@ export async function createReferenceRow(kind: ReferenceKind, input: unknown, ac
       entityId: row.id,
       after: row,
     });
+    // A new supplier starts with one roll tag, its short code, as its default (Phase 42, D-139).
+    if (kind === "supplier")
+      await seedSupplierTag(
+        row as unknown as { id: string; name: string; code: string },
+        tx,
+        actor,
+      );
     return row;
   });
 }

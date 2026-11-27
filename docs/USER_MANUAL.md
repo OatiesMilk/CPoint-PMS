@@ -48,7 +48,8 @@ supplier. **The system never ranks or scores individual workers.**
 
 | Word                      | What it means                                                                                                                                                            |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Roll**                  | One leather roll from a supplier. Each roll has its own code, such as `LR-BSA-001`, and its own area in square feet.                                                     |
+| **Roll**                  | One leather roll from a supplier. Each roll has its own code, such as `LR-BLC-001`, and its own area in square feet.                                                     |
+| **Roll tag**              | The letters in the middle of a roll code (`BLC` in `LR-BLC-001`). The Floor Manager keeps the list under **Inventory → Roll tags**.                                      |
 | **Shot**                  | One photo of part of a roll. A roll is scanned in several shots, edge to edge.                                                                                           |
 | **Pass**                  | This part of the roll can go on to cutting. Shown in green.                                                                                                              |
 | **Reject**                | This part of the roll is not for cutting. Set it aside. Shown in red.                                                                                                    |
@@ -493,10 +494,17 @@ others. Use the filters to find an item or to see only **Low or out** of stock.
 2. Enter **Arrived on** (the delivery date).
 3. Choose **Kept in** (optional): where the rolls are stored. The place you used last time is
    chosen for you.
-4. Enter each roll's area in **sq ft**, and the **Supplier's tag** if the supplier gave one. Tap
-   **Add another roll** for each extra roll.
-5. Tap **Save** (for example **Save 3 rolls**). Each roll gets its code when you save. The message
-   offers **Print its label** (or **Print their labels**).
+4. Enter each roll's area in **sq ft**. Each roll also has a **Tag** and optional **Digits**; together
+   they make its code, shown under the row (for example `LR-BLC-001`).
+   - The supplier's default tag is already chosen. Open the box to pick another tag (the supplier's
+     tags come first, then **Other tags**). A new row starts on the tag of the row above.
+   - Type the **Digits** (1 to 6 numbers, like `001`), or leave them empty: the roll takes the next
+     free number for that tag (the row says "next free").
+   - Tap **Add another roll** for each extra roll.
+5. Tap **Save** (for example **Save 3 rolls**). The message offers **Print its label** (or **Print
+   their labels**). If a code is already a roll, the row says so and gives the next free one
+   ("Roll 2: LR-BLC-001 is already a roll. Next free: LR-BLC-004."). Nothing is saved until every
+   roll is fine.
 
 ![A leather item with its rolls, each with its status and Defect %.](screenshots/manual/14-inventory-rolls.png)
 
@@ -505,6 +513,26 @@ Capture, or when you remove it.
 
 **Remove a damaged roll** (for example water damage): open the roll and choose **Remove roll…**. It
 leaves stock and can't be scanned. Any shots it already has stay on record.
+
+**Roll tags**
+
+Under **Inventory**, tap **Roll tags** to keep the list of tags that start every roll code, like `LR-BLC-001`.
+CPoint chooses its own codes; the demo uses placeholders such as `BLC`.
+
+1. Tap **Add tag**. Enter the **Code** (2 to 6 capital letters or digits, starting with a letter, like
+   BLC), optionally choose the **Supplier** it belongs to, and tick **Default for this supplier** if
+   **Add rolls** should choose it first for that supplier. A supplier has one default; ticking it moves the
+   default from the supplier's other tag. Save.
+2. The table shows each tag's **Supplier**, whether it is the **Default**, **Rolls using it** and its
+   **Status**. Every supplier added in **Settings** starts with a tag made from its short code, as its default.
+3. Use the pencil to **Edit** a tag. Its **code** can't change once a roll was made from it (the code is on
+   printed labels); its supplier and default can.
+4. **Deactivate** a tag you don't want in **Add rolls** any more: its rolls keep their codes. **Remove** is only
+   for a tag no roll was made from. **Reactivate** brings a tag back.
+
+Rolls added before roll tags keep their codes and their **Tag number** (the number on the supplier's own paper
+tag, still shown, searched at **Find roll** and printed on the label). **Add rolls** no longer asks for it; the
+Floor Manager can still correct it in **Edit details**.
 
 **Storage locations**
 
@@ -705,7 +733,9 @@ applies from the date shown in the message. It pauses the batch it falls in, eve
 **Suppliers**
 
 Add the leather suppliers CPoint buys from, with a **Name**, **Code**, and optional **Contact person**,
-**Phone** and **Notes**. The Floor Manager picks from this list when adding a leather item.
+**Phone** and **Notes**. The Floor Manager picks from this list when adding a leather item. A new supplier's
+first roll tag is made from its code and is its default in **Add rolls**. Changing the code later doesn't
+rename that tag: the Floor Manager keeps the tags under **Inventory → Roll tags**.
 
 ![Settings, Defect types tab.](screenshots/manual/13-settings-defects.png)
 
@@ -738,6 +768,9 @@ Filter by action or record type, or paste a record id to see its full history.
 | "No roll or location has the code … Check the label or type the code." | Check the sticker, or type the code again on **Find roll**.                   |
 | "Add a storage location first." (the Move button is off)               | The Floor Manager adds places under **Inventory → Storage locations**.        |
 | "Move its rolls first." (a location can't be deactivated)              | Move the rolls to another place, then deactivate it.                          |
+| "Roll 2: LR-BLC-001 is already a roll. Next free: LR-BLC-004."         | Type other digits, or leave **Digits** empty for the next free number.        |
+| "Roll 1: … has no default tag. Choose a tag from the list."            | Choose a tag in the row, or tick a default under **Inventory → Roll tags**.   |
+| "A roll was made from BLC, so it can't be removed."                    | Deactivate the tag instead; its rolls keep their codes.                       |
 
 ---
 

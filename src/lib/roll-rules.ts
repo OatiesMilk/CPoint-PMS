@@ -74,14 +74,79 @@ export function freeSupplierCode(base: string, taken: readonly string[]): string
   }
 }
 
-/** "LR-MLT" for supplier MLT: the prefix whose numbers run 001, 002, … */
-export function rollCodePrefix(supplierCode: string): string {
-  return `LR-${supplierCode}`;
+/** "LR-BLC" for roll tag BLC: the prefix whose digits run 001, 002, … (the tag's code, Phase 42). */
+export function rollCodePrefix(tagCode: string): string {
+  return `LR-${tagCode}`;
 }
 
-/** "LR-MLT-007" (Phase 30A, Dylan 26 Oct 2026); R- and B- rolls from before keep their codes. */
-export function formatRollCode(supplierCode: string, n: number): string {
-  return `${rollCodePrefix(supplierCode)}-${String(n).padStart(3, "0")}`;
+/** The most digits a roll code can end in. */
+export const ROLL_DIGITS_MAX = 6;
+
+/**
+ * "LR-BLC-007": LR-, the roll tag's code and the digits, padded to three (Phase 30A, Dylan
+ * 26 Oct 2026; the tag replaced the supplier's short code in Phase 42, D-139). R- and B- rolls
+ * from before keep their codes.
+ */
+export function formatRollCode(tagCode: string, n: number): string {
+  return `${rollCodePrefix(tagCode)}-${String(n).padStart(3, "0")}`;
+}
+
+export type RollNumberResult = { ok: true; value: number | null } | { ok: false; reason: string };
+
+/**
+ * The digits typed after a roll tag in Add rolls: 1 to 6 digits, 1 or more. Left blank (null) the
+ * roll takes the next free number (A-120).
+ */
+export function parseRollNumber(raw: unknown, rollNumber: number): RollNumberResult {
+  const text = typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
+  if (text === "") return { ok: true, value: null };
+  if (!new RegExp(`^\\d{1,${ROLL_DIGITS_MAX}}$`).test(text) || Number(text) < 1)
+    return {
+      ok: false,
+      reason: `Roll ${rollNumber}: type the digits after the tag, like 001 (up to ${ROLL_DIGITS_MAX} digits). Leave them empty for the next free number.`,
+    };
+  return { ok: true, value: Number(text) };
+}
+
+/**
+ * The highest number any of these roll codes carries under `prefix` ("LR-BLC"), 0 when none: the
+ * next free number is one more. A code that doesn't end in LR-BLC-<digits> (a tag number typed as
+ * a code, an old B- roll) is ignored.
+ */
+export function highestRollNumber(codes: readonly string[], prefix: string): number {
+  const head = `${prefix}-`;
+  let highest = 0;
+  for (const code of codes) {
+    if (!code.startsWith(head)) continue;
+    const tail = code.slice(head.length);
+    if (!/^\d{1,9}$/.test(tail)) continue;
+    highest = Math.max(highest, Number(tail));
+  }
+  return highest;
+}
+
+/**
+ * The code each Add rolls row will get, for the live line under it: the digits typed, or the next
+ * free number after the highest the tag has so far (the same order the server uses, A-120). Null
+ * for a row with no tag chosen yet. `highest` is each tag code's highest number now.
+ */
+export function previewRollCodes(
+  rows: readonly { tagCode: string | null; number: number | null }[],
+  highest: Readonly<Record<string, number>>,
+): (string | null)[] {
+  const top = new Map<string, number>();
+  return rows.map(({ tagCode, number }) => {
+    if (!tagCode) return null;
+    const now = top.get(tagCode) ?? highest[tagCode] ?? 0;
+    const n = number ?? now + 1;
+    top.set(tagCode, Math.max(now, n));
+    return formatRollCode(tagCode, n);
+  });
+}
+
+/** The line for a typed roll number that already is a roll's code (A-121). */
+export function rollCodeTakenMessage(rollNumber: number, code: string, nextFree: string): string {
+  return `Roll ${rollNumber}: ${code} is already a roll. Next free: ${nextFree}.`;
 }
 
 // ───────────── area ─────────────

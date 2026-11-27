@@ -366,7 +366,7 @@ async function SuppliersTab() {
           label: "Code",
           optional: true,
           placeholder: "e.g. MLT",
-          hint: "2 to 6 capital letters or digits, for roll codes like LR-MLT-001. Left blank, it is made from the name.",
+          hint: "2 to 6 capital letters or digits. Left blank, it is made from the name. A new supplier’s first roll tag takes this code; later changes don’t rename the tag (the Floor Manager keeps the tags under Inventory → Roll tags).",
         },
         { name: "contactPerson", label: "Contact person", optional: true },
         { name: "phone", label: "Phone", optional: true, placeholder: "e.g. 0917 123 4567" },

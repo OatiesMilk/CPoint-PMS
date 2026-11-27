@@ -13,8 +13,7 @@ const rolls = {
   findRollState: vi.fn(),
   insertRoll: vi.fn(),
   moveRoll: vi.fn(async (..._args: unknown[]) => true),
-  nextRollCodeNumber: vi.fn(async () => 7),
-  rollCodeTaken: vi.fn(async () => false),
+  listRollCodesWithPrefix: vi.fn(async (_prefix: string, _db?: unknown): Promise<string[]> => []),
   listRollShotMeasures: vi.fn(
     async (): Promise<{ defectAreaSqIn: number | null; flatSharePct: number | null }[]> => [],
   ),
@@ -40,6 +39,18 @@ const locations = {
 const listLunchBreaks = vi.fn(async (): Promise<unknown[]> => [
   { effectiveFrom: "2026-01-01", startTime: "11:00", endTime: "12:00" },
 ]);
+// Phase 42: roll tags. MLT is the supplier's default; BLC is one for any supplier.
+const TAGS: Record<string, { id: string; code: string; isActive: boolean; isDefault: boolean }> = {
+  mlt: { id: "t-mlt", code: "MLT", isActive: true, isDefault: true },
+  blc: { id: "t-blc", code: "BLC", isActive: true, isDefault: false },
+  old: { id: "t-old", code: "OLD", isActive: false, isDefault: false },
+};
+const tagModel = {
+  findRollTag: vi.fn(async (id: string): Promise<unknown> => {
+    return Object.values(TAGS).find((t) => t.id === id) ?? null;
+  }),
+  findDefaultRollTag: vi.fn(async (): Promise<unknown> => TAGS.mlt),
+};
 const refs = {
   findSupplier: vi.fn(async (): Promise<unknown> => ({
     id: "sp1",
@@ -66,6 +77,7 @@ const recordAudit = vi.fn();
 vi.mock("@/server/lib/prisma", () => ({ getPrisma: vi.fn() }));
 vi.mock("@/server/models/roll.model", () => rolls);
 vi.mock("@/server/models/location.model", () => locations);
+vi.mock("@/server/models/roll-tag.model", () => tagModel);
 vi.mock("@/server/models/reference-data.model", () => refs);
 vi.mock("@/server/models/inventory.model", () => inventory);
 vi.mock("@/server/models/production.model", () => ({ listLunchBreaks }));
@@ -106,23 +118,20 @@ beforeEach(() => {
   vi.clearAllMocks();
   rolls.moveRoll.mockResolvedValue(true);
   rolls.findRollState.mockResolvedValue(state());
-  rolls.nextRollCodeNumber.mockResolvedValue(7);
-  rolls.rollCodeTaken.mockResolvedValue(false);
+  rolls.listRollCodesWithPrefix.mockResolvedValue(["LR-MLT-001", "LR-MLT-006", "B-261116-2"]);
+  tagModel.findDefaultRollTag.mockResolvedValue(TAGS.mlt);
   rolls.updateRollDetails.mockResolvedValue(true);
   inventory.findInventoryItem.mockResolvedValue(LEATHER);
 });
 
-describe("addRolls (Phase 30A, D-103)", () => {
+describe("addRolls (Phase 30A, D-103; roll tags, Phase 42, D-139)", () => {
   const values = {
     receivedOn: "2026-10-26",
-    rolls: [
-      { areaSqFt: 24.5, tagCode: "T-1" },
-      { areaSqFt: 30, tagCode: undefined },
-    ],
+    // The first roll has no tag and no digits: the supplier's default and the next free number.
+    rolls: [{ areaSqFt: 24.5 }, { areaSqFt: 30 }],
   };
 
-  it("codes each roll from the supplier, adds it in stock and puts +1 on the ledger", async () => {
-    rolls.nextRollCodeNumber.mockResolvedValueOnce(7).mockResolvedValueOnce(8);
+  it("codes each roll from its tag, adds it in stock and puts +1 on the ledger", async () => {
     rolls.insertRoll.mockImplementation(async (data: { code: string }) => ({
       id: `id-${data.code}`,
     }));
@@ -130,12 +139,13 @@ describe("addRolls (Phase 30A, D-103)", () => {
       .mockResolvedValueOnce({ onHandAfter: 4 })
       .mockResolvedValueOnce({ onHandAfter: 5 });
     const result = await svc.addRolls("it1", values, FM, now);
-    expect(rolls.nextRollCodeNumber).toHaveBeenCalledWith("LR-MLT", "tx");
+    expect(rolls.listRollCodesWithPrefix).toHaveBeenCalledWith("LR-MLT", "tx");
+    // The highest MLT number is 6, so blank digits run 007, 008.
     expect(rolls.insertRoll).toHaveBeenNthCalledWith(
       1,
       {
         code: "LR-MLT-007",
-        tagCode: "T-1",
+        tagId: "t-mlt",
         itemId: "it1",
         supplierId: "sp1",
         areaSqFt: 24.5,
@@ -159,32 +169,146 @@ describe("addRolls (Phase 30A, D-103)", () => {
     );
     expect(result).toEqual({
       added: [
-        { id: "id-LR-MLT-007", code: "LR-MLT-007", areaSqFt: 24.5, tagCode: "T-1" },
-        { id: "id-LR-MLT-008", code: "LR-MLT-008", areaSqFt: 30, tagCode: null },
+        { id: "id-LR-MLT-007", code: "LR-MLT-007", areaSqFt: 24.5 },
+        { id: "id-LR-MLT-008", code: "LR-MLT-008", areaSqFt: 30 },
       ],
       quantityOnHand: 5,
     });
     expect(recordAudit).toHaveBeenCalledTimes(1);
     expect(recordAudit).toHaveBeenCalledWith(
       "tx",
-      expect.objectContaining({ action: "roll.add", entity: "InventoryItem", entityId: "it1" }),
+      expect.objectContaining({
+        action: "roll.add",
+        entity: "InventoryItem",
+        entityId: "it1",
+        after: expect.objectContaining({
+          rolls: [
+            { code: "LR-MLT-007", areaSqFt: 24.5, tag: "MLT" },
+            { code: "LR-MLT-008", areaSqFt: 30, tag: "MLT" },
+          ],
+        }),
+      }),
     );
   });
 
-  it("skips a number whose code is already taken", async () => {
-    rolls.nextRollCodeNumber.mockResolvedValueOnce(7).mockResolvedValueOnce(8);
-    rolls.rollCodeTaken.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  it("takes the tag chosen on a row and the digits typed, padded to three", async () => {
+    rolls.listRollCodesWithPrefix.mockImplementation(async (prefix: string) =>
+      prefix === "LR-BLC" ? ["LR-BLC-003"] : [],
+    );
     rolls.insertRoll.mockResolvedValue({ id: "x" });
-    await svc.addRolls(
+    const result = await svc.addRolls(
       "it1",
-      { ...values, rolls: [{ areaSqFt: 10, tagCode: undefined }] },
+      {
+        receivedOn: "2026-10-26",
+        rolls: [
+          { areaSqFt: 10, tagId: "t-blc", number: 12 },
+          { areaSqFt: 11, tagId: "t-blc" },
+          { areaSqFt: 12, tagId: "t-blc", number: 1234 },
+          { areaSqFt: 13, tagId: "t-mlt", number: 1 },
+        ],
+      },
       FM,
       now,
     );
+    // A blank row after 012 takes 013 (one more than the highest so far).
+    expect(result.added.map((r) => r.code)).toEqual([
+      "LR-BLC-012",
+      "LR-BLC-013",
+      "LR-BLC-1234",
+      "LR-MLT-001",
+    ]);
     expect(rolls.insertRoll).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "LR-MLT-008" }),
+      expect.objectContaining({ code: "LR-BLC-012", tagId: "t-blc" }),
       "tx",
     );
+  });
+
+  it("starts at 001 for a tag with no rolls yet", async () => {
+    rolls.listRollCodesWithPrefix.mockResolvedValue([]);
+    rolls.insertRoll.mockResolvedValue({ id: "x" });
+    const result = await svc.addRolls("it1", { ...values, rolls: [{ areaSqFt: 10 }] }, FM, now);
+    expect(result.added[0].code).toBe("LR-MLT-001");
+  });
+
+  it("refuses typed digits that are already a roll, with the next free number, and saves nothing", async () => {
+    await expect(
+      svc.addRolls(
+        "it1",
+        { ...values, rolls: [{ areaSqFt: 10 }, { areaSqFt: 10, number: 6 }] },
+        FM,
+        now,
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [
+        {
+          path: ["rolls", 1, "number"],
+          message: "Roll 2: LR-MLT-006 is already a roll. Next free: LR-MLT-008.",
+        },
+      ],
+    });
+    expect(rolls.insertRoll).not.toHaveBeenCalled();
+    expect(recordAudit).not.toHaveBeenCalled();
+  });
+
+  it("refuses the same digits twice in one save", async () => {
+    await expect(
+      svc.addRolls(
+        "it1",
+        {
+          ...values,
+          rolls: [
+            { areaSqFt: 10, number: 20 },
+            { areaSqFt: 10, number: 20 },
+          ],
+        },
+        FM,
+        now,
+      ),
+    ).rejects.toMatchObject({
+      details: [{ path: ["rolls", 1, "number"], message: expect.stringContaining("LR-MLT-020") }],
+    });
+    expect(rolls.insertRoll).not.toHaveBeenCalled();
+  });
+
+  it("names each roll whose tag is missing, unknown or deactivated, before reading any code", async () => {
+    tagModel.findDefaultRollTag.mockResolvedValue(null);
+    await expect(
+      svc.addRolls(
+        "it1",
+        {
+          ...values,
+          rolls: [
+            { areaSqFt: 10 },
+            { areaSqFt: 10, tagId: "nope" },
+            { areaSqFt: 10, tagId: "t-old" },
+          ],
+        },
+        FM,
+        now,
+      ),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: [
+        {
+          path: ["rolls", 0, "tagId"],
+          message:
+            "Roll 1: Marikina Leather Trading has no default tag. Choose a tag from the list.",
+        },
+        { path: ["rolls", 1, "tagId"], message: "Roll 2: Choose a tag from the list." },
+        {
+          path: ["rolls", 2, "tagId"],
+          message: "Roll 3: the tag OLD is deactivated. Choose another tag.",
+        },
+      ],
+    });
+    expect(rolls.listRollCodesWithPrefix).not.toHaveBeenCalled();
+    expect(rolls.insertRoll).not.toHaveBeenCalled();
+  });
+
+  it("answers a code taken at the same moment as a conflict, not an error page", async () => {
+    rolls.insertRoll.mockRejectedValueOnce(Object.assign(new Error("unique"), { code: "P2002" }));
+    await expect(svc.addRolls("it1", values, FM, now)).rejects.toMatchObject({ status: 409 });
   });
 
   it("refuses a day after today on its field", async () => {
@@ -887,15 +1011,11 @@ describe("where rolls are kept (Phase 32)", () => {
     rolls.insertRoll.mockImplementation(async (data: { code: string }) => ({
       id: `id-${data.code}`,
     }));
-    rolls.nextRollCodeNumber.mockResolvedValueOnce(7).mockResolvedValueOnce(8);
     await svc.addRolls(
       "it1",
       {
         receivedOn: "2026-10-26",
-        rolls: [
-          { areaSqFt: 5, tagCode: undefined },
-          { areaSqFt: 6, tagCode: undefined },
-        ],
+        rolls: [{ areaSqFt: 5 }, { areaSqFt: 6 }],
         locationId: "b1",
       },
       FM,
@@ -933,7 +1053,7 @@ describe("where rolls are kept (Phase 32)", () => {
         "it1",
         {
           receivedOn: "2026-10-26",
-          rolls: [{ areaSqFt: 5, tagCode: undefined }],
+          rolls: [{ areaSqFt: 5 }],
           locationId: "b1",
         },
         FM,

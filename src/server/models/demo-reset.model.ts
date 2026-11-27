@@ -99,6 +99,8 @@ export async function deleteResetTargets(keep: ResetKeep, db: Db) {
   // Each roll's location history, then the rolls, then the storage locations (Phase 32).
   await db.rollMove.deleteMany();
   await db.roll.deleteMany();
+  // The roll tags go with the rolls; the service puts each kept supplier's default back (Phase 42).
+  await db.rollTag.deleteMany();
   await db.storageLocation.deleteMany();
   await db.rollSequence.deleteMany();
   await db.rollCodeSequence.deleteMany();
@@ -173,6 +175,22 @@ export async function reactivateSuppliers(names: string[], db: Db): Promise<numb
     data: { isActive: true },
   });
   return count;
+}
+
+/**
+ * Gives each kept supplier its one default roll tag again, its short code (Phase 42, D-139), after
+ * the reset removed every tag. Returns how many were added.
+ */
+export async function reseedSupplierTags(names: string[], db: Db): Promise<number> {
+  const suppliers = await db.supplier.findMany({
+    where: { name: { in: names } },
+    select: { id: true, code: true },
+  });
+  for (const supplier of suppliers)
+    await db.rollTag.create({
+      data: { code: supplier.code, supplierId: supplier.id, isDefault: true },
+    });
+  return suppliers.length;
 }
 
 /** Puts the demo accounts' names back (D-090); an account that isn't there is skipped. */

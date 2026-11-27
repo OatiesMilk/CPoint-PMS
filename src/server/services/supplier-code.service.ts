@@ -5,6 +5,7 @@ import {
   findSupplierByName,
   listSupplierCodes,
 } from "@/server/models/reference-data.model";
+import { seedSupplierTag } from "./roll-tag.service";
 
 /**
  * A supplier's short code for roll codes (Phase 30A, D-104): the one typed, or one made from the
@@ -14,12 +15,20 @@ export async function suggestSupplierCode(name: string, db: Db = defaultDb()): P
   return freeSupplierCode(supplierCodeFromName(name), await listSupplierCodes(db));
 }
 
-/** Bootstrap and the demo week: add a supplier by name if missing, with a free short code. */
+/**
+ * Bootstrap and the demo week: add a supplier by name if missing, with a free short code and its
+ * first roll tag (the short code, as its default; Phase 42, D-139).
+ */
 export async function ensureSupplierWithCode(
   data: { name: string; notes: string },
   db: Db = defaultDb(),
 ) {
   const existing = await findSupplierByName(data.name, db);
   if (existing) return existing;
-  return ensureSupplier({ ...data, code: await suggestSupplierCode(data.name, db) }, db);
+  const supplier = await ensureSupplier(
+    { ...data, code: await suggestSupplierCode(data.name, db) },
+    db,
+  );
+  await seedSupplierTag(supplier, db);
+  return supplier;
 }

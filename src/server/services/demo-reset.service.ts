@@ -7,6 +7,7 @@ import {
   countResetTargets,
   deleteResetTargets,
   reactivateSuppliers,
+  reseedSupplierTags,
   setDemoAccountNames,
   upsertDefectTypeState,
   type ResetCounts,
@@ -172,6 +173,8 @@ export async function resetDemoData(
       await deleteResetTargets(keep, tx);
       // The demo week adds its leather items for the demo suppliers, so they must be on.
       const suppliersReactivated = await reactivateSuppliers(keep.supplierNames, tx);
+      // Every roll tag went with the rolls: each kept supplier gets its default back (Phase 42).
+      await reseedSupplierTags(keep.supplierNames, tx);
       // The audit log starts again with this row first, so anyone can see when and what was reset;
       // the default lunch and the defect types it sets come after it.
       await recordAudit(tx, {

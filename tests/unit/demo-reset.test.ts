@@ -6,6 +6,7 @@ const model = {
   upsertDefectTypeState: vi.fn(),
   setDemoAccountNames: vi.fn(),
   reactivateSuppliers: vi.fn(async () => 3),
+  reseedSupplierTags: vi.fn(async () => 5),
 };
 const env = { NODE_ENV: "development", BOOTSTRAP_ADMIN_EMAIL: "Owner@CPoint.local" };
 const recordAudit = vi.fn();
@@ -77,6 +78,7 @@ describe("resetDemoData", () => {
     expect(model.deleteResetTargets).toHaveBeenCalledWith(keep, "tx");
     // Deactivated demo suppliers are turned back on, so the week can add its leather items.
     expect(model.reactivateSuppliers).toHaveBeenCalledWith(keep.supplierNames, "tx");
+    expect(model.reseedSupplierTags).toHaveBeenCalledWith(keep.supplierNames, "tx");
     expect(model.upsertDefectTypeState).toHaveBeenCalledTimes(MODEL_DEFECT_TYPES.length);
     // The demo accounts get their names back (D-090).
     expect(model.setDemoAccountNames).toHaveBeenCalledWith(

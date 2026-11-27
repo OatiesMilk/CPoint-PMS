@@ -27,6 +27,7 @@ import {
   startRoll,
 } from "./roll.service";
 import { ensureLocation } from "./location.service";
+import { ensureRollTag } from "./roll-tag.service";
 import { ensureSupplierWithCode } from "./supplier-code.service";
 import { setCameraOperator } from "./camera.service";
 import { markNonWorking, queueFromTheStart, saveCheckIn, saveDayPlan } from "./production.service";
@@ -510,6 +511,12 @@ export async function seedDemoWeek(
   ).id;
   let delivery = 0;
 
+  // ── roll tags (Phase 42, D-139): every demo supplier has its default tag from its short code;
+  //    one extra tag shows the Add rolls dropdown a choice. CPoint hasn't confirmed its real tag
+  //    codes (A-119): BLC is a placeholder. ──
+  const bulacanA = activeSuppliers.find((s) => s.name === "Bulacan Supplier A");
+  if (bulacanA) await ensureRollTag({ code: "BLC", supplierId: bulacanA.id, isDefault: false }, fm);
+
   // ── leather rolls (Phase 30A, D-103, D-104): the Floor Manager adds each roll to its item with
   //    its own area, the evening before the week and when a delivery comes in. A constructor picks
   //    the oldest roll of the item at Capture. ──
@@ -530,11 +537,8 @@ export async function seedDemoWeek(
       itemIds.get(sku)!,
       {
         receivedOn: manilaToday(t),
-        rolls: areas.map((areaSqFt, i) => ({
-          areaSqFt,
-          tagCode:
-            i % 2 === 0 ? `T${manilaToday(t).slice(5).replace("-", "")}-${i + 1}` : undefined,
-        })),
+        // No tag and no digits: the supplier's default tag and the next free number (Phase 42).
+        rolls: areas.map((areaSqFt) => ({ areaSqFt })),
         locationId,
       },
       fm,

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { ACCOUNTS, signIn } from "./helpers";
-import { addInventoryRoll, makeConstructor, managerApi, supplierId } from "./cv-helpers";
+import { addInventoryRoll, adminApi, makeConstructor, managerApi, supplierId } from "./cv-helpers";
 
 async function signInAs(page: Page, account: (typeof ACCOUNTS)[keyof typeof ACCOUNTS]) {
   await page.goto("/login");
@@ -305,7 +305,13 @@ test("leather rolls are added on the item with their areas, never on the sheet (
   await dialog.getByRole("button", { name: "Save 2 rolls" }).click();
   await expect(dialog.getByText("Roll 2: use at most two decimals, like 24.75.")).toBeVisible();
   await dialog.locator("#add-rolls-rolls-1-areaSqFt").fill("31.75");
-  await dialog.locator("#add-rolls-rolls-1-tagCode").fill("T-88");
+  // Each row has a tag, the supplier's default chosen first (Phase 42), and optional digits.
+  await expect(dialog.locator("#add-rolls-rolls-1-tagId option:checked")).toContainText(
+    "(default)",
+  );
+  const digits = String(900000 + Math.floor(Math.random() * 99999));
+  await dialog.locator("#add-rolls-rolls-1-number").fill(digits);
+  await expect(dialog.getByTestId("roll-code-preview").nth(1)).toContainText(`-${digits}`);
   await dialog.getByRole("button", { name: "Save 2 rolls" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByText(/2 rolls added to .*: LR-[A-Z0-9]+-\d{3,} to LR-/)).toBeVisible();
@@ -341,11 +347,12 @@ test("Inventory is the Floor Manager's alone (D-100): the Admin and the QI are r
   const item = await createItem(api, { reorderLevel: 1, openingStock: 3 });
 
   await signInAs(page, ACCOUNTS.admin);
-  for (const path of ["/inventory", `/inventory/${item.id}`]) {
+  for (const path of ["/inventory", `/inventory/${item.id}`, "/inventory/tags"]) {
     await page.goto(path);
     await expect(page).toHaveURL("/forbidden");
   }
   expect((await page.request.get("/api/v1/inventory")).status()).toBe(403);
+  expect((await page.request.get("/api/v1/roll-tags")).status()).toBe(403);
   const post = await page.request.post("/api/v1/inventory/updates", {
     data: { lines: [{ itemId: item.id, seenQuantity: 3, added: 1 }] },
   });
@@ -358,8 +365,181 @@ test("Inventory is the Floor Manager's alone (D-100): the Admin and the QI are r
   await qi.goto("/inventory");
   await expect(qi).toHaveURL("/forbidden");
   expect((await qi.request.get("/api/v1/inventory")).status()).toBe(403);
+  expect((await qi.request.get("/api/v1/roll-tags")).status()).toBe(403);
   await qi.close();
 });
+
+test.describe("Roll tags (Phase 42, D-139)", () => {
+  test("a supplier starts with its short code as its default tag; Add rolls offers it first, and a taken code is refused", async ({
+    browser,
+    page,
+  }) => {
+    // A supplier of its own, so no other test's default tag is touched.
+    const admin = await adminApi(browser);
+    const name = `E2E Tag Supplier ${randomBytes(3).toString("hex").toUpperCase()}`;
+    const made = await admin.post("/api/v1/suppliers", { data: { name } });
+    expect(made.status()).toBe(201);
+    const supplier = (await made.json()).data as { id: string; code: string };
+    const api = await managerApi(browser);
+    const tags = (await (await api.get("/api/v1/roll-tags")).json()).data as {
+      code: string;
+      isDefault: boolean;
+      supplierId: string | null;
+    }[];
+    expect(tags.find((t) => t.code === supplier.code)).toMatchObject({
+      isDefault: true,
+      supplierId: supplier.id,
+    });
+
+    const sku = uniqueCode("LR");
+    const item = await api.post("/api/v1/inventory", {
+      data: {
+        sku,
+        name: `E2E tagged hide ${sku}`,
+        category: "LEATHER_ROLL",
+        unit: "roll",
+        reorderLevel: 0,
+        supplierId: supplier.id,
+      },
+    });
+    expect(item.status()).toBe(201);
+    const { id } = (await item.json()).data;
+
+    await signInAs(page, ACCOUNTS.manager);
+    await page.goto(`/inventory/${id}`);
+    await page.getByRole("button", { name: "Add rolls" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.locator("#add-rolls-rolls-0-tagId option:checked")).toHaveText(
+      `${supplier.code} (default)`,
+    );
+    await dialog.locator("#add-rolls-rolls-0-areaSqFt").fill("24.5");
+    await dialog.locator("#add-rolls-rolls-0-number").fill("7");
+    await expect(dialog.getByTestId("roll-code-preview")).toContainText(`LR-${supplier.code}-007`);
+    await dialog.getByRole("button", { name: "Save 1 roll" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(`LR-${supplier.code}-007 added to`)).toBeVisible();
+
+    // The same digits again: refused on the row, with the next free number, and nothing saved.
+    await page.getByRole("button", { name: "Add rolls" }).click();
+    await dialog.locator("#add-rolls-rolls-0-areaSqFt").fill("20");
+    await dialog.locator("#add-rolls-rolls-0-number").fill("7");
+    await dialog.getByRole("button", { name: "Save 1 roll" }).click();
+    await expect(dialog).toContainText(
+      `Roll 1: LR-${supplier.code}-007 is already a roll. Next free: LR-${supplier.code}-008.`,
+    );
+    expect(await onHand(api, id)).toBe(1);
+    // Digits left empty take the next free number.
+    await dialog.locator("#add-rolls-rolls-0-number").fill("");
+    await expect(dialog.getByTestId("roll-code-preview")).toContainText(`LR-${supplier.code}-008`);
+    await dialog.getByRole("button", { name: "Save 1 roll" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(`LR-${supplier.code}-008 added to`)).toBeVisible();
+    expect(await onHand(api, id)).toBe(2);
+  });
+
+  test("the Floor Manager adds, edits, deactivates and removes tags; a tag in use keeps its code", async ({
+    browser,
+    page,
+  }) => {
+    const admin = await adminApi(browser);
+    const name = `E2E Tag Owner ${randomBytes(3).toString("hex").toUpperCase()}`;
+    const supplier = (await (await admin.post("/api/v1/suppliers", { data: { name } })).json())
+      .data as { id: string; code: string };
+    const api = await managerApi(browser);
+    const code = `T${randomBytes(2).toString("hex").toUpperCase()}`;
+
+    await signInAs(page, ACCOUNTS.manager);
+    await page.goto("/inventory");
+    await page.getByRole("link", { name: "Roll tags" }).click();
+    await expect(page).toHaveURL("/inventory/tags");
+    await expect(page.getByRole("heading", { name: "Roll tags" })).toBeVisible();
+
+    // Add a tag for the supplier and make it the default: the supplier's first tag stops being one.
+    await page.getByRole("button", { name: "Add tag" }).first().click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Code").fill(code.toLowerCase());
+    await dialog.getByRole("combobox", { name: /^Supplier/ }).selectOption({ label: name });
+    await dialog.getByLabel("Default for this supplier").check();
+    await dialog.getByRole("button", { name: "Add tag" }).click();
+    await expect(dialog).toBeHidden();
+    const row = page.getByTestId("roll-tag-row").filter({ hasText: code });
+    await expect(row).toContainText(name);
+    await expect(row).toContainText("Default");
+    const first = page.getByTestId("roll-tag-row").filter({ hasText: supplier.code }).first();
+    await expect(first).not.toContainText("Default");
+
+    // A code another tag has is refused on its field.
+    await page.getByRole("button", { name: "Add tag" }).first().click();
+    await dialog.getByLabel("Code").fill(code);
+    await dialog.getByRole("button", { name: "Add tag" }).click();
+    await expect(dialog).toContainText(`${code} is already a roll tag.`);
+    await dialog.getByLabel("Code").fill("1x");
+    await dialog.getByRole("button", { name: "Add tag" }).click();
+    await expect(dialog).toContainText("Enter a tag code of 2 to 6 capital letters or digits");
+    await page.keyboard.press("Escape");
+
+    // A roll made from the tag locks its code and its removal.
+    const sku = uniqueCode("LR");
+    const item = await api.post("/api/v1/inventory", {
+      data: {
+        sku,
+        name: `E2E tag item ${sku}`,
+        category: "LEATHER_ROLL",
+        unit: "roll",
+        reorderLevel: 0,
+        supplierId: supplier.id,
+      },
+    });
+    const { id } = (await item.json()).data;
+    const added = await api.post(`/api/v1/inventory/${id}/rolls`, {
+      data: { receivedOn: new Date().toISOString().slice(0, 10), rolls: [{ areaSqFt: 24.5 }] },
+    });
+    expect(added.status()).toBe(201);
+    // No tag chosen: the supplier's default, which is now the new one.
+    expect((await added.json()).data.added[0].code).toBe(`LR-${code}-001`);
+    await page.reload();
+    await expect(row).toContainText("1");
+    await expect(row.getByRole("button", { name: `Remove ${code}` })).toBeDisabled();
+    await row.getByRole("button", { name: `Edit ${code}` }).click();
+    await expect(dialog.getByLabel("Code")).toHaveAttribute("readonly", "");
+    await page.keyboard.press("Escape");
+    const patch = await api.patch(`/api/v1/roll-tags/${(await tagByCode(api, code)).id}`, {
+      data: { code: "ZZZZ" },
+    });
+    expect(patch.status()).toBe(409);
+
+    // Deactivating it takes it out of Add rolls; its roll keeps its code.
+    await row.getByRole("button", { name: `Deactivate ${code}` }).click();
+    await expect(row).toContainText("Deactivated");
+    await page.goto(`/inventory/${id}`);
+    await page.getByRole("button", { name: "Add rolls" }).click();
+    await expect(
+      page.getByRole("dialog").locator("#add-rolls-rolls-0-tagId option", { hasText: code }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // A tag no roll was made from can be removed.
+    await page.goto("/inventory/tags");
+    const spare = `S${randomBytes(2).toString("hex").toUpperCase()}`;
+    await page.getByRole("button", { name: "Add tag" }).first().click();
+    await dialog.getByLabel("Code").fill(spare);
+    await dialog.getByRole("button", { name: "Add tag" }).click();
+    await expect(dialog).toBeHidden();
+    const spareRow = page.getByTestId("roll-tag-row").filter({ hasText: spare });
+    await expect(spareRow).toContainText("Any supplier");
+    await spareRow.getByRole("button", { name: `Remove ${spare}` }).click();
+    await dialog.getByRole("button", { name: "Remove tag" }).click();
+    await expect(spareRow).toHaveCount(0);
+  });
+});
+
+async function tagByCode(api: APIRequestContext, code: string): Promise<{ id: string }> {
+  const list = (await (await api.get("/api/v1/roll-tags?active=false")).json()).data as {
+    id: string;
+    code: string;
+  }[];
+  return list.find((t) => t.code === code)!;
+}
 
 test.describe("Find roll from Inventory (Phase 41, D-138)", () => {
   test("the Floor Manager opens Find roll from Inventory, finds a roll and goes back", async ({

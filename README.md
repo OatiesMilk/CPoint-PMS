@@ -18,6 +18,11 @@ shared view of the line:
   a button on Inventory for the Floor Manager, in the menu for constructors with camera access, D-138) takes a roll's code, tag number or
   scanned label and shows where it is and where it has been; Capture can pick a roll by its label.
   A roll Returned to supplier is set aside in a place until the supplier picks it up.
+- **Roll tags (Phase 42, D-139):** every roll code starts with a **roll tag**, `LR-<tag>-<digits>`
+  (`LR-BLC-001`). The Floor Manager keeps the list under Inventory → **Roll tags** (add, edit,
+  deactivate, remove). **Add rolls** has a **Tag** box per roll (the supplier's default tag is chosen
+  first) and optional **Digits**; digits left empty take the next free number, and a code that is
+  already a roll is refused with the next free one. A supplier's short code starts its first tag.
 - **Batches and the Inspection queue (Phases 27 and 33, D-129):** the Floor Manager plans each
   weekday on a calendar (rolls to be used, the quota of passed pairs, every 4 hours or once a day,
   the shift). Each check-in interval is a batch with a code (`B-261116-2`), lunch left out. Every
@@ -176,9 +181,12 @@ first on **Batches → Plan days** if it isn't.
 3. **Inventory → Black cowhide (school shoes):** the item's **Rolls**, each with its code
    (`LR-BSA-001`), where it is kept, area, status (Not yet scanned, Being scanned, Scanning passed,
    Returned to supplier, Removed), shots and Defect %. **Add rolls**: the day they arrived, **Kept
-   in** a location, then each roll's area; **Print its label** follows. The count on hand follows
-   the rolls (D-103). **Update stock** opens the one sheet for every other item (Added, Used,
-   Correction with a reason).
+   in** a location, then each roll's area, its **Tag** (the supplier's default is chosen; the demo
+   also has `BLC`) and optional **Digits**; **Print its label** follows. The count on hand follows
+   the rolls (D-103). **Roll tags** (button on Inventory, Phase 42) lists the tags that start every
+   roll code with their supplier, default and the rolls using each; add one, then choose it in **Add
+   rolls**. A tag a roll was made from keeps its code (deactivate it instead of removing it).
+   **Update stock** opens the one sheet for every other item (Added, Used, Correction with a reason).
 4. **Inventory → Storage locations** (Phase 32): the demo's placeholder racks and bins (`R1-B1` to
    `R2-B3`) and `RETURN`, with how many rolls each holds; tick two and **Print 2 labels** (an A4
    sheet of 3 × 7 stickers; print at 100%). Back on the item, **Move rolls** takes a few rolls to
@@ -319,7 +327,7 @@ flowchart LR
 
 ## Data model
 
-The core tables (`prisma/schema.prisma` has all 31, with indexes). Ids are UUIDv7. The tables of
+The core tables (`prisma/schema.prisma` has all 32, with indexes). Ids are UUIDv7. The tables of
 the panel's revisions (storage locations, the Inspection queue, final defects and repairs, stages)
 are in the diagram too; supporting tables (audit log, sessions, sequences, the demo clock,
 attendance marks) are left out of it.
@@ -327,6 +335,8 @@ attendance marks) are left out of it.
 ```mermaid
 erDiagram
   Supplier |o--o{ InventoryItem : "supplies (leather)"
+  Supplier |o--o{ RollTag : "default tag (Phase 42)"
+  RollTag |o--o{ Roll : "starts its code"
   InventoryItem ||--o{ Roll : "has rolls"
   InventoryItem ||--o{ InventoryMovement : "ledger of"
   StockUpdate ||--o{ InventoryMovement : groups
@@ -349,7 +359,7 @@ erDiagram
   User ||--o{ AuditLog : "acts in"
 
   Roll {
-    string code "LR-MLT-001 (older R-, B-)"
+    string code "LR-BLC-001 (older R-, B-)"
     decimal areaSqFt "entered by the FM"
     enum status "IN_STOCK, OPEN, FINISHED, CANCELLED"
     float defectSharePct "worked out at Finish roll"
@@ -385,6 +395,11 @@ erDiagram
   CvSettings {
     float foundAtOrAbove "0.5"
     float returnSharePct "10"
+  }
+  RollTag {
+    string code "BLC, the middle of a roll code"
+    bool isDefault "a supplier's first choice in Add rolls"
+    bool isActive "off: leaves Add rolls, its rolls keep their codes"
   }
   StorageLocation {
     string code "R1-B3, printed on its label"

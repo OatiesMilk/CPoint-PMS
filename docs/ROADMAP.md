@@ -1115,3 +1115,25 @@ Plan: `docs/prompts/plans/phase-41-find-roll-in-inventory-plan.md` (Dylan's requ
 - [x] Codex QA run 1: PASS WITH ISSUES (`qa/reports/2026-11-26-phase-41-run1.md`; 13 of 13 scenarios, e2e 37 passed with 2 environment skips;
       the one issue is a `demo:reset` foreign-key failure at setup, not Phase 41's)
 - [ ] `USER_MANUAL.pdf` rebuilt (the manual's text changed; no screenshot shows the change), and committed and merged
+
+## Phase 42 — Roll tags: a managed list starts every roll code
+
+Plan: `docs/prompts/plans/phase-42-roll-tags-plan.md` (Dylan's request and answers, 2026-11-26). Decision: D-139 (A-119 to A-124).
+One migration (`20261126090000_roll_tags`).
+
+- [x] `RollTag` model and `Roll.tagId`; the migration gives every supplier a default tag from its short code and links the rolls
+      whose code starts `LR-<that code>-` (today's codes and defaults stay)
+- [x] Roll code `LR-<tag>-<digits>`: digits optional (blank = next free number), padded to 3, 1 to 6 numbers; a taken or repeated
+      code is refused on its row with the next free one, nothing saved
+- [x] Add rolls: **Tag** (supplier's default first) and **Digits** per row, with a live code line; the free-text Supplier's tag left it
+- [x] Inventory → **Roll tags** (Floor Manager): add, edit, deactivate/reactivate, remove; code locked once a roll was made from the
+      tag; one default per supplier; audited; `GET/POST /api/v1/roll-tags`, `GET/PATCH/DELETE /api/v1/roll-tags/{id}`
+- [x] A new supplier (Settings, bootstrap, demo seed) gets its first tag; the demo adds `BLC` for Bulacan Supplier A
+- [x] Unit tests (roll-tag rules, service and validator; roll rules, roll service, roll validator, settings service, demo seed) and
+      the e2e tests in `tests/e2e/inventory.spec.ts` (written, not run here; Codex runs them)
+- [x] Docs: README, USER_MANUAL (6.5, 7.3, section 8), API, master spec, DESIGN.md, DECISIONS (D-139), STATUS, SESSION_LOG
+- [x] `npm run check` passes (2026-11-26, in a clean copy of the repository: lint, typecheck, 68 files and 1068 tests, build)
+- [x] QA handoff `qa/handoffs/2026-11-26-roll-tags.md`, Codex prompt `qa/CODEX_PROMPT_PHASE_42.md`
+- [x] Codex QA run 1 FAIL (2026-11-27: migration fine, 275 of 275 rolls linked; Digits and Code boxes truncated input, `demo:reset` left tags, one e2e selector), fixed; run 2 **PASS WITH ISSUES** (all scenarios and the 13 Inventory e2e tests pass with one worker; one copy line fixed after)
+- [ ] Manual screenshots 14 and a new Roll tags one, and `USER_MANUAL.pdf`, retaken on the laptop after the pass; the vault notes
+- [ ] `docs/DEMO_SCRIPT.md` (Dylan's file): its Add rolls step should say "choose the tag, type the digits"
